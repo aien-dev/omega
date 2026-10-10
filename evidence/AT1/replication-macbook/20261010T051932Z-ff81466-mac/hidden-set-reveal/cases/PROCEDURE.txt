@@ -1,0 +1,70 @@
+AT-1 Agent 7 hidden set: generation procedure (published at reveal; the seed is not part of this text)
+
+Authority: aien-architecture main ea91d7c (AT1_CHARTER.md, AT1_SPEC.md merged at 81047f5),
+AT1_CASE_V1.md sha256 e62018d8deec97fffca5cacaf6452d8fc45c395596517665cd73eb0c777a3e8f,
+AT1_RESULT_V1.md sha256 3e6efd7e641a89bf0e425267525afabc51fe7a5497d3d539cdeaf09ddb6fa92d,
+AT0_RESULT_V2.md sha256 bd0f9eb8cf3ef7226c3ea18c1c9fbd4db62e0c23a0481afa519830fc1f514b5e (all verified on a fresh clone).
+
+Machine: the MacBook (Macbook.local, macOS 26.6.2 arm64). Files live in ~/at1-hidden/, outside any git checkout.
+Tool: at1h.rs (this directory; Rust std only, built with rustc 1.97.1 `rustc -O --edition 2021 at1h.rs`).
+SHA-256 is computed by /usr/bin/shasum -a 256 (shasum 6.02). No Python anywhere.
+
+1. Seed. 8 bytes from /dev/urandom on the MacBook, written as 16 hex digits to ~/at1-hidden/private/SEED
+   (mode 600). It never leaves the MacBook and is not posted.
+2. Self-test first. `at1h selftest worked-example.case` must report 0 failures. It checks:
+   the AT1_CASE_V1 section 6 worked example (45 lines) gives case_id 890980a4..., acceptance_id d63246c3...,
+   case_file_sha256 76e282fe... and re-renders byte-identically; and the exact checker reproduces the AT1_SPEC
+   section 13 tables P1, P2, P3, P3b, P4, P5, P6, N3, N4a, N6 (clock marginals, Pauli plus-outcomes, ideal columns)
+   and the expected verdicts of P1b, P1c, P2, N1, P3, N1b, P5, N1e, N2, N3, N4a, N6, and detects the R4 per-level
+   irrational spectrum.
+3. Generation. `at1h gen <seed> cases`. A splitmix64 stream seeded with the seed drives every choice. Classes are
+   drawn in the fixed order P1, P1c, P2, P3, P3b, P4, P6, N2, N3, N4a, N4b, N6. For each class the tool draws a
+   candidate from fixed pools (below), computes the case exactly, and accepts the first candidate that meets the
+   class predicate, the token limits and the margin rule of AT1_SPEC section 8.3; otherwise it draws again from the
+   same stream. Pools:
+   - povm_tau_turns tau from {1/4, 1/8, 3/4, 1/2, 3/8}; quarter unit u = 1/(4 tau).
+   - clock_dim N in {3, 4} (P1 and N2: {2, 3, 4}); energies E_j = u q_j + off with q_j = (distinct residue mod 4)
+     + 4 t, t in {-1, 0, 1}, off from {0, 1/2, -1/3, 1/5}. Distinct residues make every gap times tau a non-integer
+     quarter turn (complete clock); N4b reuses one residue (broken clock).
+   - clock_label_count M in {4, 8} (P4: 8); povm_weight w = N/M (N4a: N/(2M)).
+   - |h| = m/(8 tau), m in {1, 2, 3}, along a rational unit axis; h0 from {0, 1/3, -1/2, 2/7} or fixed by the
+     class anchor (h0 = -E_a - s|h| for a zero-coupling matched level; h0 = -E_d for a degenerate level).
+   - Level roles: zero coupling; rotated (n_j = |E_j + h0| times a rational unit axis (a, b, c)/d from the
+     Pythagorean quadruples (1,2,2,3) (2,3,6,7) (1,4,8,9) (4,4,7,9) (2,6,9,11) (6,6,7,11) (3,4,12,13)
+     (2,10,11,15) (3,0,4,5) (0,5,12,13) (8,0,15,17) with random permutation and signs); matched along z;
+     spectator (|n_j| = |E_j + h0| + delta, delta in {1/2, 1, 1/3, 3/2}); degenerate (n_j = 0 at E_j + h0 = 0);
+     near miss (|n_j| = |E_j + h0| +- 2^-20 along z); swapped (v_j = -2h). v_j = n_j - h.
+   - reference_system_state from {(1,1), (1,i), (2,1-i), (1,(3+4i)/5), (3,-1), (1+i,2), (1,-2i), (5,2+i)}
+     (P4: complex entries only; N6: the vector orthogonal to the single kernel vector); reference label random
+     (P4: nonzero).
+   Because every phase is a quarter turn, every expected quantity is an exact Gaussian rational.
+   Class predicates: P1 zero coupling, target IDEAL, PASS, kernel dim >= 2. P1c spectator couplings (some v_j != 0),
+   target IDEAL, PASS. P2 one rotated level, target INTERACTING, PASS, label-dependent clock marginal, and its IDEAL
+   twin fails with exactly SCHRODINGER_DEVIATION_EXCEEDED. P3 every v_j != 0, kernel dim >= 3, PASS,
+   label-dependent marginal. P3b degenerate level + rotated level, kernel dim >= 3, PASS, label-dependent marginal.
+   P4 complex psi_0, reference label != t0, M = 8, PASS, label-dependent marginal, IDEAL twin fails as P2's.
+   P6 near-miss level (exact kernel test must say no), PASS, IDEAL twin fails as P2's. N2 kernel dim 0:
+   TRIVIAL_PHYSICAL_STATE. N3 swapped level giving an exactly zero label: CONDITIONAL_UNDEFINED. N4a wrong weight:
+   POVM_NORMALIZATION_EXCEEDED, PROBABILITY_SUM_EXCEEDED. N4b broken clock: POVM_NORMALIZATION_EXCEEDED (plus
+   PROBABILITY_SUM_EXCEEDED if the exact sum differs from 1). N6 psi_0 orthogonal to the kernel:
+   TRIVIAL_PHYSICAL_STATE.
+4. N1 family: the semantic blocks of P2, P4 and P6, unchanged (same case_id), with control_kind NEGATIVE,
+   prediction_target IDEAL, expected FAIL SCHRODINGER_DEVIATION_EXCEEDED.
+5. Refusal files, one defect each on an accepted case, identities recomputed for the defective text where the defect
+   is inside a hashed block: per-level irrational spectrum on P4 (one coupling x component plus a small rational so
+   |h + v_j|^2 is not a rational square while |h| stays rational): CASE_IRRATIONAL_SPECTRUM; coupling index token
+   `01` at position 1 on P3 (charter reading e): CASE_NONCANONICAL; header `OMEGA-AT0-CASE v1` on P1 (reading d):
+   CASE_PARSE_ERROR; `domain omega.at0.case.v1` on P3b (reading d): CASE_UNSUPPORTED_VERSION; last interaction_pauli
+   line removed on P2: CASE_PARSE_ERROR; `clock_label 2 t1` at position 1 on P6 (reading e): CASE_PARSE_ERROR.
+6. Expected outcomes. For every result case the tool applies AT1_RESULT_V1 sections 4 and 5 to the exact values
+   (kernel pairs and level vectors per AT1_CASE_V1 section 3, chi_k with quarter-turn phases, p(k) = w ||chi_k||^2/(N S),
+   Pauli plus-outcomes from chi_k, ideal state exp(-i H_S (t_k - t_r)) psi_0, exact POVM residual), writes the expected
+   outcome and code set into the acceptance block and EXPECTED.tsv (with the 12-check vector), re-reads the written
+   file and recomputes everything from the bytes. DETAILS.txt holds the exact tables.
+   Assumption stated: check 1 passes for an engine reporting ESTIMATED or RIGOROUS (every case has min_bound_kind
+   ESTIMATED); checks 2, 4 and 8 pass for a correct engine; check 12 passes because both sides apply the status
+   rule to the same exact p(k) and the margin rule keeps every label determinate.
+7. Commitment. MANIFEST: one line per file in cases/ (the case files, EXPECTED.tsv, DETAILS.txt, PROCEDURE.txt,
+   at1h.rs), `<sha256><two spaces><file name>` as printed by `shasum -a 256`, sorted bytewise by file name,
+   LF-terminated. The commitment is `shasum -a 256 MANIFEST`. At reveal the cases/ folder and MANIFEST are committed
+   to omega evidence/AT1/replication-<host>/ and anyone can recompute the commitment.

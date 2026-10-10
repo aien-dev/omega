@@ -1,0 +1,32 @@
+# path	class	expected	codec	engine	oracle	derived_outcome	derived_codes	case_verdict	findings
+positive/P2-kat-rotated-level-n4.case	P2	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+positive/a7h-01-p1-zero-coupling-ideal.case	P1	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+positive/a7h-02-p1c-spectator-ideal.case	P1c	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+positive/a7h-03-p2-one-rotated-level.case	P2	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+positive/a7h-04-p3-every-level-coupled.case	P3	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+positive/a7h-05-p3b-degenerate-level.case	P3b	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+positive/a7h-06-p4-complex-psi-ref-nonzero.case	P4	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+positive/a7h-07-p6-near-miss-level.case	P6	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+negative/a7h-08-n2-trivial-kernel.case	N2	AT1_CASE_OK	ok	ran	ran	FAIL	TRIVIAL_PHYSICAL_STATE	PASS	none
+negative/a7h-09-n3-zero-label.case	N3	AT1_CASE_OK	ok	ran	ran	FAIL	CONDITIONAL_UNDEFINED	PASS	none
+negative/a7h-10-n4a-wrong-weight.case	N4a	AT1_CASE_OK	ok	ran	ran	FAIL	POVM_NORMALIZATION_EXCEEDED,PROBABILITY_SUM_EXCEEDED	PASS	none
+negative/a7h-11-n4b-broken-clock.case	N4b	AT1_CASE_OK	ok	ran	ran	FAIL	POVM_NORMALIZATION_EXCEEDED	PASS	none
+negative/a7h-12-n6-zero-projection.case	N6	AT1_CASE_OK	ok	ran	ran	FAIL	TRIVIAL_PHYSICAL_STATE	PASS	none
+negative/a7h-13-n1a-p2-question-ideal-target.case	N1	AT1_CASE_OK	ok	ran	ran	FAIL	SCHRODINGER_DEVIATION_EXCEEDED	PASS	none
+negative/a7h-14-n1b-p4-question-ideal-target.case	N1	AT1_CASE_OK	ok	ran	ran	FAIL	SCHRODINGER_DEVIATION_EXCEEDED	PASS	none
+negative/a7h-15-n1c-p6-question-ideal-target.case	N1	AT1_CASE_OK	ok	ran	ran	FAIL	SCHRODINGER_DEVIATION_EXCEEDED	PASS	none
+refuse/a7h-16-r1-per-level-irrational.case	R	AT1_CASE_REFUSED CASE_IRRATIONAL_SPECTRUM	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/a7h-17-r2-coupling-index-01.case	R	AT1_CASE_REFUSED CASE_NONCANONICAL	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/a7h-18-r3-at0-header.case	R	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/a7h-19-r4-domain-at0.case	R	AT1_CASE_REFUSED CASE_UNSUPPORTED_VERSION	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/a7h-20-r5-coupling-count.case	R	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/a7h-21-r6-label-index-value.case	R	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+# negative: PASS 8 FAIL 0 INDETERMINATE 0
+# positive: PASS 8 FAIL 0 INDETERMINATE 0
+# refusal: PASS 6 FAIL 0 INDETERMINATE 0
+# AT1-G1 codec conformance (my codec, engine and oracle refusals exact; KAT digests copied): PASS
+# T9 wall-clock independence (engine run twice, TZ and environment changed): PASS (case_id, acceptance_id, values block and verdict_id identical; each evidence_digest recomputes, so it differs whenever the covered bytes differ)
+# AT1-G2 isolation: not judged here; run gates/isolation.sh on the compute objects
+# AT1-G3 oracle calibration (every oracle record against the exact shadow, which reproduces the AT1_SPEC 13 hand tables in selftest): PASS
+# AT1-G4 positive arm (every POSITIVE case verifies PASS): PASS
+# AT1-G5 negative arm, candidate part (every NEGATIVE case FAILs with exactly its codes); mutant part: `at1-eval mutants`: PASS

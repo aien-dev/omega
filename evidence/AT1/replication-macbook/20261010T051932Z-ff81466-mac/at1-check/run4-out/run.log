@@ -1,0 +1,91 @@
+AT-1 Agent 5 run 20261010T051716Z mode=check omega=ff814662a19cf7da6b183f3e667c6c921e0ead21 starting_checkout_clean=YES
+CONTROL C0-CONTRACT-DIGESTS PASS  all match contract.lock and the AT0_FREEZE.md rows (arch HEAD ea91d7c)
+$ git clone --no-hardlinks /Users/drakestapleton/at1-replication/run-ff814662a19c/omega <work>/src; git checkout --detach ff814662a19cf7da6b183f3e667c6c921e0ead21
+Note: switching to 'ff814662a19cf7da6b183f3e667c6c921e0ead21'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+CONTROL C0-COMPONENTS-AT-QUALIFIED-COMMIT NOT_RUN  components are those of HEAD
+$ (cd <work>/src/research/atemporal/at1/oracle && sh build.sh)
+BUILD oracle-build ok
+$ (cd <work>/src/research/atemporal/at1/model && make CC=/Users/drakestapleton/at1-replication/run-ff814662a19c/ccwrap/cc-nosan)
+BUILD model-build ok
+$ (cd <work>/src/research/atemporal/at1/evaluator && make all)
+BUILD evaluator-build ok
+CONTROL C1-BUILD-LEAVES-TREE-CLEAN PASS  empty (build outputs are git-ignored)
+CONTROL C1-MODEL-TESTS PASS  plain rc=0 (1390 passed, 0 failed); asan rc=0 (asan: -fsanitize=address,undefined not supported by /Users/drakestapleton/at1-replication/run-ff814662a19c/ccwrap/cc-nosan here; skipped)
+CONTROL C1-ORACLE-TESTS PASS  rc=0 (test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.61s)
+CONTROL C1-ORACLE-OWN-ISOLATION PASS  Agent 2's own gate rc=0 (ISOLATION PASS)
+CONTROL C1-EVALUATOR-TESTS PASS  rc=0; SELFTEST: PASS (550 assertions, 0 failed);corpus-check: 96 files, 0 differ;MUTANT_RECEIPT: PASS (244 cells, 0 unexpected) -> build/MUTANT_RECEIPT.tsv;AT1_ISOLATION_CONTROLS: PASS;
+cases: 96 (positive 12, negative 12, refuse 72); hidden sets not touched
+$ (cd evaluator && sh run.sh 'sh <work>/src/research/atemporal/at1/integration/engine_shim.sh {case} {out}' 'sh <work>/src/research/atemporal/at1/integration/oracle_shim.sh {case} {out}' cases /Users/drakestapleton/at1-replication/run-ff814662a19c/omega/build/at1-dashnm/check/results/pass1)
+pass 1: evaluator run.sh rc=0
+$ (TZ=Asia/Tokyo sh evaluator/run.sh 'sh <work>/src/research/atemporal/at1/integration/engine_shim.sh {case} {out}' 'sh <work>/src/research/atemporal/at1/integration/oracle_shim.sh {case} {out}' cases /Users/drakestapleton/at1-replication/run-ff814662a19c/omega/build/at1-dashnm/check/results/pass2)
+pass 2: evaluator run.sh rc=0
+CONTROL C2-REPEATABILITY PASS  73 result files: 73/73 identical outside run_started_utc, run_finished_utc, evidence_digest (0/73 byte-identical); TABLE.tsv and VERDICT_IDS.tsv byte-identical; both runs rc=0
+CONTROL C3-SPLICE-AGREEMENT PASS  24/24 byte-identical (same verdict block, verdict_id, provenance and evidence_digest)
+CONTROL C4-SPLICE-READING-C PASS  24/24: all four reference_* families copied verbatim in values-block order (label, clock_probability, ideal, interacting), nothing else spliced
+CONTROL C5-PROVENANCE-PIN PASS  49/49 name contract_commit cbe4c8ed88d28bb96d5209327ecd30aa9cddaf7a, omega ff81466 and the built binaries; oracle build recorded source_tree_clean YES
+CONTROL C6-EVALUATION-ORDER PASS  24/24 byte-identical
+CONTROL C7-DIRECT-VERIFY PASS  24/24 AT1_VERIFY PASS, each matching the evaluator's TABLE.tsv case verdict
+CONTROL C8-ENGINE-MUTANT-DROP-V PASS  15/18 killed; blind: positive/P1a-zero-coupling-interacting.case positive/P1b-zero-coupling-ideal.case positive/P1c-spectator-coupling-ideal.case; every cell equals Agent 4's predicted KILLED/BLIND
+CONTROL C8-ENGINE-MUTANT-WRONG-LEVEL PASS  16/18 killed; blind: positive/P1a-zero-coupling-interacting.case positive/P1b-zero-coupling-ideal.case; every cell equals Agent 4's predicted KILLED/BLIND
+CONTROL C9-ISOLATION-ENGINE PASS  strict set clean (AT1_ISOLATION: PASS (5 objects clean)); at1_bn: only fwrite (the out-of-memory diagnostic to stderr); at1_io: only fopen, fread; no instruction hit anywhere
+CONTROL C10-ISOLATION-ENGINE-MUTANTS PASS  all three flagged: hidden_clock_mutant:caught counter_mutant:caught raw_syscall_mutant:caught (clock_gettime by the symbol scan; the inline counter read and inline system call by the instruction scan)
+built target/libat1.rlib
+CONTROL C11-ISOLATION-ORACLE PASS  AT1_ISOLATION: PASS (1 objects clean) (compute crate src/at1 only; main.rs is the I/O layer, excluded by design)
+CONTROL C12-ISOLATION-ORACLE-MUTANTS PASS  all three flagged: std_time:caught counter:caught raw_syscall:caught
+CONTROL C13-GATE-CONTROLS PASS  4 rows AS_INTENDED; symbol scan alone blind to the two inline mutants, as designed
+Note: switching to 'ff814662a19cf7da6b183f3e667c6c921e0ead21'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+CONTROL C14-MAKE-N-HYGIENE PASS  byte-identical in all four comparisons (all: 64 lines, exit 2; test: 64 lines, exit 2); the plan names omegatool
+CONTROL C15-MAKE-DATABASE PASS  empty diff over 4391 database lines (SRCS, all, test present): no variable, rule, target or prerequisite of the existing build changes
+CONTROL C16-MAKE-PARSES PASS  both plan: sh 'research/atemporal/at1/integration/run.sh' --out 'build/at1-dashnm/check'; no undefined AT1_ variable
+GATE AT1-G0 REFERENCE  freeze recorded by Agent 0 (aien-architecture contract cbe4c8e, spec 81047f5, from contract.lock); this run: C0-CONTRACT-DIGESTS PASS
+GATE AT1-G1 PASS  refusal rows: PASS 72 FAIL 0 INDETERMINATE 0; failing rows: none
+GATE AT1-G2 PASS  symbol + instruction scans of compute objects only; the evaluator is UNISOLATED (same host, same account); what the scans cannot see is listed in QUALIFICATION.md
+GATE AT1-G3 PASS  oracle records judged on 24 valid cases
+GATE AT1-G4 PASS  positive: PASS 12 FAIL 0 INDETERMINATE 0
+GATE AT1-G5 PASS  negative: PASS 12 FAIL 0 INDETERMINATE 0; MUTANT_RECEIPT: PASS (244 cells, 0 unexpected) -> build/MUTANT_RECEIPT.tsv
+GATE AT1-G6 PASS  run.sh rc=0; SELFTEST: PASS (550 assertions, 0 failed); corpus-check: 96 files, 0 differ; T9 PASS; the evaluator ran on the same host and account as the candidates (UNISOLATED)
+GATE AT1-G7 NOT_RUN  Agent 7 (replication on the MacBook) owns G7
+GATE AT1-G8 NOT_RUN  Agent 6 (scientific review) owns G8
+omega_commit ff814662a19cf7da6b183f3e667c6c921e0ead21
+source_tree_clean YES
+starting_checkout_clean YES
+contract_commit cbe4c8ed88d28bb96d5209327ecd30aa9cddaf7a
+stamp 20261010T051716Z
+host Macbook.local macOS 26.6.2 arm64
+cases 96: positive 12, negative 12, refuse 72; engine results written 24
+evaluator table: positive PASS 12 FAIL 0 INDETERMINATE 0; negative PASS 12 FAIL 0 INDETERMINATE 0; refusal PASS 72 FAIL 0 INDETERMINATE 0
+mutants: drop_v 15/18 killed; wrong_level 16/18 killed; evaluator receipt MUTANT_RECEIPT: PASS (244 cells, 0 unexpected) -> build/MUTANT_RECEIPT.tsv
+gates: AT1-G0=REFERENCE AT1-G1=PASS AT1-G2=PASS AT1-G3=PASS AT1-G4=PASS AT1-G5=PASS AT1-G6=PASS AT1-G7=NOT_RUN AT1-G8=NOT_RUN 
+controls failing: 0; gates failing: 0

@@ -1,0 +1,2 @@
+FAIL: instruction <work>/iso/mut/at1_numeric_counter_mutant.o __text +0xef8: d53be048 MRS from the generic timer (CNT*_EL0)
+AT1_ISOLATION: FAIL
