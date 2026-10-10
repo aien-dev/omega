@@ -386,6 +386,12 @@ static void raise_int_group(void *ctx) { (void)ctx; kill(0, SIGINT); }
 static void child_sigint(T *t, void *arg)
 {
     (void)arg;
+    /* A background job of a non-interactive shell (`make ... &`, nohup) inherits SIGINT and SIGQUIT ignored, and a
+     * non-interactive osh keeps an inherited ignore for its children (POSIX, child_signals). The test then never kills
+     * the sleepers and reads COMPLETED st=0 (#388). Start from default dispositions so the test measures osh, not the
+     * caller's environment. */
+    signal(SIGINT, SIG_DFL);
+    signal(SIGQUIT, SIG_DFL);
     OshBuilder *b = nb();
     helper(b, "sleep", "20000");
     helper(b, "sleep", "20000");
