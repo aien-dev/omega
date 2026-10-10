@@ -1,5 +1,19 @@
 {
-  "schema_version": "1.0.0",
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-10T04:42:37Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:0795c4be5936747cb485e4c44f82c1c97940b84d49977a5bc9604de4f84973f2",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 5,
+      "generated_at_commit": "c5cf6f40e750dca16f9e8e2d7fd241d4382a6445",
+      "source_tree": "sha256:45aa3f349a99a8ed2011cc573859298de068a01614faa7736deed97511312819"
+    }
+  },
   "name": "at1-integration",
-  "purpose": "AT-1 Agent 5 integration runner (run.sh), engine and oracle shims for the evaluator, contract pin, and the qualification report"
+  "purpose": "AT-1 Agent 5 integration runner (run.sh), engine and oracle shims for the evaluator, contract pin, and the qualification report",
+  "schema_version": "1.0.0"
 }
