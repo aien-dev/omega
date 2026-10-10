@@ -1,0 +1,58 @@
+SELF-BUILD                                   build    PASS                 cc -std=c11 -Wall -Wextra -Werror -pedantic
+SELF-BUILD-ASAN                              build    PASS                 ASan/UBSan build
+SELF-KAT-DIGESTS                             codec    PASS                 file, case_id and acceptance_id equal the published digests
+SELF-GEN-ROUNDTRIP                           codec    PASS                 generator reproduces the example byte for byte
+SELF-SHADOW-HAND-TABLE                       shadow   PASS                 shadow oracle reproduces the section 6 hand table
+SELF-CORPUS-MANIFEST                         corpus   PASS                 68 cases give their expected response
+SELF-DERIVATIONS                             derivation PASS                 26 positive/negative cases: expected codes equal the derived codes
+MUTANT-BLIND-P1-kat-ideal-qubit-n4-hardcoded_table mutant   INCONCLUSIVE         defect indistinguishable from truth on this case by construction (stat
+MUTANT-BLIND-P1-kat-ideal-qubit-n4-wrong_weight_hidden mutant   INCONCLUSIVE         defect indistinguishable from truth on this case by construction (stat
+MUTANT-BLIND-P1-kat-ideal-qubit-n4-verdict_forged mutant   INCONCLUSIVE         defect indistinguishable from truth on this case by construction (stat
+MUTANT-BLIND-P1f-y-axis-rotation-conjugate_bug mutant   INCONCLUSIVE         defect indistinguishable from truth on this case by construction (stat
+MUTANT-BLIND-P2b-h0-shift-control-hardcoded_table mutant   INCONCLUSIVE         defect indistinguishable from truth on this case by construction (stat
+MUTANT-BLIND-P2-tilted-h0-reversed_reference mutant   INCONCLUSIVE         defect indistinguishable from truth on this case by construction (stat
+MUTANT-BLIND-N7-unreachable-labels-label_status_wrong mutant   INCONCLUSIVE         defect indistinguishable from truth on this case by construction (stat
+MUTANT-BLIND-P1-kat-ideal-qubit-n4-label_claimed_defined mutant   INCONCLUSIVE         defect indistinguishable from truth on this case by construction (stat
+SELF-MUTANTS                                 mutant   PASS                 41 discriminating case/mutant pairs all caught
+MUTANT-dirty_tree                            mutant   PASS                 graded INCONCLUSIVE as designed (not citable)
+MUTANT-contract_commit_wrong                 mutant   PASS                 graded INCONCLUSIVE as designed (not citable)
+SELF-ASAN                                    sanitizer PASS                 codec, refusals, synth and verify clean under ASan/UBSan
+GATE-ISOLATION-MUTANT-CAUGHT                 gate     PASS                 hidden-clock mutant rejected
+GATE-ISOLATION-CLEAN-PASSES                  gate     PASS                 clean arithmetic object accepted
+GATE-ISOLATION-FORTIFIED-READ-CAUGHT         gate     PASS                 hardened-libc file-read aliases (__fread_chk, __open_2) rejected
+GATE-ISOLATION-RUST-STD-TIME-CAUGHT          gate     PASS                 Rust std::time::SystemTime mutant rejected (v0/legacy mangling and dem
+GATE-ISOLATION-RUST-EXTERN-CLOCK-CAUGHT      gate     PASS                 Rust extern "C" clock_gettime mutant rejected
+GATE-ISOLATION-RUST-CLEAN-PASSES             gate     PASS                 oracle compute crate alone (1 rlib members) accepted
+HIDDEN-COMMITMENT                            hidden   PASS                 published hidden cases match the digests committed before the candidat
+CAND-CODEC-CONFORMANCE                       candidate PASS                 68 public cases answered exactly as the contract requires
+CAND-CODEC-HIDDEN                            candidate PASS                 hidden cases accepted
+CAND-VERIFY-P1-kat-ideal-qubit-n4            candidate PASS                 independent verification agrees; expectation met
+CAND-VERIFY-P1b-ideal-n4-tau8-m8             candidate PASS                 independent verification agrees; expectation met
+CAND-VERIFY-P1c-ideal-n6-m6                  candidate PASS                 independent verification agrees; expectation met
+CAND-VERIFY-P1d-ref-offset-t2                candidate PASS                 independent verification agrees; expectation met
+CAND-VERIFY-P1e-x-axis-rotation              candidate PASS                 independent verification agrees; expectation met
+CAND-VERIFY-P1f-y-axis-rotation              candidate PASS                 independent verification agrees; expectation met
+CAND-VERIFY-P1g-complex-psi-yplus            candidate PASS                 independent verification agrees; expectation met
+CAND-VERIFY-P2-tilted-h0                     candidate PASS                 independent verification agrees; expectation met
+CAND-VERIFY-P2b-h0-shift-control             candidate PASS                 independent verification agrees; expectation met
+CAND-VERIFY-P3-spec-reference-model          candidate PASS                 independent verification agrees; expectation met
+CAND-VERIFY-P4-degenerate-identity-h         candidate PASS                 independent verification agrees; expectation met
+CAND-VERIFY-P5-large-rationals               candidate PASS                 independent verification agrees; expectation met
+CAND-VERIFY-N1-uncovered-spectrum            candidate PASS                 independent verification agrees; expectation met
+CAND-VERIFY-N2-half-covered                  candidate PASS                 independent verification agrees; expectation met
+CAND-VERIFY-N3-broken-clock-tau3             candidate PASS                 independent verification agrees; expectation met
+CAND-VERIFY-N4-wrong-weight-2                candidate PASS                 independent verification agrees; expectation met
+CAND-VERIFY-N4b-wrong-weight-5               candidate PASS                 independent verification agrees; expectation met
+CAND-VERIFY-N5-precision-demand              candidate PASS                 independent verification agrees; expectation met
+CAND-VERIFY-N6-zero-kernel-component         candidate PASS                 independent verification agrees; expectation met
+CAND-VERIFY-N7-unreachable-labels            candidate PASS                 independent verification agrees; expectation met
+CAND-VERIFY-H1                               candidate PASS                 independent verification agrees; expectation met
+CAND-VERIFY-H2                               candidate PASS                 independent verification agrees; expectation met
+CAND-VERIFY-H3                               candidate PASS                 independent verification agrees; expectation met
+CAND-VERIFY-H4                               candidate PASS                 independent verification agrees; expectation met
+CAND-VERIFY-H5                               candidate PASS                 independent verification agrees; expectation met
+CAND-VERIFY-H6                               candidate PASS                 independent verification agrees; expectation met
+CAND-WALLCLOCK-INDEPENDENCE                  control  PASS                 verdict_id and values identical across time/TZ; evidence digests diffe
+CAND-ISOLATION                               gate     PASS                 no clock/random/env/file/net/process/thread symbol in candidate comput
+---- summary: pass=48 fail=0 inconclusive=8 blocked_no_candidate=0 not_run=0  (self-test overall PASS; isolation UNISOLATED)
+written results/qualification.json

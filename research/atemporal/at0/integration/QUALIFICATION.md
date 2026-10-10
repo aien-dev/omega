@@ -1,4 +1,68 @@
-# AT-0 qualification report (Agent 5): second run, then first run (history)
+# AT-0 qualification report (Agent 5): third run, then second and first runs (history)
+
+# Third run (final re-qualification on omega `712469d`)
+
+**Status: THIRD RUN RECORDED. G2 PASS, G4 PASS (12/12), G5 PASS (8/8), G6 PASS (20/20), G7 NOT_RUN (Agent 6). Every control C0 to C19 PASS (0 failing). D1 to D11 FIXED and verified. `make at0-check` exits 0 from a clean clone.**
+This is software conformance of the AT-0 implementation to its frozen contracts, not a result about time, gravity or quantum mechanics (charter section 1). One platform (aarch64 Linux, glibc, gcc 13.3.0, rustc 1.98.1). The evaluator runs UNISOLATED (same host and account), so nothing here is blinded.
+
+Evidence: `evidence/AT0/20261010T005447Z-712469d/` (62 case copies, 20 results per pass over two passes, 24 mutant results, component files, 20 verifier JSONs, `receipts/` with sha256 of cases, binaries and contract lock, `cc`/`rustc` versions in `toolchain.txt`, flags in `flags.txt`, `controls.tsv`, `gates.tsv`, `run.log`). The first two evidence folders are untouched.
+Pins: omega `712469d93eda90072fe80ab2fcb4e63afce37cf9` (main after #368 `bff4a42` and #369), tree clean (`source_tree_clean YES`); the run is on this commit with no source change (this PR adds only the evidence folder and this report); contract aien-architecture `fe86e43` (CASE_V1 `d90af74b...`, RESULT_V2 `bd0f9eb8...`); spec `68f47e2`. The task brief named omega head 771d281; `git log origin/main -1` at the start of this run showed `712469d`, so `712469d` is what was run.
+
+## T1. Commands and exit status
+- `make at0-check` from the fresh clone: **exit 0**, 59 s wall, output tail `controls failing: 0; gates failing: 0` (two internal passes for repeatability).
+- `AT0_ARCH_DIR=<local aien-architecture clone at 68f47e2> sh research/atemporal/at0/integration/run.sh --evidence`: exit 0, writes the evidence folder above. This is the recorded run; the same controls and gates as the make run, plus C0-CONTRACT-DIGESTS (the make run has no architecture clone and reports it NOT_RUN).
+
+## T2. Gates
+| Gate | Result | Command / evidence | Detail |
+|---|---|---|---|
+| AT0-G2 | **PASS** | `make at0-check` controls C7-C13 (isolation_check.sh and evaluator/gates/isolation.sh on 11 model compute objects and the Rust oracle rlib member, C and Rust hidden-clock mutants incl. `std::time`, make hygiene, make parses) | all pass; Agent 4 independent sign-off of this scanner recorded by reference (omega#358, 2026-10-10T00:09:52Z), not a runner check |
+| AT0-G4 | **PASS** | every positive case outcome PASS and expectation_met YES (`receipts/cases.tsv`) | 12/12 |
+| AT0-G5 | **PASS** | every negative case FAIL with exactly its codes; C5, C6, C8, C10 | 8/8; axis-swap mutant 12/12 caught; Y-sign mutant 9/12 caught |
+| AT0-G6 | **PASS** | `at0-eval result <result> --case <case>` on all 20 assembled results plus `evaluator/run.sh` with this runner as candidate (C14, C15, C16) | evaluator agrees 20/20; harness pass=48 fail=0 inconclusive=8 (documented blind mutant pairs), blocked_no_candidate=0 |
+| AT0-G7 | **NOT_RUN** | - | Agent 6 owns it |
+
+## T3. Cases: expected vs got
+| Class | Expected | Got |
+|---|---|---|
+| positive (P1, P1b-g, P2, P2b, P3, P4, P5) | 12 PASS, expectation_met YES | 12/12 |
+| negative (N1, N2, N3, N4, N4b, N5, N6, N7) | 8 FAIL with exactly the expected codes | 8/8, codes exact |
+| refusals | 42 files; model, oracle and manifest give the same code | **42/42 agree** |
+| R17, R30 (noncanonical integers) | CASE_NONCANONICAL | model, oracle, manifest: CASE_NONCANONICAL |
+| R31 (control_kind bad), R36 (label count mismatch), R37 (model_family bad) | CASE_PARSE_ERROR (Agent 0 rulings, shape before range) | model, oracle, manifest: CASE_PARSE_ERROR |
+| other bare-literal fixed lines of CASE_V1 section 1 (energy_unit, system_dim, interaction, constraint, physical_state, clock_povm, observables) | CASE_PARSE_ERROR (same ruling, applied by Agent 3 to all eight literals in #368) | covered by the 42-row agreement; I did not add separate refusal files for them (the manifest has no such rows beyond R37), so each literal other than model_family is checked by Agent 3's own tests, not by my runner |
+Valid cases assembled: 20 of 20; evaluator verdict agrees with the assembled outcome on 20 of 20.
+
+## T4. Controls (receipts/controls.tsv has every command)
+All PASS: C0-CONTRACT-DIGESTS (recorded run: sha256 of AT0_CASE_V1.md, AT0_RESULT_V2.md and AT0_SPEC.md in a local aien-architecture clone at HEAD `68f47e2` equal contract.lock; I also checked by hand with `git show fe86e43:...`: CASE_V1 `d90af74b...d663d9`, RESULT_V2 `bd0f9eb8...514b5e`, both equal to the lock at `fe86e43`, which is an ancestor of `68f47e2`; spec at `68f47e2` `5e6165cf...c73dc275` equals the lock), C0-RUSTC-PIN, C1 (model tests 13/13 plain and ASan/UBSan; oracle tests; oracle own isolation), C2 repeatability (20/20 values blocks, verdict_id, case_id, acceptance_id equal; evidence_digest differs 20/20), C3 wall-clock independence (second pass 2 s later, `TZ=Asia/Tokyo`), C4 evaluation order (20/20 bit-identical), C5 axis swap 12/12, C6 Y-sign 9/12 (P1f, P2, P4 do not show Y at any sampled reading), C7 to C10 isolation (C and Rust), C11 `make -n` hygiene, C12 make database, C13 make parses, C14 evaluator harness (pass=48 fail=0 inconclusive=8), C15, C16, C17 judge calibration 22/22, C18 assembler refusals, **C19 refusal agreement 42/42**.
+
+## T5. Make hygiene (re-checked in this run)
+`make -n -k all` and `make -n -k test` with and without `mk/at0.mk`: byte-identical (63 lines each; sha256 of the printed output `48130733...f3fd8`; exit 2 both ways because the sibling physics checkout is absent, a pre-existing condition, D10). The runner also records the four comparisons (defaults and `PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0`) in `receipts/make-n-*.txt` (C11) and an empty make-database diff (C12).
+
+## T6. Status of D1 to D11
+| D | Status | Verified by |
+|---|---|---|
+| D1 model ERR_OVERFLOW on P5 | FIXED (#366) | P5 PASS, G4 12/12 |
+| D2 R17/R30 code | FIXED (#366) | C19 rows R17, R30 |
+| D3 R31/R36 ruling | FIXED (Agent 0 ruling, manifest #365, codec) | C19 rows R31, R36 |
+| D4 oracle fixture n1-uncovered | FIXED (#364) | C17 22/22 |
+| D5 Rust std::time mutant | FIXED (#365, #364) | C10, C1-ORACLE-OWN-ISOLATION, C14 |
+| D6 file reader in parser object | FIXED (#366) | C7 strict scan of `at0_case.o` clean |
+| D7 oracle contract_commit | FIXED (#364) | evaluator accepts 20/20 assembled results |
+| D8 spec pin | FIXED (#364, #366) | READMEs name `68f47e2`; C17 `spec-p2-tilted-h0`. I did not re-derive the spec section 13 tables myself |
+| D9 make coupling via MAKEFILE_LIST | OPEN, informational, mine, unchanged | C12 |
+| D10 make exit 2 without physics checkout | OPEN, pre-existing, informational | C11, T5 |
+| D11 R37 code | FIXED (Agent 0 ruling; #368 model, #369 manifest) | C19 row R37 all three CASE_PARSE_ERROR; C19 42/42; `make at0-check` exit 0 |
+Also from #369: the evaluator isolation gate now strips `__name_chk` and `__name_2` aliases and forbids the plain file-read family (the finding I reported in run 2); my own `isolation_check.sh` strips them since run 2, C7 and C10 pass with both.
+
+## T7. Hidden set (by reference, not run by me)
+Agent 4 ran H1 to H6 against omega `bff4a428` and published the outcomes on omega#358 (issuecomment-6091815405) and under `evaluator/results/hidden-run-bff4a428/`: H1 to H4 PASS, H5 FAIL (POVM_NORMALIZATION_EXCEEDED, PROBABILITY_SUM_EXCEEDED), H6 FAIL (SCHRODINGER_DEVIATION_EXCEEDED), all expectation_met YES, independent verification PASS. I re-checked only that the six files on main match their sha256 in `HIDDEN_COMMITMENT.txt` (all six equal). `bff4a428` and `712469d` differ only in Agent 4's evaluator directory and `.crumb` files. My runner points `AT0_HIDDEN_DIR` at a nonexistent path and does not run them.
+
+## T8. UNKNOWN and limits
+UNISOLATED evaluator (same host, same account): not a blinded qualification. Symbol scans see symbols only (inline `svc`, counter registers, function pointers pass `nm`). One platform; the model's `cos`/`sin` depend on the C library and its bounds assume 1 ulp. Bounds are ESTIMATED, no RIGOROUS claim. The judge in the assembler is mine (a third reading of RESULT_V2 section 4), evidence of a consistent reading, not independence. Spec section 13 tables not re-derived by me. Verifier JSON and some logs carry absolute temp paths, so their digests differ on a re-run elsewhere; values blocks and verdict_id do not. C0-CONTRACT-DIGESTS is NOT_RUN in plain `make at0-check` (no architecture clone), PASS in the recorded run. G7 is Agent 6's.
+
+---
+
+# Second run and first run (history, unchanged below)
 
 # Second run (re-qualification on omega `ee29a2c`)
 

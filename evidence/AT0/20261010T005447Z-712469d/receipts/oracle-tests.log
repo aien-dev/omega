@@ -1,0 +1,19 @@
+
+running 14 tests
+test at0::rational::tests::reduces_and_orders ... ok
+test at0::complex::tests::algebra ... ok
+test at0::exact::tests::doubles_and_decimals_meet_exactly ... ok
+test at0::sha256::tests::test_vectors ... ok
+test tests::case_name_outside_identity_and_tokens ... ok
+test tests::density_matrix_properties_and_routes ... ok
+test tests::known_answer_digests_and_kernel ... ok
+test tests::reference_model_hand_table ... ok
+test tests::refusals_in_contract_order ... ok
+test tests::record_shape_and_wall_clock_independence ... ok
+test tests::spec_draft_reference_model ... ok
+test tests::negative_controls ... ok
+test tests::multiple_n_offsets_phases_tilts ... ok
+test tests::fixtures_render_and_meet_expectations ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

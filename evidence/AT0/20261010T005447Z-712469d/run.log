@@ -1,0 +1,55 @@
+AT-0 Agent 5 run 20261010T005447Z mode=evidence omega=712469d93eda90072fe80ab2fcb4e63afce37cf9 tree_clean=YES
+CONTROL C0-CONTRACT-DIGESTS PASS  contract files match contract.lock (arch HEAD 68f47e2)
+$ git clone --no-hardlinks /home/drakestapleton/.claude/jobs/6427e119/tmp/agent5c/omega /tmp/at0-run.kbxplD/src; git checkout --detach 712469d93eda90072fe80ab2fcb4e63afce37cf9
+CONTROL C0-RUSTC-PIN PASS  rustc 1.98.1 (48a229cea 2026-09-01) (pin 1.98.1)
+$ (cd /tmp/at0-run.kbxplD/src/research/atemporal/at0/model && ./build.sh)
+BUILD model-build ok
+$ (cd /tmp/at0-run.kbxplD/src/research/atemporal/at0/model && ./build.sh asan)
+BUILD model-build-asan ok
+$ (cd /tmp/at0-run.kbxplD/src/research/atemporal/at0/oracle && ./build.sh)
+BUILD oracle-build ok
+$ (cd /tmp/at0-run.kbxplD/src/research/atemporal/at0/evaluator && make -s all)
+BUILD evaluator-build ok
+$ (cd /tmp/at0-run.kbxplD/src/research/atemporal/at0/evaluator && make -s asan)
+BUILD evaluator-build-asan ok
+$ cc -std=c11 -Wall -Wextra -Werror -pedantic -O2 -D_POSIX_C_SOURCE=200809L -I src -o at0-assemble at0_assemble.c src/sha256.c
+CONTROL C1-MODEL-TESTS PASS  plain rc=0, ASan/UBSan rc=0 (at0-tests: 13/13 passed)
+CONTROL C1-ORACLE-TESTS PASS  rc=0 (test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s)
+CONTROL C1-ORACLE-OWN-ISOLATION PASS  Agent 2's own gate rc=0 (ISOLATION PASS)
+NOTE build_flags truncated to 200 bytes; full flags in receipts/flags.txt
+cases: 62 (positive 12, negative 8, refuse 42); hidden set not touched
+pass 1 done: 62 rows
+CONTROL C2-REPEATABILITY PASS  20 results: values blocks byte-identical 20/20, verdict_id equal 20/20, case_id/acceptance_id equal, evidence_digest differs 20/20
+CONTROL C3-WALLCLOCK-INDEPENDENCE PASS  equal case_id, acceptance_id, verdict_id and values block; different evidence_digest
+CONTROL C4-EVALUATION-ORDER PASS  20/20 bit-identical (labels evaluated in reverse order)
+CONTROL C5-AXIS-SWAP-MUTANT PASS  12/12 caught; every P1 case caught except: none
+CONTROL C6-Y-SIGN-MUTANT PASS  9/12 caught; not caught (swap invisible on that case, see QUALIFICATION.md): P1f-y-axis-rotation P2-tilted-h0 P4-degenerate-identity-h
+CONTROL C7-ISOLATION-MODEL-CLEAN PASS  11 compute objects clean under both scanners (parser at0_case.o strictly clean); at0_io.o scanned separately (strict scan rc=1: HIT /tmp/at0-run.kbxplD/iso/clean/at0_io.o: fopen fread )
+CONTROL C8-ISOLATION-MODEL-HIDDEN-CLOCK-MUTANT PASS  caught by both: HIT /tmp/at0-run.kbxplD/iso/mut/at0_engine_hidden_clock.o: clock_gettime 
+built target/libat0.rlib
+CONTROL C9-ISOLATION-ORACLE-CLEAN PASS  1 rlib members clean under both scanners (compute crate src/at0 only; main.rs is the I/O layer and is excluded by design)
+CONTROL C10-ISOLATION-ORACLE-HIDDEN-CLOCK-MUTANTS PASS  own scanner flags both; evaluator gate flags std-time mutant rc=1 and extern-clock mutant rc=1 (0 would mean not flagged)
+CONTROL C11-MAKE-N-HYGIENE PASS  byte-identical in all four comparisons (all: 64 lines, test: 64 lines; exit 2 both ways because the physics checkout is absent, a pre-existing condition)
+CONTROL C12-MAKE-DATABASE PASS  empty diff: no variable, rule, target or prerequisite of the existing build changes (SRCS, all, test, clean untouched)
+CONTROL C13-MAKE-PARSES PASS  both parse and plan: sh research/atemporal/at0/integration/run.sh --out build/at0/check
+CONTROL C14-EVALUATOR-HARNESS PASS  ---- summary: pass=48 fail=0 inconclusive=8 blocked_no_candidate=0 not_run=0  (self-test overall PASS; isolation UNISOLATED); CAND-VERIFY PASS lines: 26
+CONTROL C15-EVALUATOR-WALLCLOCK PASS  Agent 4's own wall-clock control passes on this runner
+CONTROL C16-EVALUATOR-ISOLATION-CAND PASS  passes
+CONTROL C17-JUDGE-CALIBRATION PASS  22/22 identical
+CONTROL C18-ASSEMBLER-REFUSALS PASS  all refused with exit 3 and the expected message
+CONTROL C19-REFUSAL-AGREEMENT PASS  all 42 refuse cases agree
+GATE AT0-G2 PASS  runner checks C7-C13 all pass; Agent 4 sign-off of this runner scanner (isolation_check.sh) on C objects and Rust rlib members is recorded by reference only (omega#358, 2026-10-10T00:09:52Z, before #364 merged, so it covers the scanner, not the final oracle code; the runner does not verify it) and Agent 4 gate now flags the Rust std::time mutant (C10); Agent 4 is UNISOLATED (same host and account)
+GATE AT0-G4 PASS  12/12
+GATE AT0-G5 PASS  8/8 negative cases
+GATE AT0-G6 PASS  evaluator PASS on 20 of 20 valid cases (the other 0 produced no result file, see G4); evaluator self-tests, mutants and gates with this runner as candidate: 0 FAIL; evidence folder committed by the PR
+GATE AT0-G7 NOT_RUN  Agent 6 (scientific review) owns G7; Agent 5 does not run it
+omega_commit 712469d93eda90072fe80ab2fcb4e63afce37cf9
+source_tree_clean YES
+contract_commit fe86e43aae63370b3084f78e971a33b81ce75a9d
+stamp 20261010T005447Z
+cases 62 valid 20 refused 42
+G4 positive 12/12; G5 negative 8/8; G6 evaluator agreement 20/20; refusal rows where model, oracle and manifest agree 42/42
+mutant axis_swap: 12/12 caught
+mutant y_sign_flip: 9/12 caught; not caught (swap invisible on that case, see QUALIFICATION.md): P1f-y-axis-rotation P2-tilted-h0 P4-degenerate-identity-h
+gates: AT0-G2=PASS AT0-G4=PASS AT0-G5=PASS AT0-G6=PASS AT0-G7=NOT_RUN 
+controls failing: 0; gates failing: 0
