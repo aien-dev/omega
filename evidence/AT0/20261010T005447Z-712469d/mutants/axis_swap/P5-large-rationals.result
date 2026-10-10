@@ -1,0 +1,111 @@
+OMEGA-AT0-RESULT v2
+domain omega.at0.result.v2
+contract AT0_RESULT_V2
+case_contract AT0_CASE_V1
+case_name at0-p5-large-rationals
+begin semantic
+model_family PAGE_WOOTTERS_FINITE_IDEAL
+energy_unit DIMENSIONLESS_HBAR_1
+clock_dim 2
+clock_energies -7/1048573,7/1048573
+system_dim 2
+system_hamiltonian_pauli 0/1,2/1048573,3/1048573,6/1048573
+interaction NONE
+constraint SUM_HC_HS
+physical_state NULLSPACE_PROJECTION
+reference_clock_label t0
+reference_system_state (1/1048571;0/1),(1/1048569;1/1048567)
+clock_povm COVARIANT_DISCRETE
+povm_tau_turns 1048573/28
+povm_weight 1/1
+clock_label_count 2
+clock_label 0 t0
+clock_label 1 t1
+observables PAULI_X,PAULI_Y,PAULI_Z
+end semantic
+begin acceptance
+control_kind POSITIVE
+expected_outcome PASS
+expected_failure_codes none
+min_bound_kind ESTIMATED
+tol_constraint_residual 1@12
+tol_povm_residual 1@12
+tol_probability 1@12
+tol_zero_probability 1@9
+tol_schrodinger 1@12
+end acceptance
+case_id 46726a3921759525561c49c54697d4b4ef9e5712519eb65c49df2724120f5aec
+acceptance_id a13fb02dd674b8042ef8c0a197f03d58768709f782ba59cd26545eef6d41a228
+case_file_sha256 0bdbb88022f02f9b842998afc185c723fee66b75d4afdb953d2318cbe25838ec
+begin numerics
+arithmetic BINARY64
+bound_kind ESTIMATED
+threads 1
+end numerics
+begin values
+physical_state_kernel_dim 2
+constraint_residual f64:3b839885814aaa07 7105524@21
+povm_residual f64:3cb778d6acf9d833 1065816@20
+label 0 t0 DEFINED
+label 1 t1 DEFINED
+clock_probability 0 f64:3fe0000000000001 3197444@20
+clock_probability 1 f64:3fdfffffffffffff 3197444@20
+pauli 0 X PLUS f64:3feaaaaaaaaa7fff 3552715@20
+pauli 0 X MINUS f64:3fc5555555560000 3552715@20
+pauli 0 Y PLUS f64:3feaaaa955549554 3552715@20
+pauli 0 Y MINUS f64:3fc5555aaaadaaae 3552715@20
+pauli 0 Z PLUS f64:3fd5554ffffdfffe 3552715@20
+pauli 0 Z MINUS f64:3fe5555800010000 3552715@20
+pauli 1 X PLUS f64:3fcfc83c84574e5a 3552715@20
+pauli 1 X MINUS f64:3fe80df0deea2c68 3552715@20
+pauli 1 Y PLUS f64:3fcc4c9f74ae8995 3552715@20
+pauli 1 Y MINUS f64:3fe8ecd822d45d9a 3552715@20
+pauli 1 Z PLUS f64:3fea8ecb9781a72e 3552715@20
+pauli 1 Z MINUS f64:3fc5c4d1a1f96344 3552715@20
+reference 0 X PLUS f64:3feaaaa955549555 1421087@20
+reference 0 X MINUS f64:3fc5555aaaadaaaf 1421087@20
+reference 0 Y PLUS f64:3feaaaaaaaaa8002 1421087@20
+reference 0 Y MINUS f64:3fc5555555560002 1421087@20
+reference 0 Z PLUS f64:3fd5554ffffe0000 1421087@20
+reference 0 Z MINUS f64:3fe5555800010002 1421087@20
+reference 1 X PLUS f64:3fcc4c9f74ae8998 3653323@20
+reference 1 X MINUS f64:3fe8ecd822d45d9c 3653323@20
+reference 1 Y PLUS f64:3fcfc83c84574e61 3653323@20
+reference 1 Y MINUS f64:3fe80df0deea2c6a 3653323@20
+reference 1 Z PLUS f64:3fea8ecb9781a731 3653323@20
+reference 1 Z MINUS f64:3fc5c4d1a1f96348 3653323@20
+end values
+begin verdict
+check bound_kind_sufficient PASS
+check values_finite PASS
+check physical_state_nontrivial PASS
+check constraint_residual PASS
+check povm_normalization PASS
+check clock_probability_sum PASS
+check probability_range PASS
+check pauli_pair_sum PASS
+check conditional_defined PASS
+check schrodinger_agreement FAIL
+outcome FAIL
+failure_codes SCHRODINGER_DEVIATION_EXCEEDED
+error_code none
+expectation_met NO
+end verdict
+verdict_id 268f7cf20b49624cd4ccfe82b469a8c57f29ea65abbfe02a18f58ce8f6575c68
+begin provenance
+source_repo aien-dev/omega
+source_commit 712469d93eda90072fe80ab2fcb4e63afce37cf9
+source_tree_clean YES
+contract_commit fe86e43aae63370b3084f78e971a33b81ce75a9d
+engine_sha256 bd5b2eeb6f9114ab085b29a86d56c20ccfe5df658eb10ee46f0e80a1fdb5f92c
+oracle_repo aien-dev/omega
+oracle_commit 712469d93eda90072fe80ab2fcb4e63afce37cf9
+oracle_sha256 62f06673d745bf4d4a7a28643440d5e934e2fd95bddb7384d7a99a76ca10faf4
+build_cc gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0 (engine); rustc 1.98.1 (48a229cea 2026-09-01) (oracle) (MUTANT axis_swap control, not a qualification result)
+build_flags engine: -std=c11 -Wall -Wextra -Werror -pedantic -D_POSIX_C_SOURCE=200809L -I$HERE -I$ROOT/src -O2 -lm; oracle: rustc --edition 2021 -C opt-level=2 -C codegen-units=1 -C debuginfo=0 -C panic=abort -D
+host spark-b87b
+run_started_utc 2026-10-10T00:55:08Z
+run_finished_utc 2026-10-10T00:55:08Z
+end provenance
+evidence_digest 67a85bf2e738ab7569e19e9e7b39eab01825d141773e6f00736c991497188adc
+end
