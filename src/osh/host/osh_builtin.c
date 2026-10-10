@@ -158,7 +158,7 @@ static int bi_cd(OshSession *s, const OshCmd *c, const int io[3], int in_parent)
     }
     /* A child context keeps its own copy of the table, so setting here is safe in both cases. */
     (void)in_parent;
-    osh_var_set(s, "OLDPWD", old);
+    osh_var_export(s, "OLDPWD", old); /* bash exports OLDPWD */
     osh_var_set(s, "PWD", cur);
     if (show) {
         char line[PATH_MAX + 1];

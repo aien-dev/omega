@@ -379,6 +379,17 @@ static void test_builtins(void)
     CHECK(go(&t, b, &r) == 0, "cd ok");
     CHECK(osh_var_get(&t.s, "PWD") && strcmp(osh_var_get(&t.s, "PWD"), P("d1")) == 0, "PWD=%s", osh_var_get(&t.s, "PWD"));
     CHECK(osh_var_get(&t.s, "OLDPWD") && strcmp(osh_var_get(&t.s, "OLDPWD"), cwd0) == 0, "OLDPWD");
+    { /* bash exports OLDPWD, so a child sees the previous directory */
+        t_clear(&t);
+        OshBuilder *b2 = nb(0, 0);
+        helper(b2, "env", "OLDPWD", NULL);
+        go(&t, b2, &r);
+        char *o2 = t_out(&t), w2[PATH_MAX + 2];
+        snprintf(w2, sizeof w2, "%s\n", cwd0);
+        CHECK(strcmp(o2, w2) == 0, "OLDPWD reaches children, got '%s'", o2);
+        free(o2);
+        t_clear(&t);
+    }
     b = nb(0, 0);
     cmd(b, OSH_B_CD, "cd", "sub/../sub/.", NULL);
     CHECK(go(&t, b, &r) == 0, "relative cd");
@@ -1521,8 +1532,14 @@ static void test_session_env(void)
     int a = 0, z = 0, n = 0, raw = 0;
     for (char **p = e; *p; p++) { n++; a += !strcmp(*p, "A=9"); z += !strcmp(*p, "Z=z");
         raw += !strcmp(*p, "9x=1") + !strcmp(*p, "A B=1") + !strcmp(*p, "BASH_FUNC_f%%=() {  echo hi; }"); }
-    CHECK(a == 1 && z == 1 && n == 8, "fresh envp with override (n=%d)", n);
+    CHECK(a == 1 && z == 1 && n == 9, "fresh envp with override plus SHLVL (n=%d)", n);
     CHECK(raw == 3, "non-identifier entries reach children verbatim, as bash does (%d/3)", raw);
+    /* bash 5.2: SHLVL is the inherited level plus one; OLDPWD is exported, valueless unless inherited naming a directory */
+    int shl = 0, oldpwd_valueless = 0;
+    for (char **p = e; *p; p++) shl += !strcmp(*p, "SHLVL=1");
+    for (size_t k = 0; k < s.nvars; k++)
+        if (!strcmp(s.vars[k].name, "OLDPWD")) oldpwd_valueless = s.vars[k].exported && !s.vars[k].value;
+    CHECK(shl == 1 && oldpwd_valueless, "no SHLVL inherited: SHLVL=1 exported; OLDPWD exported without a value (%d %d)", shl, oldpwd_valueless);
     osh_envp_free(e);
     CHECK(osh_var_set(&s, "bad name", "x") < 0 && osh_var_export(&s, "", NULL) < 0, "invalid names refused");
     osh_var_set(&s, "U", "u");
@@ -1531,6 +1548,35 @@ static void test_session_env(void)
     for (char **p = e; *p; p++) found += !strncmp(*p, "U=", 2);
     CHECK(found == 0, "unexported variable not in envp");
     osh_envp_free(e);
+    osh_session_free(&s);
+}
+
+/* bash 5.2.21 (measured): SHLVL=3 -> 4; abc -> 1; -2 -> 0; 999 -> 1 (too high, reset); inherited OLDPWD kept only when it
+ * names a directory. */
+static void test_session_levels(void)
+{
+    static const struct { const char *in, *want; } lv[] = {{"SHLVL=3", "4"}, {"SHLVL=abc", "1"}, {"SHLVL=-2", "0"}, {"SHLVL=999", "1"}, {"SHLVL=0", "1"}};
+    for (size_t k = 0; k < sizeof lv / sizeof lv[0]; k++) {
+        OshSession s;
+        char in[32];
+        snprintf(in, sizeof in, "%s", lv[k].in);
+        char *env[] = {in, NULL};
+        CHECK(osh_session_init(&s, env) == 0, "init %s", lv[k].in);
+        const char *v = osh_var_get(&s, "SHLVL");
+        CHECK(v && strcmp(v, lv[k].want) == 0, "%s -> SHLVL=%s (got %s)", lv[k].in, lv[k].want, v ? v : "(null)");
+        osh_session_free(&s);
+    }
+    OshSession s;
+    char *env1[] = {"OLDPWD=/usr", NULL};
+    CHECK(osh_session_init(&s, env1) == 0, "init oldpwd dir");
+    CHECK(osh_var_get(&s, "OLDPWD") && strcmp(osh_var_get(&s, "OLDPWD"), "/usr") == 0, "inherited OLDPWD naming a directory is kept");
+    osh_session_free(&s);
+    char *env2[] = {"OLDPWD=/nonexistent-dir-osh", NULL};
+    CHECK(osh_session_init(&s, env2) == 0, "init oldpwd bogus");
+    int valueless = 0;
+    for (size_t k = 0; k < s.nvars; k++)
+        if (!strcmp(s.vars[k].name, "OLDPWD")) valueless = s.vars[k].exported && !s.vars[k].value;
+    CHECK(valueless, "inherited OLDPWD not naming a directory becomes a valueless export");
     osh_session_free(&s);
 }
 
@@ -2226,7 +2272,7 @@ int main(int argc, char **argv)
 
     if (argc > 2 && !strcmp(argv[1], "--only")) { g_only_set = 1; g_only = argv[2]; }
     alarm(300); /* watchdog: a hang must fail the run, not stall it */
-    if (want("env")) { test_session_env(); test_raw_env(); }
+    if (want("env")) { test_session_env(); test_raw_env(); test_session_levels(); }
     if (want("simple")) test_simple_and_path();
     if (want("builtins")) test_builtins();
     if (want("printf")) { test_printf(); test_printf_review(); }
