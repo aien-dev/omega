@@ -58,7 +58,7 @@ static void mark_param(ps *p, const char *d) { if (!p->bad_param) { p->bad_param
 static int fixed_value(ps *p, const char *key, const char *want) {
     char *v;
     if (!expect_key(p, key, &v)) return 0;
-    if (strcmp(v, want) != 0) mark_param(p, p->lines[p->i - 1]);
+    if (strcmp(v, want) != 0) { p->detail = p->lines[p->i - 1]; return 0; }  /* bare literal is line grammar: shape, CASE_PARSE_ERROR (Agent 0 ruling D11) */
     return 1;
 }
 static int parse_rat_list(ps *p, const char *val, rat *out, int max, int *count) {

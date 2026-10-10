@@ -9,13 +9,15 @@
 #   sh gates/isolation.sh <object-or-binary>...
 # Prints AT0_ISOLATION: PASS|FAIL and one line per hit. Exit 0 on PASS.
 fail=0
-FORBIDDEN="clock_gettime clock_getres clock_nanosleep clock gettimeofday time timegm timelocal localtime localtime_r gmtime gmtime_r mktime strftime nanosleep sleep usleep rand rand_r srand random srandom drand48 lrand48 arc4random getrandom getentropy getenv secure_getenv setenv putenv fopen fopen64 freopen open open64 openat openat64 creat socket connect accept bind listen send recv sendto recvfrom getaddrinfo gethostbyname dlopen dlsym system popen fork vfork posix_spawn execv execve execvp execl pthread_create thrd_create clone syscall"
+FORBIDDEN="clock_gettime clock_getres clock_nanosleep clock gettimeofday time timegm timelocal localtime localtime_r gmtime gmtime_r mktime strftime nanosleep sleep usleep rand rand_r srand random srandom drand48 lrand48 arc4random getrandom getentropy getenv secure_getenv setenv putenv fopen fopen64 freopen open open64 openat openat64 creat socket connect accept bind listen send recv sendto recvfrom getaddrinfo gethostbyname dlopen dlsym system popen fork vfork posix_spawn execv execve execvp execl pthread_create thrd_create clone syscall read write pread pwrite pread64 pwrite64 readv writev fread fwrite fgets fgetc getc getchar getline getdelim fscanf scanf mmap mmap64 ioctl"
 for o in "$@"; do
     [ -f "$o" ] || { echo "missing $o"; fail=1; continue; }
     # static (-p) and dynamic (-D) tables; a stripped executable keeps only its dynamic imports
     if ! nm -p "$o" >"$o.nm" 2>/dev/null && ! nm -D "$o" >"$o.nm" 2>/dev/null; then echo "FAIL: $o: nm cannot read symbols (not an ELF object?)"; fail=1; rm -f "$o.nm"; continue; fi
     { nm -p "$o" 2>/dev/null; nm -D "$o" 2>/dev/null; } > "$o.nm"
-    syms=$(awk 'NF>=2 {print $NF}' "$o.nm" | sed 's/@.*$//')
+    # strip the version suffix, then normalise hardened-libc aliases so a fortified build cannot hide a call:
+    # __fread_chk -> fread, __open_2 -> open, __openat64_2 -> openat64 (Agent 5 finding, omega#358)
+    syms=$(awk 'NF>=2 {print $NF}' "$o.nm" | sed -E 's/@.*$//; s/^__([a-z0-9_]+)_chk$/\1/; s/^__([a-z0-9_]+)_2$/\1/')
     for bad in $FORBIDDEN; do
         if echo "$syms" | grep -qx "_\{0,1\}${bad}" ; then echo "FAIL: $o references $bad"; fail=1; fi
     done

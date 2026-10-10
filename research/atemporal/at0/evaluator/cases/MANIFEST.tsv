@@ -59,5 +59,11 @@ refuse/R33-missing-final-lf.case	R1	AT0_CASE_REFUSED CASE_PARSE_ERROR
 refuse/R34-empty.case	R1	AT0_CASE_REFUSED CASE_PARSE_ERROR
 refuse/R35-trailing-line.case	R1	AT0_CASE_REFUSED CASE_PARSE_ERROR
 refuse/R36-label-count-mismatch.case	R3	AT0_CASE_REFUSED CASE_PARSE_ERROR
-refuse/R37-model-family-bad.case	R3	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R37-model-family-bad.case	R3	AT0_CASE_REFUSED CASE_PARSE_ERROR
 refuse/R38-acceptance-id-wrong.case	R5	AT0_CASE_REFUSED CASE_ID_MISMATCH
+hidden/H1.case	H1	AT0_CASE_OK
+hidden/H2.case	H2	AT0_CASE_OK
+hidden/H3.case	H3	AT0_CASE_OK
+hidden/H4.case	H4	AT0_CASE_OK
+hidden/H5.case	H5	AT0_CASE_OK
+hidden/H6.case	H6	AT0_CASE_OK

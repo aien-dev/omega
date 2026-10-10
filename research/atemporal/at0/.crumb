@@ -3,8 +3,8 @@
     "generated": {
       "children": [
         {
-          "digest": "7095b71ea2f1ecd9bbb9e8be207e4e6311eeb7f701f5b631575dcbcdb8075881",
-          "last_commit": "f0bac17c",
+          "digest": "89c1c159c3b165b4da0433cd0b89584f76fd43ca3a8d29bc3eb522e8f26b4465",
+          "last_commit": "1b099302",
           "name": "evaluator",
           "purpose": "Agent 4 independent adversarial evaluator for AT-0: independent AT0_CASE_V1 codec, exact-arithme"
         },
@@ -16,7 +16,7 @@
         },
         {
           "digest": "412b7b17d778908a08547c6555d1bb684e26b8fcf16eae953cd4a23510028ba9",
-          "last_commit": "f768beb0",
+          "last_commit": "bff4a428",
           "name": "model",
           "purpose": "Agent 3 candidate relational quantum engine in portable C11: state, Hamiltonians, constraint ker"
         },
@@ -27,15 +27,15 @@
           "purpose": "AT-0 reference oracle (Rust, standard library only, built by rustc directly; research cross-chec"
         }
       ],
-      "children_root": "sha256:c75e543d08609c5a41f334998f4b9344f6eee4540e605eb15e6162761a0cfa30",
-      "compiled_at": "2026-10-10T00:41:47Z",
+      "children_root": "sha256:bd4fd3c2725df8af3c59be4a39a84c5d360b5b2f4ea5af37b60438f6c1755dd9",
+      "compiled_at": "2026-10-10T00:48:51Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:a806ac405f876e1c33a1400260ccb06ffdf1f441979ef57ac5ec809b396344e1",
+      "digest": "sha256:91cb2a0cd8a87c28c63dcff6dc566ab7839519695a5a5fa73d078c1c238a06f7",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 173,
-      "generated_at_commit": "f768beb0f76b857e9bfcf432db02135dd27be780",
-      "source_tree": "sha256:d4b8d221ac594a821f8f9bb503ada232ad5166f40e419f076a95b68572de20c8"
+      "files": 189,
+      "generated_at_commit": "1b099302031b3ac860efd536a5df2883235f62ce",
+      "source_tree": "sha256:78be999c343090c88c9675591d50808820504f1df6675d0ff3701652ca38b797"
     }
   },
   "name": "at0",

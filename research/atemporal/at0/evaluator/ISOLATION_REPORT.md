@@ -10,11 +10,11 @@ Facts:
 - Evaluator, candidate engine (omega `research/atemporal/at0/model`,
   merged omega#360), reference oracle and runner are developed and executed on
   the same host (the Spark, one Linux user account, one shared filesystem).
-- The hidden qualification cases live outside the repository in
-  `~/at0-private/agent4/` on that host. Any process running as that account
-  can read them. The files are withheld from the public repository and from
-  the candidate developer's briefs, but their non-access by other agents on
-  this machine cannot be proven.
+- The hidden qualification cases were held outside the repository in
+  `~/at0-private/agent4/` on that host until the candidate freeze declared by
+  Agent 0/6 on omega#358 (2026-10-09, after omega#366). They are now published
+  in `cases/hidden/`. While withheld, any process running as that account could
+  read them; their non-access by other agents on this machine cannot be proven.
 - `HIDDEN_COMMITMENT.txt` publishes the SHA-256 of each hidden file. This
   commitment establishes **data identity** (the files judged later are the
   files committed to now, and they were fixed before the candidate was run).
@@ -80,6 +80,10 @@ has a 64-bit mantissa (x86-64) the shadow states a 1e-14 bound instead of
 1e-20; the evaluator refuses to run the shadow below 64 bits. Every run,
 including `--self-only`, rewrites `results/qualification.json`; that file is the
 deliverable and is meant to be committed with the run it describes.
+
+Hardened-libc aliases: the scan normalises `__name_chk` and `__name_2` to `name`,
+so a build with `_FORTIFY_SOURCE` cannot hide `fread` or `open` behind `__fread_chk`
+or `__open_2` (control: `gates/fortified_read_mutant.c`).
 
 ## Scope of any PASS
 

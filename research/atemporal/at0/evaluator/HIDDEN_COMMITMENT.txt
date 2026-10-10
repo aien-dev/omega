@@ -1,4 +1,4 @@
-# Agent 4 hidden qualification set: SHA-256 of each private case file (contents withheld until candidate freeze).
+# Agent 4 hidden qualification set: SHA-256 of each case file. Withheld outside the repository until the candidate freeze declared by Agent 0/6 on omega#358 (2026-10-09, after omega#366); revealed in cases/hidden/ with this run. run.sh re-checks these digests on every run.
 # A digest proves identity of the file later revealed; it does not prove non-access (see ISOLATION_REPORT.md).
 # Six AT0_CASE_V1 files (four POSITIVE, two NEGATIVE), stored outside the repository on the Spark under ~/at0-private/agent4/.
 52aab0b3dc505fdc5da4ce77bb144ae48f59974cdf9a78fd2f98b73b2b5b9674  H1.case
