@@ -8,12 +8,17 @@ at0_status at0_constraint_kernel(const at0_case *c, const at0_system_hamiltonian
 {
     if (!c || !hs || !out) return AT0_ERR_ARGUMENT;
     memset(out, 0, sizeof *out);
+    /* E_j + h0 -/+ |h| == 0  <=>  (E_j + h0) == +/-|h|. E_j + h0 has a denominator <= 2^40 and
+     * |h| is representable, so at0_rat_cmp decides exactly; the eigenvalues themselves
+     * (reduced denominator up to 2^80) are never materialized as rationals. */
+    at0_rat neg_norm = c->h_norm;
+    neg_norm.n = -neg_norm.n;
     for (int j = 0; j < c->clock_dim; j++) {
+        at0_rat t;
+        at0_status st = at0_rat_add(c->clock_energies[j], c->h0, &t);
+        if (st != AT0_OK) return st;
         for (int s = 0; s < AT0_SYSTEM_DIM; s++) {
-            at0_rat sum;
-            at0_status st = at0_rat_add(c->clock_energies[j], hs->eig[s], &sum);
-            if (st != AT0_OK) return st;
-            if (at0_rat_is_zero(sum)) {
+            if (at0_rat_cmp(t, s == 0 ? c->h_norm : neg_norm) == 0) {
                 if (out->kernel_dim >= AT0_TOTAL_DIM_MAX) return AT0_ERR_INTERNAL;
                 out->match_j[out->kernel_dim] = j;
                 out->match_s[out->kernel_dim] = s;
@@ -35,56 +40,46 @@ static at0_status overlap_is_zero(const at0_case *c, const at0_system_hamiltonia
         *zero = at0_rat_is_zero(p.re) && at0_rat_is_zero(p.im);
         return AT0_OK;
     }
-    at0_rat a, rpz, hx = c->hx, hy = c->hy;
-    at0_status st = at0_rat_add(c->h_norm, c->hz, &rpz);
+    /* a = |h| + hz = A / D with D = dx dy dz (unreduced, |A| < 2^62, D < 2^60) */
+    at0_i128 A, D;
+    at0_status st = at0_exact_norm_plus_hz(c->hx, c->hy, c->hz, c->h_norm, &A, &D);
     if (st != AT0_OK) return st;
-    if (at0_rat_is_zero(rpz)) {
+    if (A == 0) {
         /* h = (0, 0, -|h|): the eigenvectors are |0> (s = 0) and |1> (s = 1), as in at0_hamiltonian_system */
         at0_crat p = s == 0 ? p0 : p1;
         *zero = at0_rat_is_zero(p.re) && at0_rat_is_zero(p.im);
         return AT0_OK;
     }
-    /* conj(v_s) . psi0 with v_0 = (-(hx - i hy), a), v_1 = (a, hx + i hy), a = |h| + hz:
-     *   s=0: conj(v_0) = (-(hx + i hy), a)  -> -(hx + i hy) p0 + a p1
-     *   s=1: conj(v_1) = (a, hx - i hy)     ->  a p0 + (hx - i hy) p1
-     * Each is u*p + v*q with u, v complex rationals; test both parts for zero
-     * with cross-multiplied 128-bit integers (no reduction needed). */
-    a = rpz;
-    at0_crat u, v, p, q;
-    if (s == 0) {
-        u.re.n = -hx.n; u.re.d = hx.d; u.im.n = -hy.n; u.im.d = hy.d;   /* -(hx + i hy) */
-        v.re = a; v.im.n = 0; v.im.d = 1;
-        p = p0; q = p1;
-    } else {
-        u.re = a; u.im.n = 0; u.im.d = 1;
-        v.re = hx; v.im.n = -hy.n; v.im.d = hy.d;                          /* hx - i hy */
-        p = p0; q = p1;
-    }
-    /* (u.re + i u.im)(p.re + i p.im) + (v.re + i v.im)(q.re + i q.im) */
-    /* real: u.re p.re - u.im p.im + v.re q.re - v.im q.im ; imag: u.re p.im + u.im p.re + v.re q.im + v.im q.re */
-    /* The product test above can overflow for extreme inputs, so decide the zero test with
-     * the limit-checked rational API instead: each operand is at most 2^20, products are
-     * at most 2^40 and are reduced after every step; AT0_ERR_OVERFLOW is reported, never wrapped. */
-    {
-        at0_rat r1, r2, r3, r4, re, im, t;
-        /* real part */
-        if ((st = at0_rat_mul(u.re, p.re, &r1)) != AT0_OK) return st;
-        if ((st = at0_rat_mul(u.im, p.im, &r2)) != AT0_OK) return st;
-        if ((st = at0_rat_mul(v.re, q.re, &r3)) != AT0_OK) return st;
-        if ((st = at0_rat_mul(v.im, q.im, &r4)) != AT0_OK) return st;
-        if ((st = at0_rat_sub(r1, r2, &t)) != AT0_OK) return st;
-        if ((st = at0_rat_add(t, r3, &t)) != AT0_OK) return st;
-        if ((st = at0_rat_sub(t, r4, &re)) != AT0_OK) return st;
-        /* imaginary part */
-        if ((st = at0_rat_mul(u.re, p.im, &r1)) != AT0_OK) return st;
-        if ((st = at0_rat_mul(u.im, p.re, &r2)) != AT0_OK) return st;
-        if ((st = at0_rat_mul(v.re, q.im, &r3)) != AT0_OK) return st;
-        if ((st = at0_rat_mul(v.im, q.re, &r4)) != AT0_OK) return st;
-        if ((st = at0_rat_add(r1, r2, &t)) != AT0_OK) return st;
-        if ((st = at0_rat_add(t, r3, &t)) != AT0_OK) return st;
-        if ((st = at0_rat_add(t, r4, &im)) != AT0_OK) return st;
-        *zero = at0_rat_is_zero(re) && at0_rat_is_zero(im);
-    }
+    /* conj(v_s) . psi0 with v_0 = (-(hx - i hy), a), v_1 = (a, hx + i hy):
+     *   s=0: conj(v_0) = (-(hx + i hy), a)  -> X p0 + Y p1 with X = -(hx + i hy), Y = a
+     *   s=1: conj(v_1) = (a, hx - i hy)     -> X p0 + Y p1 with X = a, Y = hx - i hy
+     * Every coefficient is written over the common denominator D: hx = nx (dy dz) / D,
+     * hy = ny (dx dz) / D, a = A / D, so each coefficient numerator is < 2^62.
+     * real = Xr p0r - Xi p0i + Yr p1r - Yi p1i,  imag = Xr p0i + Xi p0r + Yr p1i + Yi p1r.
+     * Each part is a sum of four terms (coef / D) * (m / d) with m <= 2^20, d <= 2^20, of which
+     * at most three have a nonzero coefficient (X or Y is real). at0_exact_sum_is_zero drops the
+     * zero terms and cross-multiplies: |coef * m * d' * d''| < 2^62 * 2^20 * 2^40 = 2^122 per
+     * term, three terms < 2^124, within 128-bit signed range; the common factor D cancels. */
+    at0_i128 hxn = (at0_i128)c->hx.n * ((at0_i128)c->hy.d * c->hz.d);
+    at0_i128 hyn = (at0_i128)c->hy.n * ((at0_i128)c->hx.d * c->hz.d);
+    at0_i128 Xr, Xi, Yr, Yi;
+    if (s == 0) { Xr = -hxn; Xi = -hyn; Yr = A; Yi = 0; }
+    else        { Xr = A;    Xi = 0;    Yr = hxn; Yi = -hyn; }
+    at0_i128 num[4], den[4];
+    int zr, zi;
+    /* real part */
+    num[0] =  Xr * p0.re.n; den[0] = p0.re.d;
+    num[1] = -Xi * p0.im.n; den[1] = p0.im.d;
+    num[2] =  Yr * p1.re.n; den[2] = p1.re.d;
+    num[3] = -Yi * p1.im.n; den[3] = p1.im.d;
+    if ((st = at0_exact_sum_is_zero(4, num, den, &zr)) != AT0_OK) return st;
+    /* imaginary part */
+    num[0] = Xr * p0.im.n; den[0] = p0.im.d;
+    num[1] = Xi * p0.re.n; den[1] = p0.re.d;
+    num[2] = Yr * p1.im.n; den[2] = p1.im.d;
+    num[3] = Yi * p1.re.n; den[3] = p1.re.d;
+    if ((st = at0_exact_sum_is_zero(4, num, den, &zi)) != AT0_OK) return st;
+    *zero = zr && zi;
     return AT0_OK;
 }
 

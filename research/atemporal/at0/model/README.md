@@ -1,7 +1,7 @@
 # AT-0 candidate relational quantum engine (research model)
 
 **Status:** candidate implementation, research directory. Not a gate, not evidence, not a contract.
-**Program:** AT-0 Clock-Free Universe, tracking issue aien-dev/omega#358. Pinned to: frozen contracts `AT0_CASE_V1` at aien-architecture `044c9d1` and `AT0_RESULT_V2` (Agent 0 ruling on omega#358; `AT0_RESULT_V1` superseded, same section numbers); charter (ownership, gates) at aien-architecture `d390939`; draft `AT0_SPEC.md` at aien-architecture PR #176 head `0efd1a14` (DRAFT, not merged: the hand tables used by the tests must be re-verified when it merges).
+**Program:** AT-0 Clock-Free Universe, tracking issue aien-dev/omega#358. Pinned to: frozen contracts `AT0_CASE_V1` at aien-architecture `044c9d1` and `AT0_RESULT_V2` (Agent 0 ruling on omega#358; `AT0_RESULT_V1` superseded, same section numbers); charter (ownership, gates) at aien-architecture `d390939`; `AT0_SPEC.md` at aien-architecture `68f47e2` (PR #176 merged 2026-10-09; the hand tables the tests use were re-verified against it: section 13.2 P1/P1b and T1/T2 agree with `test_pauli_probabilities` and `test_schrodinger_general_n_phase_omega`).
 **Built from:** omega `19f73c7`. **Language:** portable C11 (`__int128` via `__extension__` for exact rationals),
 `-lm` only, single thread, no GPU, no network, no Python.
 
@@ -23,11 +23,12 @@ emergence of time** (charter section 1, draft spec section 11).
 
 | Component | File | Entry points |
 |---|---|---|
-| Exact arithmetic | `at0_exact.c` | reduced rationals with 128-bit intermediates and contract limits, scaled decimals, exact rational square root test, exact phase reduction mod one turn, exact integer comparison of a binary64 against decimal tolerances (`at0_exact_prob_status`) |
-| Versioned input | `at0_case.c` | `at0_case_parse` (AT0_CASE_V1 rules 1 to 6 in contract order), `at0_case_emit` (byte-exact), `at0_case_identities` (domain-tagged SHA-256 via omega `src/sha256.c`) |
+| Exact arithmetic | `at0_exact.c` | reduced rationals with 128-bit intermediates and contract limits, scaled decimals, exact phase reduction mod one turn, exact integer comparison of a binary64 against decimal tolerances (`at0_exact_prob_status`), and overflow-free exact helpers for derived quantities whose reduced denominators exceed 2^62 (`at0_rat_norm_exact` for `|h|`, `at0_exact_norm_plus_hz`, `at0_exact_sum_is_zero`; checked 128-bit products, never wrapped) |
+| Versioned input | `at0_case.c` | `at0_case_parse` (AT0_CASE_V1 rules 1 to 6 in contract order; a well-formed but noncanonical token such as `04` or `-0/1` is rule 2, judged after the whole shape pass), `at0_case_emit` (byte-exact), `at0_case_identities` (domain-tagged SHA-256 via omega `src/sha256.c`); works on bytes only |
+| File input | `at0_io.c` | `at0_case_read_file`: the only object that touches the file system (fopen/fread), hands the bytes to `at0_case_parse` |
 | Quantum state | `at0_state.c` | bounds-checked vector in `C^N (x) C^2`, clock factor first; norms, inner products, finiteness checks |
-| Hamiltonian construction | `at0_hamiltonian.c` | exact spectrum `h0 +/- |h|`, binary64 eigenvectors, `H_total` applied to a state |
-| Constraint verification | `at0_constraint.c` | exact kernel enumeration (`E_j + e_s = 0` in rationals), nullspace projection `P_0 (|t_r> (x) |psi_0>)`, residual `||H_total Psi_hat||`, exact decision whether `Psi = 0` |
+| Hamiltonian construction | `at0_hamiltonian.c` | spectrum `h0 +/- |h|` (exact in the case's `h0`, `h_norm`; stored as binary64), binary64 eigenvectors, `H_total` applied to a state |
+| Constraint verification | `at0_constraint.c` | exact kernel enumeration (`E_j + h0 = -/+ |h|` compared in rationals, the eigenvalues are never reduced), nullspace projection `P_0 (|t_r> (x) |psi_0>)`, residual `||H_total Psi_hat||`, exact decision whether `Psi = 0` |
 | Internal clock POVM | `at0_povm.c` | `|t_k> = N^(-1/2) sum_j exp(-2 pi i E_j k tau) |E_j>` with the turn count reduced exactly before `cos`/`sin`; residual `||sum_k F_k - I||_F` |
 | Conditional state | `at0_conditional.c` | `phi_k = (<t_k| (x) I) Psi`, `p(k) = w ||phi_k||^2 / ||Psi||^2`, `rho_k = phi phi^dagger / ||phi||^2` |
 | Observables | `at0_observable.c` | `P(sigma = +/-1) = Tr(rho (I +/- sigma)/2)`, each sign computed directly from `rho`, never as one minus the other |
@@ -124,15 +125,22 @@ than 2; `RIGOROUS` bounds; shot sampling; the oracle's `reference` lines and the
 - Contract limits on written tokens (|n|, d <= 2^20; scaled k <= 40) are judged in rule 3 as `CASE_INVALID_PARAMETER`,
   after the shape (rule 1) and version (rule 2) checks. A token longer than 18 digits is parsed as a saturation value
   (never an integer overflow) and refused the same way; a scaled numerator above 10^18 - 1 is refused as unsupported.
-- Derived exact quantities (`|h|`, `h0 +/- |h|`, kernel sums, exact overlaps) use 128-bit intermediates and must fit
-  63-bit numerators and denominators; a case whose derived rationals do not fit stops with `AT0_ENGINE_ERROR ERR_OVERFLOW`
-  (explicit, never a wrong number). No valid case within the contract limits is known to hit this.
+- Derived exact quantities (`|h|`, `|h| + hz`, kernel matches, exact overlaps) never pass through a reduced rational:
+  with tokens at the rule-3 limit (2^20) and distinct denominators their reduced denominators reach 2^80 and beyond
+  (qualification finding D1, case P5). They are decided on unreduced 128-bit integers over the common denominator
+  `dx dy dz`, with every product bounded at the use site (largest: 2^124 in the overlap test) and checked with
+  overflow-detecting arithmetic; an exceeded bound stops with `AT0_ENGINE_ERROR ERR_OVERFLOW` (explicit, never a wrong
+  number), which no in-limit case can reach. `test_large_rationals_within_limits` covers P5 and a three-denominator
+  case with an exactly-zero overlap.
 - Trivial kernel ruling (Agent 0, omega#358): `povm_residual` is still computed, nothing is divided, every label is
   `UNDEFINED`; this engine already behaves that way. Result files move to `AT0_RESULT_V2`; the `contract` line of the
   engine output names it, and the values block is unchanged.
 - Independent review (Claude Opus 5.5 over the full diff, 2026-10-09) found five arithmetic-limit defects, all fixed and
   covered by `test_review_findings`; it confirmed the eigenvectors, kernel projection, phase reduction, Born rule and
   identity hashing. Codex review was unavailable (usage limit).
+- Qualification fixes (Agent 5 first run, omega#363): D1 `ERR_OVERFLOW` on P5 (above), D2 noncanonical integers
+  (`clock_dim 04`, `-0/1`) now `CASE_NONCANONICAL` instead of `CASE_PARSE_ERROR`, D6 file reader moved to `at0_io.c`,
+  D8 spec pin moved to the merged commit. D3 (R31, R36: rule 1 against rule 3) is an Agent 0 contract call and is unchanged.
 - `tests/cases/kat-ideal-qubit-n4.case` is the contract's section 6 example byte for byte
   (`case_file_sha256 ed16c95c...`).
 

@@ -82,15 +82,20 @@ static int valid_digest(const char *s)
         if (!((s[i] >= '0' && s[i] <= '9') || (s[i] >= 'a' && s[i] <= 'f'))) return 0;
     return 1;
 }
+/* canonical integer token for counts and indices (same tri-state as the rational tokens:
+ * 1 canonical, 0 shape error, -1 noncanonical such as "04" or "-0"), bounded so counts cannot
+ * overflow; a negative value is left to rule 3. */
 static int parse_small_int(const char *s, long *out)
 {
-    /* canonical nonnegative integer token, bounded so counts cannot overflow */
-    size_t n = strlen(s);
-    if (n == 0 || n > 9) return 0;
-    if (s[0] == '0' && n > 1) return 0;
+    size_t n = strlen(s), i = 0; int neg = 0;
+    if (n > 0 && s[0] == '-') { neg = 1; i = 1; }
+    if (n == i || n - i > 9) return 0;
+    for (size_t j = i; j < n; j++) if (!isdigit((unsigned char)s[j])) return 0;
+    int canonical = !(s[i] == '0' && (n - i > 1 || neg));
     long v = 0;
-    for (size_t i = 0; i < n; i++) { if (!isdigit((unsigned char)s[i])) return 0; v = v * 10 + (s[i] - '0'); }
-    *out = v; return 1;
+    for (; i < n; i++) v = v * 10 + (s[i] - '0');
+    *out = neg ? -v : v;
+    return canonical ? 1 : -1;
 }
 
 /* split a comma list in place (no spaces, no empty items, no trailing comma) */
@@ -122,6 +127,7 @@ typedef struct {
     int expected_codes_raw_count;
     char expected_codes_raw[AT0_FAILURE_CODE_COUNT + 1][48];
     int expected_codes_overflow;
+    int noncanonical;               /* a well-formed but noncanonical token was seen (rule 2, judged after the shape pass) */
 } raw_t;
 
 static at0_status copy_tok(const char *src, char *dst, size_t cap)
@@ -130,7 +136,10 @@ static at0_status copy_tok(const char *src, char *dst, size_t cap)
     strcpy(dst, src); return AT0_OK;
 }
 
-#define NEED(expr) do { at0_status st_ = (expr); if (st_ != AT0_OK) return st_; } while (0)
+/* token parse: a shape error (rule 1) returns at once; a noncanonical token (rule 2) is recorded
+ * and judged after the whole shape pass, so rule 1 anywhere in the file wins over rule 2 */
+#define NEED(expr) do { at0_status st_ = (expr); if (st_ == AT0_CASE_NONCANONICAL) r->noncanonical = 1; else if (st_ != AT0_OK) return st_; } while (0)
+#define SMALL_INT(tok, out) do { int c_ = parse_small_int((tok), (out)); if (c_ == 0) return AT0_CASE_PARSE_ERROR; if (c_ < 0) r->noncanonical = 1; } while (0)
 #define FIXED(L, text) do { const char *l_ = next_line(L); if (!l_ || strcmp(l_, text) != 0) return AT0_CASE_PARSE_ERROR; } while (0)
 #define KEYED(L, key, rest) do { rest = key_rest(next_line(L), key); if (!rest) return AT0_CASE_PARSE_ERROR; } while (0)
 
@@ -150,7 +159,7 @@ static at0_status parse_shape(lines_t *L, at0_case *c, raw_t *r)
     FIXED(L, "begin semantic");
     KEYED(L, "model_family", rest);   NEED(copy_tok(rest, r->model_family, sizeof r->model_family));
     KEYED(L, "energy_unit", rest);    NEED(copy_tok(rest, r->energy_unit, sizeof r->energy_unit));
-    KEYED(L, "clock_dim", rest);      if (!parse_small_int(rest, &r->clock_dim)) return AT0_CASE_PARSE_ERROR;
+    KEYED(L, "clock_dim", rest);      SMALL_INT(rest, &r->clock_dim);
     KEYED(L, "clock_energies", rest);
     {
         if (strlen(rest) >= sizeof tmp) return AT0_CASE_PARSE_ERROR;
@@ -188,7 +197,7 @@ static at0_status parse_shape(lines_t *L, at0_case *c, raw_t *r)
     KEYED(L, "clock_povm", rest);     NEED(copy_tok(rest, r->clock_povm, sizeof r->clock_povm));
     KEYED(L, "povm_tau_turns", rest); NEED(at0_rat_parse(rest, &c->povm_tau_turns));
     KEYED(L, "povm_weight", rest);    NEED(at0_rat_parse(rest, &c->povm_weight));
-    KEYED(L, "clock_label_count", rest); if (!parse_small_int(rest, &r->label_count)) return AT0_CASE_PARSE_ERROR;
+    KEYED(L, "clock_label_count", rest); SMALL_INT(rest, &r->label_count);
     for (long k = 0; k < r->label_count; k++) {
         KEYED(L, "clock_label", rest);
         if (strlen(rest) >= sizeof tmp) return AT0_CASE_PARSE_ERROR;
@@ -197,7 +206,8 @@ static at0_status parse_shape(lines_t *L, at0_case *c, raw_t *r)
         if (!sp) return AT0_CASE_PARSE_ERROR;
         *sp = 0;
         long idx;
-        if (!parse_small_int(tmp, &idx) || idx != k) return AT0_CASE_PARSE_ERROR;
+        SMALL_INT(tmp, &idx);
+        if (idx != k) return AT0_CASE_PARSE_ERROR;
         if (!valid_label(sp + 1)) return AT0_CASE_PARSE_ERROR;
         if (k < AT0_LABEL_MAX) strcpy(c->labels[k], sp + 1);
     }
@@ -242,7 +252,7 @@ static at0_status parse_shape(lines_t *L, at0_case *c, raw_t *r)
     strcpy(c->acceptance_id, rest);
     FIXED(L, "end");
     if (L->pos != L->count) return AT0_CASE_PARSE_ERROR;      /* trailing lines */
-    return AT0_OK;
+    return r->noncanonical ? AT0_CASE_NONCANONICAL : AT0_OK;  /* rule 2, after the whole shape pass */
 }
 
 /* rule 3: ranges and fixed values */
@@ -289,15 +299,11 @@ static at0_status check_parameters(at0_case *c, const raw_t *r)
 /* rule 4: |h|^2 must be the square of a rational */
 static at0_status check_spectrum(at0_case *c)
 {
-    at0_rat x2, y2, z2, s;
-    at0_status st;
-    if ((st = at0_rat_mul(c->hx, c->hx, &x2)) != AT0_OK) return AT0_ERR_OVERFLOW;
-    if ((st = at0_rat_mul(c->hy, c->hy, &y2)) != AT0_OK) return AT0_ERR_OVERFLOW;
-    if ((st = at0_rat_mul(c->hz, c->hz, &z2)) != AT0_OK) return AT0_ERR_OVERFLOW;
-    if ((st = at0_rat_add(x2, y2, &s)) != AT0_OK) return AT0_ERR_OVERFLOW;
-    if ((st = at0_rat_add(s, z2, &s)) != AT0_OK) return AT0_ERR_OVERFLOW;
+    /* |h|^2 is formed from unreduced 128-bit integers: the reduced rational |h|^2 can have a
+     * denominator up to 2^120 for in-limit tokens with distinct denominators. */
     int sq;
-    if ((st = at0_rat_sqrt_exact(s, &c->h_norm, &sq)) != AT0_OK) return AT0_ERR_OVERFLOW;
+    at0_status st = at0_rat_norm_exact(c->hx, c->hy, c->hz, &c->h_norm, &sq);
+    if (st != AT0_OK) return st;
     if (!sq) return AT0_CASE_IRRATIONAL_SPECTRUM;
     return AT0_OK;
 }
@@ -507,30 +513,3 @@ done:
     return st;
 }
 
-at0_status at0_case_read_file(const char *path, at0_case *out)
-{
-    if (!path || !out) return AT0_ERR_ARGUMENT;
-    FILE *f = fopen(path, "rb");
-    if (!f) return AT0_ERR_IO;
-    size_t cap = 65536, len = 0;
-    uint8_t *buf = malloc(cap);
-    if (!buf) { fclose(f); return AT0_ERR_INTERNAL; }
-    for (;;) {
-        size_t n = fread(buf + len, 1, cap - len, f);
-        len += n;
-        if (n == 0) break;
-        if (len == cap) {
-            if (cap > (size_t)LINE_CAP * 256) { free(buf); fclose(f); return AT0_CASE_PARSE_ERROR; }
-            cap *= 2;
-            uint8_t *nb = realloc(buf, cap);
-            if (!nb) { free(buf); fclose(f); return AT0_ERR_INTERNAL; }
-            buf = nb;
-        }
-    }
-    int err = ferror(f);
-    fclose(f);
-    if (err) { free(buf); return AT0_ERR_IO; }
-    at0_status st = at0_case_parse(buf, len, out);
-    free(buf);
-    return st;
-}

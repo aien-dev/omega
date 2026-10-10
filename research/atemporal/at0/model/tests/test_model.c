@@ -118,12 +118,39 @@ static int test_exact_arithmetic(void)
     CHECK(at0_rat_make(INT64_MAX, 1, &r) == AT0_ERR_OVERFLOW, "representability limit");
     OK(at0_rat_make(1000, 1, &r)); OK(at0_rat_mul(r, r, &r)); OK(at0_rat_mul(r, r, &r)); CHECK(r.n == 1000000000000LL, "wide product");
     CHECK(at0_rat_parse("2/4", &r) == AT0_CASE_NONCANONICAL, "2/4");
-    CHECK(at0_rat_parse("-0/1", &r) == AT0_CASE_PARSE_ERROR, "-0/1");
+    CHECK(at0_rat_parse("-0/1", &r) == AT0_CASE_NONCANONICAL, "-0/1 is well formed but noncanonical (qualification D2)");
+    CHECK(at0_rat_parse("04/1", &r) == AT0_CASE_NONCANONICAL, "leading zero numerator");
+    CHECK(at0_rat_parse("1/04", &r) == AT0_CASE_NONCANONICAL, "leading zero denominator");
+    CHECK(at0_rat_parse("04/x", &r) == AT0_CASE_PARSE_ERROR, "shape error wins over canonicality inside a token");
+    CHECK(at0_rat_parse("0/1", &r) == AT0_OK && r.n == 0, "0/1 canonical");
+    at0_crat z;
+    CHECK(at0_crat_parse("(-0/1;1/1)", &z) == AT0_CASE_NONCANONICAL, "-0 inside a complex token");
+    CHECK(at0_crat_parse("(-0/1;1/x)", &z) == AT0_CASE_PARSE_ERROR, "shape error in the other part wins");
     CHECK(at0_rat_parse("+1/1", &r) == AT0_CASE_PARSE_ERROR, "+1/1");
     CHECK(at0_rat_parse("1/0", &r) == AT0_CASE_NONCANONICAL, "1/0");
     at0_scaled s;
     CHECK(at0_scaled_parse("10@13", &s) == AT0_CASE_NONCANONICAL, "10@13");
     CHECK(at0_scaled_parse("0@3", &s) == AT0_CASE_NONCANONICAL, "0@3");
+    CHECK(at0_scaled_parse("04@1", &s) == AT0_CASE_NONCANONICAL, "leading zero scaled");
+    CHECK(at0_scaled_parse("1@04", &s) == AT0_CASE_NONCANONICAL, "leading zero exponent");
+    CHECK(at0_scaled_parse("-0@0", &s) == AT0_CASE_NONCANONICAL, "-0 scaled");
+    /* overflow-free |h| and |h| + hz for in-limit tokens with distinct denominators (qualification D1) */
+    {
+        at0_rat hn; int issq; at0_i128 A, D;
+        OK(at0_rat_norm_exact(R(1, 349524), R(1, 262143), R(0, 1), &hn, &issq));   /* (3, 4) / 1048572 in reduced form */
+        CHECK(issq && hn.n == 5 && hn.d == 1048572, "|h| = 5/1048572, got %lld/%lld", (long long)hn.n, (long long)hn.d);
+        OK(at0_exact_norm_plus_hz(R(1, 349524), R(1, 262143), R(0, 1), hn, &A, &D));
+        CHECK(D == (at0_i128)349524 * 262143 && A == (at0_i128)5 * 87381, "a = |h| + hz over D = dx dy dz: A=%lld D=%lld", (long long)A, (long long)D);
+        OK(at0_rat_norm_exact(R(1, 1048573), R(1, 1048571), R(1, 1048569), &hn, &issq));
+        CHECK(!issq, "three coprime denominators: irrational, decided without overflow");
+        OK(at0_rat_norm_exact(R(2, 1048573), R(3, 1048573), R(6, 1048573), &hn, &issq));
+        CHECK(issq && hn.n == 7 && hn.d == 1048573, "P5 norm 7/1048573");
+        at0_i128 num[4] = { 1, -1, 0, 0 }, den[4] = { 1048573, 1048573, 1, 1 }; int zero;
+        OK(at0_exact_sum_is_zero(4, num, den, &zero)); CHECK(zero, "1/d - 1/d == 0");
+        num[1] = -1; den[1] = 1048571;
+        OK(at0_exact_sum_is_zero(4, num, den, &zero)); CHECK(!zero, "1/d1 - 1/d2 != 0");
+        CHECK(at0_rat_norm_exact(R(AT0_RATIONAL_LIMIT + 1, 1), R(0, 1), R(0, 1), &hn, &issq) == AT0_ERR_OVERFLOW, "out-of-limit input is refused, not wrapped");
+    }
     OK(at0_scaled_parse("1@41", &s)); CHECK(!at0_scaled_in_limits(s), "1@41 parses, rule 3 refuses it");
     OK(at0_scaled_parse("25@2", &s)); CHECK(s.n == 25 && s.k == 2, "25@2");
     /* exact comparison: p = 0.25, b = 1e-15, tol = 1e-9 -> defined */
@@ -375,6 +402,80 @@ static int expect_refusal(const char *name, const char *from, const char *to, at
     return 0;
 }
 
+/* two substitutions in sequence */
+static int expect_refusal2(const char *name, const char *from1, const char *to1, const char *from2, const char *to2, at0_status want)
+{
+    static char text[8192]; at0_case c;
+    memcpy(text, kat_bytes, kat_len); text[kat_len] = 0;
+    const char *from[2] = { from1, from2 }, *to[2] = { to1, to2 };
+    for (int i = 0; i < 2; i++) {
+        char *pos = strstr(text, from[i]);
+        CHECK(pos != NULL, "%s: pattern %d not found", name, i);
+        static char out[8192];
+        size_t head = (size_t)(pos - text);
+        memcpy(out, text, head); out[head] = 0;
+        strcat(out, to[i]); strcat(out, pos + strlen(from[i]));
+        strcpy(text, out);
+    }
+    at0_status st = at0_case_parse((const uint8_t *)text, strlen(text), &c);
+    CHECK(st == want, "%s: got %s, want %s", name, at0_status_name(st), at0_status_name(want));
+    return 0;
+}
+
+/* qualification D1: in-limit tokens with large, distinct denominators must run, not overflow */
+static int test_large_rationals_within_limits(void)
+{
+    static at0_engine_result r;
+    {
+        /* Agent 5's positive case P5 (copied byte for byte into tests/cases) */
+        static uint8_t buf[8192]; size_t len; at0_case c;
+        CHECK(load_file("p5-large-rationals.case", buf, sizeof buf, &len), "cannot read p5 case");
+        OK(at0_case_parse(buf, len, &c));
+        OK(at0_engine_run(&c, &r));
+        CHECK(r.kernel_dim == 2 && r.psi_nonzero, "P5 kernel %d nonzero %d", r.kernel_dim, r.psi_nonzero);
+        double psum = 0;
+        for (int k = 0; k < r.label_count; k++) {
+            psum += r.label[k].clock_probability;
+            for (int a = 0; a < 3; a++)
+                CHECK(fabs(r.label[k].pauli[a][0] + r.label[k].pauli[a][1] - 1.0) <= 1e-14, "P5 label %d axis %d not normalized", k, a);
+        }
+        CHECK(fabs(psum - 1.0) <= 1e-14, "P5 clock probabilities sum %.17g", psum);
+    }
+    {
+        /* N = 2, h = (1/349524, 1/262143, 0) = (3, 4, 0)/1048572: |h| = 5/1048572, three distinct in-limit denominators;
+         * psi0 = ((-3 + 4i), 5) / 1048571 is the exact eigenvector v_0, so <v_1|psi0> = 0 exactly
+         * (the overlap decision must be exact over 128-bit integers, never a reduced rational).
+         * The conditional state is then the stationary eigenstate for every label:
+         * P(Z+) = 25/50 = 1/2, P(X+) = (1 - 3/5)/2 = 1/5, P(Y+) = (1 - 4/5)/2 = 1/10. */
+        at0_case c; spec_two_level(&c, 4, 0);
+        strcpy(c.name, "large-distinct-denominators");
+        c.clock_energies[0] = R(-5, 1048572); c.clock_energies[1] = R(5, 1048572);
+        c.h0 = R(0, 1); c.hx = R(1, 349524); c.hy = R(1, 262143); c.hz = R(0, 1);
+        c.psi0[0].re = R(-3, 1048571); c.psi0[0].im = R(4, 1048571);
+        c.psi0[1].re = R(5, 1048571);  c.psi0[1].im = R(0, 1);
+        c.povm_tau_turns = R(1048572, 40);     /* tau (E_1 - E_0) = 1/4 turn per label step */
+        OK(finalize(&c));
+        CHECK(c.h_norm.n == 5 && c.h_norm.d == 1048572, "|h|");
+        OK(at0_engine_run(&c, &r));
+        CHECK(r.kernel_dim == 2 && r.psi_nonzero, "kernel %d nonzero %d", r.kernel_dim, r.psi_nonzero);
+        for (int k = 0; k < r.label_count; k++) {
+            CHECK(fabs(r.label[k].pauli[2][0] - 0.5) <= 1e-14, "Z+ label %d = %.17g", k, r.label[k].pauli[2][0]);
+            CHECK(fabs(r.label[k].pauli[0][0] - 0.2) <= 1e-14, "X+ label %d = %.17g", k, r.label[k].pauli[0][0]);
+            CHECK(fabs(r.label[k].pauli[1][0] - 0.1) <= 1e-14, "Y+ label %d = %.17g", k, r.label[k].pauli[1][0]);
+        }
+        /* and the generic (nonzero overlap) branch with the same denominators */
+        c.psi0[0].re = R(1, 1048571); c.psi0[0].im = R(0, 1);
+        c.psi0[1].re = R(1, 1048569); c.psi0[1].im = R(1, 1048567);
+        OK(finalize(&c));
+        OK(at0_engine_run(&c, &r));
+        CHECK(r.psi_nonzero, "generic psi0 gives a nonzero state");
+        double psum = 0;
+        for (int k = 0; k < r.label_count; k++) psum += r.label[k].clock_probability;
+        CHECK(fabs(psum - 1.0) <= 1e-14, "clock probabilities sum %.17g", psum);
+    }
+    return 0;
+}
+
 static int test_invalid_input_refusal(void)
 {
     int f = 0;
@@ -398,6 +499,15 @@ static int test_invalid_input_refusal(void)
     f |= expect_refusal("crlf", "clock_dim 4\n", "clock_dim 4\r\n", AT0_CASE_PARSE_ERROR);
     f |= expect_refusal("missing final lf", "end\n", "end", AT0_CASE_PARSE_ERROR);
     f |= expect_refusal("unknown key", "interaction NONE", "interactions NONE", AT0_CASE_PARSE_ERROR);
+    /* qualification D2: well-formed but noncanonical integers are rule 2, not rule 1 */
+    f |= expect_refusal("R17 leading-zero clock_dim", "clock_dim 4\n", "clock_dim 04\n", AT0_CASE_NONCANONICAL);
+    f |= expect_refusal("R30 negative zero h0", "0/1,0/1,0/1,1/2", "-0/1,0/1,0/1,1/2", AT0_CASE_NONCANONICAL);
+    f |= expect_refusal("leading-zero label count", "clock_label_count 4", "clock_label_count 04", AT0_CASE_NONCANONICAL);
+    f |= expect_refusal("leading-zero label index", "clock_label 0 t0", "clock_label 00 t0", AT0_CASE_NONCANONICAL);
+    f |= expect_refusal("plus sign is a shape error", "povm_weight 1/1", "povm_weight +1/1", AT0_CASE_PARSE_ERROR);
+    /* rule order across the file: a shape error after a noncanonical token still reports rule 1 */
+    f |= expect_refusal("rule 1 beats rule 2 across lines", "clock_dim 4\n", "clock_dim 04\n", AT0_CASE_NONCANONICAL);
+    f |= expect_refusal2("rule 1 beats rule 2 across lines", "clock_dim 4\n", "clock_dim 04\n", "povm_weight 1/1", "povm_weight 1/x", AT0_CASE_PARSE_ERROR);
     f |= expect_refusal("bad label chars", "clock_label 1 t1", "clock_label 1 T1", AT0_CASE_PARSE_ERROR);
     f |= expect_refusal("trailing lines", "end\n", "end\nextra\n", AT0_CASE_PARSE_ERROR);
     f |= expect_refusal("bad failure code with FAIL", "expected_outcome PASS\nexpected_failure_codes none", "expected_outcome FAIL\nexpected_failure_codes NOT_A_CODE", AT0_CASE_ID_MISMATCH);
@@ -473,6 +583,7 @@ int main(int argc, char **argv)
         { "invalid_input_refusal", test_invalid_input_refusal },
         { "repeatability_and_order", test_repeatability_and_order },
         { "review_findings_f1_f5", test_review_findings },
+        { "large_rationals_within_limits", test_large_rationals_within_limits },
     };
     int total = (int)(sizeof tests / sizeof tests[0]), passed = 0;
     for (int i = 0; i < total; i++) {

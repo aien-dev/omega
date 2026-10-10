@@ -76,6 +76,13 @@ int        at0_scaled_in_limits(at0_scaled s);  /* contract limit k <= 40 */
 double     at0_rat_to_double(at0_rat a);                      /* one correctly-rounded division */
 /* exact test: is a a square of a rational? if yes, *root is the nonnegative root */
 at0_status at0_rat_sqrt_exact(at0_rat a, at0_rat *root, int *is_square);
+/* overflow-free exact helpers for in-limit case data (see at0_exact.c): */
+int        at0_i128_mul(at0_i128 a, at0_i128 b, at0_i128 *out);    /* 1 on success, 0 on overflow */
+int        at0_i128_add(at0_i128 a, at0_i128 b, at0_i128 *out);
+at0_status at0_rat_norm_exact(at0_rat hx, at0_rat hy, at0_rat hz, at0_rat *norm, int *is_square); /* |h| */
+at0_status at0_exact_norm_plus_hz(at0_rat hx, at0_rat hy, at0_rat hz, at0_rat h_norm,
+                                  at0_i128 *A, at0_i128 *D);        /* |h| + hz = A / D, D = dx dy dz */
+at0_status at0_exact_sum_is_zero(int count, const at0_i128 *num, const at0_i128 *den, int *zero);
 /* reduce x into [-1/2, 1/2) exactly: x - round(x) */
 at0_status at0_rat_reduce_turn(at0_rat x, at0_rat *out);
 
@@ -165,7 +172,8 @@ at0_status at0_state_check_finite(const at0_state *s);
 
 /* ---- Hamiltonian construction --------------------------------------------- */
 typedef struct {
-    at0_rat eig[AT0_SYSTEM_DIM];        /* e_0 = h0 - |h|, e_1 = h0 + |h| (exact) */
+    double eig[AT0_SYSTEM_DIM];         /* binary64 values of e_0 = h0 - |h|, e_1 = h0 + |h|; the exact
+                                           spectrum lives in the case (h0, h_norm) and is what the kernel test uses */
     at0_qubit vec[AT0_SYSTEM_DIM];      /* orthonormal eigenvectors (binary64) */
     int degenerate;                     /* |h| == 0 */
     at0_qubit_op hs;                    /* H_S matrix in computational basis */
