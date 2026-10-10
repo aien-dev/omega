@@ -10,7 +10,7 @@ ALLOW=${ALLOW:-^$}
 for o in "$@"; do
     [ -f "$o" ] || { echo "UNREADABLE $o"; rc=2; continue; }
     syms=$(nm -u "$o" 2>/dev/null) || { echo "UNREADABLE $o (nm failed)"; rc=2; continue; }
-    hits=$(printf '%s\n' "$syms" | awk 'NF{print $NF}' | sed 's/@.*$//' | grep -E "$BAN" | grep -vE "$ALLOW" | sort -u | tr '\n' ' ')
+    hits=$(printf '%s\n' "$syms" | awk 'NF{print $NF}' | sed 's/@.*$//; s/^__//; s/_chk$//' | grep -E "$BAN" | grep -vE "$ALLOW" | sort -u | tr '\n' ' ')
     if [ -n "$hits" ]; then echo "HIT $o: $hits"; [ $rc -eq 0 ] && rc=1; fi
 done
 exit $rc
