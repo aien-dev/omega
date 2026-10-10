@@ -89,6 +89,18 @@ static int pwd_names_cwd(const char *p)
     return p && p[0] == '/' && stat(p, &a) == 0 && stat(".", &b) == 0 && a.st_dev == b.st_dev && a.st_ino == b.st_ino;
 }
 
+/* Keep an imported entry whose name is not an identifier. bash never makes it a variable and never shows it in
+ * `export -p`, yet every child still receives it; dropping it would starve tools that read their own odd entries. */
+static int raw_keep(OshSession *s, const char *entry)
+{
+    char **nr = realloc(s->raw_env, (s->nraw + 1) * sizeof *nr);
+    if (!nr) return -1;
+    s->raw_env = nr;
+    if (!(nr[s->nraw] = strdup(entry))) return -1;
+    s->nraw++;
+    return 0;
+}
+
 int osh_session_init(OshSession *s, char *const *envp)
 {
     memset(s, 0, sizeof *s);
@@ -100,10 +112,12 @@ int osh_session_init(OshSession *s, char *const *envp)
         if (!eq || eq == *envp) continue;
         size_t nl = (size_t)(eq - *envp);
         char name[256];
-        if (nl >= sizeof name) continue;
-        memcpy(name, *envp, nl);
-        name[nl] = 0;
-        if (!osh_name_valid(name)) continue;
+        int ident = nl < sizeof name;
+        if (ident) { memcpy(name, *envp, nl); name[nl] = 0; ident = osh_name_valid(name); }
+        if (!ident) {
+            if (raw_keep(s, *envp)) { osh_session_free(s); return -1; }
+            continue;
+        }
         if (osh_var_export(s, name, eq + 1)) { osh_session_free(s); return -1; }
     }
     if (!pwd_names_cwd(osh_var_get(s, "PWD"))) {
@@ -121,6 +135,10 @@ void osh_session_free(OshSession *s)
     free(s->vars);
     s->vars = NULL;
     s->nvars = s->capvars = 0;
+    for (size_t i = 0; i < s->nraw; i++) free(s->raw_env[i]);
+    free(s->raw_env);
+    s->raw_env = NULL;
+    s->nraw = 0;
 }
 
 void osh_envp_free(char **envp)
@@ -132,7 +150,7 @@ void osh_envp_free(char **envp)
 
 char **osh_build_envp(const OshSession *s, const OshAssign *ov, int nov)
 {
-    char **e = calloc(s->nvars + (size_t)nov + 1, sizeof *e);
+    char **e = calloc(s->nvars + s->nraw + (size_t)nov + 1, sizeof *e);
     if (!e) return NULL;
     size_t n = 0;
     for (size_t i = 0; i < s->nvars; i++) {
@@ -145,6 +163,10 @@ char **osh_build_envp(const OshSession *s, const OshAssign *ov, int nov)
         str[nl] = '=';
         memcpy(str + nl + 1, v->value, vl + 1);
         e[n++] = str;
+    }
+    for (size_t i = 0; i < s->nraw; i++) { /* verbatim; their names are not identifiers so no override can match them */
+        if (!(e[n] = strdup(s->raw_env[i]))) { osh_envp_free(e); return NULL; }
+        n++;
     }
     for (int k = 0; k < nov; k++) {
         size_t nl = strlen(ov[k].name), vl = strlen(ov[k].value);

@@ -129,6 +129,9 @@ typedef int (*OshEffectHook)(void *ctx, const OshBinding *b, int op, const char 
 typedef struct OshSession {
     OshVar *vars;
     size_t nvars, capvars;
+    char **raw_env;              /* imported entries whose name is not an identifier ("A B=1", "1X=2", "BASH_FUNC_f%%=..."):
+                                    never shell variables, but handed verbatim to every child as bash does (#344 RISK-7) */
+    size_t nraw;
     int last_status;             /* $? */
     int fd[3];                   /* the shell's own stdin/stdout/stderr (default 0,1,2); never closed by osh */
     int interactive;             /* nonzero: foreground pipelines take the terminal on tty_fd */
@@ -152,7 +155,7 @@ typedef struct OshSession {
 } OshSession;
 
 /* Fill the variable table from envp (NAME=value strings; entries without '=' or with an invalid name are ignored)
- * and set PWD per POSIX (kept if it names the current directory, else getcwd). All imported variables are exported. */
+ * and set PWD per POSIX (kept if it names the current directory, else getcwd). All imported variables are exported; entries whose name is not an identifier are kept in raw_env for children only. */
 int osh_session_init(OshSession *s, char *const *envp);
 void osh_session_free(OshSession *s);
 const char *osh_var_get(const OshSession *s, const char *name);               /* NULL if unset */

@@ -187,11 +187,8 @@ static int count_fds(void)
     return n - 1; /* the DIR itself */
 }
 
-static void t_begin(T *t, const char *path)
+static void t_begin_env(T *t, const char *path, char *const *env)
 {
-    extern char **environ;
-    char *env[] = {"HOME=/nonexistent-home", "LANG=C", NULL};
-    (void)environ;
     osh_session_init(&t->s, env);
     osh_var_export(&t->s, "PATH", path);
     snprintf(t->op, sizeof t->op, "%s/cap.out", g_tmp);
@@ -203,6 +200,12 @@ static void t_begin(T *t, const char *path)
     t->s.binding.valid = 1;
     t->s.binding.domain = 2;
     t->s.binding.cap_generation = 1;
+}
+
+static void t_begin(T *t, const char *path)
+{
+    char *env[] = {"HOME=/nonexistent-home", "LANG=C", NULL};
+    t_begin_env(t, path, env);
 }
 
 static void t_end(T *t)
@@ -1349,19 +1352,44 @@ static void test_direct_equals_record(void)
     t_end(&t);
 }
 
+/* bash 5.2: `env 'A B=1' bash -c env` still shows "A B=1"; the entry is not a variable but every child gets it (#344 RISK-7) */
+static void test_raw_env(void)
+{
+    T t; OshBuilder *b; OshResult r;
+    char *env[] = {"HOME=/nonexistent-home", "LANG=C", "A B=1", "1X=2", NULL};
+    t_begin_env(&t, "/usr/bin:/bin", env);
+    b = nb(0, 0);
+    helper(b, "env", "A B", NULL);
+    go(&t, b, &r);
+    char *o = t_out(&t);
+    CHECK(strcmp(o, "1\n") == 0, "child sees A B=1 (got %s)", o);
+    free(o);
+    t_clear(&t);
+    b = nb(0, 0);
+    helper(b, "env", "1X", NULL);
+    go(&t, b, &r);
+    o = t_out(&t);
+    CHECK(strcmp(o, "2\n") == 0, "child sees 1X=2 (got %s)", o);
+    free(o);
+    CHECK(osh_var_get(&t.s, "A B") == NULL && osh_var_get(&t.s, "1X") == NULL, "not shell variables");
+    t_end(&t);
+}
+
 static void test_session_env(void)
 {
     OshSession s;
-    char *env[] = {"A=1", "B=two=2", "=bad", "NOEQ", "9x=1", "C=", NULL};
+    char *env[] = {"A=1", "B=two=2", "=bad", "NOEQ", "9x=1", "C=", "A B=1", "BASH_FUNC_f%%=() {  echo hi; }", NULL};
     CHECK(osh_session_init(&s, env) == 0, "init");
     CHECK(strcmp(osh_var_get(&s, "A"), "1") == 0 && strcmp(osh_var_get(&s, "B"), "two=2") == 0 && osh_var_get(&s, "C") && !*osh_var_get(&s, "C"), "imported");
-    CHECK(osh_var_get(&s, "NOEQ") == NULL && osh_var_get(&s, "9x") == NULL, "malformed entries ignored");
+    CHECK(osh_var_get(&s, "NOEQ") == NULL && osh_var_get(&s, "9x") == NULL && osh_var_get(&s, "A B") == NULL, "malformed entries are not variables");
     CHECK(osh_var_get(&s, "PWD") != NULL, "PWD set");
     OshAssign ov[2] = {{"A", "9"}, {"Z", "z"}};
     char **e = osh_build_envp(&s, ov, 2);
-    int a = 0, z = 0, n = 0;
-    for (char **p = e; *p; p++) { n++; a += !strcmp(*p, "A=9"); z += !strcmp(*p, "Z=z"); }
-    CHECK(a == 1 && z == 1 && n == 5, "fresh envp with override (n=%d)", n);
+    int a = 0, z = 0, n = 0, raw = 0;
+    for (char **p = e; *p; p++) { n++; a += !strcmp(*p, "A=9"); z += !strcmp(*p, "Z=z");
+        raw += !strcmp(*p, "9x=1") + !strcmp(*p, "A B=1") + !strcmp(*p, "BASH_FUNC_f%%=() {  echo hi; }"); }
+    CHECK(a == 1 && z == 1 && n == 8, "fresh envp with override (n=%d)", n);
+    CHECK(raw == 3, "non-identifier entries reach children verbatim, as bash does (%d/3)", raw);
     osh_envp_free(e);
     CHECK(osh_var_set(&s, "bad name", "x") < 0 && osh_var_export(&s, "", NULL) < 0, "invalid names refused");
     osh_var_set(&s, "U", "u");
@@ -2061,7 +2089,7 @@ int main(int argc, char **argv)
 
     if (argc > 2 && !strcmp(argv[1], "--only")) { g_only_set = 1; g_only = argv[2]; }
     alarm(300); /* watchdog: a hang must fail the run, not stall it */
-    if (want("env")) test_session_env();
+    if (want("env")) { test_session_env(); test_raw_env(); }
     if (want("simple")) test_simple_and_path();
     if (want("builtins")) test_builtins();
     if (want("printf")) { test_printf(); test_printf_review(); }
