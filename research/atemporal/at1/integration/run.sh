@@ -82,6 +82,18 @@ valblock() { sed -n '/^begin values$/,/^end values$/p' "$1"; }
 # a result without the three lines the contract allows to differ between honest runs
 stable() { grep -v -E '^(run_started_utc|run_finished_utc|evidence_digest) ' "$1"; }
 CCBIN=${CC:-cc}
+ASAN_LIMIT=${AT1_ASAN_LIMIT:-900}   # seconds for the model sanitizer leg; rc 124 on timeout (G7 run 1 hung here)
+kill_tree() { for c in $(pgrep -P "$1" 2>/dev/null); do kill_tree "$c"; done; kill "$1" 2>/dev/null; }
+# limited SECONDS LOG CMD...: run CMD with output to LOG and kill its whole process tree after SECONDS (rc 124).
+# Portable: no coreutils timeout on macOS, so a sleeping watchdog subshell plus pgrep -P for the descendants.
+limited() {
+    lsec=$1; llog=$2; shift 2
+    "$@" > "$llog" 2>&1 & lpid=$!
+    ( sleep "$lsec"; kill_tree "$lpid"; echo "$lpid" > "$llog.timeout" ) & lwd=$!
+    wait "$lpid"; lrc=$?
+    if [ -f "$llog.timeout" ]; then rm -f "$llog.timeout"; lrc=124; else kill_tree "$lwd"; wait "$lwd" 2>/dev/null; fi
+    return $lrc
+}
 TAB=$(printf '\t')
 
 say "AT-1 Agent 5 run $STAMP mode=$MODE omega=$HEAD starting_checkout_clean=$OUTER_CLEAN"
@@ -136,7 +148,10 @@ CC_V=$($CCBIN --version 2>&1 | head -1)
 RUSTC_V=$(rustc --version 2>&1)
 {
     echo "date_utc $STAMP"; echo "uname $(uname -srm)"; echo "host $HOSTN"; echo "os $OSDESC"
-    echo "cc ($CCBIN) $CC_V"; echo "make $(make --version 2>&1 | head -1)"; echo "nm $(nm --version 2>&1 | head -1)"; echo "sh $(ls -l /bin/sh 2>&1)"
+    echo "cc ($CCBIN) $CC_V"; echo "make $(make --version 2>&1 | head -1)"
+    # nm path and version, and the shell actually running this script (Agent 7 finding: G7 substituted both)
+    echo "nm ($(command -v nm 2>/dev/null || echo not-found)) $(nm --version 2>&1 | head -1)"; echo "sh $(ls -l /bin/sh 2>&1)"
+    echo "sh running this script: $(ps -o comm= -p $$ 2>/dev/null || echo unknown)"; echo "asan limit seconds $ASAN_LIMIT"
     echo "sha tool $SHATOOL"; echo "git $(git --version)"
     echo "--- rustc -vV"; rustc -vV 2>&1
 } > "$R/toolchain.txt"
@@ -165,7 +180,8 @@ fi
     || ctrl C1-BUILD-LEAVES-TREE-CLEAN FAIL "git status --porcelain in the clone after the builds" "$(git -C "$S" status --porcelain | head -3 | tr '\n' ' ')"
 OSTATE=$("$ORACLE" emit "$AT1/evaluator/cases/positive/P2-kat-rotated-level-n4.case" 2>/dev/null | sed -n 's/^source_tree_clean //p')
 ( cd "$AT1/model" && make test CC="$CCBIN" ) > "$R/model-tests.log" 2>&1; mrc=$?
-( cd "$AT1/model" && make asan CC="$CCBIN" ) > "$R/model-tests-asan.log" 2>&1; mrca=$?
+limited "$ASAN_LIMIT" "$R/model-tests-asan.log" sh -c "cd \"$AT1/model\" && make asan CC=\"$CCBIN\""; mrca=$?
+[ $mrca -eq 124 ] && echo "asan: TIMEOUT after $ASAN_LIMIT s (watchdog; Agent 7 finding: an ASan probe can spin forever on some hosts)" >> "$R/model-tests-asan.log"
 ( cd "$AT1/oracle" && sh build.sh test ) > "$R/oracle-tests.log" 2>&1; orc=$?
 ( cd "$AT1/oracle" && sh isolation.sh ) > "$R/oracle-isolation-own.log" 2>&1; oisorc=$?
 ( cd "$AT1/evaluator" && make test CC="$CCBIN" ) > "$R/evaluator-tests.log" 2>&1; erc=$?
@@ -335,7 +351,16 @@ GATE="$AT1/evaluator/gates/isolation.sh"
 # allowed() obj "sym sym": run the gate on one object; PASS iff every FAIL line is "references <sym>" with sym in the list
 allowed() {
     sh "$GATE" "$EVAL" "$1" > "$WORK/al.out" 2>&1; alrc=$?
-    bad=$(grep '^FAIL' "$WORK/al.out" | while read -r l; do s=$(printf '%s' "$l" | sed -n 's/^FAIL: .* references \([A-Za-z0-9_]*\)$/\1/p'); case " $2 " in *" $s "*) [ -n "$s" ] || echo "$l";; *) echo "$l";; esac; done)
+    # One FAIL line per iteration, read from a file (not a pipe) so the loop runs in this shell, and no
+    # case statement inside $( ): bash 3.2 (macOS /bin/sh) cannot parse that (Agent 7 finding, G7 run 2).
+    grep '^FAIL' "$WORK/al.out" > "$WORK/al.fail"; bad=""
+    while read -r l; do
+        s=$(printf '%s' "$l" | sed -n 's/^FAIL: .* references \([A-Za-z0-9_]*\)$/\1/p')
+        keep=1
+        if [ -n "$s" ]; then case " $2 " in *" $s "*) keep=0;; esac; fi
+        [ $keep -eq 1 ] && bad="$bad$l
+"
+    done < "$WORK/al.fail"
     cat "$WORK/al.out"
     # the gate must have run to its summary line; a nonzero exit is acceptable only with exempt FAIL lines and nothing else
     grep -q '^AT1_ISOLATION: ' "$WORK/al.out" || return 1
