@@ -181,6 +181,12 @@ pub fn parse_scaled(tok: &str) -> Result<(Scaled, bool), Refusal> {
 
 /// Comma list without spaces; items nonempty.
 fn split_list(tok: &str) -> Result<Vec<&str>, Refusal> {
+    // AT1_CASE_V1 section 2: "the empty list is `none`" (Agent 0 ruling, omega#371 comment
+    // 6093816127: `clock_dim 0` with `clock_energies none` meets the count rule and falls to
+    // the range rule, CASE_INVALID_PARAMETER).
+    if tok == "none" {
+        return Ok(Vec::new());
+    }
     let items: Vec<&str> = tok.split(',').collect();
     if items.iter().any(|s| s.is_empty()) {
         return shape(format!("list {:?}", tok));

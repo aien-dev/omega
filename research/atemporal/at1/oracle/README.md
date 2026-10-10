@@ -37,9 +37,11 @@ copied from the AT-0 oracle as a starting point, as charter section 4 allows).
   `clock_energies`, `interaction_pauli` or `clock_label` lines are `CASE_PARSE_ERROR`; a
   rational with denominator below 1 and a negative part of a scaled token are
   `CASE_NONCANONICAL`; a rational over the token limit and a scaled exponent above 40 are
-  `CASE_INVALID_PARAMETER`; `clock_dim 0` (or any value that differs from the number of
-  `clock_energies` entries) is a count-line mismatch, so `CASE_PARSE_ERROR` before the range
-  rule `2 <= N <= 64` is reached. The values-block parser the judge uses takes
+  `CASE_INVALID_PARAMETER`; a `clock_dim` value that differs from the number of
+  `clock_energies` entries is a count-line mismatch (`CASE_PARSE_ERROR`), while `none` is the
+  empty list (AT1_CASE_V1 section 2), so `clock_dim 0` with `clock_energies none` and no
+  `interaction_pauli` line meets the count rule and the range rule `2 <= N <= 64` refuses it
+  with `CASE_INVALID_PARAMETER` (Agent 0 ruling, omega#371, row X7). The values-block parser the judge uses takes
   `physical_state_kernel_dim` only as a canonical decimal (`0` or `[1-9][0-9]*`).
 - Phase sign frozen in `AT1_CASE_V1` section 3: `chi_k = sum_j exp(+2 pi i E_j (k - r) tau) u_j`.
 
