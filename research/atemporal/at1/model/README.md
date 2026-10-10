@@ -159,7 +159,7 @@ For comparison, `AT1_SPEC.md` 8.4 item 5 reports `5.6e-16` from its scratch buil
    - `ORACLE_UNAVAILABLE` and `INTERNAL_ERROR` result shapes.
    - Through the CLI: output equals the library output, `--reversed`, `none`, refusal exit 2 with the exact stderr line, bad provenance exit 1 with empty stdout.
    - Oracle `undefined` placement: one clock line undefined, a status that contradicts its own clock value, an all-`undefined` record with `DEFINED` labels, a status change without its lines, `reference_ideal` undefined, `reference_interacting` undefined on a `DEFINED` label: all refused. A consistent trivial-shape oracle record against a nontrivial engine is accepted and gives check 12 FAIL.
-8. **Independent review findings** (each test fails on the pre-review code and passes now):
+8. **Independent review findings** (46 assertions; 28 of them fail on the pre-review code, all pass now):
    - The review reproducer above for the POVM bound (the pre-review code was 58 times over its bound).
    - Minimal bound tokens: `1` is `1@0`, `0.25` is `25@2`, plus the minimality property on 12 values from `3e-41` to `123456789`.
    - Label status rule at its exact boundaries (`p + b == tol` is `UNDEFINED`, `p - b == tol` is `INDETERMINATE`).
