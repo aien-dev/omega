@@ -19,7 +19,7 @@
 //   209 CAP_FIELDS 210 CAP_OUT 211 CAP_VALUE 212 CAP_VARREQ 243 AMBIGUOUS_REDIRECT 244 VALUE_NUL 245 VALUE_GLOB
 //   239 UNSUPPORTED_BUILTIN (argv[0] after expansion is set eval exec . source trap shift read return break continue
 //   local readonly alias wait : declare typeset let command type umask hash ulimit getopts jobs pushd popd dirs
-//   history unalias fg bg builtin enable shopt mapfile times caller disown suspend logout bind help compgen complete
+//   history unalias fg bg builtin enable shopt mapfile readarray times caller disown suspend logout bind help compgen complete
 //   fc compopt;
 //   names over 8 bytes such as readarray are not caught)  213 WORKSPACE_SIZE 214 ABI_MAGIC 215 ABI_VERSION 216 ABI_LENGTH
 //   217 ABI_RESERVED (also: the parser has not completed the list, or an expander cell is corrupt)
@@ -521,6 +521,13 @@ fn cmd_end(w: cells) -> u64 {
     if w[cb] > 0 {
         let b: u64 = classify(pack8o(w, w[cb + 4], w[cb + 5]));
         if b == 99 { return fail(w, 239, w[@EX_A0@]); }
+        // readarray is the one bash builtin longer than 8 bytes, so pack8o cannot carry it: matched here (#344)
+        let o9: u64 = w[cb + 4];
+        if w[cb + 5] == 9 {
+            if pack8o(w, o9, 8) == 0x7265616461727261 {
+                if w[@OUT@ + o9 + 8] == 0x79 { return fail(w, 239, w[@EX_A0@]); }
+            }
+        }
         w[cb + 3] = b;
     }
     let pb: u64 = @PIPES@ + w[@EX_PIPE@] * 4;

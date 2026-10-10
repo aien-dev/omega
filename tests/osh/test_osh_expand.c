@@ -761,6 +761,8 @@ static const Case CASES[] = {
     {"unsupported in second command", "a | exec b\n", "", "refuse 239 UNSUPPORTED_BUILTIN off=4"},
     {"each unsupported name", "trap\n", "", "refuse 239 UNSUPPORTED_BUILTIN off=0"},
     {"read is unsupported", "read x\n", "", "refuse 239 UNSUPPORTED_BUILTIN off=0"},
+    {"readarray is unsupported (9-byte name, #344)", "readarray x\n", "", "refuse 239 UNSUPPORTED_BUILTIN off=0"},
+    {"readarray via variable", "$R x\n", "R=readarray", "refuse 239 UNSUPPORTED_BUILTIN off=0"},
     {"continue return break local readonly alias wait", "wait\n", "", "refuse 239 UNSUPPORTED_BUILTIN off=0"},
     {"export NAME=value is not split", "export A=$Y B\n", "Y=a  b", "ok | P0 conn=1 | C0 b=4 argv=\"export\",\"A=a  b\",\"B\" as= rd="},
     {"export value keeps glob bytes", "export A=$Y\n", "Y=*", "ok | P0 conn=1 | C0 b=4 argv=\"export\",\"A=*\" as= rd="},

@@ -364,6 +364,8 @@ void osh_xr_pipe(const uint8_t *in, size_t n, const OshRefLex *lx, const OshRefP
         if (!c.status && c.blk[0] > 0) {
             uint64_t a0o = c.blk[4], a0l = c.blk[5];
             int b = classify(pack_name(out->out + a0o, a0l));
+            /* readarray: the one bash builtin longer than 8 bytes; pack_name cannot carry it (mirrors cmd_end, #344) */
+            if (a0l == 9 && memcmp(out->out + a0o, "readarray", 9) == 0) b = 99;
             if (b == 99) { c.woff = c.a0off; err(&c, 239); }
             else c.blk[3] = (uint64_t)b;
         }
