@@ -1,0 +1,4 @@
+mkdir -p build
+/Users/drakestapleton/at1-replication/run-ff814662a19c/ccwrap/cc-nosan -std=c11 -O2 -ffp-contract=off -Wall -Wextra -Werror -pedantic -I../../../../src -o build/at1-model at1_bn.c at1_case.c at1_exact.c at1_numeric.c at1_result.c at1_io.c ../../../../src/sha256.c at1_main.c -lm
+mkdir -p build
+/Users/drakestapleton/at1-replication/run-ff814662a19c/ccwrap/cc-nosan -std=c11 -O2 -ffp-contract=off -Wall -Wextra -Werror -pedantic -I../../../../src -I. -o build/test_model at1_bn.c at1_case.c at1_exact.c at1_numeric.c at1_result.c at1_io.c ../../../../src/sha256.c tests/test_model.c -lm

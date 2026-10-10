@@ -1,0 +1,22 @@
+# file	class	expected_outcome	expected_codes	codec	engine	oracle	evaluator_outcome	evaluator_codes	case_verdict	checks_expected	checks_got	case_id	acceptance_id	values_vs_exact	match
+a7h-01-p1-zero-coupling-ideal.case	P1	PASS	none	ok	ran	ran	PASS	none	PASS	PPPPPPPPPPPP	PPPPPPPPPPPP	same	same	AGREE	yes
+a7h-02-p1c-spectator-ideal.case	P1c	PASS	none	ok	ran	ran	PASS	none	PASS	PPPPPPPPPPPP	PPPPPPPPPPPP	same	same	AGREE	yes
+a7h-03-p2-one-rotated-level.case	P2	PASS	none	ok	ran	ran	PASS	none	PASS	PPPPPPPPPPNP	PPPPPPPPPPNP	same	same	AGREE	yes
+a7h-04-p3-every-level-coupled.case	P3	PASS	none	ok	ran	ran	PASS	none	PASS	PPPPPPPPPPNP	PPPPPPPPPPNP	same	same	AGREE	yes
+a7h-05-p3b-degenerate-level.case	P3b	PASS	none	ok	ran	ran	PASS	none	PASS	PPPPPPPPPPNP	PPPPPPPPPPNP	same	same	AGREE	yes
+a7h-06-p4-complex-psi-ref-nonzero.case	P4	PASS	none	ok	ran	ran	PASS	none	PASS	PPPPPPPPPPNP	PPPPPPPPPPNP	same	same	AGREE	yes
+a7h-07-p6-near-miss-level.case	P6	PASS	none	ok	ran	ran	PASS	none	PASS	PPPPPPPPPPNP	PPPPPPPPPPNP	same	same	AGREE	yes
+a7h-08-n2-trivial-kernel.case	N2	FAIL	TRIVIAL_PHYSICAL_STATE	ok	ran	ran	FAIL	TRIVIAL_PHYSICAL_STATE	PASS	PPFNPNNNNNNN	PPFNPNNNNNNN	same	same	AGREE	yes
+a7h-09-n3-zero-label.case	N3	FAIL	CONDITIONAL_UNDEFINED	ok	ran	ran	FAIL	CONDITIONAL_UNDEFINED	PASS	PPPPPPPPFPNP	PPPPPPPPFPNP	same	same	AGREE	yes
+a7h-10-n4a-wrong-weight.case	N4a	FAIL	POVM_NORMALIZATION_EXCEEDED,PROBABILITY_SUM_EXCEEDED	ok	ran	ran	FAIL	POVM_NORMALIZATION_EXCEEDED,PROBABILITY_SUM_EXCEEDED	PASS	PPPPFFPPPPNP	PPPPFFPPPPNP	same	same	AGREE	yes
+a7h-11-n4b-broken-clock.case	N4b	FAIL	POVM_NORMALIZATION_EXCEEDED	ok	ran	ran	FAIL	POVM_NORMALIZATION_EXCEEDED	PASS	PPPPFPPPPPNP	PPPPFPPPPPNP	same	same	AGREE	yes
+a7h-12-n6-zero-projection.case	N6	FAIL	TRIVIAL_PHYSICAL_STATE	ok	ran	ran	FAIL	TRIVIAL_PHYSICAL_STATE	PASS	PPFNPNNNNNNN	PPFNPNNNNNNN	same	same	AGREE	yes
+a7h-13-n1a-p2-question-ideal-target.case	N1	FAIL	SCHRODINGER_DEVIATION_EXCEEDED	ok	ran	ran	FAIL	SCHRODINGER_DEVIATION_EXCEEDED	PASS	PPPPPPPPPFPP	PPPPPPPPPFPP	same	same	AGREE	yes
+a7h-14-n1b-p4-question-ideal-target.case	N1	FAIL	SCHRODINGER_DEVIATION_EXCEEDED	ok	ran	ran	FAIL	SCHRODINGER_DEVIATION_EXCEEDED	PASS	PPPPPPPPPFPP	PPPPPPPPPFPP	same	same	AGREE	yes
+a7h-15-n1c-p6-question-ideal-target.case	N1	FAIL	SCHRODINGER_DEVIATION_EXCEEDED	ok	ran	ran	FAIL	SCHRODINGER_DEVIATION_EXCEEDED	PASS	PPPPPPPPPFPP	PPPPPPPPPFPP	same	same	AGREE	yes
+a7h-16-r1-per-level-irrational.case	R	CASE_IRRATIONAL_SPECTRUM	-	ok	refused-exactly	refused-exactly	REFUSED	CASE_IRRATIONAL_SPECTRUM	PASS	-	-	-	-	-	yes
+a7h-17-r2-coupling-index-01.case	R	CASE_NONCANONICAL	-	ok	refused-exactly	refused-exactly	REFUSED	CASE_NONCANONICAL	PASS	-	-	-	-	-	yes
+a7h-18-r3-at0-header.case	R	CASE_PARSE_ERROR	-	ok	refused-exactly	refused-exactly	REFUSED	CASE_PARSE_ERROR	PASS	-	-	-	-	-	yes
+a7h-19-r4-domain-at0.case	R	CASE_UNSUPPORTED_VERSION	-	ok	refused-exactly	refused-exactly	REFUSED	CASE_UNSUPPORTED_VERSION	PASS	-	-	-	-	-	yes
+a7h-20-r5-coupling-count.case	R	CASE_PARSE_ERROR	-	ok	refused-exactly	refused-exactly	REFUSED	CASE_PARSE_ERROR	PASS	-	-	-	-	-	yes
+a7h-21-r6-label-index-value.case	R	CASE_PARSE_ERROR	-	ok	refused-exactly	refused-exactly	REFUSED	CASE_PARSE_ERROR	PASS	-	-	-	-	-	yes

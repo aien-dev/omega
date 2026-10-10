@@ -1,0 +1,40 @@
+$ git init -q omega
+exit 0
+$ git -C omega remote add origin https://github.com/aien-dev/omega.git
+exit 0
+$ git -C omega fetch -q --depth 1 origin ff814662a19cf7da6b183f3e667c6c921e0ead21
+exit 0
+$ git -C omega checkout -q --detach FETCH_HEAD
+exit 0
+$ git clone -q https://github.com/aien-dev/aien-architecture.git arch
+exit 0
+arch HEAD ea91d7c06507c8e43fdcef2b685f29d88a9e7d81
+$ AT1_ARCH_DIR=/Users/drakestapleton/at1-replication/run-ff814662a19c/arch make at1-check   (started 2026-10-10T04:58:59Z)
+manifest-unchanged
+commitment 63b2edf061ffe88f4560a31391ed4945e71ed3e607aab87c2b932c7e2438a2e6
+$ git clone -q --no-hardlinks omega hsrc
+exit 0
+$ git -C hsrc checkout -q --detach ff814662a19cf7da6b183f3e667c6c921e0ead21
+exit 0
+$ sh build.sh
+exit 0
+$ make CC=cc
+exit 0
+$ make all
+exit 0
+hsrc status lines 0
+$ ./build/at1-eval qualify --cases /Users/drakestapleton/at1-replication/run-ff814662a19c/hidden-run/cases --engine sh /Users/drakestapleton/at1-replication/run-ff814662a19c/hsrc/research/atemporal/at1/integration/engine_shim.sh {case} {out} --oracle sh /Users/drakestapleton/at1-replication/run-ff814662a19c/hsrc/research/atemporal/at1/integration/oracle_shim.sh {case} {out} --out /Users/drakestapleton/at1-replication/run-ff814662a19c/hidden-run/out
+exit 0
+$ /Users/drakestapleton/at1-hidden/phase2/cmpvals /Users/drakestapleton/at1-hidden/cases/DETAILS.txt /Users/drakestapleton/at1-replication/run-ff814662a19c/hidden-run/out/spliced 1e-12
+exit 0
+$ sample 31753 2 > asan-probe-hang.sample.txt   (ASan probe hang evidence)
+$ AT1_ARCH_DIR=/Users/drakestapleton/at1-replication/run-ff814662a19c/arch CC=/Users/drakestapleton/at1-replication/run-ff814662a19c/ccwrap/cc-nosan make at1-check AT1_OUT=build/at1-nosan   (started 2026-10-10T05:12:42Z)
+exit 2   (finished 2026-10-10T05:13:30Z)
+$ ln -sf /bin/dash shwrap/sh   (sh substitution; /bin/sh is bash 3.2.57)
+$ PATH=/Users/drakestapleton/at1-replication/run-ff814662a19c/shwrap:$PATH AT1_ARCH_DIR=/Users/drakestapleton/at1-replication/run-ff814662a19c/arch CC=/Users/drakestapleton/at1-replication/run-ff814662a19c/ccwrap/cc-nosan make at1-check AT1_OUT=build/at1-dash   (started 2026-10-10T05:14:52Z)
+exit 2   (finished 2026-10-10T05:16:07Z)
+$ rustup component add llvm-tools   (for llvm-nm matching rustc LLVM 22; Apple nm is LLVM 17)
+exit 0
+$ ln -sf <rustup sysroot>/lib/rustlib/aarch64-apple-darwin/bin/llvm-nm nmwrap/nm   (nm substitution)
+$ PATH=/Users/drakestapleton/at1-replication/run-ff814662a19c/shwrap:/Users/drakestapleton/at1-replication/run-ff814662a19c/nmwrap:$PATH AT1_ARCH_DIR=/Users/drakestapleton/at1-replication/run-ff814662a19c/arch CC=/Users/drakestapleton/at1-replication/run-ff814662a19c/ccwrap/cc-nosan make at1-check AT1_OUT=build/at1-dashnm   (started 2026-10-10T05:17:15Z)
+exit 0   (finished 2026-10-10T05:18:30Z)

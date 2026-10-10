@@ -1,0 +1,7 @@
+AT-1 Agent 5 run 20261010T045902Z mode=check omega=ff814662a19cf7da6b183f3e667c6c921e0ead21 starting_checkout_clean=YES
+CONTROL C0-CONTRACT-DIGESTS PASS  all match contract.lock and the AT0_FREEZE.md rows (arch HEAD ea91d7c)
+CONTROL C0-COMPONENTS-AT-QUALIFIED-COMMIT NOT_RUN  components are those of HEAD
+BUILD oracle-build ok
+BUILD model-build ok
+BUILD evaluator-build ok
+CONTROL C1-BUILD-LEAVES-TREE-CLEAN PASS  empty (build outputs are git-ignored)

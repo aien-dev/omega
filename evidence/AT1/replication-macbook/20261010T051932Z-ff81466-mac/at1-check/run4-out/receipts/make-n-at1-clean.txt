@@ -1,0 +1,1 @@
+case 'build/at1-dashnm' in at1|*/at1) rm -rf -- 'build/at1-dashnm';; *) echo "at1-clean: AT1_OUT='build/at1-dashnm' does not end in /at1; not removed" >&2; exit 1;; esac

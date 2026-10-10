@@ -1,0 +1,126 @@
+== a7h-01-p1-zero-coupling-ideal.case
+kernel_dim 2 psi_zero false povm_residual_squared 0/1
+k 0 p 1/8 plusXYZ 1/2 1/10 1/5 idealXYZ 1/2 1/10 1/5
+k 1 p 1/8 plusXYZ 9/10 1/2 1/5 idealXYZ 9/10 1/2 1/5
+k 2 p 1/8 plusXYZ 1/2 9/10 1/5 idealXYZ 1/2 9/10 1/5
+k 3 p 1/8 plusXYZ 1/10 1/2 1/5 idealXYZ 1/10 1/2 1/5
+k 4 p 1/8 plusXYZ 1/2 1/10 1/5 idealXYZ 1/2 1/10 1/5
+k 5 p 1/8 plusXYZ 9/10 1/2 1/5 idealXYZ 9/10 1/2 1/5
+k 6 p 1/8 plusXYZ 1/2 9/10 1/5 idealXYZ 1/2 9/10 1/5
+k 7 p 1/8 plusXYZ 1/10 1/2 1/5 idealXYZ 1/10 1/2 1/5
+== a7h-02-p1c-spectator-ideal.case
+kernel_dim 2 psi_zero false povm_residual_squared 0/1
+k 0 p 1/8 plusXYZ 41/45 13/18 29/90 idealXYZ 41/45 13/18 29/90
+k 1 p 1/8 plusXYZ 37/45 5/18 73/90 idealXYZ 37/45 5/18 73/90
+k 2 p 1/8 plusXYZ 1/5 1/2 9/10 idealXYZ 1/5 1/2 9/10
+k 3 p 1/8 plusXYZ 13/45 17/18 37/90 idealXYZ 13/45 17/18 37/90
+k 4 p 1/8 plusXYZ 41/45 13/18 29/90 idealXYZ 41/45 13/18 29/90
+k 5 p 1/8 plusXYZ 37/45 5/18 73/90 idealXYZ 37/45 5/18 73/90
+k 6 p 1/8 plusXYZ 1/5 1/2 9/10 idealXYZ 1/5 1/2 9/10
+k 7 p 1/8 plusXYZ 13/45 17/18 37/90 idealXYZ 13/45 17/18 37/90
+== a7h-03-p2-one-rotated-level.case
+kernel_dim 3 psi_zero false povm_residual_squared 0/1
+k 0 p 7/120 plusXYZ 5/14 5/7 1/14 idealXYZ 0/1 1/2 1/2
+k 1 p 5/24 plusXYZ 9/10 17/25 37/50 idealXYZ 1/1 1/2 1/2
+k 2 p 23/120 plusXYZ 5/46 13/23 37/46 idealXYZ 0/1 1/2 1/2
+k 3 p 1/24 plusXYZ 1/2 1/5 1/10 idealXYZ 1/1 1/2 1/2
+k 4 p 7/120 plusXYZ 5/14 5/7 1/14 idealXYZ 0/1 1/2 1/2
+k 5 p 5/24 plusXYZ 9/10 17/25 37/50 idealXYZ 1/1 1/2 1/2
+k 6 p 23/120 plusXYZ 5/46 13/23 37/46 idealXYZ 0/1 1/2 1/2
+k 7 p 1/24 plusXYZ 1/2 1/5 1/10 idealXYZ 1/1 1/2 1/2
+== a7h-04-p3-every-level-coupled.case
+kernel_dim 3 psi_zero false povm_residual_squared 0/1
+k 0 p 2017/49944 plusXYZ 114461/157326 2425/12102 65237/78663 idealXYZ 193/405 61/162 13/810
+k 1 p 14429/49944 plusXYZ 384497/1125462 82741/86574 355241/562731 idealXYZ 4/5 9/10 1/2
+k 2 p 2149/49944 plusXYZ 59237/167622 5809/12894 2057/83811 idealXYZ 193/405 61/162 13/810
+k 3 p 6377/49944 plusXYZ 336761/497406 36877/38262 109541/248703 idealXYZ 4/5 9/10 1/2
+k 4 p 2017/49944 plusXYZ 114461/157326 2425/12102 65237/78663 idealXYZ 193/405 61/162 13/810
+k 5 p 14429/49944 plusXYZ 384497/1125462 82741/86574 355241/562731 idealXYZ 4/5 9/10 1/2
+k 6 p 2149/49944 plusXYZ 59237/167622 5809/12894 2057/83811 idealXYZ 193/405 61/162 13/810
+k 7 p 6377/49944 plusXYZ 336761/497406 36877/38262 109541/248703 idealXYZ 4/5 9/10 1/2
+== a7h-05-p3b-degenerate-level.case
+kernel_dim 3 psi_zero false povm_residual_squared 0/1
+k 0 p 113/888 plusXYZ 1465/2486 153/1243 457/2486 idealXYZ 1/2 1/10 1/5
+k 1 p 1/8 plusXYZ 1289/2442 65/1221 677/2442 idealXYZ 1/5 1/10 1/2
+k 2 p 109/888 plusXYZ 9/22 1/11 5/22 idealXYZ 1/2 1/10 4/5
+k 3 p 1/8 plusXYZ 1157/2442 197/1221 325/2442 idealXYZ 4/5 1/10 1/2
+k 4 p 113/888 plusXYZ 1465/2486 153/1243 457/2486 idealXYZ 1/2 1/10 1/5
+k 5 p 1/8 plusXYZ 1289/2442 65/1221 677/2442 idealXYZ 1/5 1/10 1/2
+k 6 p 109/888 plusXYZ 9/22 1/11 5/22 idealXYZ 1/2 1/10 4/5
+k 7 p 1/8 plusXYZ 1157/2442 197/1221 325/2442 idealXYZ 4/5 1/10 1/2
+== a7h-06-p4-complex-psi-ref-nonzero.case
+kernel_dim 3 psi_zero false povm_residual_squared 0/1
+k 0 p 1/8 plusXYZ 265/858 773/858 116/429 idealXYZ 61/98 9/49 13/98
+k 1 p 73/312 plusXYZ 881/1606 1521/1606 226/803 idealXYZ 1/2 1/1 1/2
+k 2 p 1/8 plusXYZ 661/858 773/858 160/429 idealXYZ 61/98 9/49 13/98
+k 3 p 5/312 plusXYZ 9/22 5/22 10/11 idealXYZ 1/2 1/1 1/2
+k 4 p 1/8 plusXYZ 265/858 773/858 116/429 idealXYZ 61/98 9/49 13/98
+k 5 p 73/312 plusXYZ 881/1606 1521/1606 226/803 idealXYZ 1/2 1/1 1/2
+k 6 p 1/8 plusXYZ 661/858 773/858 160/429 idealXYZ 61/98 9/49 13/98
+k 7 p 5/312 plusXYZ 9/22 5/22 10/11 idealXYZ 1/2 1/1 1/2
+== a7h-07-p6-near-miss-level.case
+kernel_dim 3 psi_zero false povm_residual_squared 0/1
+k 0 p 97/428 plusXYZ 9/194 1745/3298 1168/1649 idealXYZ 1/6 1/3 5/6
+k 1 p 73/428 plusXYZ 1/2 9/34 16/17 idealXYZ 5/6 2/3 5/6
+k 2 p 129/428 plusXYZ 89/258 113/4386 1168/2193 idealXYZ 1/6 1/3 5/6
+k 3 p 129/428 plusXYZ 257/258 2425/4386 1168/2193 idealXYZ 5/6 2/3 5/6
+== a7h-08-n2-trivial-kernel.case
+kernel_dim 0 psi_zero false povm_residual_squared 0/1
+k 0 p undefined plusXYZ undefined idealXYZ 37/150 5/6 17/75
+k 1 p undefined plusXYZ undefined idealXYZ 121/150 13/15 97/150
+k 2 p undefined plusXYZ undefined idealXYZ 5/6 1/6 2/3
+k 3 p undefined plusXYZ undefined idealXYZ 41/150 2/15 37/150
+== a7h-09-n3-zero-label.case
+kernel_dim 2 psi_zero false povm_residual_squared 0/1
+k 0 p 1/4 plusXYZ 9/26 1/26 5/13 idealXYZ 5/6 1/6 1/3
+k 1 p 0/1 plusXYZ undefined idealXYZ 17/1014 389/1014 281/507
+k 2 p 1/4 plusXYZ 9/26 1/26 5/13 idealXYZ 5/6 1/6 1/3
+k 3 p 0/1 plusXYZ undefined idealXYZ 17/1014 389/1014 281/507
+k 4 p 1/4 plusXYZ 9/26 1/26 5/13 idealXYZ 5/6 1/6 1/3
+k 5 p 0/1 plusXYZ undefined idealXYZ 17/1014 389/1014 281/507
+k 6 p 1/4 plusXYZ 9/26 1/26 5/13 idealXYZ 5/6 1/6 1/3
+k 7 p 0/1 plusXYZ undefined idealXYZ 17/1014 389/1014 281/507
+== a7h-10-n4a-wrong-weight.case
+kernel_dim 2 psi_zero false povm_residual_squared 1/1
+k 0 p 5/632 plusXYZ 9/10 4/5 1/2 idealXYZ 17/405 61/162 533/810
+k 1 p 153/632 plusXYZ 2273/2754 16/81 745/2754 idealXYZ 4/5 9/10 1/2
+k 2 p 5/632 plusXYZ 9/10 4/5 1/2 idealXYZ 17/405 61/162 533/810
+k 3 p 153/632 plusXYZ 2273/2754 16/81 745/2754 idealXYZ 4/5 9/10 1/2
+== a7h-11-n4b-broken-clock.case
+kernel_dim 2 psi_zero false povm_residual_squared 2/1
+k 0 p 293/1252 plusXYZ 40213/68562 49297/68562 2020/34281 idealXYZ 257/338 89/169 25/338
+k 1 p 205/1252 plusXYZ 3737/9594 125/9594 2276/4797 idealXYZ 241/338 9/169 193/338
+k 2 p 333/1252 plusXYZ 28981/77922 49297/77922 37588/38961 idealXYZ 153/338 89/169 337/338
+k 3 p 421/1252 plusXYZ 50509/98514 97969/98514 28228/49257 idealXYZ 1/2 1/1 1/2
+== a7h-12-n6-zero-projection.case
+kernel_dim 1 psi_zero true povm_residual_squared 0/1
+k 0 p undefined plusXYZ undefined idealXYZ 61/198 65/99 13/198
+k 1 p undefined plusXYZ undefined idealXYZ 5/22 9/11 5/22
+k 2 p undefined plusXYZ undefined idealXYZ 13/198 65/99 61/198
+k 3 p undefined plusXYZ undefined idealXYZ 29/198 49/99 29/198
+== a7h-13-n1a-p2-question-ideal-target.case
+kernel_dim 3 psi_zero false povm_residual_squared 0/1
+k 0 p 7/120 plusXYZ 5/14 5/7 1/14 idealXYZ 0/1 1/2 1/2
+k 1 p 5/24 plusXYZ 9/10 17/25 37/50 idealXYZ 1/1 1/2 1/2
+k 2 p 23/120 plusXYZ 5/46 13/23 37/46 idealXYZ 0/1 1/2 1/2
+k 3 p 1/24 plusXYZ 1/2 1/5 1/10 idealXYZ 1/1 1/2 1/2
+k 4 p 7/120 plusXYZ 5/14 5/7 1/14 idealXYZ 0/1 1/2 1/2
+k 5 p 5/24 plusXYZ 9/10 17/25 37/50 idealXYZ 1/1 1/2 1/2
+k 6 p 23/120 plusXYZ 5/46 13/23 37/46 idealXYZ 0/1 1/2 1/2
+k 7 p 1/24 plusXYZ 1/2 1/5 1/10 idealXYZ 1/1 1/2 1/2
+== a7h-14-n1b-p4-question-ideal-target.case
+kernel_dim 3 psi_zero false povm_residual_squared 0/1
+k 0 p 1/8 plusXYZ 265/858 773/858 116/429 idealXYZ 61/98 9/49 13/98
+k 1 p 73/312 plusXYZ 881/1606 1521/1606 226/803 idealXYZ 1/2 1/1 1/2
+k 2 p 1/8 plusXYZ 661/858 773/858 160/429 idealXYZ 61/98 9/49 13/98
+k 3 p 5/312 plusXYZ 9/22 5/22 10/11 idealXYZ 1/2 1/1 1/2
+k 4 p 1/8 plusXYZ 265/858 773/858 116/429 idealXYZ 61/98 9/49 13/98
+k 5 p 73/312 plusXYZ 881/1606 1521/1606 226/803 idealXYZ 1/2 1/1 1/2
+k 6 p 1/8 plusXYZ 661/858 773/858 160/429 idealXYZ 61/98 9/49 13/98
+k 7 p 5/312 plusXYZ 9/22 5/22 10/11 idealXYZ 1/2 1/1 1/2
+== a7h-15-n1c-p6-question-ideal-target.case
+kernel_dim 3 psi_zero false povm_residual_squared 0/1
+k 0 p 97/428 plusXYZ 9/194 1745/3298 1168/1649 idealXYZ 1/6 1/3 5/6
+k 1 p 73/428 plusXYZ 1/2 9/34 16/17 idealXYZ 5/6 2/3 5/6
+k 2 p 129/428 plusXYZ 89/258 113/4386 1168/2193 idealXYZ 1/6 1/3 5/6
+k 3 p 129/428 plusXYZ 257/258 2425/4386 1168/2193 idealXYZ 5/6 2/3 5/6

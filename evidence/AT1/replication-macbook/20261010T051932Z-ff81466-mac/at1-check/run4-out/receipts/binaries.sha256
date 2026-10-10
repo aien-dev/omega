@@ -1,0 +1,5 @@
+92d2755cec6e7bf8526947bee64d56b2a4bab0a1ce4045449a5f84be718889cb  src/research/atemporal/at1/model/build/at1-model
+6348fbb5f71756a1035c83708cd46298b41e155501baa11d370dbbad52ad889e  src/research/atemporal/at1/oracle/target/at1-oracle
+a95eb1d556fdcef9a8cee05ebcf68fc87c7ce3bb3cc6a5b3f01499baefaab1cb  src/research/atemporal/at1/evaluator/build/at1-eval
+798b7b27ba703aa7de6c9f122c1accf648dd933f6ed63ff122a26dee437c1491  src/research/atemporal/at1/model/build/test_model
+4bde73b673bfb7643d2b4167620bed404ed1bb808cfb24650e8a5bcdac0de8ed  src/research/atemporal/at1/oracle/target/at1-oracle-test

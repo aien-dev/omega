@@ -1,0 +1,9 @@
+omega_commit ff814662a19cf7da6b183f3e667c6c921e0ead21
+source_tree_clean YES
+starting_checkout_clean YES
+contract_commit cbe4c8ed88d28bb96d5209327ecd30aa9cddaf7a
+stamp 20261010T051716Z
+host Macbook.local macOS 26.6.2 arm64
+cases 96: positive 12, negative 12, refuse 72; engine results written 24
+evaluator table: positive PASS 12 FAIL 0 INDETERMINATE 0; negative PASS 12 FAIL 0 INDETERMINATE 0; refusal PASS 72 FAIL 0 INDETERMINATE 0
+mutants: drop_v 15/18 killed; wrong_level 16/18 killed; evaluator receipt MUTANT_RECEIPT: PASS (244 cells, 0 unexpected) -> build/MUTANT_RECEIPT.tsv

@@ -1,0 +1,17 @@
+# case	kernel_dim	values_compared	max_abs_dev_engine	max_abs_dev_oracle	status_mismatches	over_tol	result
+a7h-01-p1-zero-coupling-ideal	2	160	1.110e-16	2.776e-17	0	0	AGREE
+a7h-02-p1c-spectator-ideal	2	160	1.110e-16	1.110e-16	0	0	AGREE
+a7h-03-p2-one-rotated-level	3	160	1.110e-16	1.110e-16	0	0	AGREE
+a7h-04-p3-every-level-coupled	3	160	2.220e-16	1.110e-16	0	0	AGREE
+a7h-05-p3b-degenerate-level	3	160	1.110e-16	1.110e-16	0	0	AGREE
+a7h-06-p4-complex-psi-ref-nonzero	3	160	2.220e-16	2.220e-16	0	0	AGREE
+a7h-07-p6-near-miss-level	3	80	1.110e-16	1.110e-16	0	0	AGREE
+a7h-08-n2-trivial-kernel	0	24	0.000e0	1.110e-16	0	0	AGREE
+a7h-09-n3-zero-label	2	112	1.110e-16	2.220e-16	0	0	AGREE
+a7h-10-n4a-wrong-weight	2	80	6.106e-16	3.331e-16	0	0	AGREE
+a7h-11-n4b-broken-clock	2	80	1.665e-16	2.220e-16	0	0	AGREE
+a7h-12-n6-zero-projection	1	24	0.000e0	2.220e-16	0	0	AGREE
+a7h-13-n1a-p2-question-ideal-target	3	160	1.110e-16	1.110e-16	0	0	AGREE
+a7h-14-n1b-p4-question-ideal-target	3	160	2.220e-16	2.220e-16	0	0	AGREE
+a7h-15-n1c-p6-question-ideal-target	3	80	1.110e-16	1.110e-16	0	0	AGREE
+# cases 15 disagreeing 0 (tolerance 1e-12)
