@@ -68,7 +68,8 @@ typedef struct {
     int status;
 } Run;
 
-/* mode 0: osh -c TEXT [args]; 1: osh SCRIPT [args] (TEXT written to the file); 2: osh with TEXT on standard input */
+/* mode 0: osh -c TEXT [args]; 1: osh SCRIPT [args] (TEXT written to the file); 2: osh with TEXT on standard input;
+ * 3: osh [args] as given (TEXT unused) */
 static Run run_osh(int mode, const char *text, char *const *args, int interp)
 {
     char outp[512], errp[512], inp[512], scr[512];
@@ -252,6 +253,30 @@ static int pty_wait(int fd, char *buf, size_t cap, size_t *n, const char *want, 
 
 /* ^C typed at an idle interactive prompt (review of #340, BUG-5): the shell drops the half-typed line, prompts again,
  * keeps running and sets $? to 130, as bash does. Before the fix the shell died of SIGINT. Needs a pseudo-terminal. */
+/* `osh SCRIPT` with a script that is a directory, missing or unreadable: bash 5.2 exits 126, 127 and 126 with the
+ * system's message (#344 NIT "osh DIR 127 vs 126"). */
+static void test_script_status(void)
+{
+    char miss[600], unread[600];
+    snprintf(miss, sizeof miss, "%s/no-such-script.osh", TMP);
+    snprintf(unread, sizeof unread, "%s/unreadable.osh", TMP);
+    FILE *f = fopen(unread, "wb");
+    if (f) { fputs("exit 0\n", f); fclose(f); }
+    chmod(unread, 0);
+    const struct { const char *path, *msg; int status; } rows[] = {
+        {TMP, "Is a directory", 126}, {miss, "No such file or directory", 127}, {unread, "Permission denied", 126}};
+    for (size_t i = 0; i < sizeof rows / sizeof rows[0]; i++) {
+        if (i == 2 && geteuid() == 0) continue; /* root can read anything */
+        char *const args[] = {(char *)rows[i].path, NULL};
+        Run r = run_osh(3, "", args, 0);
+        check(r.status == rows[i].status && strstr(r.err, rows[i].msg) != NULL, "osh %s: status %d (want %d), stderr '%s' (want '%s')",
+              rows[i].path, r.status, rows[i].status, r.err, rows[i].msg);
+        free(r.out);
+        free(r.err);
+    }
+    chmod(unread, 0644);
+}
+
 static void test_prompt_ctrl_c(void)
 {
     int master = posix_openpt(O_RDWR | O_NOCTTY);
@@ -343,6 +368,7 @@ int main(int argc, char **argv)
         free(want_out);
         free(r[0].out); free(r[0].err); free(r[1].out); free(r[1].err);
     }
+    test_script_status();
     test_prompt_ctrl_c();
     printf("e2e cases %lu (each run native and OSH_INTERP=1), checks %lu, failures %lu\n", ncases, checks, fails);
     /* clean the fixture: only files this test created */
