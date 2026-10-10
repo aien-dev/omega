@@ -1,0 +1,13 @@
+# AT-1 contract pin (AT1_CHARTER.md section 8). Owner: AT-1 Agent 5. Read by run.sh only.
+# Format: "<key> <value>". Digests are plain SHA-256 of the file bytes at the named commit.
+# The *_sha256 rows must also appear in the AT-1 rows of AT0_FREEZE.md (aien-architecture main).
+repo aien-dev/aien-architecture
+contract_commit cbe4c8ed88d28bb96d5209327ecd30aa9cddaf7a
+contract_commit_also_accepted 81047f52850f4bd14c2fc5772ec2ac833ac694b9 ea91d7c06507c8e43fdcef2b685f29d88a9e7d81
+case_v1_sha256 e62018d8deec97fffca5cacaf6452d8fc45c395596517665cd73eb0c777a3e8f
+result_v1_sha256 3e6efd7e641a89bf0e425267525afabc51fe7a5497d3d539cdeaf09ddb6fa92d
+result_v2_sha256 bd0f9eb8cf3ef7226c3ea18c1c9fbd4db62e0c23a0481afa519830fc1f514b5e
+spec_commit 81047f52850f4bd14c2fc5772ec2ac833ac694b9
+spec_sha256 9a4c420b89c694a4ab13b77a9e0304de7dc830e50813a40e1128f4e673e5f576
+charter_readings_commit ea91d7c06507c8e43fdcef2b685f29d88a9e7d81
+charter_sha256_at_readings_commit 40d2daecbb1e1d8e33022a2034376f84a03b3b152e748bcbca9d1c8871dc9e8a
