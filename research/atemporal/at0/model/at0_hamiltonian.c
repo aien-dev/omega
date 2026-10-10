@@ -10,11 +10,11 @@ at0_status at0_hamiltonian_system(const at0_case *c, at0_system_hamiltonian *out
     if (!c || !out) return AT0_ERR_ARGUMENT;
     memset(out, 0, sizeof *out);
     at0_status st;
-    if ((st = at0_rat_sub(c->h0, c->h_norm, &out->eig[0])) != AT0_OK) return st;
-    if ((st = at0_rat_add(c->h0, c->h_norm, &out->eig[1])) != AT0_OK) return st;
     double h0 = at0_rat_to_double(c->h0), hx = at0_rat_to_double(c->hx);
     double hy = at0_rat_to_double(c->hy), hz = at0_rat_to_double(c->hz);
     double r = at0_rat_to_double(c->h_norm);
+    out->eig[0] = h0 - r;
+    out->eig[1] = h0 + r;
     out->hs.m[0][0] = h0 + hz;      out->hs.m[0][1] = hx - I * hy;
     out->hs.m[1][0] = hx + I * hy;  out->hs.m[1][1] = h0 - hz;
     if (at0_rat_is_zero(c->h_norm)) {
@@ -24,9 +24,9 @@ at0_status at0_hamiltonian_system(const at0_case *c, at0_system_hamiltonian *out
         out->vec[1].v[0] = 0.0; out->vec[1].v[1] = 1.0;
         return AT0_OK;
     }
-    at0_rat rpz;
-    if ((st = at0_rat_add(c->h_norm, c->hz, &rpz)) != AT0_OK) return st;
-    if (at0_rat_is_zero(rpz)) {
+    at0_i128 A, D;    /* exact a = |h| + hz = A / D, never a reduced rational (its denominator can exceed 2^62) */
+    if ((st = at0_exact_norm_plus_hz(c->hx, c->hy, c->hz, c->h_norm, &A, &D)) != AT0_OK) return st;
+    if (A == 0) {
         /* h = (0, 0, -|h|): eigenvalue -|h| on |0>, +|h| on |1> */
         out->vec[0].v[0] = 1.0; out->vec[0].v[1] = 0.0;
         out->vec[1].v[0] = 0.0; out->vec[1].v[1] = 1.0;
