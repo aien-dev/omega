@@ -53,11 +53,11 @@ refuse/R27-rational-over-limit.case	R3	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
 refuse/R28-duplicate-label.case	R3	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
 refuse/R29-ref-label-missing.case	R3	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
 refuse/R30-negative-zero.case	R1	AT0_CASE_REFUSED CASE_NONCANONICAL
-refuse/R31-control-kind-bad.case	R3	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R31-control-kind-bad.case	R3	AT0_CASE_REFUSED CASE_PARSE_ERROR
 refuse/R32-case-name-two-tokens.case	R1	AT0_CASE_REFUSED CASE_PARSE_ERROR
 refuse/R33-missing-final-lf.case	R1	AT0_CASE_REFUSED CASE_PARSE_ERROR
 refuse/R34-empty.case	R1	AT0_CASE_REFUSED CASE_PARSE_ERROR
 refuse/R35-trailing-line.case	R1	AT0_CASE_REFUSED CASE_PARSE_ERROR
-refuse/R36-label-count-mismatch.case	R3	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R36-label-count-mismatch.case	R3	AT0_CASE_REFUSED CASE_PARSE_ERROR
 refuse/R37-model-family-bad.case	R3	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
 refuse/R38-acceptance-id-wrong.case	R5	AT0_CASE_REFUSED CASE_ID_MISMATCH

@@ -185,3 +185,19 @@ mutant counts as caught only on FAIL, gate control objects that fail to compile
 record NOT_RUN instead of a false PASS, the isolation gate reads dynamic symbol
 tables and forbids `syscall`, scaled-decimal bounds above 2^64 convert exactly,
 and the shadow bound follows the long double width.
+
+## Rulings applied after the first qualification run (omega#358, 2026-10-09)
+
+- D3 (Agent 0): `control_kind` with a token outside POSITIVE/NEGATIVE, and a
+  `clock_label_count` larger than the number of `clock_label` lines, are shape
+  failures (section 1 line grammar), so step 1 fires first: CASE_PARSE_ERROR,
+  not CASE_INVALID_PARAMETER. The codec and the manifest rows R31 and R36 now
+  say so. Ambiguity A2 (rational beyond the limit is a range failure) is
+  unaffected: a well-formed integer that is too large is not a grammar failure.
+- D5 (Agent 5): the isolation gate grepped `std..time`, which never matches a
+  real Rust symbol (legacy mangling writes `_ZN3std4time...`, v0 mangling
+  `_RNv...3std4time...`). The gate now scans the raw and the demangled symbol
+  tables for both mangling schemes and the `std::time`, `SystemTime`, `Instant`
+  spellings, and `run.sh` builds three Rust controls from the oracle compute
+  crate (clean, std::time mutant, extern "C" clock_gettime mutant) whenever
+  rustc is available. See ISOLATION_REPORT.md for the G2 sign-off.

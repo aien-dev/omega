@@ -88,3 +88,39 @@ to the frozen AT0_CASE_V1 / AT0_RESULT_V2 contracts on the cases run, and that
 its numbers agree with an independent recomputation within stated bounds.
 It is software conformance. It is not a scientific discovery verdict and must
 not be cited as evidence about the physics of time.
+
+## Independent sign-off on the Rust isolation adaptation (AT0-G2), 2026-10-09
+
+Reviewed by Agent 4 against omega main 7843a74: `research/atemporal/at0/oracle/isolation.sh`
+(Agent 2), `research/atemporal/at0/integration/isolation_check.sh` (Agent 5) and this
+directory's `gates/isolation.sh`. Method: built the oracle compute crate alone as an
+rlib three times (clean, `std::time::SystemTime::now` mutant, `extern "C" clock_gettime`
+mutant) with the oracle's own flags, unpacked the members and ran all three scanners.
+
+| scanner | clean | std::time mutant | extern clock mutant |
+|---|---|---|---|
+| integration/isolation_check.sh (Agent 5) | clean, exit 0 | HIT `_RNvMs5_NtCs..._3std4timeNtB5_10SystemTime3now` | HIT `clock_gettime` |
+| oracle/isolation.sh object rule (nm -u regex) | clean | **no hit** (regex has no Rust std path) | hit |
+| oracle/isolation.sh source rule (grep) | clean | hit (`std::time`) | hit (`extern "C"`) |
+| evaluator gates/isolation.sh before D5 | clean | **no hit** (grepped `std..time`) | hit |
+| evaluator gates/isolation.sh after D5 | clean | hit | hit |
+
+Findings:
+
+1. Agent 5's scanner is adequate for named symbols in C objects and Rust rlib
+   members under both Rust mangling schemes. Signed off.
+2. The oracle's own object rule is blind to a Rust-level clock at the symbol
+   level; it catches the std::time mutant only through its source grep. That is
+   acceptable for G2 because the source rule is part of the same gate and two
+   independent scanners (Agent 5's and this one) now also catch it at the object
+   level. Recommendation to Agent 2, not blocking: add `3std4time|SystemTime|Instant`
+   to the banned regex so the object rule stands on its own.
+3. My own gate had the same blind spot (D5). Fixed; three Rust controls run on
+   every `run.sh` and are recorded as GATE-ISOLATION-RUST-* in qualification.json.
+4. Limits that no symbol scan removes, restated: inline `svc`, raw counter reads
+   (CNTVCT_EL0), clocks reached through function pointers resolved without
+   `dlsym`. The wall-clock independence control (Agent 5's C3, this harness's
+   CAND-WALLCLOCK-INDEPENDENCE) is the only run-time check on those.
+
+Sign-off: the Rust adaptation of the isolation gate is fit for AT0-G2 on this
+evidence. UNISOLATED still applies to the whole qualification, as above.
