@@ -1,0 +1,96 @@
+# path	class	expected tool response (every parser must give it; refusals: one stderr line, exit 2)
+positive/P1a-zero-coupling-interacting.case	P1	AT1_CASE_OK
+positive/P1b-zero-coupling-ideal.case	P1	AT1_CASE_OK
+positive/P1c-spectator-coupling-ideal.case	P1	AT1_CASE_OK
+positive/P2-kat-rotated-level-n4.case	P2	AT1_CASE_OK
+positive/P2t4-global-phase-i.case	P2	AT1_CASE_OK
+positive/P2t5-scale-2.case	P2	AT1_CASE_OK
+positive/P3-every-level-coupled.case	P3	AT1_CASE_OK
+positive/P3b-degenerate-level.case	P3	AT1_CASE_OK
+positive/P4-complex-psi-ref-t1.case	P4	AT1_CASE_OK
+positive/P4t7-complex-psi-ref-t0.case	P4	AT1_CASE_OK
+positive/P5-large-rationals.case	P5	AT1_CASE_OK
+positive/P6-near-miss-energies.case	P6	AT1_CASE_OK
+negative/N1-p2-target-ideal.case	N1	AT1_CASE_OK
+negative/N1b-p3-target-ideal.case	N1	AT1_CASE_OK
+negative/N1c-p3b-target-ideal.case	N1	AT1_CASE_OK
+negative/N1d-p4-target-ideal.case	N1	AT1_CASE_OK
+negative/N1e-p5-target-ideal.case	N1	AT1_CASE_OK
+negative/N1f-p6-target-ideal.case	N1	AT1_CASE_OK
+negative/N2-every-level-out.case	N2	AT1_CASE_OK
+negative/N3-zero-label.case	N3	AT1_CASE_OK
+negative/N4a-wrong-weight.case	N4	AT1_CASE_OK
+negative/N4b-broken-clock-tau3.case	N4	AT1_CASE_OK
+negative/N5-precision-demand.case	N5	AT1_CASE_OK
+negative/N6-zero-projection.case	N6	AT1_CASE_OK
+refuse/R0a-line-removed.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R0b-one-crlf-line.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R1-noncanonical-tau.case	R1	AT1_CASE_REFUSED CASE_NONCANONICAL
+refuse/R2-header-v2.case	R2	AT1_CASE_REFUSED CASE_UNSUPPORTED_VERSION
+refuse/R2b-domain-v2.case	R2	AT1_CASE_REFUSED CASE_UNSUPPORTED_VERSION
+refuse/R2c-contract-v2.case	R2	AT1_CASE_REFUSED CASE_UNSUPPORTED_VERSION
+refuse/R3-clock-dim-65.case	R3	AT1_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R3b-clock-dim-1.case	R3	AT1_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R4-irrational-level.case	R4	AT1_CASE_REFUSED CASE_IRRATIONAL_SPECTRUM
+refuse/R4b-irrational-h.case	R4	AT1_CASE_REFUSED CASE_IRRATIONAL_SPECTRUM
+refuse/R5-case-id-digit.case	R5	AT1_CASE_REFUSED CASE_ID_MISMATCH
+refuse/R5b-acceptance-id-digit.case	R5	AT1_CASE_REFUSED CASE_ID_MISMATCH
+refuse/R6-fail-without-codes.case	R6	AT1_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R6b-code-outside-set.case	R6	AT1_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R7-coupling-count.case	R7	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R8-coupling-order.case	R8	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R9-interaction-none.case	R9	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R10-at0-model-family.case	R10	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R11-at0-constraint.case	R11	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R12-target-both.case	R12	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R12b-target-missing.case	R12	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R13-noncanonical-coupling.case	R13	AT1_CASE_REFUSED CASE_NONCANONICAL
+refuse/R14-coupling-over-limit.case	R14	AT1_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R01-noncanonical-rational.case	R1	AT1_CASE_REFUSED CASE_NONCANONICAL
+refuse/R02-header-v2.case	R2	AT1_CASE_REFUSED CASE_UNSUPPORTED_VERSION
+refuse/R03-clock-dim-1.case	R3	AT1_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R04-irrational-spectrum.case	R4	AT1_CASE_REFUSED CASE_IRRATIONAL_SPECTRUM
+refuse/R05-wrong-case-id.case	R5	AT1_CASE_REFUSED CASE_ID_MISMATCH
+refuse/R06-codes-with-pass.case	R6	AT1_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R06b-codes-unsorted.case	R6	AT1_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R06c-codes-unknown.case	R6	AT1_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R06d-fail-without-codes.case	R6	AT1_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R07-crlf.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R08-tab.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R09-blank-line.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R10-trailing-space.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R11-double-space.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R12-missing-key.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R13-unknown-key.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R14-duplicate-key.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R15-out-of-order.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R16-float-text.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R17-noncanonical-integer.case	R1	AT1_CASE_REFUSED CASE_NONCANONICAL
+refuse/R18-noncanonical-scaled.case	R1	AT1_CASE_REFUSED CASE_NONCANONICAL
+refuse/R19-label-uppercase.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R20-energies-not-increasing.case	R3	AT1_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R21-psi-zero.case	R3	AT1_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R22-tau-zero.case	R3	AT1_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R23-weight-negative.case	R3	AT1_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R24-wrong-domain.case	R2	AT1_CASE_REFUSED CASE_UNSUPPORTED_VERSION
+refuse/R25-wrong-contract.case	R2	AT1_CASE_REFUSED CASE_UNSUPPORTED_VERSION
+refuse/R26-clock-dim-65.case	R3	AT1_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R27-rational-over-limit.case	R3	AT1_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R28-duplicate-label.case	R3	AT1_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R29-ref-label-missing.case	R3	AT1_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R30-negative-zero.case	R1	AT1_CASE_REFUSED CASE_NONCANONICAL
+refuse/R31-control-kind-bad.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R32-case-name-two-tokens.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R33-missing-final-lf.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R34-empty.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R35-trailing-line.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R36-label-count-mismatch.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R37-model-family-bad.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R38-acceptance-id-wrong.case	R5	AT1_CASE_REFUSED CASE_ID_MISMATCH
+refuse/R39-huge-digits-tau.case	R3	AT1_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/X1-at0-header.case	Rd	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/X2-at0-domain.case	Rd	AT1_CASE_REFUSED CASE_UNSUPPORTED_VERSION
+refuse/X3-coupling-index-01.case	Re	AT1_CASE_REFUSED CASE_NONCANONICAL
+refuse/X4-coupling-index-a.case	Re	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/X5-coupling-index-wrong.case	Re	AT1_CASE_REFUSED CASE_PARSE_ERROR
+refuse/X6-clock-label-index-01.case	Re	AT1_CASE_REFUSED CASE_NONCANONICAL

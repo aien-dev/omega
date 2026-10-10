@@ -1,0 +1,8 @@
+# AT-1 G2 gate controls: Linux aarch64, CC=cc (cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0)
+clean_control	gate=PASS	want=PASS	AS_INTENDED	
+hidden_clock_mutant	gate=FAIL	want=FAIL	AS_INTENDED	FAIL: hidden_clock_mutant.o references clock_gettime
+counter_mutant	gate=FAIL	want=FAIL	AS_INTENDED	FAIL: instruction counter_mutant.o .text +0x0: d53be040 MRS from the generic timer (CNT*_EL0)
+raw_syscall_mutant	gate=FAIL	want=FAIL	AS_INTENDED	FAIL: instruction raw_syscall_mutant.o .text +0x34: d4000001 SVC (raw system call)
+counter_mutant	symbol-scan-only=PASS (blind, as expected)
+raw_syscall_mutant	symbol-scan-only=PASS (blind, as expected)
+AT1_ISOLATION_CONTROLS: PASS
