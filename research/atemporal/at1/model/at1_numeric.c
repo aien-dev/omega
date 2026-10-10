@@ -5,7 +5,7 @@
  *   Psi    = P_0 (|t_r> (x) psi_0) = sum_j <E_j|t_r> y_j       y_j = P_0 (|E_j> (x) psi_0) exact
  *                                                             (at1_exact.c), rounded once
  *   constraint_residual = || H_total Psi_hat ||_2             literal D x D product, V included
- *   povm_residual = || sum_k w |t_k><t_k| - I ||_F            pairwise sum over k
+ *   povm_residual = || sum_k w |t_k><t_k| - I ||_F            pairwise over k and over N^2 squares
  *   phi_k  = (<t_k| (x) I) Psi                                bra conjugates the coefficients
  *   p(k)   = w ||phi_k||^2 / ||Psi||^2
  *   P(A, s | k) = Tr(rho_k (I + s A)/2), rho_k = phi_k phi_k^dagger / ||phi_k||^2
@@ -15,7 +15,7 @@
  * eps = 2^-53, L = number of clock levels carrying Psi (exact, at1_exact.c), c = L + 12,
  * delta = 16 eps (relative error of Psi), eta = sqrt(L / N) (delta + c eps) (error of phi_k / ||Psi||):
  *   constraint_residual  2 [Hmax delta + 8 eps (Hmax + 1)] + 4 eps value
- *   povm_residual        2 (ceil(log2 M) + 8) eps (M w + 1) + 4 eps value
+ *   povm_residual        2 [(ceil(log2 M) + 8) eps (M w + 1) + (2 ceil(log2 N) + 4) eps value]
  *   clock_probability    2 [2 sqrt(w p) eta + (2 delta + (2L + 12) eps) p] + 4 w eta^2
  *   pauli                2 [2 eta sqrt(w / p) + 16 eps]
  * Derivation in README.md (section "Numerics"). They assume libm cos, sin and sqrt within a few
@@ -51,8 +51,8 @@ static void bound_scaled(double x, uint64_t *N, unsigned *k)
     int kk = (int)ceil(6.0 - log10(x));
     if (kk < 0) kk = 0;
     if (kk > AT1_SCALED_K_MAX) kk = AT1_SCALED_K_MAX;
-    double y = ceil(x * pow(10.0, kk)) + 1.0;
-    uint64_t n = (uint64_t)y;
+    double y = floor(x * pow(10.0, kk)) - 2.0;  /* start below, step up to the minimum */
+    uint64_t n = y > 0.0 ? (uint64_t)y : 0;
     bq ex, sc; bn nb; bq_init(&ex); bq_init(&sc); bn_init(&nb);
     bq_from_double(&ex, x);
     for (;;) {                                 /* exact check N / 10^k >= x */
@@ -108,6 +108,15 @@ static int clock_phase(const bq *E, int k, const bq *tau, cplx *out)
     return 1;
 }
 
+/* pairwise sum of a[lo..hi) (real), for the Frobenius norm over N^2 entries */
+static double pair_sum_r(const double *a, int lo, int hi)
+{
+    if (hi - lo == 1) return a[lo];
+    if (hi - lo == 0) return 0.0;
+    int mid = lo + (hi - lo) / 2;
+    return pair_sum_r(a, lo, mid) + pair_sum_r(a, mid, hi);
+}
+
 /* pairwise sum of a[lo..hi) (complex), for the POVM sum over labels */
 static cplx pair_sum(const cplx *a, int lo, int hi)
 {
@@ -139,7 +148,7 @@ at1_status at1_compute(const at1_case *c, const at1_kernel *K, int reversed, at1
     /* povm_residual (independent of Psi) */
     {
         cplx *terms = at1_xmalloc((size_t)M * sizeof(cplx));
-        double fro2 = 0.0;
+        double *sq = at1_xmalloc((size_t)N * (size_t)N * sizeof(double));
         for (int j = 0; j < N; j++) for (int l = 0; l < N; l++) {
             for (int k = 0; k < M; k++) {
                 cplx t = c_mul(tk[k * N + j], c_conj(tk[k * N + l]));
@@ -147,12 +156,14 @@ at1_status at1_compute(const at1_case *c, const at1_kernel *K, int reversed, at1
             }
             cplx s = pair_sum(terms, 0, M);
             if (j == l) s.re -= 1.0;
-            fro2 += c_abs2(s);
+            sq[j * N + l] = c_abs2(s);
         }
         free(terms);
-        out->povm.value = sqrt(fro2);
+        out->povm.value = sqrt(pair_sum_r(sq, 0, N * N));   /* pairwise: N^2 terms, log depth */
+        free(sq);
         int lg = 0; while ((1 << lg) < M) lg++;
-        out->povm.bound = 2.0 * (lg + 8) * AT1_EPS * (M * w + 1.0) + 4.0 * AT1_EPS * out->povm.value;
+        int ln = 0; while ((1 << ln) < N) ln++;
+        out->povm.bound = 2.0 * ((lg + 8) * AT1_EPS * (M * w + 1.0) + (2 * ln + 4) * AT1_EPS * out->povm.value);
     }
 
     if (out->trivial) {

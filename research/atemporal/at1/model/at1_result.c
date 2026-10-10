@@ -145,6 +145,21 @@ static int key_is(const char *line, size_t len, const char *key)
     return len > k && strncmp(line, key, k) == 0 && line[k] == ' ';
 }
 
+
+/* the status rule of section 3, exact, on a written value and its written bound */
+static at1_label_status jv_status(const jv *x, const at1_scaled *tol)
+{
+    bq P, B, T, s; bq_init(&P); bq_init(&B); bq_init(&T); bq_init(&s);
+    bq_from_double(&P, x->v);
+    bq_from_scaled(&B, &x->bN, x->bk);
+    bq_from_scaled(&T, &tol->n, tol->k);
+    at1_label_status st;
+    bq_add(&s, &P, &B);
+    if (bq_cmp(&s, &T) <= 0) st = AT1_LABEL_UNDEFINED;
+    else { bq_sub(&s, &P, &B); st = bq_cmp(&s, &T) > 0 ? AT1_LABEL_DEFINED : AT1_LABEL_INDETERMINATE; }
+    bq_free(&P); bq_free(&B); bq_free(&T); bq_free(&s);
+    return st;
+}
 static at1_status refs_parse(const at1_case *c, const char *text, size_t len, refs_t *R, char *err, size_t cap)
 {
     const int M = c->label_count;
@@ -163,7 +178,7 @@ static at1_status refs_parse(const at1_case *c, const char *text, size_t len, re
     for (size_t i = 0; i < len; ) {
         const char *e = memchr(text + i, '\n', len - i);
         size_t l = (size_t)(e - (text + i));
-        if (l == 11 && strncmp(text + i, "begin values", 12) == 0) has_values = 1;
+        if (l == 12 && strncmp(text + i, "begin values", 12) == 0) has_values = 1;
         i += l + 1;
     }
     static const char *fam[4] = { "reference_label", "reference_clock_probability", "reference_ideal", "reference_interacting" };
@@ -215,6 +230,25 @@ static at1_status refs_parse(const at1_case *c, const char *text, size_t len, re
         got++;
     }
     if (got != expect_total) { snprintf(err, cap, "oracle record: %d reference lines, expected %d", got, expect_total); return AT1_ERR_ARGUMENT; }
+    /* undefined placement (section 1): reference_ideal is always a value; reference_interacting
+     * is undefined exactly when that reference_label is not DEFINED; reference_clock_probability
+     * is undefined only in the trivial shape (all M undefined, every reference_label UNDEFINED);
+     * a written clock value must reproduce its reference_label under the status rule. */
+    int n_undef_clock = 0;
+    for (int k = 0; k < M; k++) n_undef_clock += R->clock[k].kind == JV_UNDEFINED;
+    for (int k = 0; k < M; k++) {
+        const char *why = NULL;
+        for (int s = 0; s < 6 && !why; s++) {
+            if (R->ideal[k][s].kind == JV_UNDEFINED) why = "reference_ideal undefined";
+            else if ((R->inter[k][s].kind == JV_UNDEFINED) != (R->status[k] != AT1_LABEL_DEFINED))
+                why = "reference_interacting undefined does not match reference_label";
+        }
+        if (!why && n_undef_clock != 0 && (n_undef_clock != M || R->status[k] != AT1_LABEL_UNDEFINED))
+            why = "reference_clock_probability undefined outside the trivial shape";
+        if (!why && R->clock[k].kind == JV_VALUE && jv_status(&R->clock[k], &c->tol_zero) != R->status[k])
+            why = "reference_label does not follow the status rule on reference_clock_probability";
+        if (why) { snprintf(err, cap, "oracle record: label %d: %s", k, why); return AT1_ERR_ARGUMENT; }
+    }
     return AT1_OK;
 }
 

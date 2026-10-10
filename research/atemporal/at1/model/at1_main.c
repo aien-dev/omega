@@ -2,7 +2,8 @@
  *
  *   at1-model result <case> <oracle-record|none> <provenance> [--reversed]
  *       writes the complete AT1_RESULT_V1 file to standard output. The reference_* lines are
- *       spliced verbatim from the oracle record (charter reading c); "none" writes an ERROR
+ *       spliced verbatim from the oracle record (charter reading c); "none", or an oracle record
+ *       that cannot be read, writes an ERROR
  *       result with error_code ORACLE_UNAVAILABLE. The provenance file holds the provenance
  *       lines (source_repo .. run_finished_utc, then optional artifact lines) so that the
  *       engine itself never reads a clock.
@@ -52,24 +53,25 @@ int main(int argc, char **argv)
     at1_status st = at1_read_file(argv[2], &case_bytes, &case_len);
     if (st == AT1_ERR_RESOURCE) return engine_error("RESOURCE_LIMIT case file larger than 1 MiB");
     if (st != AT1_OK) return engine_error("cannot read case file");
-    if (result_mode) {
-        if (strcmp(argv[3], "none") != 0) {
-            st = at1_read_file(argv[3], &oracle, &oracle_len);
-            if (st != AT1_OK) { free(case_bytes); return engine_error("cannot read oracle record"); }
-        }
-        st = at1_read_file(argv[4], &prov, &prov_len);
-        if (st != AT1_OK) { free(case_bytes); free(oracle); return engine_error("cannot read provenance file"); }
-    }
-
+    /* the case is validated before any other input is read, so a refusal is never masked */
     at1_case c;
     st = at1_case_parse(case_bytes, case_len, &c);
     free(case_bytes);
     if (st >= AT1_CASE_PARSE_ERROR && st <= AT1_CASE_ID_MISMATCH) {
         fprintf(stderr, "AT1_CASE_REFUSED %s\n", at1_status_name(st));
-        free(oracle); free(prov);
         return 2;
     }
-    if (st != AT1_OK) { free(oracle); free(prov); return engine_error(st == AT1_ERR_RESOURCE ? "RESOURCE_LIMIT engine limit in case file" : "INTERNAL_ERROR case parse"); }
+    if (st != AT1_OK) return engine_error(st == AT1_ERR_RESOURCE ? "RESOURCE_LIMIT engine limit in case file" : "INTERNAL_ERROR case parse");
+
+    /* an oracle record that cannot be read is a run error (ORACLE_UNAVAILABLE), not a tool failure;
+     * the provenance is required to write any result at all */
+    if (result_mode) {
+        st = at1_read_file(argv[4], &prov, &prov_len);
+        if (st != AT1_OK) { at1_case_free(&c); return engine_error("cannot read provenance file"); }
+        if (strcmp(argv[3], "none") != 0 && at1_read_file(argv[3], &oracle, &oracle_len) != AT1_OK) {
+            free(oracle); oracle = NULL; oracle_len = 0;     /* written as ERROR ORACLE_UNAVAILABLE */
+        }
+    }
 
     at1_kernel k;
     at1_values *v = at1_xcalloc(1, sizeof *v);

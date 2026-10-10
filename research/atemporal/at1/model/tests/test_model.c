@@ -694,12 +694,29 @@ static void large(void)
 }
 
 /* ---- oracle record, provenance, ERROR results ------------------------------------------------- */
+/* rewrite label k of an oracle record consistently: its status, its clock line and its six
+ * reference_interacting lines (undefined unless the new status is DEFINED) */
+static char *label_edit(const char *o, int k, const char *status, const char *clock)
+{
+    char pre[96], old[256], rep[256], *cur = strdup(o), *u;
+    snprintf(pre, sizeof pre, "reference_label %d ", k);
+    if (line_with_prefix(cur, pre, old, sizeof old)) { snprintf(rep, sizeof rep, "reference_label %d t%d %s\n", k, k, status); u = replace_line(cur, old, rep); free(cur); cur = u; }
+    snprintf(pre, sizeof pre, "reference_clock_probability %d ", k);
+    if (line_with_prefix(cur, pre, old, sizeof old)) { snprintf(rep, sizeof rep, "reference_clock_probability %d %s\n", k, clock); u = replace_line(cur, old, rep); free(cur); cur = u; }
+    for (int q = 0; q < 6 && strcmp(status, "DEFINED") != 0; q++) {
+        snprintf(pre, sizeof pre, "reference_interacting %d %s %s ", k, AX[q / 2], SG[q % 2]);
+        if (line_with_prefix(cur, pre, old, sizeof old)) { snprintf(rep, sizeof rep, "%sundefined 0@0\n", pre); u = replace_line(cur, old, rep); free(cur); cur = u; }
+    }
+    return cur;
+}
+static char *(*g_mut)(const char *) = NULL;   /* optional whole-record edit inside verdict_with */
 static void verdict_with(const char *id, const spec *s, const table4 *inter, const table4 *ideal, const char *old, const char *rep,
                          const char *prov, const char *want_checks, const char *want_codes, const char *want_met, at1_status want_st)
 {
     at1_values *v = calloc(1, sizeof *v); at1_case c;
     if (!values_of(s, 0, v, &c)) { CHECK(0, "%s: did not run", id); free(v); return; }
     char *o = oracle_record(&c, inter, ideal, 0);
+    if (g_mut) { char *u = g_mut(o); free(o); o = u; }
     if (old) { char *u = replace_line(o, old, rep); CHECK(u != NULL, "%s: edit did not apply", id); if (u) { free(o); o = u; } }
     char *res = NULL; size_t rl = 0; char err[256] = "";
     at1_status st = at1_result_write(&c, v, o, strlen(o), prov, strlen(prov), &res, &rl, err, sizeof err);
@@ -713,16 +730,71 @@ static void verdict_with(const char *id, const spec *s, const table4 *inter, con
     free(res); free(o); free(v); at1_case_free(&c);
 }
 
+static char *mut_label1_undefined(const char *o) { return label_edit(o, 1, "UNDEFINED", "f64:0000000000000000 1@15"); }
+static char *mut_label1_indeterminate(const char *o)
+{
+    char f[64], cl[96]; at1_f64_format(1e-9, f, sizeof f); snprintf(cl, sizeof cl, "%s 1@15", f);
+    return label_edit(o, 1, "INDETERMINATE", cl);
+}
+static char *mut_oracle_trivial(const char *o)
+{
+    char *cur = strdup(o), *u;
+    for (int k = 0; k < 4; k++) { u = label_edit(cur, k, "UNDEFINED", "undefined 0@0"); free(cur); cur = u; }
+    return cur;
+}
+static char *mut_one_clock_undefined(const char *o) { return label_edit(o, 1, "UNDEFINED", "undefined 0@0"); }
+static char *mut_status_rule_broken(const char *o)
+{
+    char f[64], cl[96]; f64_of("1/4", f, sizeof f); snprintf(cl, sizeof cl, "%s 1@15", f);
+    return label_edit(o, 1, "UNDEFINED", cl);   /* clock 1/4 says DEFINED */
+}
+static char *mut_all_undefined(const char *o)
+{
+    /* every value line undefined, every label DEFINED (the review's PASS reproducer) */
+    sb b = { 0 }; char line[512];
+    for (const char *p = o; *p; ) {
+        const char *e = strchr(p, '\n'); size_t l = (size_t)(e - p);
+        if (l >= sizeof line) l = sizeof line - 1;
+        memcpy(line, p, l); line[l] = 0; p = e + 1;
+        int nt = 0; for (char *q = line; *q; q++) nt += *q == ' ';
+        if (strncmp(line, "reference_clock_probability ", 28) == 0 || strncmp(line, "reference_ideal ", 16) == 0
+            || strncmp(line, "reference_interacting ", 22) == 0) {
+            char *sp = line; for (int s = 0; s < nt - 1; s++) sp = strchr(sp, ' ') + 1;
+            strcpy(sp, "undefined 0@0");
+        }
+        sb_printf(&b, "%s\n", line);
+    }
+    return b.p;
+}
 static void tool_rules(void)
 {
     spec p2; base_B(&p2, "at1-kat-rotated-level-n4"); p2.v[2] = RHO;
     spec n1 = p2; n1.target = "IDEAL"; n1.control = "NEGATIVE"; n1.expected = "FAIL"; n1.codes = "SCHRODINGER_DEVIATION_EXCEEDED";
     char f[64], line[256];
     /* label status disagreement: check 12 FAIL */
-    verdict_with("oracle-status-disagree", &p2, &T_P2, &T_P1, "reference_label 1 t1 DEFINED", "reference_label 1 t1 UNDEFINED\n", PROV,
-                 "PPPPPPPPPPNF", "ORACLE_DISAGREEMENT", "NO", AT1_OK);
-    verdict_with("oracle-status-indeterminate", &p2, &T_P2, &T_P1, "reference_label 1 t1 DEFINED", "reference_label 1 t1 INDETERMINATE\n", PROV,
-                 "PPPPPPPPPPNI", "PRECISION_INSUFFICIENT", "NO", AT1_OK);
+    g_mut = mut_label1_undefined;
+    verdict_with("oracle-status-disagree", &p2, &T_P2, &T_P1, NULL, NULL, PROV, "PPPPPPPPPPNF", "ORACLE_DISAGREEMENT", "NO", AT1_OK);
+    g_mut = mut_label1_indeterminate;
+    verdict_with("oracle-status-indeterminate", &p2, &T_P2, &T_P1, NULL, NULL, PROV, "PPPPPPPPPPNI", "PRECISION_INSUFFICIENT", "NO", AT1_OK);
+    /* a consistent trivial-shape oracle record against a nontrivial engine: every label disagrees */
+    g_mut = mut_oracle_trivial;
+    verdict_with("oracle-trivial-shape", &p2, &T_P2, &T_P1, NULL, NULL, PROV, "PPPPPPPPPNNF", "ORACLE_DISAGREEMENT", "NO", AT1_OK);
+    /* undefined placement and the status rule are enforced on the oracle record (review finding 1) */
+    g_mut = mut_one_clock_undefined;
+    verdict_with("oracle-one-clock-undefined", &p2, &T_P2, &T_P1, NULL, NULL, PROV, NULL, NULL, NULL, AT1_ERR_ARGUMENT);
+    g_mut = mut_status_rule_broken;
+    verdict_with("oracle-status-rule-broken", &p2, &T_P2, &T_P1, NULL, NULL, PROV, NULL, NULL, NULL, AT1_ERR_ARGUMENT);
+    g_mut = mut_all_undefined;
+    verdict_with("oracle-all-undefined", &p2, &T_P2, &T_P1, NULL, NULL, PROV, NULL, NULL, NULL, AT1_ERR_ARGUMENT);
+    g_mut = NULL;
+    verdict_with("oracle-status-without-lines", &p2, &T_P2, &T_P1, "reference_label 1 t1 DEFINED", "reference_label 1 t1 UNDEFINED\n", PROV, NULL, NULL, NULL, AT1_ERR_ARGUMENT);
+    {
+        char a[64], l1[160], l2[160];
+        f64_of("1", a, sizeof a); snprintf(l1, sizeof l1, "reference_ideal 0 X PLUS %s 1@15", a);
+        verdict_with("oracle-ideal-undefined", &p2, &T_P2, &T_P1, l1, "reference_ideal 0 X PLUS undefined 0@0\n", PROV, NULL, NULL, NULL, AT1_ERR_ARGUMENT);
+        f64_of("49/50", a, sizeof a); snprintf(l2, sizeof l2, "reference_interacting 0 X PLUS %s 1@15", a);
+        verdict_with("oracle-interacting-undefined", &p2, &T_P2, &T_P1, l2, "reference_interacting 0 X PLUS undefined 0@0\n", PROV, NULL, NULL, NULL, AT1_ERR_ARGUMENT);
+    }
     /* INTERACTING target, wrong oracle clock marginal: check 10 FAIL with INTERACTING_DEVIATION_EXCEEDED */
     f64_of("1/4", f, sizeof f); snprintf(line, sizeof line, "reference_clock_probability 0 %s 1@15", (f64_of("5/28", f, sizeof f), f));
     char rep[256]; char f2[64]; f64_of("1/4", f2, sizeof f2); snprintf(rep, sizeof rep, "reference_clock_probability 0 %s 1@15\n", f2);
@@ -770,6 +842,134 @@ static void tool_rules(void)
     }
 }
 
+/* ---- review findings: values block, POVM accumulation, bound formatting, boundaries ---------- */
+static void scaled_of(const char *t, bq *out)
+{
+    const char *at = strchr(t, '@'); bn n; bn_init(&n); bn_from_digits(&n, t, (size_t)(at - t));
+    bq_from_scaled(out, &n, (unsigned)atoi(at + 1)); bn_free(&n);
+}
+static void bound_minimal(double x)
+{
+    char t[400]; at1_bound_format(x, t, sizeof t);
+    const char *at = strchr(t, '@'); size_t d = (size_t)(at - t); unsigned k = (unsigned)atoi(at + 1);
+    bq X, B, Bm; bq_init(&X); bq_init(&B); bq_init(&Bm);
+    bq_from_double(&X, x); scaled_of(t, &B);
+    int ok = d <= 7 || k == 0;
+    ok = ok && bq_cmp(&B, &X) >= 0;
+    /* one unit less in the seventh significant digit (or in the last digit when k is clamped) is below x */
+    unsigned s = d < 7 ? (unsigned)(7 - d) : 0;
+    if (k + s > AT1_SCALED_K_MAX) s = AT1_SCALED_K_MAX - k;
+    bn n, p, one; bn_init(&n); bn_init(&p); bn_init(&one);
+    bn_from_digits(&n, t, d); bn_pow10(&p, s); bn_mul(&n, &n, &p); bn_set_u64(&one, 1); bn_sub(&n, &n, &one);
+    bq_from_scaled(&Bm, &n, k + s);
+    ok = ok && bq_cmp(&Bm, &X) < 0;
+    CHECK(ok, "bound %.17g written %s is not the smallest 7-digit scaled decimal >= x", x, t);
+    bn_free(&n); bn_free(&p); bn_free(&one); bq_free(&X); bq_free(&B); bq_free(&Bm);
+}
+static void review(void)
+{
+    char t[400];
+    /* finding 5: minimal bound tokens */
+    at1_bound_format(1.0, t, sizeof t); CHECK(strcmp(t, "1@0") == 0, "bound 1 written %s", t);
+    at1_bound_format(0.25, t, sizeof t); CHECK(strcmp(t, "25@2") == 0, "bound 0.25 written %s", t);
+    at1_bound_format(3.0, t, sizeof t); CHECK(strcmp(t, "3@0") == 0, "bound 3 written %s", t);
+    at1_bound_format(0.0, t, sizeof t); CHECK(strcmp(t, "0@0") == 0, "bound 0 written %s", t);
+    at1_bound_format(1e-300, t, sizeof t); CHECK(strcmp(t, "1@40") == 0, "bound 1e-300 written %s", t);
+    const double xs[] = { 1.0, 0.25, 1.0 / 3.0, 1e-15, 8.17e-15, 2.31e-13, 7.0e-17, 6.56e-12, 123456789.0, 9999999.5, 1e-40, 3e-41 };
+    for (size_t i = 0; i < sizeof xs / sizeof xs[0]; i++) bound_minimal(xs[i]);
+
+    /* label status rule at its exact boundaries, tol_zero = 1/2 */
+    at1_scaled tz; bn_init(&tz.n); bn_set_u64(&tz.n, 5); tz.k = 1;
+    CHECK(at1_status_rule(0.25, 0.25, &tz) == AT1_LABEL_UNDEFINED, "status: p + b == tol must be UNDEFINED");
+    CHECK(at1_status_rule(0.5, 0.0, &tz) == AT1_LABEL_UNDEFINED, "status: p == tol, b = 0 must be UNDEFINED");
+    CHECK(at1_status_rule(nextafter(0.5, 1.0), 0.0, &tz) == AT1_LABEL_DEFINED, "status: p one ulp above tol must be DEFINED");
+    CHECK(at1_status_rule(0.75, 0.25, &tz) == AT1_LABEL_INDETERMINATE, "status: p - b == tol must be INDETERMINATE");
+    CHECK(at1_status_rule(0.75, 0.125, &tz) == AT1_LABEL_DEFINED, "status: p - b > tol must be DEFINED");
+    bn_free(&tz.n);
+
+    /* finding 2: POVM accumulation, N = 64, M = 1, w = 1/3: exact value sqrt(571)/3 */
+    {
+        spec s; base_B(&s, "at1-review-povm-n64"); sb e = { 0 };
+        for (int j = 0; j < 64; j++) sb_printf(&e, "%s%d/1", j ? "," : "", j);
+        s.N = 64; s.E = e.p; s.h = "0/1,0/1,0/1,0/1"; s.tau = "1/1"; s.w = "1/3"; s.M = 1;
+        at1_values *v = calloc(1, sizeof *v);
+        int ok = values_of(&s, 0, v, NULL);
+        CHECK(ok, "povm reproducer did not run");
+        if (ok) {
+            char bt[400]; at1_bound_format(v->povm.bound, bt, sizeof bt);
+            bq V, B, lo, hi, ex; bq_init(&V); bq_init(&B); bq_init(&lo); bq_init(&hi); bq_init(&ex);
+            bq_from_double(&V, v->povm.value); scaled_of(bt, &B); bq_set_i64(&ex, 571, 9);
+            bq_sub(&lo, &V, &B); bq_add(&hi, &V, &B);
+            int in = bq_sign(&lo) >= 0; bq_mul(&lo, &lo, &lo); bq_mul(&hi, &hi, &hi);
+            in = in && bq_cmp(&lo, &ex) <= 0 && bq_cmp(&ex, &hi) <= 0;
+            double err = fabs(v->povm.value - sqrt(571.0) / 3.0);
+            CHECK(in, "povm reproducer: value outside [exact - bound, exact + bound], error about %.3g bound %s", err, bt);
+            printf("review povm N=64 M=1 w=1/3: value %.17g, |value - sqrt(571)/3| about %.3g, bound %s (ratio %.3g)\n",
+                   v->povm.value, err, bt, err / v->povm.bound);
+            bq_free(&V); bq_free(&B); bq_free(&lo); bq_free(&hi); bq_free(&ex);
+        }
+        free(e.p); free(v);
+    }
+
+    spec p2; base_B(&p2, "at1-kat-rotated-level-n4"); p2.v[2] = RHO;
+    at1_values *v = calloc(1, sizeof *v); at1_case c;
+    if (!values_of(&p2, 0, v, &c)) { CHECK(0, "review: P2 did not run"); free(v); return; }
+    char *o = oracle_record(&c, &T_P2, &T_P1, 0), *res = NULL, err[256], checks[13], outcome[64], codes[512], met[32];
+    size_t rl;
+
+    /* finding 3: an oracle record that is a full result file; lines outside its values block are ignored */
+    {
+        const char *first = strstr(o, "reference_label ");
+        sb b = { 0 };
+        sb_printf(&b, "%.*s", (int)(first - o), o);
+        sb_printf(&b, "reference_label 0 t0 BOGUS\nbegin values\n%send values\nend\n", first);
+        at1_status st = at1_result_write(&c, v, b.p, b.n, PROV, strlen(PROV), &res, &rl, err, sizeof err);
+        CHECK(st == AT1_OK, "values-block record refused: %s", err);
+        if (st == AT1_OK) {
+            verdict_of(res, checks, outcome, sizeof outcome, codes, sizeof codes, met, sizeof met);
+            CHECK(strcmp(checks, "PPPPPPPPPPNP") == 0 && strcmp(outcome, "PASS") == 0, "values-block record: %s %s", checks, outcome);
+            free(res);
+        }
+        free(b.p);
+    }
+
+    /* finding 6: absolute-form comparison boundary on check 10 (|d| + b == tol is PASS, one ulp more is INDETERMINATE) */
+    {
+        CHECK(at1_result_write(&c, v, o, strlen(o), PROV, strlen(PROV), &res, &rl, err, sizeof err) == AT1_OK, "boundary base: %s", err);
+        char line[256], vt[64], bt[64];
+        line_with_prefix(res, "pauli 0 X PLUS ", line, sizeof line);
+        sscanf(line + 15, "%63s %63s", vt, bt);
+        free(res);
+        const char *at = strchr(bt, '@'); unsigned k = (unsigned)atoi(at + 1);
+        uint64_t nb = strtoull(bt, NULL, 10), p = 1;
+        CHECK(k >= 12 && k - 12 <= 19, "boundary: engine bound %s out of the test's range", bt);
+        for (unsigned i = 12; i < k; i++) p *= 10;
+        uint64_t ob = p - nb; unsigned okk = k;
+        while (okk > 0 && ob % 10 == 0) { ob /= 10; okk--; }
+        char old[160], rep[200], a[64];
+        f64_of("49/50", a, sizeof a); snprintf(old, sizeof old, "reference_interacting 0 X PLUS %s 1@15", a);
+        snprintf(rep, sizeof rep, "reference_interacting 0 X PLUS %s %llu@%u\n", vt, (unsigned long long)ob, okk);
+        char *o2 = replace_line(o, old, rep);
+        CHECK(o2 && at1_result_write(&c, v, o2, strlen(o2), PROV, strlen(PROV), &res, &rl, err, sizeof err) == AT1_OK, "boundary equal: %s", err);
+        if (o2) {
+            verdict_of(res, checks, outcome, sizeof outcome, codes, sizeof codes, met, sizeof met);
+            CHECK(strcmp(checks, "PPPPPPPPPPNP") == 0 && strcmp(codes, "none") == 0, "boundary equal: %s %s", checks, codes);
+            free(res); free(o2);
+        }
+        uint64_t bits = 0; for (int i = 4; i < 20; i++) bits = (bits << 4) | (uint64_t)(vt[i] <= '9' ? vt[i] - '0' : vt[i] - 'a' + 10);
+        double dv; memcpy(&dv, &bits, sizeof dv); at1_f64_format(nextafter(dv, 2.0), a, sizeof a);
+        snprintf(rep, sizeof rep, "reference_interacting 0 X PLUS %s %llu@%u\n", a, (unsigned long long)ob, okk);
+        o2 = replace_line(o, old, rep);
+        CHECK(o2 && at1_result_write(&c, v, o2, strlen(o2), PROV, strlen(PROV), &res, &rl, err, sizeof err) == AT1_OK, "boundary ulp: %s", err);
+        if (o2) {
+            verdict_of(res, checks, outcome, sizeof outcome, codes, sizeof codes, met, sizeof met);
+            CHECK(strcmp(checks, "PPPPPPPPPINP") == 0 && strcmp(codes, "PRECISION_INSUFFICIENT") == 0, "boundary ulp: %s %s", checks, codes);
+            free(res); free(o2);
+        }
+    }
+    free(o); free(v); at1_case_free(&c);
+}
+
 /* ---- the command-line tool -------------------------------------------------------------------- */
 static int run(const char *cmd)
 {
@@ -810,6 +1010,20 @@ static void cli(void)
     out = read_all("build/t.err", NULL); char *so = read_all("build/t.out", &n);
     CHECK(out && strcmp(out, "AT1_CASE_REFUSED CASE_NONCANONICAL\n") == 0 && n == 0, "cli refusal stderr/stdout");
     free(out); free(so);
+    /* finding 4: an unreadable oracle record is an ERROR ORACLE_UNAVAILABLE result, and a refused
+     * case is reported before any other input is read */
+    snprintf(cmd, sizeof cmd, "%s result build/t.case build/no-such.oracle build/t.prov > build/t.out 2> build/t.err", g_tool);
+    CHECK(run(cmd) == 0, "cli unreadable oracle exit status");
+    out = read_all("build/t.out", NULL);
+    CHECK(out && strstr(out, "\noutcome ERROR\nfailure_codes none\nerror_code ORACLE_UNAVAILABLE\n"), "cli unreadable oracle result");
+    free(out);
+    snprintf(cmd, sizeof cmd, "%s result build/t-r1.case build/no-such.oracle build/no-such.prov > build/t.out 2> build/t.err", g_tool);
+    CHECK(run(cmd) == 2, "cli refusal with unreadable inputs exit status");
+    out = read_all("build/t.err", NULL);
+    CHECK(out && strcmp(out, "AT1_CASE_REFUSED CASE_NONCANONICAL\n") == 0, "cli refusal masked by unreadable inputs");
+    free(out);
+    snprintf(cmd, sizeof cmd, "%s result build/t.case build/t.oracle build/no-such.prov > build/t.out 2> build/t.err", g_tool);
+    CHECK(run(cmd) == 1, "cli unreadable provenance exit status");
     char *bp = replace_line(PROV, "source_tree_clean YES", "source_tree_clean MAYBE\n");
     write_all("build/t-bad.prov", bp, strlen(bp)); free(bp);
     snprintf(cmd, sizeof cmd, "%s result build/t.case build/t.oracle build/t-bad.prov > build/t.out 2> build/t.err", g_tool);
@@ -832,6 +1046,7 @@ int main(int argc, char **argv)
     invariance();
     large();
     tool_rules();
+    review();
     cli();
     printf("refusal files: %d\n", nref);
     printf("measured: max |p - exact| %.3g, max ratio to its bound %.3g; max |pauli - exact| %.3g, max ratio %.3g\n",
