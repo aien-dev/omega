@@ -59,8 +59,8 @@ G2 to G6 were measured on both commits with the same results. Engine and evaluat
 | negative | 12 | 12 FAIL with exactly their codes (judged PASS by the evaluator) |
 | refusals | 72 | run 1: 71 exact for engine, oracle and evaluator codec, X7 failing on the oracle only (D1). Run 2: 72/72 exact |
 | engine results per pass | 24 (plus one T9 rerun of the KAT) | pass 2 equals pass 1 on 73/73 result files, outside the three fields the contract lets differ |
-| engine mutant drop_v (H loses the clock-energy term) | 18 valid cases | 15 killed, 3 blind (P1a, P1b, P1c). Each cell equals Agent 4's predicted KILLED/BLIND in `evaluator/MUTANT_RECEIPT.tsv` |
-| engine mutant wrong_level (energy taken from level j-1) | 18 valid cases | 16 killed, 2 blind (P1a, P1b), matching the receipt |
+| engine mutant drop_v (H loses the coupling term kron(Pj, Vj); the clock energy stays) | 18 valid cases | 15 killed, 3 blind (P1a, P1b, P1c). Each cell equals Agent 4's predicted KILLED/BLIND in `evaluator/MUTANT_RECEIPT.tsv` |
+| engine mutant wrong_level (coupling v taken from level j-1 instead of j) | 18 valid cases | 16 killed, 2 blind (P1a, P1b), matching the receipt |
 | isolation mutants | 3 C (clock_gettime, inline counter read, inline svc) + 3 Rust (std::time, inline cntvct_el0 read, inline svc) | 6/6 caught |
 
 ## Q4. Controls (receipts/controls.tsv holds each command and detail)
