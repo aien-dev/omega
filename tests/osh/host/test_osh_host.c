@@ -37,6 +37,12 @@ static unsigned char gen_byte(unsigned long i) { return (unsigned char)((i * 265
 static int helper_main(int argc, char **argv)
 {
     const char *op = argc > 2 ? argv[2] : "";
+    if (!strcmp(op, "die")) { /* die of a signal (omega#344 RISK-8 tests) */
+        int sig = argc > 3 ? atoi(argv[3]) : SIGTERM;
+        signal(sig, SIG_DFL);
+        raise(sig);
+        return 99;
+    }
     if (!strcmp(op, "echo")) {
         for (int i = 3; i < argc; i++) printf("%s%s", i > 3 ? " " : "", argv[i]);
         printf("\n");
@@ -430,6 +436,77 @@ static void test_builtins(void)
     b = nb(0, 0);
     cmd(b, OSH_B_CD, "cd", P("absent-dir"), NULL);
     CHECK(go(&t, b, &r) == 1 && strcmp(osh_var_get(&t.s, "PWD"), P("d1")) == 0, "failed cd keeps PWD");
+
+    /* omega#344 RISK-3 and NITs: cd -L, -P, --, invalid option, cd "", CDPATH refusal */
+    b = nb(0, 0);
+    cmd(b, OSH_B_CD, "cd", "-L", P("d1/sub"), NULL);
+    CHECK(go(&t, b, &r) == 0 && strcmp(osh_var_get(&t.s, "PWD"), P("d1/sub")) == 0, "cd -L DIR");
+    b = nb(0, 0);
+    cmd(b, OSH_B_CD, "cd", "--", P("d1"), NULL);
+    CHECK(go(&t, b, &r) == 0 && strcmp(osh_var_get(&t.s, "PWD"), P("d1")) == 0, "cd -- DIR");
+    b = nb(0, 0);
+    cmd(b, OSH_B_CD, "cd", "-P", P("d1/sub"), NULL);
+    {
+        char phys[PATH_MAX];
+        CHECK(go(&t, b, &r) == 0 && getcwd(phys, sizeof phys) && strcmp(osh_var_get(&t.s, "PWD"), phys) == 0, "cd -P sets PWD to the physical directory");
+    }
+    t_clear(&t);
+    b = nb(0, 0);
+    cmd(b, OSH_B_CD, "cd", "-x", P("d1"), NULL);
+    CHECK(go(&t, b, &r) == 2, "cd -x is an invalid option, status 2");
+    o = t_err(&t);
+    CHECK(strstr(o, "cd: -x: invalid option") != NULL, "cd -x diagnostic, got '%s'", o);
+    free(o);
+    {
+        char keep[PATH_MAX];
+        snprintf(keep, sizeof keep, "%s", osh_var_get(&t.s, "PWD"));
+        b = nb(0, 0);
+        cmd(b, OSH_B_CD, "cd", "", NULL);
+        CHECK(go(&t, b, &r) == 0 && strcmp(osh_var_get(&t.s, "PWD"), keep) == 0, "cd \"\" is a no-op with status 0");
+    }
+    b = nb(0, 0);
+    cmd(b, OSH_B_CD, "cd", P("d1"), NULL);
+    go(&t, b, &r);
+    osh_var_set(&t.s, "CDPATH", P("absent-dir"));
+    t_clear(&t);
+    b = nb(0, 0);
+    cmd(b, OSH_B_CD, "cd", "sub", NULL);
+    CHECK(go(&t, b, &r) == 1 && strcmp(osh_var_get(&t.s, "PWD"), P("d1")) == 0, "relative cd refused while CDPATH is set");
+    o = t_err(&t);
+    CHECK(strstr(o, "CDPATH is set") != NULL, "CDPATH diagnostic, got '%s'", o);
+    free(o);
+    b = nb(0, 0);
+    cmd(b, OSH_B_CD, "cd", "./sub", NULL);
+    CHECK(go(&t, b, &r) == 0 && strcmp(osh_var_get(&t.s, "PWD"), P("d1/sub")) == 0, "anchored ./sub still works with CDPATH set");
+    osh_var_unset(&t.s, "CDPATH");
+    b = nb(0, 0);
+    cmd(b, OSH_B_CD, "cd", P("d1"), NULL);
+    go(&t, b, &r);
+
+    /* omega#344 NIT: bash 5.2 returns 0 and says nothing for unset of a non-identifier */
+    t_clear(&t);
+    b = nb(0, 0);
+    cmd(b, OSH_B_UNSET, "unset", "1x", NULL);
+    CHECK(go(&t, b, &r) == 0, "unset 1x succeeds as in bash");
+    o = t_err(&t);
+    CHECK(o[0] == 0, "unset 1x is silent, got '%s'", o);
+    free(o);
+
+    /* omega#344 RISK-8: a member killed by a signal gets a message, except SIGINT and SIGPIPE */
+    t_clear(&t);
+    b = nb(0, 0);
+    helper(b, "die", "15", NULL);
+    CHECK(go(&t, b, &r) == 143 && r.cmd[0].termsig == SIGTERM, "SIGTERM death is status 143, got %d", r.status);
+    o = t_err(&t);
+    CHECK(strstr(o, "Terminated (signal 15)") != NULL, "Terminated message, got '%s'", o);
+    free(o);
+    t_clear(&t);
+    b = nb(0, 0);
+    helper(b, "die", "13", NULL);
+    CHECK(go(&t, b, &r) == 141, "SIGPIPE death is status 141, got %d", r.status);
+    o = t_err(&t);
+    CHECK(o[0] == 0, "SIGPIPE death stays silent, got '%s'", o);
+    free(o);
 
     /* export / unset in parent; exported reaches children, unexported does not */
     b = nb(0, 0);

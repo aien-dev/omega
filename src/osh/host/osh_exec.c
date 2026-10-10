@@ -13,7 +13,7 @@
  *    bare names are not found (127); process-global environ is never consulted after osh_session_init. An empty
  *    element means the current directory (POSIX). Names containing '/' are used as given, never searched.
  *  - Statuses: not found 127; found but not executable, a directory, or execve refused (including ENOEXEC: a script
- *    without a shebang is NOT run through sh) 126; killed by signal 128+n.
+ *    without a shebang is NOT run through sh) 126; killed by signal 128+n, with a "Name (signal n)" line on stderr except for SIGINT and SIGPIPE (bash prints "Killed" and "Terminated" too).
  *  - STOPPED MEMBERS (no job control in R1): the wait loop notices a stop of ANY member (SIGSTOP, SIGTSTP, ...), sends
  *    SIGKILL to the pipeline (killpg when it has its own group, else to each unreaped member), reaps all, writes a
  *    diagnostic, and the pipeline status is 128+stopsig of the first member seen stopped. The stopped member is
@@ -547,6 +547,27 @@ static int wait_all(OshSession *s, OshResult *res, Child *ch, int n, pid_t pgid,
     return first_stop;
 }
 
+/* bash's "Killed" / "Terminated" line for a member that died of a signal (omega#344 RISK-8); SIGINT and SIGPIPE
+ * stay silent, as in bash. */
+static const char *signame(int sig)
+{
+    switch (sig) {
+    case SIGHUP: return "Hangup";
+    case SIGQUIT: return "Quit";
+    case SIGILL: return "Illegal instruction";
+    case SIGABRT: return "Aborted";
+    case SIGBUS: return "Bus error";
+    case SIGFPE: return "Floating point exception";
+    case SIGKILL: return "Killed";
+    case SIGSEGV: return "Segmentation fault";
+    case SIGTERM: return "Terminated";
+    case SIGUSR1: return "User defined signal 1";
+    case SIGUSR2: return "User defined signal 2";
+    case SIGALRM: return "Alarm clock";
+    default: return "Signal";
+    }
+}
+
 static void run_pipeline(OshSession *s, const OshRequest *r, JCtx *jc, OshResult *res)
 {
     int n = r->ncmds;
@@ -710,6 +731,11 @@ static void run_pipeline(OshSession *s, const OshRequest *r, JCtx *jc, OshResult
     if (s->after_launch_hook) s->after_launch_hook(s->after_launch_ctx);
     int stopsig = wait_all(s, res, ch, n, pgid, own_pg);
     if (tty) tcsetpgrp(s->tty_fd, getpgrp());
+    for (int i = 0; i < n; i++) {
+        const OshCmdResult *cr = &res->cmd[i];
+        if (cr->outcome == OSH_OUT_COMPLETED && cr->termsig && cr->termsig != SIGINT && cr->termsig != SIGPIPE)
+            osh_diag(s->fd[2], "%s: %s (signal %d)", r->cmd[i].nargv > 0 ? r->cmd[i].argv[0] : "?", signame(cr->termsig), cr->termsig);
+    }
     res->status = stopsig ? 128 + stopsig : res->cmd[n - 1].status;
     for (int i = 0; i < n; i++)
         if (res->cmd[i].err != OSH_E_OK && res->cmd[i].err != OSH_E_NOT_FOUND && res->err == OSH_E_OK) res->err = res->cmd[i].err;
