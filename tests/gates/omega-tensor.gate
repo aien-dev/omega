@@ -1,0 +1,29 @@
+# tests/gates/omega-tensor.gate
+# Mirrors hosted: host-suites-2.yml tensor: test-tensor, test-tensor-store, test-m20-receipt, test-tensor-mutations (hosted 210 s)
+gate: OMEGA-TENSOR
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/tensor.mk
+  - src/tensor/
+  - tests/test_omega_tensor.c
+  - tests/test_omega_tensor_store.c
+  - tests/test_m20_receipt.sh
+  - tests/fixtures/m20_receipt/
+  - tools/m20_receipt.sh
+  - tools/m20_receipt_mutations.sh
+  - tools/tensor_mutations.sh
+  - src/
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["tensor"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 15m
+exactness: EXACT
+cache_scope: machine

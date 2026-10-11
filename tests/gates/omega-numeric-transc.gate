@@ -1,0 +1,27 @@
+# tests/gates/omega-numeric-transc.gate
+# Mirrors hosted: pr-smoke.yml 'FP32 transcendentals' and host-suites-3.yml numeric-transc: make test-numeric-transc, 10 mutants killed (hosted 85 s)
+gate: OMEGA-NUMERIC-TRANSC
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/
+  - src/
+  - tests/test_omega_transc.c
+  - tests/numeric_oracle.h
+  - tests/numeric_native/
+  - tools/
+  - docs/numeric/E1_TRANSCENDENTAL_CONTRACT.md
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["numeric-transc"]
+expects:
+  exit: 0
+  observe: ["mutants_killed == 10"]
+  verdict: PASS
+timeout: 15m
+exactness: EXACT
+cache_scope: machine

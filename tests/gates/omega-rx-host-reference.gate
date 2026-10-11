@@ -1,0 +1,26 @@
+# tests/gates/omega-rx-host-reference.gate
+# Mirrors hosted: rx-host.yml host-reference: the resident reaction host reference suite, receipts checked, qualification receipt emitted; physics-src at e95e3ed, aienos-src at aienos.lock (hosted 339 s)
+# cache: never because the suite binds receipts to the candidate commit and reads pinned sibling sources.
+gate: OMEGA-RX-HOST-REFERENCE
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/
+  - src/
+  - tests/
+  - tools/
+  - aienos.lock
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["rx-host-reference"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 30m
+exactness: EXACT
+cache_scope: machine
+cache: never

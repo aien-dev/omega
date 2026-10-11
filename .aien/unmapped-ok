@@ -1,0 +1,8 @@
+# Changed paths matching these globs need only the always-run set (.aien/always).
+# Everything else must be covered by a manifest's inputs or the commit is NOT_RUN.
+# Conservative: several hosted workflows path-filter on docs/ and evidence/ subtrees,
+# so only the repository's top-level prose is listed. Read from the base ref.
+LICENSE
+.gitignore
+README.md
+CONTRIBUTORS.md

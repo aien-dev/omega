@@ -1,0 +1,23 @@
+# tests/gates/omega-train.gate
+# Mirrors hosted: host-suites.yml train: make test-train (hosted 11 s)
+gate: OMEGA-TRAIN
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/train.mk
+  - src/train/
+  - tests/train/
+  - src/
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["train"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 10m
+exactness: EXACT
+cache_scope: machine

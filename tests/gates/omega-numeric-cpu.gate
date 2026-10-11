@@ -1,0 +1,25 @@
+# tests/gates/omega-numeric-cpu.gate
+# Mirrors hosted: host-suites.yml numeric-cpu: test-numeric-cpu test-numeric-qualify test-e1-combine test-chipwait-campaign test-gpu-wait test-gpu-wait-mutants test-gpu-code-alloc (hosted 63 s)
+gate: OMEGA-NUMERIC-CPU
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/
+  - src/
+  - tests/test_omega_numeric.c
+  - tests/numeric_oracle.h
+  - tests/run_numeric_gates.sh
+  - tools/
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["numeric-cpu"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 15m
+exactness: EXACT
+cache_scope: machine

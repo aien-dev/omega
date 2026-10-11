@@ -1,0 +1,23 @@
+# tests/gates/omega-numeric-lifecycle.gate
+# Mirrors hosted: host-suites-3.yml numeric-lifecycle: make test-numeric-lifecycle (hosted 9 s)
+gate: OMEGA-NUMERIC-LIFECYCLE
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/
+  - tests/test_numeric_lifecycle.c
+  - tests/numeric_native/
+  - src/
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["numeric-lifecycle"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 10m
+exactness: EXACT
+cache_scope: machine

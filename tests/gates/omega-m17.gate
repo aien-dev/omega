@@ -1,0 +1,23 @@
+# tests/gates/omega-m17.gate
+# Mirrors hosted: host-suites-3.yml m17 is SKIP on GitHub (needs GB10 chip, physical SM execution gate): make test-m17
+gate: OMEGA-M17
+manifest_version: 2
+owner: omega
+requires:
+  - gb10
+inputs:
+  - Makefile
+  - mk/
+  - src/
+  - tests/
+  - physics.lock
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["m17"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 30m
+exactness: EXACT
+cache_scope: hardware

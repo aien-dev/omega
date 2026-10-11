@@ -1,0 +1,25 @@
+# tests/gates/omega-algebra.gate
+# Mirrors hosted: host-suites-2.yml algebra: test-algebra test-algebra-asan, test-realize, test-phase-twin, test-ma-digital-bottom (hosted 189 s)
+gate: OMEGA-ALGEBRA
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/
+  - src/algebra/
+  - src/turing/
+  - tests/algebra/
+  - evidence/MIXED_ALGEBRA/
+  - src/
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["algebra"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 15m
+exactness: EXACT
+cache_scope: machine

@@ -1,0 +1,26 @@
+# tests/gates/omega-estimation.gate
+# Mirrors hosted: host-suites.yml estimation: test-estimation test-est-tools test-estimation-v3 test-est3c-tools (hosted 576 s)
+gate: OMEGA-ESTIMATION
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/
+  - src/estimation/
+  - tests/estimation/
+  - tools/estimation/
+  - docs/estimation/
+  - evidence/R15/raw/
+  - src/
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["estimation"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 30m
+exactness: EXACT
+cache_scope: machine

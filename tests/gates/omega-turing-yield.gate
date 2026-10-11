@@ -1,0 +1,26 @@
+# tests/gates/omega-turing-yield.gate
+# Mirrors hosted: turing-yield.yml portable-boundaries: make test-turing-yield test-turing-energy (hosted 22 s)
+gate: OMEGA-TURING-YIELD
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/
+  - src/turing/
+  - tests/turing/
+  - tools/turing_yield.c
+  - tools/r15_reduce.c
+  - tools/
+  - src/
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["turing-yield"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 10m
+exactness: EXACT
+cache_scope: machine

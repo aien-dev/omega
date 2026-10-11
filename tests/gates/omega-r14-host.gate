@@ -1,0 +1,28 @@
+# tests/gates/omega-r14-host.gate
+# Mirrors hosted: rx-host.yml chip-only-declared: test-r14-host is declared SKIP on GitHub (spark-only: needs both Spark core classes, X925 + A725, no GPU)
+# requires: aarch64 + bare_metal because the living systems need both Spark CPU core classes on the real machine; a hosted or virtual AArch64 runner does not qualify.
+gate: OMEGA-R14-HOST
+manifest_version: 2
+owner: omega
+requires:
+  - aarch64
+  - bare_metal
+inputs:
+  - Makefile
+  - mk/
+  - src/
+  - tests/
+  - tools/
+  - aienos.lock
+  - argus.lock
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["spark:test-r14-host"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 60m
+exactness: EXACT
+cache_scope: machine
+cache: never

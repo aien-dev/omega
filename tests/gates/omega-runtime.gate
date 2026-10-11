@@ -1,0 +1,34 @@
+# tests/gates/omega-runtime.gate
+# Mirrors hosted: host-suites-2.yml runtime: r15 instr/receipt/preflight/g15-diag, r16 inventory/negative/surface/negative-mutants/qualify-selftest, aienos-lock-source, allen; physics-src and aienos-src at their locks (hosted 466 s)
+gate: OMEGA-RUNTIME
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/
+  - src/runtime/
+  - src/fabric/
+  - src/allen/
+  - tests/runtime/
+  - tests/allen/
+  - tests/r15_receipt_test.sh
+  - tools/
+  - spec/
+  - docs/
+  - evidence/R15/
+  - evidence/ALLEN/
+  - physics.lock
+  - aienos.lock
+  - src/
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["runtime"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 30m
+exactness: EXACT
+cache_scope: machine

@@ -1,0 +1,27 @@
+# tests/gates/omega-faculty-arm.gate
+# Mirrors hosted: rx-host.yml omega-faculty-arm: program-id, program-realize, R10, regulate, R11, R13/R14 host and silicon builds, R16-G3 link maps, production hygiene, negative build, empirical optimizer, plan reuse; pinned physics, aienos and ARGUS (hosted 157 s)
+# cache: never because receipts bind the candidate commit and the step reads pinned sibling sources.
+gate: OMEGA-FACULTY-ARM
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/
+  - src/
+  - tests/
+  - tools/
+  - aienos.lock
+  - argus.lock
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["faculty-arm"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 30m
+exactness: EXACT
+cache_scope: machine
+cache: never

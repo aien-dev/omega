@@ -1,0 +1,24 @@
+# tests/gates/omega-physics0.gate
+# Mirrors hosted: host-suites.yml physics0: make physics0-test (hosted 44 s)
+gate: OMEGA-PHYSICS0
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/physics0.mk
+  - src/physics0/
+  - tests/physics0/
+  - src/compiler/
+  - src/
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["physics0"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 15m
+exactness: EXACT
+cache_scope: machine

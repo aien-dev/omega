@@ -1,0 +1,26 @@
+# tests/gates/omega-numeric-transc-digest.gate
+# Mirrors hosted: host-suites-3.yml numeric-transc-digest: make test-numeric-transc-digest, at least one 'matches frozen digest' (hosted 293 s)
+gate: OMEGA-NUMERIC-TRANSC-DIGEST
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/
+  - tests/test_omega_transc.c
+  - tests/numeric_native/
+  - tools/omegatool.c
+  - docs/numeric/E1_TRANSCENDENTAL_CONTRACT.md
+  - src/
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["numeric-transc-digest"]
+expects:
+  exit: 0
+  observe: ["frozen_digests_matched >= 1"]
+  verdict: PASS
+timeout: 20m
+exactness: EXACT
+cache_scope: machine

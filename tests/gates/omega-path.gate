@@ -1,0 +1,23 @@
+# tests/gates/omega-path.gate
+# Mirrors hosted: host-suites-2.yml path: make test-path (hosted 31 s)
+gate: OMEGA-PATH
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/
+  - src/path/
+  - tests/path/
+  - src/
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["path"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 10m
+exactness: EXACT
+cache_scope: machine
