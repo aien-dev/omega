@@ -211,8 +211,8 @@
           "purpose": "Directory tests/path. Purpose not yet described by a human."
         },
         {
-          "digest": "b1b593c229ffdd13bf48e79fcac4ae6b4592b4f030fa7667b42864b160c35b6a",
-          "last_commit": "430df5b",
+          "digest": "d5153d318a11642a5e13824353222fc392ead92108540bc8ffd747fcfd40b813",
+          "last_commit": "49475ff",
           "name": "physics0",
           "purpose": "PD-0 gates: world self-test, oracle calibration, learner L0/L1/NULL, mutations, OSC differential"
         },
@@ -260,7 +260,7 @@
         },
         {
           "digest": "aa03a550299d9f3effb477f19a4c177b84b0679850d019430ba362e185b4317a",
-          "last_commit": "84107ae",
+          "last_commit": "773bc36",
           "name": "runtime",
           "purpose": "Directory tests/runtime. Purpose not yet described by a human."
         },
@@ -289,15 +289,15 @@
           "purpose": "Directory tests/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:b15562174dfa4bc07053cf4ef71f8d829db85edf05927be530ff0c1d972d1674",
-      "compiled_at": "2026-10-11T15:14:08Z",
+      "children_root": "sha256:69aaf7d04e800f1d8fb081bfdfedab3dcd5b607d257efcc39183f7d6dd4a2dce",
+      "compiled_at": "2026-10-11T15:28:03Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:14a81e1167174309d45775dd87378918c8819531b8c91366629711d8e6f8beb9",
-      "evidence_files": 14,
-      "evidence_root": "sha256:080bc99a4a66250db3cda56908658fd3f09c53170ca32c85caa2d11ef3126f1d",
-      "files": 957,
-      "generated_at_commit": "84107aed4de7fd16edc4fd3d19ac893a6d9c98e7",
-      "source_tree": "sha256:bef70d44f9229f9132b51fc346007b32ed3dee9d80b07a52b9d04d97410654a0"
+      "digest": "sha256:b6e45fd97c85a40daeb3c943be669531e380092e0cd6e48e92e70a32b018af75",
+      "evidence_files": 16,
+      "evidence_root": "sha256:96d08097822ad95f4e562c19e0ba5df5a035774c48632f1832912c40a27bd27a",
+      "files": 959,
+      "generated_at_commit": "e03ab2063194f0ebde8a29f1835c16fa27a86bfc",
+      "source_tree": "sha256:c6b6cbd6ae8eb3d7b760b8e3f4a3ae74ba61cb05fc410973c178038300a4a8be"
     },
     "owner_lane": "",
     "provenance": {

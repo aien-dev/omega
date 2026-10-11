@@ -21,14 +21,14 @@
           "purpose": "PD-0 learner (Physics-0 Discovery Engine D4): fits compact one-step relations over a bounded mon"
         },
         {
-          "digest": "0e1ebb7998345f08f3d751d00356b53c04265966bea9edde6b57aa9e70a5374e",
-          "last_commit": "30ff08f",
+          "digest": "d45d67ce93300f4f942a246336b500f22a259429ab8ad0a17a249b1af2362fea",
+          "last_commit": "e6fd5ee",
           "name": "learner_v2",
           "purpose": "PD-0 learner v2 (G3): seal-1 learner plus 20-step SELECT rollout ranking, rollout hidden-state f"
         },
         {
           "digest": "311b692c17bdc10ff1e82b7e5cd82544a83926e0ab0d92b4b286fd91a01f935d",
-          "last_commit": "30ff08f",
+          "last_commit": "430df5b",
           "name": "regime",
           "purpose": "Dev-only PD-0 regime switch: redraws the world constants from the declared ranges at an episode "
         },
@@ -39,15 +39,15 @@
           "purpose": "PD-0 score: see docs on physics main"
         }
       ],
-      "children_root": "sha256:a017b937863eb7c15f9fa70322441f6e7da70840e220d2067f0aa2e695d480ec",
-      "compiled_at": "2026-10-11T14:41:00Z",
+      "children_root": "sha256:cf8bcbb7c4359aad2e233f7d5e799ac92c6163b8db454fa70a5a357c72856f14",
+      "compiled_at": "2026-10-11T15:21:12Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:4b55679e40d65b6c29ef738eead218eb97844b1e38d2241d04568d895c7e9dc3",
+      "digest": "sha256:8c5cf96997407cff3f8a4c78150ae5294d2ed09a8d9076ae933e426a60792037",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 36,
-      "generated_at_commit": "46cc7b5b94626a292ed130be9f9315d4b069615d",
-      "source_tree": "sha256:1841e8b167e525a599c6a8fbf65fc7b065ab1e6edb3a2e8d8719ed9a9c6b5926"
+      "generated_at_commit": "7b4c5827922e7d2632dd631f3d65be82ec4f8b74",
+      "source_tree": "sha256:537839fbacaecf4d49dea93bbb765617ee3669632f288660dae013e0dbed45bf"
     }
   },
   "layer": "src",
