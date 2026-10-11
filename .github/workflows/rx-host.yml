@@ -93,6 +93,14 @@ jobs:
           mkdir -p build
           make test-effect-cap64 | tee build/effect-cap64.log
           grep -q '^OMEGA_EFFECT_CAP64_PASS$' build/effect-cap64.log
+      - name: Omega's AIENOS capability header matches the pinned AIENOS header (OMEGA_AIENOS_CAP_ABI)
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+        run: |
+          mkdir -p build
+          make test-aienos-cap-abi | tee build/aienos-cap-abi.log
+          grep -q '^OMEGA_AIENOS_CAP_ABI_PASS$' build/aienos-cap-abi.log
       - name: Show state projection receipt
         run: |
           receipt="$(find build/qual-runs -name omega_state_projection_receipt.json -type f | head -n 1)"
