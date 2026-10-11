@@ -3,14 +3,14 @@
     "generated": {
       "children": [],
       "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "compiled_at": "2026-10-11T14:41:00Z",
+      "compiled_at": "2026-10-11T15:21:12Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:4808afb4213f29aa45ea9b2d433dd302b4a6d27f8a669a0dc7b299fc2c17af16",
-      "evidence_files": 3,
-      "evidence_root": "sha256:9084ada18934989b2b06474f9aa125f460764fe48eaa7bff0354c764e9c691c6",
-      "files": 8,
-      "generated_at_commit": "46cc7b5b94626a292ed130be9f9315d4b069615d",
-      "source_tree": "sha256:fd29dce08a71dc6611582943c9ba72b57388bd263764353047a85a3aea47660f"
+      "digest": "sha256:16ac4563cb6a991cc4029a8d0dbbb89ae1bb5c19de8774c0292763181a3893b3",
+      "evidence_files": 5,
+      "evidence_root": "sha256:18312cebaaff58331eeb55a9d72d3df046afd3d71d0127276fc70473d460d558",
+      "files": 10,
+      "generated_at_commit": "7b4c5827922e7d2632dd631f3d65be82ec4f8b74",
+      "source_tree": "sha256:4ea08c9f916ca0f7cfbfe268c1c47d59d9454503884ea79e3516439eedc9acbd"
     }
   },
   "layer": "tests",
