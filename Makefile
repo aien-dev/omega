@@ -1318,6 +1318,20 @@ $(RX_R13_CORTEX): $(RX_R13_CORTEX_SRCS) tests/runtime/rx_r13_living.c src/runtim
 test-r13-cortex-episode: $(RX_R13_CORTEX)
 	./$(RX_R13_CORTEX)
 
+# ADAPTIVE-M4: bounded resource regulation (src/runtime/rx_regulate.c) on the
+# R11 host recipe. The regulator closes a loop on the World's admission budget
+# inside a fixed envelope; the test measures deferrals per burst as the objective.
+RX_REGULATE_TEST = $(OUT_DIR)/rx_regulate_test
+RX_REGULATE_SRCS = $(filter-out tests/runtime/rx_r11_aien.c,$(RX_R11_SRCS)) \
+	src/runtime/rx_regulate.c tests/runtime/rx_regulate_test.c
+$(RX_REGULATE_TEST): $(RX_REGULATE_SRCS) src/runtime/rx_regulate.h src/runtime/rx_world.h \
+		$(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_REGULATE_SRCS) $(AIENOS_CAP_LIB) -lm
+
+.PHONY: test-regulate
+test-regulate: $(RX_REGULATE_TEST)
+	./$(RX_REGULATE_TEST)
+
 $(RX_R13_SILICON): $(RX_R13_SRCS) $(RX_R13_SILICON_EXTRA) src/runtime/rx_living.h src/runtime/rx_argus.h \
 	$(RX_COMPOSE_LIVING_CHECKS) $(ARGUS_STAMP) $(AIENOS_CAP_LIB) | $(OUT_DIR)
 	$(RX_PROD_REFUSE_TEST)
