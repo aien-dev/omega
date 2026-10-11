@@ -41,8 +41,12 @@ argus_pin()   { pin aienos-argus aienos "$(lock argus.lock)"; export ARGUS_REPO=
 export OMEGA_CANDIDATE_COMMIT="$(git rev-parse HEAD)"
 
 # receipt <file name or glob> <grep pattern>...: the hosted "Show ... receipt" steps.
+# Only receipts written during this step count: a hosted job starts from a fresh checkout, so it
+# can only see its own run, while a reused local tree keeps build/qual-runs from earlier runs.
+STEP_MARK="$(mktemp /tmp/omega-gate-step.XXXXXX)"
+trap 'rm -f "$STEP_MARK"' EXIT
 receipt() {
-  local r; r="$(find build/qual-runs -name "$1" -type f | head -n 1)"; shift
+  local r; r="$(find build/qual-runs -name "$1" -type f -newer "$STEP_MARK" | head -n 1)"; shift
   test -n "$r"
   local p; for p in "$@"; do grep -q "$p" "$r"; done
   sha256sum "$r"
@@ -50,7 +54,21 @@ receipt() {
 gates_pass() { grep -E 'TOTAL GATES: [0-9]+ \| PASSED: [0-9]+ \| FAILED: 0' "$1" && ! grep -E 'FAILED: [1-9]' "$1"; }
 
 case "$step" in
-  crumb-verify)       "${CRUMB:-crumb}" verify . ;;
+  crumb-verify)
+    # Hosted crumb.yml builds the crumb tool from the aien-architecture commit in crumb.lock.
+    # Same here, from the sibling checkout ../aien-architecture into a temp dir outside the
+    # tree, so a newer crumb on PATH can never change the verdict.
+    if [ ! -d ../aien-architecture ]; then
+      echo "run.sh: ../aien-architecture is missing; the hosted job checks out aien-dev/aien-architecture at crumb.lock" >&2
+      exit 3
+    fi
+    tool="$(mktemp -d /tmp/omega-crumb-tool.XXXXXX)"
+    trap 'rm -rf "$tool" "$STEP_MARK"' EXIT
+    git -C ../aien-architecture archive "$(lock crumb.lock)" tools/crumb | tar -x -C "$tool"
+    make -s -C "$tool/tools/crumb" crumb
+    obs crumb_tool_commit "\"$(lock crumb.lock)\""
+    "$tool/tools/crumb/crumb" verify .
+    ;;
   # pr-smoke.yml
   base)
     physics_pin; set -o pipefail
@@ -90,6 +108,10 @@ case "$step" in
   crumbline)          make $NOPHYS test-crumbline test-library test-vcstore test-resolve test-vcstore-genesis test-resolve-genesis test-genesis test-genesis-real test-program-ir test-vc-bridge ;;
   runtime)
     physics_pin; aienos_pin
+    # host-suites-2.yml sets only PHYSICS_DIR and AIENOS_R7_DIR, and only on the steps that list
+    # them; the qualify self-test and the aienos.lock source proof run with neither (the latter
+    # checks the default cache, which an inherited AIENOS_R7_DIR override would bypass).
+    unset AIENOS_COMMIT OMEGA_CANDIDATE_COMMIT
     make test-r15-instr
     make test-r15-receipt
     make test-r15-preflight test-r15-g15-diag
@@ -97,8 +119,8 @@ case "$step" in
     make test-r16-negative
     make test-r16-surface
     make test-r16-negative-mutants
-    make test-r16-qualify-selftest
-    make test-aienos-lock-source
+    env -u PHYSICS_DIR -u AIENOS_R7_DIR make test-r16-qualify-selftest
+    env -u PHYSICS_DIR -u AIENOS_R7_DIR make test-aienos-lock-source
     make test-allen
     ;;
   argus)
@@ -143,9 +165,9 @@ case "$step" in
     receipt rx_typed_results_receipt.json '"failures": 0,' '"candidate_bound": true,' '"OMEGA_TYPED_RESULT_CONSTRAINTS_PASS": "PASS"'
     make test-costmodel
     receipt rx_aegis_resident_receipt.json '"failures": 0,' '"candidate_bound": true,' '"R8_CONSTITUTIONAL_AEGIS": "PASS"'
-    r="$(find build/qual-runs -name rx_heartbeat_receipt.json -type f | head -n 1)"
-    native="$(find build/qual-runs -name rx_native_authority_receipt.json -type f | head -n 1)"
-    generation="$(find build/qual-runs -name rx_generation_barrier_receipt.json -type f | head -n 1)"
+    r="$(find build/qual-runs -name rx_heartbeat_receipt.json -type f -newer "$STEP_MARK" | head -n 1)"
+    native="$(find build/qual-runs -name rx_native_authority_receipt.json -type f -newer "$STEP_MARK" | head -n 1)"
+    generation="$(find build/qual-runs -name rx_generation_barrier_receipt.json -type f -newer "$STEP_MARK" | head -n 1)"
     test -n "$r"; test -n "$native"; test -n "$generation"
     if git diff --quiet && git diff --cached --quiet; then obs tree_cleanliness '"clean"'; else obs tree_cleanliness '"dirty"'; fi
     tools/rx_host_receipts.sh heartbeat "$r"
