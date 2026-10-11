@@ -1,0 +1,20 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-11T14:41:00Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:311b692c17bdc10ff1e82b7e5cd82544a83926e0ab0d92b4b286fd91a01f935d",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 2,
+      "generated_at_commit": "46cc7b5b94626a292ed130be9f9315d4b069615d",
+      "source_tree": "sha256:fa1573ca32fdfeb1ef3d5ed7935f6e7aa3bf4bb6e5fe5c90d1cbc03ff41b51fd"
+    }
+  },
+  "layer": "src",
+  "name": "regime",
+  "purpose": "Dev-only PD-0 regime switch: redraws the world constants from the declared ranges at an episode boundary. World side, links the generator; never sealed runs.",
+  "schema_version": "1.0.0"
+}
