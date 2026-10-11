@@ -25,6 +25,21 @@
 #define PD0L_MAX_FORBID 4096u
 #define PD0L_ROLL_H 20u                 /* rollout horizon on SELECT episodes (the ladder uses 20-step rollouts too) */
 #define PD0L_ROLL_CLAMP 100000000       /* 100 units: a diverging rollout is clamped here so integer arithmetic cannot overflow */
+#ifndef PD0L_DET_BASE_EP
+#define PD0L_DET_BASE_EP 32u            /* episodes in the detector's reference block */
+#endif
+#ifndef PD0L_DET_SLACK
+#define PD0L_DET_SLACK 0.3              /* CUSUM allowance (nats): an episode must be about 1.35x worse than the reference error to push the sum up; tuned on dev seeds 101-150 and 201-250, never the evaluation seeds 1-25 */
+#endif
+#ifndef PD0L_DET_CLIP
+#define PD0L_DET_CLIP 5.0               /* per-episode log-ratio cap: one episode alone can never raise an alarm */
+#endif
+#ifndef PD0L_DET_H
+#define PD0L_DET_H 8.0                  /* CUSUM alarm threshold */
+#endif
+#ifndef PD0L_DET_FLOOR
+#define PD0L_DET_FLOOR 0.0001           /* units: floor of the reference residual scale, so a noise-free exact model has a finite scale */
+#endif
 
 typedef struct {
     uint8_t n_obs, n_channels;
@@ -48,6 +63,7 @@ typedef struct {
     int hidden_by_rollout;       /* v2: rollout error is large and out of proportion to the one-step error */
     int hidden_state_suspected;  /* residuals carry memory the vocabulary cannot express (v1 rule OR v2 rollout rule) */
     int is_prior;                /* v2: the injected prior relation */
+    int is_old;                  /* v2.1: the model held before a detected change, kept as a rival candidate */
     int is_null;
 } pd0l_candidate;
 
@@ -64,6 +80,19 @@ void pd0_learner_explore(pd0_learner *L, uint32_t episode_index, int64_t *reset,
 /* fit: rebuilds the candidate set from FIT, ranked by MDL on SELECT. returns count (>= 1: the null is always present) */
 /* v2: inject (rel != NULL) or clear (NULL) a prior relation; fit() ranks it with the fitted candidates on the same SELECT data */
 void pd0_learner_set_prior(pd0_learner *L, const pd0_rel *rel);
+/* v2.1: change detection and bounded forgetting from admissible observations only. When on, fit() first runs a residual
+ * detector (CUSUM on the per-episode one-step prediction error of a reference model fitted on the first PD0L_DET_BASE_EP
+ * episodes, scaled by that model's error on those episodes' SELECT data). On an alarm the fit window starts at the estimated change
+ * episode (older episodes are forgotten) and the model held before the change stays in the ranking as a rival candidate. */
+typedef struct {
+    int enabled, alarm;
+    uint32_t n_ep, base_ep;          /* episodes seen; episodes in the reference block (0 if the detector had too little data) */
+    uint32_t alarm_ep, change_ep;    /* 0-based episode index of the alarm and of the estimated first changed episode (valid if alarm) */
+    double cusum_max;                /* largest CUSUM value reached over the monitored episodes */
+    int old_kept;                    /* the pre-change model was non-null and entered the ranking */
+} pd0l_detect;
+void pd0_learner_set_forgetting(pd0_learner *L, int on);
+const pd0l_detect *pd0_learner_detection(const pd0_learner *L);
 int pd0_learner_fit(pd0_learner *L);
 int pd0_learner_n_candidates(const pd0_learner *L);
 const pd0l_candidate *pd0_learner_candidate(const pd0_learner *L, int i);   /* 0 = best */

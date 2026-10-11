@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct { int64_t before[PD0_MAX_OBS], after[PD0_MAX_OBS]; uint8_t chan; int64_t value; uint8_t tag; uint32_t episode; uint8_t is_reset; } trans;
+typedef struct { int64_t before[PD0_MAX_OBS], after[PD0_MAX_OBS]; uint8_t chan; int64_t value; uint8_t tag; uint32_t episode; uint8_t is_reset; uint32_t seq; } trans;
 
 struct pd0_learner {
     pd0l_desc d;
@@ -17,6 +17,8 @@ struct pd0_learner {
     uint8_t lib[PD0L_MAX_LIB][PD0_MAX_VARS + PD0_MAX_CHAN];
     int ncand; pd0l_candidate cand[PD0L_MAX_CAND];
     int has_prior; pd0_rel prior;                      /* v2 */
+    uint32_t lo, hi, n_ep;                             /* v2.1: fit window [lo,hi) over t[]; episodes seen */
+    int forget, has_old; pd0_rel old; pd0l_detect det; /* v2.1 */
 };
 
 /* v2 hidden-state rule on rollouts: a model whose 20-step SELECT rollout error is large in absolute terms AND far above its
@@ -54,7 +56,9 @@ int pd0_learner_observe(pd0_learner *L, const pd0_rec *r, uint8_t tag)
     if (tag != TAG_FIT && tag != TAG_SELECT) return -1;              /* I10: nothing else may reach the learner */
     if (r->n_obs != L->d.n_obs || L->nt >= PD0L_MAX_TRANS) return -1;
     if (r->kind == PD0_KIND_STEP && r->status != PD0_ST_OK && r->status != PD0_ST_EPISODE_END) return 0;  /* spec rev 6: EPISODE_END carries an outcome; refused/out-of-bounds/budget steps do not */
+    if (r->kind == PD0_KIND_RESET) L->n_ep++;
     trans *t = &L->t[L->nt++]; memset(t, 0, sizeof *t);
+    t->seq = L->n_ep ? L->n_ep - 1 : 0; L->hi = L->nt;
     memcpy(t->before, r->before, sizeof(int64_t) * r->n_obs); memcpy(t->after, r->after, sizeof(int64_t) * r->n_obs);
     t->chan = r->channel; t->value = r->applied; t->tag = tag; t->episode = r->episode; t->is_reset = r->kind == PD0_KIND_RESET;
     return 0;
@@ -97,7 +101,7 @@ static int64_t onestep_eval(const pd0_learner *L, const pd0_rel *rel, uint8_t ta
 {
     uint8_t no = L->d.n_obs; acc a; memset(&a, 0, sizeof a); int64_t st[PD0_MAX_VARS], nx[PD0_MAX_VARS]; memset(st, 0, sizeof st);
     double num[PD0_MAX_OBS] = { 0 }, den[PD0_MAX_OBS] = { 0 }, prev[PD0_MAX_OBS] = { 0 }; int have_prev = 0;
-    for (uint32_t i = 0; i < L->nt; i++) { const trans *t = &L->t[i]; if (t->tag != tag) continue;
+    for (uint32_t i = L->lo; i < L->hi; i++) { const trans *t = &L->t[i]; if (t->tag != tag) continue;
         if (t->is_reset) { memset(st, 0, sizeof st); have_prev = 0; continue; }
         for (int v = 0; v < no; v++) st[v] = t->before[v];
         pd0_rel_step(rel, st, t->chan, t->value, nx); acc_add(&a, nx, t->after, no);
@@ -140,8 +144,8 @@ static int64_t roll_eval(const pd0_learner *L, const pd0_rel *rel, double *bits,
 {
     uint8_t no = L->d.n_obs; acc a; memset(&a, 0, sizeof a); double se[PD0_MAX_OBS] = { 0 };
     pd0_step steps[PD0L_ROLL_H]; int64_t truth[PD0L_ROLL_H][PD0_MAX_OBS], out[PD0L_ROLL_H * PD0_MAX_OBS], init[PD0_MAX_OBS]; uint32_t ns = 0; int open = 0;
-    for (uint32_t i = 0; i <= L->nt; i++) {
-        const trans *t = i < L->nt ? &L->t[i] : NULL;
+    for (uint32_t i = L->lo; i <= L->hi; i++) {
+        const trans *t = i < L->hi ? &L->t[i] : NULL;
         if (t && t->tag != TAG_SELECT) continue;
         if (!t || t->is_reset) {                                                   /* close the open episode */
             if (open && ns) { pd0_learner_rollout(rel, init, steps, ns, out);
@@ -203,7 +207,7 @@ static void finish_candidate(const pd0_learner *L, pd0l_candidate *c)
     c->select_nrmse_micro = onestep_eval(L, &c->rel, TAG_SELECT, NULL);
     /* MDL on SELECT with the integer evaluator: residual bits per variable + description bits */
     uint8_t no = L->d.n_obs; double rb = 0; uint32_t n = 0; double se[PD0_MAX_OBS] = { 0 }; int64_t st[PD0_MAX_VARS], nx[PD0_MAX_VARS]; memset(st, 0, sizeof st);
-    for (uint32_t i = 0; i < L->nt; i++) { const trans *t = &L->t[i]; if (t->tag != TAG_SELECT) continue; if (t->is_reset) { memset(st, 0, sizeof st); continue; }
+    for (uint32_t i = L->lo; i < L->hi; i++) { const trans *t = &L->t[i]; if (t->tag != TAG_SELECT) continue; if (t->is_reset) { memset(st, 0, sizeof st); continue; }
         for (int v = 0; v < no; v++) st[v] = t->before[v];
         pd0_rel_step(&c->rel, st, t->chan, t->value, nx);
         for (int v = 0; v < no; v++) { double e = (double)(t->after[v] - nx[v]) / 1e6; se[v] += e * e; } n++; memcpy(st, nx, sizeof st); }
@@ -221,26 +225,27 @@ static int same_structure(const pd0_rel *a, const pd0_rel *b) { return pd0_rel_s
 /* v2: the injected prior is a candidate like any other: scored on the same FIT/SELECT records, ranked by rank_bits. If every slot is
  * taken it replaces the worst-ranked non-null fitted candidate, so a prior can never push the null out. */
 void pd0_learner_set_prior(pd0_learner *L, const pd0_rel *rel) { if (rel) { L->prior = *rel; L->has_prior = 1; } else L->has_prior = 0; }
-static void add_prior(pd0_learner *L)
+static void add_extra(pd0_learner *L, const pd0_rel *rel, int is_prior, int is_old)
 {
-    if (!L->has_prior) return;
-    pd0l_candidate p; memset(&p, 0, sizeof p); p.rel = L->prior; p.is_prior = 1; finish_candidate(L, &p);
-    for (int k = 0; k < L->ncand; k++) if (same_structure(&L->cand[k].rel, &p.rel)) { L->cand[k].is_prior = 1; return; }
+
+    pd0l_candidate p; memset(&p, 0, sizeof p); p.rel = *rel; p.is_prior = is_prior; p.is_old = is_old; finish_candidate(L, &p);
+    for (int k = 0; k < L->ncand; k++) if (same_structure(&L->cand[k].rel, &p.rel)) { L->cand[k].is_prior |= is_prior; L->cand[k].is_old |= is_old; return; }
     if (L->ncand < PD0L_MAX_CAND) { L->cand[L->ncand++] = p; return; }
     qsort(L->cand, (size_t)L->ncand, sizeof L->cand[0], cand_cmp);
     for (int k = L->ncand - 1; k > 0; k--) if (!L->cand[k].is_null) { L->cand[k] = p; return; }
 }
 
-int pd0_learner_fit(pd0_learner *L)
+static void add_prior(pd0_learner *L) { if (L->has_prior) add_extra(L, &L->prior, 1, 0); if (L->has_old) add_extra(L, &L->old, 0, 1); }
+static int fit_core(pd0_learner *L)
 {
     uint8_t no = L->d.n_obs; unsigned ni = L->ni, nl = L->nl; L->ncand = 0;
-    uint32_t n = 0; for (uint32_t i = 0; i < L->nt; i++) if (L->t[i].tag == TAG_FIT && !L->t[i].is_reset) n++;
+    uint32_t n = 0; for (uint32_t i = L->lo; i < L->hi; i++) if (L->t[i].tag == TAG_FIT && !L->t[i].is_reset) n++;
     pd0l_candidate *nullc = &L->cand[L->ncand++]; memset(nullc, 0, sizeof *nullc); nullc->is_null = 1;
     nullc->rel.n_vars = no; nullc->rel.n_channels = L->d.n_channels; nullc->rel.n_equations = 0; finish_candidate(L, nullc);
     if (n < 8) { add_prior(L); qsort(L->cand, (size_t)L->ncand, sizeof L->cand[0], cand_cmp); return L->ncand; }
     double *X = malloc(sizeof(double) * n * nl), *Y = malloc(sizeof(double) * n * no); if (!X || !Y) { free(X); free(Y); return L->ncand; }
     uint32_t r = 0;
-    for (uint32_t i = 0; i < L->nt; i++) { const trans *t = &L->t[i]; if (t->tag != TAG_FIT || t->is_reset) continue;
+    for (uint32_t i = L->lo; i < L->hi; i++) { const trans *t = &L->t[i]; if (t->tag != TAG_FIT || t->is_reset) continue;
         double x[PD0_MAX_VARS + PD0_MAX_CHAN]; for (int j = 0; j < no; j++) x[j] = (double)t->before[j] / 1e6; for (int c = 0; c < L->d.n_channels; c++) x[no + c] = t->chan == c ? (double)t->value / 1e6 : 0;
         for (unsigned k = 0; k < nl; k++) X[r * nl + k] = mono(x, L->lib[k], ni);
         for (int j = 0; j < no; j++) Y[r * no + j] = (double)(t->after[j] - t->before[j]) / 1e6;
@@ -259,6 +264,59 @@ int pd0_learner_fit(pd0_learner *L)
     qsort(L->cand, (size_t)L->ncand, sizeof L->cand[0], cand_cmp);
     free(X); free(Y); free(y);
     return L->ncand;
+}
+
+/* ---- v2.1: change detection and bounded forgetting (learner side only: sees nothing but its own FIT/SELECT records) ----
+ * Reference model: fit_core over the first PD0L_DET_BASE_EP episodes (null rival included). Its one-step residual scale per
+ * observed variable is measured on the SELECT episodes of that block. Every later episode i gets z_i = mean over its steps and
+ * variables of (residual / scale)^2 (about 1 while nothing changes). CUSUM: S <- max(0, S + min(ln z_i, CLIP) - SLACK);
+ * alarm when S > H. The estimated change episode is the first episode of the run that ended in the alarm with a clearly bad z. */
+void pd0_learner_set_forgetting(pd0_learner *L, int on) { L->forget = on; }
+const pd0l_detect *pd0_learner_detection(const pd0_learner *L) { return &L->det; }
+static void ref_residuals(const pd0_learner *L, const pd0_rel *ref, uint32_t from, uint32_t to, double *se, uint32_t *cnt)
+{
+    uint8_t no = L->d.n_obs; int64_t st[PD0_MAX_VARS], nx[PD0_MAX_VARS]; memset(st, 0, sizeof st); *cnt = 0; for (int v = 0; v < no; v++) se[v] = 0;
+    for (uint32_t i = from; i < to; i++) { const trans *t = &L->t[i]; if (t->is_reset) { memset(st, 0, sizeof st); continue; }
+        for (int v = 0; v < no; v++) st[v] = t->before[v];
+        pd0_rel_step(ref, st, t->chan, t->value, nx);
+        for (int v = 0; v < no; v++) { double e = (double)(t->after[v] - nx[v]) / 1e6; se[v] += e * e; } (*cnt)++; memcpy(st, nx, sizeof st); }
+}
+static void detect_change(pd0_learner *L)
+{
+    memset(&L->det, 0, sizeof L->det); L->det.enabled = 1; L->det.n_ep = L->n_ep; L->lo = 0; L->hi = L->nt; L->has_old = 0;
+    uint32_t B = PD0L_DET_BASE_EP; if (L->n_ep < B + 2) return;
+    uint32_t *es = malloc(sizeof *es * (L->n_ep + 1)); if (!es) return; uint32_t ne = 0;
+    for (uint32_t i = 0; i < L->nt; i++) if (L->t[i].is_reset && ne < L->n_ep) es[ne++] = i;
+    if (ne < B + 2) { free(es); return; } es[ne] = L->nt;
+    /* reference model on the reference block */
+    pd0l_candidate saved[PD0L_MAX_CAND]; int nsaved = L->ncand, hp = L->has_prior; memcpy(saved, L->cand, sizeof saved);
+    L->has_prior = 0; L->hi = es[B]; fit_core(L); pd0_rel ref = L->cand[0].rel;
+    L->has_prior = hp; memcpy(L->cand, saved, sizeof saved); L->ncand = nsaved; L->hi = L->nt;
+    /* residual scale on the block's SELECT episodes */
+    uint8_t no = L->d.n_obs; double s2[PD0_MAX_OBS] = { 0 }; uint32_t ns = 0;
+    for (uint32_t e = 0; e < B; e++) if (L->t[es[e]].tag == TAG_SELECT) { double se[PD0_MAX_OBS]; uint32_t c; ref_residuals(L, &ref, es[e], es[e + 1], se, &c); for (int v = 0; v < no; v++) s2[v] += se[v]; ns += c; }
+    if (!ns) { free(es); return; }
+    for (int v = 0; v < no; v++) { s2[v] /= ns; if (s2[v] < PD0L_DET_FLOOR * PD0L_DET_FLOOR) s2[v] = PD0L_DET_FLOOR * PD0L_DET_FLOOR; }
+    L->det.base_ep = B;
+    double S = 0, smax = 0; uint32_t run = B; int have_run = 0;
+    for (uint32_t e = B; e < ne && !L->det.alarm; e++) { double se[PD0_MAX_OBS]; uint32_t c; ref_residuals(L, &ref, es[e], es[e + 1], se, &c); if (c < 5) continue;
+        double z = 0; for (int v = 0; v < no; v++) z += se[v] / s2[v]; z /= (double)c * no;
+        double lz = z > 1e-12 ? log(z) : log(1e-12), x = (lz > PD0L_DET_CLIP ? PD0L_DET_CLIP : lz) - PD0L_DET_SLACK;
+        if (S <= 0 && x > 0) { run = e; have_run = 1; } S += x; if (S < 0) S = 0; if (S > smax) smax = S;
+        if (S > PD0L_DET_H && have_run) { L->det.alarm = 1; L->det.alarm_ep = e; L->det.change_ep = run;
+            for (uint32_t f = run; f <= e; f++) { double se2[PD0_MAX_OBS]; uint32_t c2; ref_residuals(L, &ref, es[f], es[f + 1], se2, &c2); double zz = 0; if (c2) { for (int v = 0; v < no; v++) zz += se2[v] / s2[v]; zz /= (double)c2 * no; }
+                if (c2 >= 5 && zz > 5.0) { L->det.change_ep = f; break; } } } }
+    L->det.cusum_max = smax;
+    if (L->det.alarm) {                                   /* keep the model held before the change as a rival, then forget the older episodes */
+        fit_core(L); const pd0l_candidate *b = &L->cand[0];
+        if (!b->is_null) { L->old = b->rel; L->has_old = 1; L->det.old_kept = 1; }
+        L->lo = es[L->det.change_ep]; }
+    free(es);
+}
+int pd0_learner_fit(pd0_learner *L)
+{
+    if (L->forget) detect_change(L); else { L->lo = 0; L->hi = L->nt; L->has_old = 0; }
+    return fit_core(L);
 }
 int pd0_learner_n_candidates(const pd0_learner *L) { return L->ncand; }
 const pd0l_candidate *pd0_learner_candidate(const pd0_learner *L, int i) { return (i >= 0 && i < L->ncand) ? &L->cand[i] : NULL; }

@@ -6,6 +6,7 @@
  *   pd0-dev2 flag   <seed_lo> <seed_hi>   C1: hidden-state flag + prediction quality per level and seed
  *   pd0-dev2 regime <seed_lo> <seed_hi>   C2: regime switch, FIXED vs UPDATING (retain) vs FRESH, per level and seed
  *   pd0-dev2 prior  <seed_lo> <seed_hi>   C3: wrong / stale prior injected into the updating learner
+ *   pd0-dev2 detect <seed_lo> <seed_hi>   v2.1 C1: change-detector decision on no-switch and switch runs
  * Built twice: with -DDEV_V1 against the seal-1 learner (flag mode only, the baseline) and against learner_v2. */
 #include "pd0_learner.h"
 #include "pd0_dev_world.h"
@@ -173,6 +174,33 @@ static int mode_regime(uint64_t lo, uint64_t hi)
     return 0;
 }
 
+
+/* ================= C1 of v2.1: change detector decisions =================
+ * pd0-dev2 detect <lo> <hi>: per level and seed, one NO-SWITCH run (32 more episodes from the same world) and one SWITCH run
+ * (regime 1 then 32 episodes of the redrawn world); the learner (forgetting on) is fed every episode and the detector decision
+ * is printed. delay = post-switch episodes consumed when the alarm fired (1 = the first one). */
+static pd0_learner *build21(sess *S, const r1data *D, const ep_t *r2, int k2, int forget)
+{
+    pd0_learner *L = pd0_learner_new(&S->d, S->seed); pd0_learner_set_forgetting(L, forget);
+    for (int i = 0; i < D->n_train; i++) feed(L, &D->train[i], D->tag[i]);
+    for (int i = 0; i < k2; i++) feed(L, &r2[i], i % 4 == 3 ? TAG_SELECT : TAG_FIT);
+    pd0_learner_fit(L); return L;
+}
+static int mode_detect(uint64_t lo, uint64_t hi)
+{
+    for (int level = 0; level < NLEV; level++) { int fa = 0, runs = 0, det = 0, nd = 0; int64_t delays[64];
+        for (uint64_t seed = lo; seed <= hi; seed++) for (int sw = 0; sw < 2; sw++) { sess S; if (open_sess(&S, level, seed)) return 3;
+            r1data *D = collect_r1(&S); int64_t ppm = 0; if (sw && dev_world_switch(S.w, 1, &ppm)) return 3;
+            static ep_t tr[32]; for (int i = 0; i < 32; i++) run_ep(&S, &tr[i], "r2", (uint32_t)i);
+            pd0_learner *L = build21(&S, D, tr, 32, 1); const pd0l_detect *d = pd0_learner_detection(L);
+            long delay = d->alarm ? (long)d->alarm_ep - D->n_train + 1 : 0;
+            printf("P0V21D level=%s seed=%llu run=%s const_change_ppm=%lld episodes=%u base_ep=%u alarm=%d alarm_ep=%u change_ep=%u switch_ep=%d delay=%ld cusum_max=%.2f old_kept=%d\n", lname(level), (unsigned long long)seed,
+                   sw ? "switch" : "noswitch", (long long)ppm, d->n_ep, d->base_ep, d->alarm, d->alarm_ep, d->change_ep, sw ? D->n_train : -1, delay, d->cusum_max, d->old_kept);
+            if (!sw) { fa += d->alarm; runs++; } else if (ppm > 0) { nd++; if (d->alarm) { if (det < 64) delays[det] = delay; det++; } }
+            pd0_learner_free(L); dev_world_close(S.w); }
+        printf("P0V21D-SUM level=%s false_alarms=%d/%d switch_detected=%d/%d median_delay_episodes=%lld\n", lname(level), fa, runs, det, nd, (long long)median(delays, det < 64 ? det : 64)); }
+    return 0;
+}
 /* ================= C3 ================= */
 static int same_support(const pd0_rel *a, const pd0_rel *b)
 {
@@ -227,13 +255,14 @@ static int mode_prior(uint64_t lo, uint64_t hi)
 
 int main(int argc, char **argv)
 {
-    if (argc < 4) { fprintf(stderr, "usage: pd0-dev2 flag|regime|prior <seed_lo> <seed_hi>\n"); return 2; }
+    if (argc < 4) { fprintf(stderr, "usage: pd0-dev2 flag|regime|prior|detect <seed_lo> <seed_hi>\n"); return 2; }
     uint64_t lo = strtoull(argv[2], NULL, 10), hi = strtoull(argv[3], NULL, 10);
     printf("PD0_DEV2 mode=%s learner=%s seeds=%llu..%llu (public dev seeds; development evidence only)\n", argv[1], LNAME, (unsigned long long)lo, (unsigned long long)hi);
     if (!strcmp(argv[1], "flag")) return mode_flag(lo, hi);
 #ifndef DEV_V1
     if (!strcmp(argv[1], "regime")) return mode_regime(lo, hi);
     if (!strcmp(argv[1], "prior")) return mode_prior(lo, hi);
+    if (!strcmp(argv[1], "detect")) return mode_detect(lo, hi);
 #endif
     fprintf(stderr, "unknown mode\n"); return 2;
 }

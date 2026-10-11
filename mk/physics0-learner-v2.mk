@@ -69,6 +69,8 @@ test-physics0-learner-v2: p0l2-isolation $(P0L2_DIR)/test_pd0_learner2 $(P0L2_DI
 	./$(P0L2_DIR)/test_pd0_learner2_asan | tail -1 | grep -q '^PHYSICS0_LEARNER2_UNIT: PASS'
 	./$(P0L2_DIR)/pd0-dev2 flag 1 1 > $(P0L2_DIR)/smoke.out
 	grep -q '^P0V2F-SUM learner=v2 level=L6 seeds=1 hidden_fired=1' $(P0L2_DIR)/smoke.out
+	./$(P0L2_DIR)/pd0-dev2 detect 1 1 > $(P0L2_DIR)/smoke-detect.out
+	grep -q "^P0V21D-SUM level=L1 false_alarms=0/1 switch_detected=1/1" $(P0L2_DIR)/smoke-detect.out
 	@echo "test-physics0-learner-v2: PASS (isolation, unit tests plain + ASan/UBSan, dev driver smoke)"
 
 # C1: one line per level and seed for the seal-1 learner (baseline) and v2, then the acceptance check. Seeds 1-5 are the acceptance seeds; 6-25 are extra dev seeds.
