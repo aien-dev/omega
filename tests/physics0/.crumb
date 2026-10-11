@@ -4,26 +4,32 @@
       "children": [
         {
           "digest": "62d7fb6a9ef393196990035afe943a384315bcd96a2e7646fe4bc2fc62706e1c",
-          "last_commit": "8a2e2687",
+          "last_commit": "30c65a3",
           "name": "learner",
           "purpose": "Learner gates: unit tests (determinism, PDLAW1 round trip, memoriser vs compact theory, null wor"
         },
         {
+          "digest": "4808afb4213f29aa45ea9b2d433dd302b4a6d27f8a669a0dc7b299fc2c17af16",
+          "last_commit": "46cc7b5",
+          "name": "learner_v2",
+          "purpose": "Learner v2 tests and dev drivers: unit tests, byte-level dev world, C1 flag, C2 regime switch an"
+        },
+        {
           "digest": "267199e8d5f72e12649a8f608abb42ab82ef85c6e3b4531ce1812f7e5e491644",
-          "last_commit": "f9a17970",
+          "last_commit": "30c65a3",
           "name": "verify",
           "purpose": "PD-0 verify: see docs on physics main"
         }
       ],
-      "children_root": "sha256:ed1db7624d62ba73dd08f4127e0162b34180e4911a743c953d3e8fc5bb634548",
-      "compiled_at": "2026-10-10T06:00:18Z",
+      "children_root": "sha256:5366b425e8a80271393929fcc28a6c2cee4778dade6ff7c48a40c8ec8773f4cd",
+      "compiled_at": "2026-10-11T14:41:00Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:fe59556d80381a125c896f9667229e57743f21b224e1bfc4195f6d7998cb9531",
-      "evidence_files": 0,
-      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 28,
-      "generated_at_commit": "0d5b3f2d3e1273587c8c206ac14ea67b551e52e4",
-      "source_tree": "sha256:130ca712cff43eacf70f1ec038cc8d0ac6e0bc575547b87d6f8564a2ca499f88"
+      "digest": "sha256:b1b593c229ffdd13bf48e79fcac4ae6b4592b4f030fa7667b42864b160c35b6a",
+      "evidence_files": 3,
+      "evidence_root": "sha256:9084ada18934989b2b06474f9aa125f460764fe48eaa7bff0354c764e9c691c6",
+      "files": 36,
+      "generated_at_commit": "46cc7b5b94626a292ed130be9f9315d4b069615d",
+      "source_tree": "sha256:09e5fcf7779a5defbbd21fbc121463069d612a6356d582e0019c32158f138e72"
     }
   },
   "layer": "tests",
