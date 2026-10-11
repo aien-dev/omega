@@ -212,7 +212,7 @@
         },
         {
           "digest": "b1b593c229ffdd13bf48e79fcac4ae6b4592b4f030fa7667b42864b160c35b6a",
-          "last_commit": "46cc7b5",
+          "last_commit": "430df5b",
           "name": "physics0",
           "purpose": "PD-0 gates: world self-test, oracle calibration, learner L0/L1/NULL, mutations, OSC differential"
         },
@@ -259,8 +259,8 @@
           "purpose": "Directory tests/relations. Purpose not yet described by a human."
         },
         {
-          "digest": "930ee5e080ab63c9c6b20b7a1eade45f6b249246dccdb3039a01c5c31a217368",
-          "last_commit": "01f6a74",
+          "digest": "4f0e66038cd243c0ac75a088f2ea7e7b1038011193a0595d4a18ef202a780c6e",
+          "last_commit": "c70f820",
           "name": "runtime",
           "purpose": "Directory tests/runtime. Purpose not yet described by a human."
         },
@@ -289,15 +289,15 @@
           "purpose": "Directory tests/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:a93512812143f661a270e000d626260885d67808300a9af1c24d613109e1eba5",
-      "compiled_at": "2026-10-11T14:41:00Z",
+      "children_root": "sha256:d30b17f6f4909b4eb164a94ae45dbf0052a56258e2de0cce2e6b4d6a737ec711",
+      "compiled_at": "2026-10-11T14:54:33Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:ac4506602f55fbf72b85484a5d77ff817a1895358556a2117b403194781ec0f0",
+      "digest": "sha256:9454b0ab0f8471bc801cc980698c86857924a166b61d84473fa1fbaa0a69384d",
       "evidence_files": 14,
       "evidence_root": "sha256:080bc99a4a66250db3cda56908658fd3f09c53170ca32c85caa2d11ef3126f1d",
-      "files": 956,
-      "generated_at_commit": "46cc7b5b94626a292ed130be9f9315d4b069615d",
-      "source_tree": "sha256:12e751705e7b0ea7dc939028e157f5a211b431465f710c8e04be26db8de409f5"
+      "files": 957,
+      "generated_at_commit": "afb919f6b0d3e5c311bbe097e06a16766ef34f82",
+      "source_tree": "sha256:00cbf54395becbc7c951b00dec0c59af96540d728398893e36a6ac3e804ddd6e"
     },
     "owner_lane": "",
     "provenance": {

@@ -128,7 +128,7 @@
         },
         {
           "digest": "4b55679e40d65b6c29ef738eead218eb97844b1e38d2241d04568d895c7e9dc3",
-          "last_commit": "30ff08f",
+          "last_commit": "430df5b",
           "name": "physics0",
           "purpose": "PD-0 hidden-equation benchmark (Physics-0 Discovery Engine cut 1): world, oracle, scorer, ladder"
         },
@@ -139,8 +139,8 @@
           "purpose": "Directory src/polyglot. Purpose not yet described by a human."
         },
         {
-          "digest": "98acfce1a1131f63cb89cce389b153d85952ccdcf5f3e0462c080a159b45ec44",
-          "last_commit": "01f6a74",
+          "digest": "44927d9c42231abe027de1821d96edecb702fa0e1a791843bf3b9e0142a31bbf",
+          "last_commit": "c70f820",
           "name": "runtime",
           "purpose": "Directory src/runtime. Purpose not yet described by a human."
         },
@@ -175,15 +175,15 @@
           "purpose": "Directory src/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:4c7959973b37e8ebc108f32cbac6ee94cbf0f2ef5b3d975b511d3ee162be4684",
-      "compiled_at": "2026-10-11T14:41:00Z",
+      "children_root": "sha256:3294f4412d2e2eacc3eaeebd4cd09fc5729c47332ff41c7441fb457e7699ed09",
+      "compiled_at": "2026-10-11T14:54:33Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:9254e5dfe5085071154ed78456c74218ccacb45ac058c06a705c0fcf6a4e300e",
+      "digest": "sha256:7e444b7d72a7c021d5c17c48d406394c36fef94f7dd91e38673e908ca0f87450",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 449,
-      "generated_at_commit": "46cc7b5b94626a292ed130be9f9315d4b069615d",
-      "source_tree": "sha256:ea1a21268e8f7722742a2ff7d4389666b6f07576134eec5e4f3adf6eced1ccb4"
+      "generated_at_commit": "afb919f6b0d3e5c311bbe097e06a16766ef34f82",
+      "source_tree": "sha256:05d15fbbabc4c2385696f8d31813a0d71810c961cb6f511e0e25cdccf7ed5f5d"
     },
     "owner_lane": "",
     "provenance": {
