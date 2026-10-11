@@ -421,6 +421,15 @@ $(EFFECT_CAP64_TEST): tests/effect/test_effect_cap64.c $(EFFECT_CAP64_OBJS) \
 test-effect-cap64: $(EFFECT_CAP64_TEST)
 	./$(EFFECT_CAP64_TEST)
 
+# OMEGA_AIENOS_CAP_ABI: src/runtime/aienos_cap.h, the copy the runtime compiles
+# against, must match the pinned header $(EFFECT_CAP64_CAP_INC)/aienos_capability.h
+# that $(AIENOS_CAP_LIB) is built from: struct layouts field by field (offset, size,
+# kind, signedness), macro values, prototypes. Eight mutated copies must each be
+# refused. Header only: nothing is linked against the library.
+.PHONY: test-aienos-cap-abi
+test-aienos-cap-abi: aienos-authority-capability
+	CC="$(CC)" CFLAGS="$(CFLAGS)" bash tests/runtime/aienos_cap_abi.sh "$(EFFECT_CAP64_CAP_INC)"
+
 $(RX_R7_TEST): $(RX_R7_SRCS) src/runtime/rx_caproot.h src/runtime/rx_world.h \
 	src/runtime/aienos_cap.h src/runtime/omega_shared_world_abi.h $(AIENOS_CAP_LIB) | $(OUT_DIR)
 	$(CC) $(CFLAGS) -pthread -o $@ $(RX_R7_SRCS) $(AIENOS_CAP_LIB) -lm
