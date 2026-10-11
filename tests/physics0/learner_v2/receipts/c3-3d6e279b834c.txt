@@ -1,0 +1,436 @@
+receipt: PD0_LEARNER_V2_C3
+commit: 3d6e279b834c0f79e7b9e1b31a177db4502dd744
+kind: development evidence, public dev seeds only; not a sealed run, not scientific verification
+PD0_DEV2 mode=prior learner=v2 seeds=1..5 (public dev seeds; development evidence only)
+P0V2P level=L0 seed=1 prior=wrong k=pre outcome=CORRECTED prior_rank=2 best_roll20=0 prior_roll20=1669244
+P0V2P level=L0 seed=1 const_change_ppm=0 prior=wrong k=4 outcome=CORRECTED prior_rank=2 best_roll20=0 prior_roll20=1952295 noprior_best_roll20=0
+P0V2P level=L0 seed=1 const_change_ppm=0 prior=stale k=4 outcome=KEPT prior_rank=0 best_roll20=0 prior_roll20=0 noprior_best_roll20=0
+P0V2P level=L0 seed=1 const_change_ppm=0 prior=wrong k=8 outcome=CORRECTED prior_rank=2 best_roll20=0 prior_roll20=1952295 noprior_best_roll20=0
+P0V2P level=L0 seed=1 const_change_ppm=0 prior=stale k=8 outcome=KEPT prior_rank=0 best_roll20=0 prior_roll20=0 noprior_best_roll20=0
+P0V2P level=L0 seed=1 const_change_ppm=0 prior=wrong k=16 outcome=CORRECTED prior_rank=2 best_roll20=0 prior_roll20=1952295 noprior_best_roll20=0
+P0V2P level=L0 seed=1 const_change_ppm=0 prior=stale k=16 outcome=KEPT prior_rank=0 best_roll20=0 prior_roll20=0 noprior_best_roll20=0
+P0V2P level=L0 seed=1 const_change_ppm=0 prior=wrong k=32 outcome=CORRECTED prior_rank=2 best_roll20=0 prior_roll20=1952295 noprior_best_roll20=0
+P0V2P level=L0 seed=1 const_change_ppm=0 prior=stale k=32 outcome=KEPT prior_rank=0 best_roll20=0 prior_roll20=0 noprior_best_roll20=0
+P0V2P level=L0 seed=2 prior=wrong k=pre outcome=CORRECTED prior_rank=2 best_roll20=0 prior_roll20=1617019
+P0V2P level=L0 seed=2 const_change_ppm=0 prior=wrong k=4 outcome=CORRECTED prior_rank=2 best_roll20=0 prior_roll20=1693248 noprior_best_roll20=0
+P0V2P level=L0 seed=2 const_change_ppm=0 prior=stale k=4 outcome=KEPT prior_rank=0 best_roll20=0 prior_roll20=0 noprior_best_roll20=0
+P0V2P level=L0 seed=2 const_change_ppm=0 prior=wrong k=8 outcome=CORRECTED prior_rank=2 best_roll20=0 prior_roll20=1693248 noprior_best_roll20=0
+P0V2P level=L0 seed=2 const_change_ppm=0 prior=stale k=8 outcome=KEPT prior_rank=0 best_roll20=0 prior_roll20=0 noprior_best_roll20=0
+P0V2P level=L0 seed=2 const_change_ppm=0 prior=wrong k=16 outcome=CORRECTED prior_rank=2 best_roll20=0 prior_roll20=1693248 noprior_best_roll20=0
+P0V2P level=L0 seed=2 const_change_ppm=0 prior=stale k=16 outcome=KEPT prior_rank=0 best_roll20=0 prior_roll20=0 noprior_best_roll20=0
+P0V2P level=L0 seed=2 const_change_ppm=0 prior=wrong k=32 outcome=CORRECTED prior_rank=2 best_roll20=0 prior_roll20=1693248 noprior_best_roll20=0
+P0V2P level=L0 seed=2 const_change_ppm=0 prior=stale k=32 outcome=KEPT prior_rank=0 best_roll20=0 prior_roll20=0 noprior_best_roll20=0
+P0V2P level=L0 seed=3 prior=wrong k=pre outcome=CORRECTED prior_rank=2 best_roll20=0 prior_roll20=1710821
+P0V2P level=L0 seed=3 const_change_ppm=0 prior=wrong k=4 outcome=CORRECTED prior_rank=2 best_roll20=0 prior_roll20=1627420 noprior_best_roll20=0
+P0V2P level=L0 seed=3 const_change_ppm=0 prior=stale k=4 outcome=KEPT prior_rank=0 best_roll20=0 prior_roll20=0 noprior_best_roll20=0
+P0V2P level=L0 seed=3 const_change_ppm=0 prior=wrong k=8 outcome=CORRECTED prior_rank=2 best_roll20=0 prior_roll20=1627420 noprior_best_roll20=0
+P0V2P level=L0 seed=3 const_change_ppm=0 prior=stale k=8 outcome=KEPT prior_rank=0 best_roll20=0 prior_roll20=0 noprior_best_roll20=0
+P0V2P level=L0 seed=3 const_change_ppm=0 prior=wrong k=16 outcome=CORRECTED prior_rank=2 best_roll20=0 prior_roll20=1627420 noprior_best_roll20=0
+P0V2P level=L0 seed=3 const_change_ppm=0 prior=stale k=16 outcome=KEPT prior_rank=0 best_roll20=0 prior_roll20=0 noprior_best_roll20=0
+P0V2P level=L0 seed=3 const_change_ppm=0 prior=wrong k=32 outcome=CORRECTED prior_rank=2 best_roll20=0 prior_roll20=1627420 noprior_best_roll20=0
+P0V2P level=L0 seed=3 const_change_ppm=0 prior=stale k=32 outcome=KEPT prior_rank=0 best_roll20=0 prior_roll20=0 noprior_best_roll20=0
+P0V2P level=L0 seed=4 prior=wrong k=pre outcome=CORRECTED prior_rank=2 best_roll20=0 prior_roll20=1819986
+P0V2P level=L0 seed=4 const_change_ppm=0 prior=wrong k=4 outcome=CORRECTED prior_rank=2 best_roll20=0 prior_roll20=1654543 noprior_best_roll20=0
+P0V2P level=L0 seed=4 const_change_ppm=0 prior=stale k=4 outcome=KEPT prior_rank=0 best_roll20=0 prior_roll20=0 noprior_best_roll20=0
+P0V2P level=L0 seed=4 const_change_ppm=0 prior=wrong k=8 outcome=CORRECTED prior_rank=2 best_roll20=0 prior_roll20=1654543 noprior_best_roll20=0
+P0V2P level=L0 seed=4 const_change_ppm=0 prior=stale k=8 outcome=KEPT prior_rank=0 best_roll20=0 prior_roll20=0 noprior_best_roll20=0
+P0V2P level=L0 seed=4 const_change_ppm=0 prior=wrong k=16 outcome=CORRECTED prior_rank=2 best_roll20=0 prior_roll20=1654543 noprior_best_roll20=0
+P0V2P level=L0 seed=4 const_change_ppm=0 prior=stale k=16 outcome=KEPT prior_rank=0 best_roll20=0 prior_roll20=0 noprior_best_roll20=0
+P0V2P level=L0 seed=4 const_change_ppm=0 prior=wrong k=32 outcome=CORRECTED prior_rank=2 best_roll20=0 prior_roll20=1654543 noprior_best_roll20=0
+P0V2P level=L0 seed=4 const_change_ppm=0 prior=stale k=32 outcome=KEPT prior_rank=0 best_roll20=0 prior_roll20=0 noprior_best_roll20=0
+P0V2P level=L0 seed=5 prior=wrong k=pre outcome=CORRECTED prior_rank=2 best_roll20=0 prior_roll20=1689111
+P0V2P level=L0 seed=5 const_change_ppm=0 prior=wrong k=4 outcome=CORRECTED prior_rank=2 best_roll20=0 prior_roll20=1873283 noprior_best_roll20=0
+P0V2P level=L0 seed=5 const_change_ppm=0 prior=stale k=4 outcome=KEPT prior_rank=0 best_roll20=0 prior_roll20=0 noprior_best_roll20=0
+P0V2P level=L0 seed=5 const_change_ppm=0 prior=wrong k=8 outcome=CORRECTED prior_rank=2 best_roll20=0 prior_roll20=1873283 noprior_best_roll20=0
+P0V2P level=L0 seed=5 const_change_ppm=0 prior=stale k=8 outcome=KEPT prior_rank=0 best_roll20=0 prior_roll20=0 noprior_best_roll20=0
+P0V2P level=L0 seed=5 const_change_ppm=0 prior=wrong k=16 outcome=CORRECTED prior_rank=2 best_roll20=0 prior_roll20=1873283 noprior_best_roll20=0
+P0V2P level=L0 seed=5 const_change_ppm=0 prior=stale k=16 outcome=KEPT prior_rank=0 best_roll20=0 prior_roll20=0 noprior_best_roll20=0
+P0V2P level=L0 seed=5 const_change_ppm=0 prior=wrong k=32 outcome=CORRECTED prior_rank=2 best_roll20=0 prior_roll20=1873283 noprior_best_roll20=0
+P0V2P level=L0 seed=5 const_change_ppm=0 prior=stale k=32 outcome=KEPT prior_rank=0 best_roll20=0 prior_roll20=0 noprior_best_roll20=0
+P0V2P-SUM level=L0 prior=wrong k=pre seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/5/0/0 median_best_roll20=0 median_prior_roll20=1689111
+P0V2P-SUM level=L0 prior=wrong k=4 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/5/0/0 median_best_roll20=0 median_prior_roll20=1693248 median_noprior_best_roll20=0
+P0V2P-SUM level=L0 prior=wrong k=8 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/5/0/0 median_best_roll20=0 median_prior_roll20=1693248 median_noprior_best_roll20=0
+P0V2P-SUM level=L0 prior=wrong k=16 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/5/0/0 median_best_roll20=0 median_prior_roll20=1693248 median_noprior_best_roll20=0
+P0V2P-SUM level=L0 prior=wrong k=32 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/5/0/0 median_best_roll20=0 median_prior_roll20=1693248 median_noprior_best_roll20=0
+P0V2P-SUM level=L0 prior=stale k=4 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=5/0/0/0 median_best_roll20=0 median_prior_roll20=0 median_noprior_best_roll20=0
+P0V2P-SUM level=L0 prior=stale k=8 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=5/0/0/0 median_best_roll20=0 median_prior_roll20=0 median_noprior_best_roll20=0
+P0V2P-SUM level=L0 prior=stale k=16 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=5/0/0/0 median_best_roll20=0 median_prior_roll20=0 median_noprior_best_roll20=0
+P0V2P-SUM level=L0 prior=stale k=32 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=5/0/0/0 median_best_roll20=0 median_prior_roll20=0 median_noprior_best_roll20=0
+P0V2P level=L1 seed=1 prior=wrong k=pre outcome=CORRECTED prior_rank=3 best_roll20=2 prior_roll20=2045533
+P0V2P level=L1 seed=1 const_change_ppm=1024854 prior=wrong k=4 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=328440 prior_roll20=1256974 noprior_best_roll20=328440
+P0V2P level=L1 seed=1 const_change_ppm=1024854 prior=stale k=4 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=328440 prior_roll20=362485 noprior_best_roll20=328440
+P0V2P level=L1 seed=1 const_change_ppm=1024854 prior=wrong k=8 outcome=CORRECTED prior_rank=2 best_roll20=322687 prior_roll20=1256974 noprior_best_roll20=322687
+P0V2P level=L1 seed=1 const_change_ppm=1024854 prior=stale k=8 outcome=CORRECTED prior_rank=1 best_roll20=322687 prior_roll20=362485 noprior_best_roll20=322687
+P0V2P level=L1 seed=1 const_change_ppm=1024854 prior=wrong k=16 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=292389 prior_roll20=1256974 noprior_best_roll20=292389
+P0V2P level=L1 seed=1 const_change_ppm=1024854 prior=stale k=16 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=292389 prior_roll20=362485 noprior_best_roll20=292389
+P0V2P level=L1 seed=1 const_change_ppm=1024854 prior=wrong k=32 outcome=CORRECTED prior_rank=2 best_roll20=263800 prior_roll20=1256974 noprior_best_roll20=263800
+P0V2P level=L1 seed=1 const_change_ppm=1024854 prior=stale k=32 outcome=CORRECTED prior_rank=2 best_roll20=263800 prior_roll20=362485 noprior_best_roll20=263800
+P0V2P level=L1 seed=2 prior=wrong k=pre outcome=CORRECTED prior_rank=3 best_roll20=2 prior_roll20=2769589
+P0V2P level=L1 seed=2 const_change_ppm=323758 prior=wrong k=4 outcome=CORRECTED prior_rank=2 best_roll20=369698 prior_roll20=3197696 noprior_best_roll20=369698
+P0V2P level=L1 seed=2 const_change_ppm=323758 prior=stale k=4 outcome=CORRECTED prior_rank=1 best_roll20=369698 prior_roll20=390983 noprior_best_roll20=369698
+P0V2P level=L1 seed=2 const_change_ppm=323758 prior=wrong k=8 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=337750 prior_roll20=3197696 noprior_best_roll20=337750
+P0V2P level=L1 seed=2 const_change_ppm=323758 prior=stale k=8 outcome=KEPT prior_rank=0 best_roll20=390983 prior_roll20=390983 noprior_best_roll20=337750
+P0V2P level=L1 seed=2 const_change_ppm=323758 prior=wrong k=16 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=316160 prior_roll20=3197696 noprior_best_roll20=316160
+P0V2P level=L1 seed=2 const_change_ppm=323758 prior=stale k=16 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=316160 prior_roll20=390983 noprior_best_roll20=316160
+P0V2P level=L1 seed=2 const_change_ppm=323758 prior=wrong k=32 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=271868 prior_roll20=3197696 noprior_best_roll20=271868
+P0V2P level=L1 seed=2 const_change_ppm=323758 prior=stale k=32 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=271868 prior_roll20=390983 noprior_best_roll20=271868
+P0V2P level=L1 seed=3 prior=wrong k=pre outcome=CORRECTED prior_rank=3 best_roll20=6 prior_roll20=2286030
+P0V2P level=L1 seed=3 const_change_ppm=261297 prior=wrong k=4 outcome=CORRECTED prior_rank=2 best_roll20=183147 prior_roll20=2437315 noprior_best_roll20=183147
+P0V2P level=L1 seed=3 const_change_ppm=261297 prior=stale k=4 outcome=CORRECTED prior_rank=1 best_roll20=183147 prior_roll20=192939 noprior_best_roll20=183147
+P0V2P level=L1 seed=3 const_change_ppm=261297 prior=wrong k=8 outcome=CORRECTED prior_rank=2 best_roll20=180677 prior_roll20=2437315 noprior_best_roll20=180677
+P0V2P level=L1 seed=3 const_change_ppm=261297 prior=stale k=8 outcome=CORRECTED prior_rank=1 best_roll20=180677 prior_roll20=192939 noprior_best_roll20=180677
+P0V2P level=L1 seed=3 const_change_ppm=261297 prior=wrong k=16 outcome=CORRECTED prior_rank=2 best_roll20=172555 prior_roll20=2437315 noprior_best_roll20=172555
+P0V2P level=L1 seed=3 const_change_ppm=261297 prior=stale k=16 outcome=CORRECTED prior_rank=1 best_roll20=172555 prior_roll20=192939 noprior_best_roll20=172555
+P0V2P level=L1 seed=3 const_change_ppm=261297 prior=wrong k=32 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=151656 prior_roll20=2437315 noprior_best_roll20=151656
+P0V2P level=L1 seed=3 const_change_ppm=261297 prior=stale k=32 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=151656 prior_roll20=192939 noprior_best_roll20=151656
+P0V2P level=L1 seed=4 prior=wrong k=pre outcome=CORRECTED prior_rank=3 best_roll20=1 prior_roll20=2301202
+P0V2P level=L1 seed=4 const_change_ppm=38667 prior=wrong k=4 outcome=CORRECTED prior_rank=2 best_roll20=29253 prior_roll20=2823108 noprior_best_roll20=29253
+P0V2P level=L1 seed=4 const_change_ppm=38667 prior=stale k=4 outcome=CORRECTED prior_rank=1 best_roll20=29253 prior_roll20=30753 noprior_best_roll20=29253
+P0V2P level=L1 seed=4 const_change_ppm=38667 prior=wrong k=8 outcome=CORRECTED prior_rank=2 best_roll20=28076 prior_roll20=2823108 noprior_best_roll20=28076
+P0V2P level=L1 seed=4 const_change_ppm=38667 prior=stale k=8 outcome=CORRECTED prior_rank=1 best_roll20=28076 prior_roll20=30753 noprior_best_roll20=28076
+P0V2P level=L1 seed=4 const_change_ppm=38667 prior=wrong k=16 outcome=CORRECTED prior_rank=2 best_roll20=26532 prior_roll20=2823108 noprior_best_roll20=26532
+P0V2P level=L1 seed=4 const_change_ppm=38667 prior=stale k=16 outcome=CORRECTED prior_rank=1 best_roll20=26532 prior_roll20=30753 noprior_best_roll20=26532
+P0V2P level=L1 seed=4 const_change_ppm=38667 prior=wrong k=32 outcome=CORRECTED prior_rank=2 best_roll20=23789 prior_roll20=2823108 noprior_best_roll20=23789
+P0V2P level=L1 seed=4 const_change_ppm=38667 prior=stale k=32 outcome=CORRECTED prior_rank=1 best_roll20=23789 prior_roll20=30753 noprior_best_roll20=23789
+P0V2P level=L1 seed=5 prior=wrong k=pre outcome=CORRECTED prior_rank=3 best_roll20=7 prior_roll20=2156965
+P0V2P level=L1 seed=5 const_change_ppm=114294 prior=wrong k=4 outcome=CORRECTED prior_rank=2 best_roll20=61323 prior_roll20=1493074 noprior_best_roll20=61323
+P0V2P level=L1 seed=5 const_change_ppm=114294 prior=stale k=4 outcome=CORRECTED prior_rank=1 best_roll20=61323 prior_roll20=62714 noprior_best_roll20=61323
+P0V2P level=L1 seed=5 const_change_ppm=114294 prior=wrong k=8 outcome=CORRECTED prior_rank=2 best_roll20=55638 prior_roll20=1493074 noprior_best_roll20=55638
+P0V2P level=L1 seed=5 const_change_ppm=114294 prior=stale k=8 outcome=KEPT prior_rank=0 best_roll20=62714 prior_roll20=62714 noprior_best_roll20=55638
+P0V2P level=L1 seed=5 const_change_ppm=114294 prior=wrong k=16 outcome=CORRECTED prior_rank=2 best_roll20=51264 prior_roll20=1493074 noprior_best_roll20=51264
+P0V2P level=L1 seed=5 const_change_ppm=114294 prior=stale k=16 outcome=CORRECTED prior_rank=1 best_roll20=51264 prior_roll20=62714 noprior_best_roll20=51264
+P0V2P level=L1 seed=5 const_change_ppm=114294 prior=wrong k=32 outcome=CORRECTED prior_rank=2 best_roll20=46647 prior_roll20=1493074 noprior_best_roll20=46647
+P0V2P level=L1 seed=5 const_change_ppm=114294 prior=stale k=32 outcome=CORRECTED prior_rank=1 best_roll20=46647 prior_roll20=62714 noprior_best_roll20=46647
+P0V2P-SUM level=L1 prior=wrong k=pre seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/5/0/0 median_best_roll20=2 median_prior_roll20=2286030
+P0V2P-SUM level=L1 prior=wrong k=4 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/4/1/0 median_best_roll20=183147 median_prior_roll20=2437315 median_noprior_best_roll20=183147
+P0V2P-SUM level=L1 prior=wrong k=8 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/4/1/0 median_best_roll20=180677 median_prior_roll20=2437315 median_noprior_best_roll20=180677
+P0V2P-SUM level=L1 prior=wrong k=16 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/3/2/0 median_best_roll20=172555 median_prior_roll20=2437315 median_noprior_best_roll20=172555
+P0V2P-SUM level=L1 prior=wrong k=32 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/3/2/0 median_best_roll20=151656 median_prior_roll20=2437315 median_noprior_best_roll20=151656
+P0V2P-SUM level=L1 prior=stale k=4 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/4/1/0 median_best_roll20=183147 median_prior_roll20=192939 median_noprior_best_roll20=183147
+P0V2P-SUM level=L1 prior=stale k=8 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=2/3/0/0 median_best_roll20=180677 median_prior_roll20=192939 median_noprior_best_roll20=180677
+P0V2P-SUM level=L1 prior=stale k=16 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/3/2/0 median_best_roll20=172555 median_prior_roll20=192939 median_noprior_best_roll20=172555
+P0V2P-SUM level=L1 prior=stale k=32 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/3/2/0 median_best_roll20=151656 median_prior_roll20=192939 median_noprior_best_roll20=151656
+P0V2P level=L2 seed=1 prior=wrong k=pre outcome=CORRECTED prior_rank=3 best_roll20=4 prior_roll20=2389835
+P0V2P level=L2 seed=1 const_change_ppm=1714860 prior=wrong k=4 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=878716 prior_roll20=1962674 noprior_best_roll20=878716
+P0V2P level=L2 seed=1 const_change_ppm=1714860 prior=stale k=4 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=878716 prior_roll20=941260 noprior_best_roll20=878716
+P0V2P level=L2 seed=1 const_change_ppm=1714860 prior=wrong k=8 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=843962 prior_roll20=1962674 noprior_best_roll20=843962
+P0V2P level=L2 seed=1 const_change_ppm=1714860 prior=stale k=8 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=843962 prior_roll20=941260 noprior_best_roll20=843962
+P0V2P level=L2 seed=1 const_change_ppm=1714860 prior=wrong k=16 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=817582 prior_roll20=1962674 noprior_best_roll20=817582
+P0V2P level=L2 seed=1 const_change_ppm=1714860 prior=stale k=16 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=817582 prior_roll20=941260 noprior_best_roll20=817582
+P0V2P level=L2 seed=1 const_change_ppm=1714860 prior=wrong k=32 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=699932 prior_roll20=1962674 noprior_best_roll20=699932
+P0V2P level=L2 seed=1 const_change_ppm=1714860 prior=stale k=32 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=699932 prior_roll20=941260 noprior_best_roll20=699932
+P0V2P level=L2 seed=2 prior=wrong k=pre outcome=CORRECTED prior_rank=3 best_roll20=1 prior_roll20=3481665
+P0V2P level=L2 seed=2 const_change_ppm=421626 prior=wrong k=4 outcome=CORRECTED prior_rank=2 best_roll20=442200 prior_roll20=4315477 noprior_best_roll20=442200
+P0V2P level=L2 seed=2 const_change_ppm=421626 prior=stale k=4 outcome=CORRECTED prior_rank=1 best_roll20=442200 prior_roll20=473233 noprior_best_roll20=442200
+P0V2P level=L2 seed=2 const_change_ppm=421626 prior=wrong k=8 outcome=CORRECTED prior_rank=2 best_roll20=421121 prior_roll20=4315477 noprior_best_roll20=421121
+P0V2P level=L2 seed=2 const_change_ppm=421626 prior=stale k=8 outcome=KEPT prior_rank=0 best_roll20=473233 prior_roll20=473233 noprior_best_roll20=421121
+P0V2P level=L2 seed=2 const_change_ppm=421626 prior=wrong k=16 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=387904 prior_roll20=4315477 noprior_best_roll20=387904
+P0V2P level=L2 seed=2 const_change_ppm=421626 prior=stale k=16 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=387904 prior_roll20=473233 noprior_best_roll20=387904
+P0V2P level=L2 seed=2 const_change_ppm=421626 prior=wrong k=32 outcome=CORRECTED prior_rank=2 best_roll20=325336 prior_roll20=4315477 noprior_best_roll20=325336
+P0V2P level=L2 seed=2 const_change_ppm=421626 prior=stale k=32 outcome=CORRECTED prior_rank=2 best_roll20=325336 prior_roll20=473233 noprior_best_roll20=325336
+P0V2P level=L2 seed=3 prior=wrong k=pre outcome=CORRECTED prior_rank=3 best_roll20=2 prior_roll20=2978067
+P0V2P level=L2 seed=3 const_change_ppm=427718 prior=wrong k=4 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=321287 prior_roll20=2646951 noprior_best_roll20=321287
+P0V2P level=L2 seed=3 const_change_ppm=427718 prior=stale k=4 outcome=KEPT prior_rank=0 best_roll20=332623 prior_roll20=332623 noprior_best_roll20=321287
+P0V2P level=L2 seed=3 const_change_ppm=427718 prior=wrong k=8 outcome=CORRECTED prior_rank=2 best_roll20=314263 prior_roll20=2646951 noprior_best_roll20=314263
+P0V2P level=L2 seed=3 const_change_ppm=427718 prior=stale k=8 outcome=CORRECTED prior_rank=1 best_roll20=314263 prior_roll20=332623 noprior_best_roll20=314263
+P0V2P level=L2 seed=3 const_change_ppm=427718 prior=wrong k=16 outcome=CORRECTED prior_rank=2 best_roll20=298268 prior_roll20=2646951 noprior_best_roll20=298268
+P0V2P level=L2 seed=3 const_change_ppm=427718 prior=stale k=16 outcome=CORRECTED prior_rank=2 best_roll20=298268 prior_roll20=332623 noprior_best_roll20=298268
+P0V2P level=L2 seed=3 const_change_ppm=427718 prior=wrong k=32 outcome=CORRECTED prior_rank=2 best_roll20=254554 prior_roll20=2646951 noprior_best_roll20=254554
+P0V2P level=L2 seed=3 const_change_ppm=427718 prior=stale k=32 outcome=CORRECTED prior_rank=2 best_roll20=254554 prior_roll20=332623 noprior_best_roll20=254554
+P0V2P level=L2 seed=4 prior=wrong k=pre outcome=CORRECTED prior_rank=3 best_roll20=3 prior_roll20=3795916
+P0V2P level=L2 seed=4 const_change_ppm=2857718 prior=wrong k=4 outcome=CORRECTED prior_rank=2 best_roll20=232415 prior_roll20=4770944 noprior_best_roll20=232415
+P0V2P level=L2 seed=4 const_change_ppm=2857718 prior=stale k=4 outcome=CORRECTED prior_rank=1 best_roll20=232415 prior_roll20=245657 noprior_best_roll20=232415
+P0V2P level=L2 seed=4 const_change_ppm=2857718 prior=wrong k=8 outcome=CORRECTED prior_rank=2 best_roll20=224329 prior_roll20=4770944 noprior_best_roll20=224329
+P0V2P level=L2 seed=4 const_change_ppm=2857718 prior=stale k=8 outcome=CORRECTED prior_rank=1 best_roll20=224329 prior_roll20=245657 noprior_best_roll20=224329
+P0V2P level=L2 seed=4 const_change_ppm=2857718 prior=wrong k=16 outcome=CORRECTED prior_rank=2 best_roll20=211085 prior_roll20=4770944 noprior_best_roll20=211085
+P0V2P level=L2 seed=4 const_change_ppm=2857718 prior=stale k=16 outcome=CORRECTED prior_rank=1 best_roll20=211085 prior_roll20=245657 noprior_best_roll20=211085
+P0V2P level=L2 seed=4 const_change_ppm=2857718 prior=wrong k=32 outcome=CORRECTED prior_rank=2 best_roll20=192864 prior_roll20=4770944 noprior_best_roll20=192864
+P0V2P level=L2 seed=4 const_change_ppm=2857718 prior=stale k=32 outcome=CORRECTED prior_rank=2 best_roll20=192864 prior_roll20=245657 noprior_best_roll20=192864
+P0V2P level=L2 seed=5 prior=wrong k=pre outcome=CORRECTED prior_rank=3 best_roll20=4 prior_roll20=2301692
+P0V2P level=L2 seed=5 const_change_ppm=320851 prior=wrong k=4 outcome=CORRECTED prior_rank=2 best_roll20=252617 prior_roll20=1773325 noprior_best_roll20=252617
+P0V2P level=L2 seed=5 const_change_ppm=320851 prior=stale k=4 outcome=CORRECTED prior_rank=2 best_roll20=252617 prior_roll20=265294 noprior_best_roll20=252617
+P0V2P level=L2 seed=5 const_change_ppm=320851 prior=wrong k=8 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=242140 prior_roll20=1773325 noprior_best_roll20=242140
+P0V2P level=L2 seed=5 const_change_ppm=320851 prior=stale k=8 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=242140 prior_roll20=265294 noprior_best_roll20=242140
+P0V2P level=L2 seed=5 const_change_ppm=320851 prior=wrong k=16 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=217732 prior_roll20=1773325 noprior_best_roll20=217732
+P0V2P level=L2 seed=5 const_change_ppm=320851 prior=stale k=16 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=217732 prior_roll20=265294 noprior_best_roll20=217732
+P0V2P level=L2 seed=5 const_change_ppm=320851 prior=wrong k=32 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=195158 prior_roll20=1773325 noprior_best_roll20=195158
+P0V2P level=L2 seed=5 const_change_ppm=320851 prior=stale k=32 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=195158 prior_roll20=265294 noprior_best_roll20=195158
+P0V2P-SUM level=L2 prior=wrong k=pre seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/5/0/0 median_best_roll20=3 median_prior_roll20=2978067
+P0V2P-SUM level=L2 prior=wrong k=4 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/3/2/0 median_best_roll20=321287 median_prior_roll20=2646951 median_noprior_best_roll20=321287
+P0V2P-SUM level=L2 prior=wrong k=8 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/3/2/0 median_best_roll20=314263 median_prior_roll20=2646951 median_noprior_best_roll20=314263
+P0V2P-SUM level=L2 prior=wrong k=16 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/2/3/0 median_best_roll20=298268 median_prior_roll20=2646951 median_noprior_best_roll20=298268
+P0V2P-SUM level=L2 prior=wrong k=32 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/3/2/0 median_best_roll20=254554 median_prior_roll20=2646951 median_noprior_best_roll20=254554
+P0V2P-SUM level=L2 prior=stale k=4 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=1/3/1/0 median_best_roll20=332623 median_prior_roll20=332623 median_noprior_best_roll20=321287
+P0V2P-SUM level=L2 prior=stale k=8 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=1/2/2/0 median_best_roll20=314263 median_prior_roll20=332623 median_noprior_best_roll20=314263
+P0V2P-SUM level=L2 prior=stale k=16 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/2/3/0 median_best_roll20=298268 median_prior_roll20=332623 median_noprior_best_roll20=298268
+P0V2P-SUM level=L2 prior=stale k=32 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/3/2/0 median_best_roll20=254554 median_prior_roll20=332623 median_noprior_best_roll20=254554
+P0V2P level=L3 seed=1 prior=wrong k=pre outcome=CORRECTED prior_rank=5 best_roll20=4 prior_roll20=3225568
+P0V2P level=L3 seed=1 const_change_ppm=1024854 prior=wrong k=4 outcome=CORRECTED prior_rank=3 best_roll20=265559 prior_roll20=2182673 noprior_best_roll20=265559
+P0V2P level=L3 seed=1 const_change_ppm=1024854 prior=stale k=4 outcome=KEPT prior_rank=0 best_roll20=294774 prior_roll20=294774 noprior_best_roll20=265559
+P0V2P level=L3 seed=1 const_change_ppm=1024854 prior=wrong k=8 outcome=CORRECTED prior_rank=3 best_roll20=260123 prior_roll20=2182673 noprior_best_roll20=260123
+P0V2P level=L3 seed=1 const_change_ppm=1024854 prior=stale k=8 outcome=CORRECTED prior_rank=1 best_roll20=260123 prior_roll20=294774 noprior_best_roll20=260123
+P0V2P level=L3 seed=1 const_change_ppm=1024854 prior=wrong k=16 outcome=REJECTED_OTHER_TERMS prior_rank=3 best_roll20=235991 prior_roll20=2182673 noprior_best_roll20=235991
+P0V2P level=L3 seed=1 const_change_ppm=1024854 prior=stale k=16 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=235991 prior_roll20=294774 noprior_best_roll20=235991
+P0V2P level=L3 seed=1 const_change_ppm=1024854 prior=wrong k=32 outcome=REJECTED_OTHER_TERMS prior_rank=3 best_roll20=208631 prior_roll20=2182673 noprior_best_roll20=208631
+P0V2P level=L3 seed=1 const_change_ppm=1024854 prior=stale k=32 outcome=REJECTED_OTHER_TERMS prior_rank=3 best_roll20=208631 prior_roll20=294774 noprior_best_roll20=208631
+P0V2P level=L3 seed=2 prior=wrong k=pre outcome=CORRECTED prior_rank=5 best_roll20=1 prior_roll20=3178404
+P0V2P level=L3 seed=2 const_change_ppm=323758 prior=wrong k=4 outcome=CORRECTED prior_rank=3 best_roll20=231253 prior_roll20=3935497 noprior_best_roll20=231253
+P0V2P level=L3 seed=2 const_change_ppm=323758 prior=stale k=4 outcome=KEPT prior_rank=0 best_roll20=246783 prior_roll20=246783 noprior_best_roll20=231253
+P0V2P level=L3 seed=2 const_change_ppm=323758 prior=wrong k=8 outcome=CORRECTED prior_rank=3 best_roll20=222273 prior_roll20=3935497 noprior_best_roll20=222273
+P0V2P level=L3 seed=2 const_change_ppm=323758 prior=stale k=8 outcome=KEPT prior_rank=0 best_roll20=246783 prior_roll20=246783 noprior_best_roll20=222273
+P0V2P level=L3 seed=2 const_change_ppm=323758 prior=wrong k=16 outcome=REJECTED_OTHER_TERMS prior_rank=3 best_roll20=203070 prior_roll20=3935497 noprior_best_roll20=203070
+P0V2P level=L3 seed=2 const_change_ppm=323758 prior=stale k=16 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=203070 prior_roll20=246783 noprior_best_roll20=203070
+P0V2P level=L3 seed=2 const_change_ppm=323758 prior=wrong k=32 outcome=CORRECTED prior_rank=3 best_roll20=177432 prior_roll20=3935497 noprior_best_roll20=177432
+P0V2P level=L3 seed=2 const_change_ppm=323758 prior=stale k=32 outcome=CORRECTED prior_rank=2 best_roll20=177432 prior_roll20=246783 noprior_best_roll20=177432
+P0V2P level=L3 seed=3 prior=wrong k=pre outcome=CORRECTED prior_rank=5 best_roll20=3 prior_roll20=2949432
+P0V2P level=L3 seed=3 const_change_ppm=292951 prior=wrong k=4 outcome=CORRECTED prior_rank=3 best_roll20=110251 prior_roll20=2948671 noprior_best_roll20=110251
+P0V2P level=L3 seed=3 const_change_ppm=292951 prior=stale k=4 outcome=KEPT prior_rank=0 best_roll20=114888 prior_roll20=114888 noprior_best_roll20=110251
+P0V2P level=L3 seed=3 const_change_ppm=292951 prior=wrong k=8 outcome=CORRECTED prior_rank=3 best_roll20=107342 prior_roll20=2948671 noprior_best_roll20=107342
+P0V2P level=L3 seed=3 const_change_ppm=292951 prior=stale k=8 outcome=CORRECTED prior_rank=1 best_roll20=107342 prior_roll20=114888 noprior_best_roll20=107342
+P0V2P level=L3 seed=3 const_change_ppm=292951 prior=wrong k=16 outcome=CORRECTED prior_rank=3 best_roll20=102951 prior_roll20=2948671 noprior_best_roll20=102951
+P0V2P level=L3 seed=3 const_change_ppm=292951 prior=stale k=16 outcome=CORRECTED prior_rank=1 best_roll20=102951 prior_roll20=114888 noprior_best_roll20=102951
+P0V2P level=L3 seed=3 const_change_ppm=292951 prior=wrong k=32 outcome=CORRECTED prior_rank=3 best_roll20=93923 prior_roll20=2948671 noprior_best_roll20=93923
+P0V2P level=L3 seed=3 const_change_ppm=292951 prior=stale k=32 outcome=CORRECTED prior_rank=1 best_roll20=93923 prior_roll20=114888 noprior_best_roll20=93923
+P0V2P level=L3 seed=4 prior=wrong k=pre outcome=CORRECTED prior_rank=5 best_roll20=3 prior_roll20=2460483
+P0V2P level=L3 seed=4 const_change_ppm=1182044 prior=wrong k=4 outcome=CORRECTED prior_rank=3 best_roll20=206772 prior_roll20=2819616 noprior_best_roll20=206772
+P0V2P level=L3 seed=4 const_change_ppm=1182044 prior=stale k=4 outcome=CORRECTED prior_rank=1 best_roll20=206772 prior_roll20=219454 noprior_best_roll20=206772
+P0V2P level=L3 seed=4 const_change_ppm=1182044 prior=wrong k=8 outcome=CORRECTED prior_rank=3 best_roll20=192402 prior_roll20=2819616 noprior_best_roll20=192402
+P0V2P level=L3 seed=4 const_change_ppm=1182044 prior=stale k=8 outcome=CORRECTED prior_rank=1 best_roll20=192402 prior_roll20=219454 noprior_best_roll20=192402
+P0V2P level=L3 seed=4 const_change_ppm=1182044 prior=wrong k=16 outcome=CORRECTED prior_rank=3 best_roll20=186186 prior_roll20=2819616 noprior_best_roll20=186186
+P0V2P level=L3 seed=4 const_change_ppm=1182044 prior=stale k=16 outcome=CORRECTED prior_rank=1 best_roll20=186186 prior_roll20=219454 noprior_best_roll20=186186
+P0V2P level=L3 seed=4 const_change_ppm=1182044 prior=wrong k=32 outcome=CORRECTED prior_rank=3 best_roll20=160567 prior_roll20=2819616 noprior_best_roll20=160567
+P0V2P level=L3 seed=4 const_change_ppm=1182044 prior=stale k=32 outcome=CORRECTED prior_rank=1 best_roll20=160567 prior_roll20=219454 noprior_best_roll20=160567
+P0V2P level=L3 seed=5 prior=wrong k=pre outcome=CORRECTED prior_rank=5 best_roll20=4 prior_roll20=3015874
+P0V2P level=L3 seed=5 const_change_ppm=266617 prior=wrong k=4 outcome=REJECTED_OTHER_TERMS prior_rank=3 best_roll20=134754 prior_roll20=3327386 noprior_best_roll20=134754
+P0V2P level=L3 seed=5 const_change_ppm=266617 prior=stale k=4 outcome=KEPT prior_rank=0 best_roll20=137527 prior_roll20=137527 noprior_best_roll20=134754
+P0V2P level=L3 seed=5 const_change_ppm=266617 prior=wrong k=8 outcome=CORRECTED prior_rank=3 best_roll20=122116 prior_roll20=3327386 noprior_best_roll20=122116
+P0V2P level=L3 seed=5 const_change_ppm=266617 prior=stale k=8 outcome=KEPT prior_rank=0 best_roll20=137527 prior_roll20=137527 noprior_best_roll20=122116
+P0V2P level=L3 seed=5 const_change_ppm=266617 prior=wrong k=16 outcome=CORRECTED prior_rank=3 best_roll20=111097 prior_roll20=3327386 noprior_best_roll20=111097
+P0V2P level=L3 seed=5 const_change_ppm=266617 prior=stale k=16 outcome=CORRECTED prior_rank=1 best_roll20=111097 prior_roll20=137527 noprior_best_roll20=111097
+P0V2P level=L3 seed=5 const_change_ppm=266617 prior=wrong k=32 outcome=CORRECTED prior_rank=3 best_roll20=101259 prior_roll20=3327386 noprior_best_roll20=101259
+P0V2P level=L3 seed=5 const_change_ppm=266617 prior=stale k=32 outcome=CORRECTED prior_rank=1 best_roll20=101259 prior_roll20=137527 noprior_best_roll20=101259
+P0V2P-SUM level=L3 prior=wrong k=pre seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/5/0/0 median_best_roll20=3 median_prior_roll20=3015874
+P0V2P-SUM level=L3 prior=wrong k=4 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/4/1/0 median_best_roll20=206772 median_prior_roll20=2948671 median_noprior_best_roll20=206772
+P0V2P-SUM level=L3 prior=wrong k=8 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/5/0/0 median_best_roll20=192402 median_prior_roll20=2948671 median_noprior_best_roll20=192402
+P0V2P-SUM level=L3 prior=wrong k=16 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/3/2/0 median_best_roll20=186186 median_prior_roll20=2948671 median_noprior_best_roll20=186186
+P0V2P-SUM level=L3 prior=wrong k=32 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/4/1/0 median_best_roll20=160567 median_prior_roll20=2948671 median_noprior_best_roll20=160567
+P0V2P-SUM level=L3 prior=stale k=4 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=4/1/0/0 median_best_roll20=206772 median_prior_roll20=219454 median_noprior_best_roll20=206772
+P0V2P-SUM level=L3 prior=stale k=8 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=2/3/0/0 median_best_roll20=192402 median_prior_roll20=219454 median_noprior_best_roll20=192402
+P0V2P-SUM level=L3 prior=stale k=16 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/3/2/0 median_best_roll20=186186 median_prior_roll20=219454 median_noprior_best_roll20=186186
+P0V2P-SUM level=L3 prior=stale k=32 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/4/1/0 median_best_roll20=160567 median_prior_roll20=219454 median_noprior_best_roll20=160567
+P0V2P level=L4 seed=1 prior=wrong k=pre outcome=CORRECTED prior_rank=3 best_roll20=17 prior_roll20=1101175
+P0V2P level=L4 seed=1 const_change_ppm=1024854 prior=wrong k=4 outcome=CORRECTED prior_rank=2 best_roll20=271115 prior_roll20=580783 noprior_best_roll20=271115
+P0V2P level=L4 seed=1 const_change_ppm=1024854 prior=stale k=4 outcome=CORRECTED prior_rank=1 best_roll20=271115 prior_roll20=281988 noprior_best_roll20=271115
+P0V2P level=L4 seed=1 const_change_ppm=1024854 prior=wrong k=8 outcome=CORRECTED prior_rank=2 best_roll20=256731 prior_roll20=580783 noprior_best_roll20=256731
+P0V2P level=L4 seed=1 const_change_ppm=1024854 prior=stale k=8 outcome=CORRECTED prior_rank=1 best_roll20=256731 prior_roll20=281988 noprior_best_roll20=256731
+P0V2P level=L4 seed=1 const_change_ppm=1024854 prior=wrong k=16 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=247804 prior_roll20=580783 noprior_best_roll20=247804
+P0V2P level=L4 seed=1 const_change_ppm=1024854 prior=stale k=16 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=247804 prior_roll20=281988 noprior_best_roll20=247804
+P0V2P level=L4 seed=1 const_change_ppm=1024854 prior=wrong k=32 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=215811 prior_roll20=580783 noprior_best_roll20=215811
+P0V2P level=L4 seed=1 const_change_ppm=1024854 prior=stale k=32 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=215811 prior_roll20=281988 noprior_best_roll20=215811
+P0V2P level=L4 seed=2 prior=wrong k=pre outcome=CORRECTED prior_rank=3 best_roll20=9 prior_roll20=1545948
+P0V2P level=L4 seed=2 const_change_ppm=323758 prior=wrong k=4 outcome=CORRECTED prior_rank=2 best_roll20=244987 prior_roll20=1579470 noprior_best_roll20=244987
+P0V2P level=L4 seed=2 const_change_ppm=323758 prior=stale k=4 outcome=CORRECTED prior_rank=1 best_roll20=244987 prior_roll20=258279 noprior_best_roll20=244987
+P0V2P level=L4 seed=2 const_change_ppm=323758 prior=wrong k=8 outcome=CORRECTED prior_rank=2 best_roll20=234127 prior_roll20=1579470 noprior_best_roll20=234127
+P0V2P level=L4 seed=2 const_change_ppm=323758 prior=stale k=8 outcome=KEPT prior_rank=0 best_roll20=258279 prior_roll20=258279 noprior_best_roll20=234127
+P0V2P level=L4 seed=2 const_change_ppm=323758 prior=wrong k=16 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=211889 prior_roll20=1579470 noprior_best_roll20=211889
+P0V2P level=L4 seed=2 const_change_ppm=323758 prior=stale k=16 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=211889 prior_roll20=258279 noprior_best_roll20=211889
+P0V2P level=L4 seed=2 const_change_ppm=323758 prior=wrong k=32 outcome=CORRECTED prior_rank=2 best_roll20=184515 prior_roll20=1579470 noprior_best_roll20=184515
+P0V2P level=L4 seed=2 const_change_ppm=323758 prior=stale k=32 outcome=CORRECTED prior_rank=2 best_roll20=184515 prior_roll20=258279 noprior_best_roll20=184515
+P0V2P level=L4 seed=3 prior=wrong k=pre outcome=CORRECTED prior_rank=3 best_roll20=12 prior_roll20=1690985
+P0V2P level=L4 seed=3 const_change_ppm=292951 prior=wrong k=4 outcome=CORRECTED prior_rank=2 best_roll20=91053 prior_roll20=1506607 noprior_best_roll20=91053
+P0V2P level=L4 seed=3 const_change_ppm=292951 prior=stale k=4 outcome=CORRECTED prior_rank=1 best_roll20=91053 prior_roll20=95720 noprior_best_roll20=91053
+P0V2P level=L4 seed=3 const_change_ppm=292951 prior=wrong k=8 outcome=CORRECTED prior_rank=2 best_roll20=89427 prior_roll20=1506607 noprior_best_roll20=89427
+P0V2P level=L4 seed=3 const_change_ppm=292951 prior=stale k=8 outcome=CORRECTED prior_rank=1 best_roll20=89427 prior_roll20=95720 noprior_best_roll20=89427
+P0V2P level=L4 seed=3 const_change_ppm=292951 prior=wrong k=16 outcome=CORRECTED prior_rank=2 best_roll20=85098 prior_roll20=1506607 noprior_best_roll20=85098
+P0V2P level=L4 seed=3 const_change_ppm=292951 prior=stale k=16 outcome=CORRECTED prior_rank=1 best_roll20=85098 prior_roll20=95720 noprior_best_roll20=85098
+P0V2P level=L4 seed=3 const_change_ppm=292951 prior=wrong k=32 outcome=CORRECTED prior_rank=2 best_roll20=72696 prior_roll20=1506607 noprior_best_roll20=72696
+P0V2P level=L4 seed=3 const_change_ppm=292951 prior=stale k=32 outcome=CORRECTED prior_rank=1 best_roll20=72696 prior_roll20=95720 noprior_best_roll20=72696
+P0V2P level=L4 seed=4 prior=wrong k=pre outcome=CORRECTED prior_rank=3 best_roll20=10 prior_roll20=1991432
+P0V2P level=L4 seed=4 const_change_ppm=1182044 prior=wrong k=4 outcome=CORRECTED prior_rank=2 best_roll20=95864 prior_roll20=2198035 noprior_best_roll20=95864
+P0V2P level=L4 seed=4 const_change_ppm=1182044 prior=stale k=4 outcome=CORRECTED prior_rank=1 best_roll20=95864 prior_roll20=101861 noprior_best_roll20=95864
+P0V2P level=L4 seed=4 const_change_ppm=1182044 prior=wrong k=8 outcome=CORRECTED prior_rank=2 best_roll20=93762 prior_roll20=2198035 noprior_best_roll20=93762
+P0V2P level=L4 seed=4 const_change_ppm=1182044 prior=stale k=8 outcome=CORRECTED prior_rank=1 best_roll20=93762 prior_roll20=101861 noprior_best_roll20=93762
+P0V2P level=L4 seed=4 const_change_ppm=1182044 prior=wrong k=16 outcome=CORRECTED prior_rank=2 best_roll20=89858 prior_roll20=2198035 noprior_best_roll20=89858
+P0V2P level=L4 seed=4 const_change_ppm=1182044 prior=stale k=16 outcome=CORRECTED prior_rank=1 best_roll20=89858 prior_roll20=101861 noprior_best_roll20=89858
+P0V2P level=L4 seed=4 const_change_ppm=1182044 prior=wrong k=32 outcome=CORRECTED prior_rank=2 best_roll20=81544 prior_roll20=2198035 noprior_best_roll20=81544
+P0V2P level=L4 seed=4 const_change_ppm=1182044 prior=stale k=32 outcome=CORRECTED prior_rank=1 best_roll20=81544 prior_roll20=101861 noprior_best_roll20=81544
+P0V2P level=L4 seed=5 prior=wrong k=pre outcome=CORRECTED prior_rank=3 best_roll20=11 prior_roll20=1779500
+P0V2P level=L4 seed=5 const_change_ppm=266617 prior=wrong k=4 outcome=CORRECTED prior_rank=2 best_roll20=30900 prior_roll20=792441 noprior_best_roll20=30900
+P0V2P level=L4 seed=5 const_change_ppm=266617 prior=stale k=4 outcome=KEPT prior_rank=0 best_roll20=31289 prior_roll20=31289 noprior_best_roll20=30900
+P0V2P level=L4 seed=5 const_change_ppm=266617 prior=wrong k=8 outcome=CORRECTED prior_rank=2 best_roll20=24502 prior_roll20=792441 noprior_best_roll20=24502
+P0V2P level=L4 seed=5 const_change_ppm=266617 prior=stale k=8 outcome=KEPT prior_rank=0 best_roll20=31289 prior_roll20=31289 noprior_best_roll20=24502
+P0V2P level=L4 seed=5 const_change_ppm=266617 prior=wrong k=16 outcome=CORRECTED prior_rank=2 best_roll20=23285 prior_roll20=792441 noprior_best_roll20=23285
+P0V2P level=L4 seed=5 const_change_ppm=266617 prior=stale k=16 outcome=KEPT prior_rank=0 best_roll20=31289 prior_roll20=31289 noprior_best_roll20=23285
+P0V2P level=L4 seed=5 const_change_ppm=266617 prior=wrong k=32 outcome=CORRECTED prior_rank=2 best_roll20=22581 prior_roll20=792441 noprior_best_roll20=22581
+P0V2P level=L4 seed=5 const_change_ppm=266617 prior=stale k=32 outcome=CORRECTED prior_rank=1 best_roll20=22581 prior_roll20=31289 noprior_best_roll20=22581
+P0V2P-SUM level=L4 prior=wrong k=pre seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/5/0/0 median_best_roll20=11 median_prior_roll20=1690985
+P0V2P-SUM level=L4 prior=wrong k=4 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/5/0/0 median_best_roll20=95864 median_prior_roll20=1506607 median_noprior_best_roll20=95864
+P0V2P-SUM level=L4 prior=wrong k=8 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/5/0/0 median_best_roll20=93762 median_prior_roll20=1506607 median_noprior_best_roll20=93762
+P0V2P-SUM level=L4 prior=wrong k=16 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/3/2/0 median_best_roll20=89858 median_prior_roll20=1506607 median_noprior_best_roll20=89858
+P0V2P-SUM level=L4 prior=wrong k=32 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/4/1/0 median_best_roll20=81544 median_prior_roll20=1506607 median_noprior_best_roll20=81544
+P0V2P-SUM level=L4 prior=stale k=4 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=1/4/0/0 median_best_roll20=95864 median_prior_roll20=101861 median_noprior_best_roll20=95864
+P0V2P-SUM level=L4 prior=stale k=8 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=2/3/0/0 median_best_roll20=93762 median_prior_roll20=101861 median_noprior_best_roll20=93762
+P0V2P-SUM level=L4 prior=stale k=16 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=1/2/2/0 median_best_roll20=89858 median_prior_roll20=101861 median_noprior_best_roll20=89858
+P0V2P-SUM level=L4 prior=stale k=32 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/4/1/0 median_best_roll20=81544 median_prior_roll20=101861 median_noprior_best_roll20=81544
+P0V2P level=L5 seed=1 prior=wrong k=pre outcome=CORRECTED prior_rank=4 best_roll20=27959 prior_roll20=2227251
+P0V2P level=L5 seed=1 const_change_ppm=1714860 prior=wrong k=4 outcome=REJECTED_OTHER_TERMS prior_rank=4 best_roll20=910242 prior_roll20=1946432 noprior_best_roll20=910242
+P0V2P level=L5 seed=1 const_change_ppm=1714860 prior=stale k=4 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=910242 prior_roll20=940740 noprior_best_roll20=910242
+P0V2P level=L5 seed=1 const_change_ppm=1714860 prior=wrong k=8 outcome=REJECTED_OTHER_TERMS prior_rank=4 best_roll20=893287 prior_roll20=1946432 noprior_best_roll20=893287
+P0V2P level=L5 seed=1 const_change_ppm=1714860 prior=stale k=8 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=893287 prior_roll20=940740 noprior_best_roll20=893287
+P0V2P level=L5 seed=1 const_change_ppm=1714860 prior=wrong k=16 outcome=REJECTED_OTHER_TERMS prior_rank=4 best_roll20=865329 prior_roll20=1946432 noprior_best_roll20=865329
+P0V2P level=L5 seed=1 const_change_ppm=1714860 prior=stale k=16 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=865329 prior_roll20=940740 noprior_best_roll20=865329
+P0V2P level=L5 seed=1 const_change_ppm=1714860 prior=wrong k=32 outcome=REJECTED_OTHER_TERMS prior_rank=4 best_roll20=817250 prior_roll20=1946432 noprior_best_roll20=817250
+P0V2P level=L5 seed=1 const_change_ppm=1714860 prior=stale k=32 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=817250 prior_roll20=940740 noprior_best_roll20=817250
+P0V2P level=L5 seed=2 prior=wrong k=pre outcome=CORRECTED prior_rank=4 best_roll20=33198 prior_roll20=3338788
+P0V2P level=L5 seed=2 const_change_ppm=421626 prior=wrong k=4 outcome=CORRECTED prior_rank=4 best_roll20=470910 prior_roll20=4316522 noprior_best_roll20=470910
+P0V2P level=L5 seed=2 const_change_ppm=421626 prior=stale k=4 outcome=KEPT prior_rank=0 best_roll20=484427 prior_roll20=484427 noprior_best_roll20=470910
+P0V2P level=L5 seed=2 const_change_ppm=421626 prior=wrong k=8 outcome=CORRECTED prior_rank=4 best_roll20=461176 prior_roll20=4316522 noprior_best_roll20=461176
+P0V2P level=L5 seed=2 const_change_ppm=421626 prior=stale k=8 outcome=KEPT prior_rank=0 best_roll20=484427 prior_roll20=484427 noprior_best_roll20=461176
+P0V2P level=L5 seed=2 const_change_ppm=421626 prior=wrong k=16 outcome=CORRECTED prior_rank=4 best_roll20=445723 prior_roll20=4316522 noprior_best_roll20=445723
+P0V2P level=L5 seed=2 const_change_ppm=421626 prior=stale k=16 outcome=CORRECTED prior_rank=2 best_roll20=445723 prior_roll20=484427 noprior_best_roll20=445723
+P0V2P level=L5 seed=2 const_change_ppm=421626 prior=wrong k=32 outcome=CORRECTED prior_rank=4 best_roll20=407392 prior_roll20=4316522 noprior_best_roll20=407392
+P0V2P level=L5 seed=2 const_change_ppm=421626 prior=stale k=32 outcome=CORRECTED prior_rank=1 best_roll20=407392 prior_roll20=484427 noprior_best_roll20=407392
+P0V2P level=L5 seed=3 prior=wrong k=pre outcome=CORRECTED prior_rank=4 best_roll20=35322 prior_roll20=2886746
+P0V2P level=L5 seed=3 const_change_ppm=427718 prior=wrong k=4 outcome=CORRECTED prior_rank=4 best_roll20=341809 prior_roll20=2633105 noprior_best_roll20=341809
+P0V2P level=L5 seed=3 const_change_ppm=427718 prior=stale k=4 outcome=CORRECTED prior_rank=1 best_roll20=341809 prior_roll20=349152 noprior_best_roll20=341809
+P0V2P level=L5 seed=3 const_change_ppm=427718 prior=wrong k=8 outcome=CORRECTED prior_rank=4 best_roll20=340474 prior_roll20=2633105 noprior_best_roll20=340474
+P0V2P level=L5 seed=3 const_change_ppm=427718 prior=stale k=8 outcome=CORRECTED prior_rank=1 best_roll20=340474 prior_roll20=349152 noprior_best_roll20=340474
+P0V2P level=L5 seed=3 const_change_ppm=427718 prior=wrong k=16 outcome=CORRECTED prior_rank=4 best_roll20=331271 prior_roll20=2633105 noprior_best_roll20=331271
+P0V2P level=L5 seed=3 const_change_ppm=427718 prior=stale k=16 outcome=CORRECTED prior_rank=2 best_roll20=331271 prior_roll20=349152 noprior_best_roll20=331271
+P0V2P level=L5 seed=3 const_change_ppm=427718 prior=wrong k=32 outcome=CORRECTED prior_rank=4 best_roll20=304065 prior_roll20=2633105 noprior_best_roll20=304065
+P0V2P level=L5 seed=3 const_change_ppm=427718 prior=stale k=32 outcome=CORRECTED prior_rank=2 best_roll20=304065 prior_roll20=349152 noprior_best_roll20=304065
+P0V2P level=L5 seed=4 prior=wrong k=pre outcome=CORRECTED prior_rank=4 best_roll20=32126 prior_roll20=3878181
+P0V2P level=L5 seed=4 const_change_ppm=2857718 prior=wrong k=4 outcome=CORRECTED prior_rank=4 best_roll20=242670 prior_roll20=4745697 noprior_best_roll20=242670
+P0V2P level=L5 seed=4 const_change_ppm=2857718 prior=stale k=4 outcome=CORRECTED prior_rank=1 best_roll20=242670 prior_roll20=249273 noprior_best_roll20=242670
+P0V2P level=L5 seed=4 const_change_ppm=2857718 prior=wrong k=8 outcome=CORRECTED prior_rank=4 best_roll20=239001 prior_roll20=4745697 noprior_best_roll20=239001
+P0V2P level=L5 seed=4 const_change_ppm=2857718 prior=stale k=8 outcome=CORRECTED prior_rank=1 best_roll20=239001 prior_roll20=249273 noprior_best_roll20=239001
+P0V2P level=L5 seed=4 const_change_ppm=2857718 prior=wrong k=16 outcome=CORRECTED prior_rank=4 best_roll20=232666 prior_roll20=4745697 noprior_best_roll20=232666
+P0V2P level=L5 seed=4 const_change_ppm=2857718 prior=stale k=16 outcome=CORRECTED prior_rank=1 best_roll20=232666 prior_roll20=249273 noprior_best_roll20=232666
+P0V2P level=L5 seed=4 const_change_ppm=2857718 prior=wrong k=32 outcome=CORRECTED prior_rank=4 best_roll20=222572 prior_roll20=4745697 noprior_best_roll20=222572
+P0V2P level=L5 seed=4 const_change_ppm=2857718 prior=stale k=32 outcome=CORRECTED prior_rank=1 best_roll20=222572 prior_roll20=249273 noprior_best_roll20=222572
+P0V2P level=L5 seed=5 prior=wrong k=pre outcome=CORRECTED prior_rank=4 best_roll20=31405 prior_roll20=2297854
+P0V2P level=L5 seed=5 const_change_ppm=320851 prior=wrong k=4 outcome=CORRECTED prior_rank=4 best_roll20=264544 prior_roll20=1775839 noprior_best_roll20=264544
+P0V2P level=L5 seed=5 const_change_ppm=320851 prior=stale k=4 outcome=CORRECTED prior_rank=1 best_roll20=264544 prior_roll20=270053 noprior_best_roll20=264544
+P0V2P level=L5 seed=5 const_change_ppm=320851 prior=wrong k=8 outcome=CORRECTED prior_rank=4 best_roll20=254267 prior_roll20=1775839 noprior_best_roll20=254267
+P0V2P level=L5 seed=5 const_change_ppm=320851 prior=stale k=8 outcome=CORRECTED prior_rank=1 best_roll20=254267 prior_roll20=270053 noprior_best_roll20=254267
+P0V2P level=L5 seed=5 const_change_ppm=320851 prior=wrong k=16 outcome=CORRECTED prior_rank=4 best_roll20=242854 prior_roll20=1775839 noprior_best_roll20=242854
+P0V2P level=L5 seed=5 const_change_ppm=320851 prior=stale k=16 outcome=CORRECTED prior_rank=1 best_roll20=242854 prior_roll20=270053 noprior_best_roll20=242854
+P0V2P level=L5 seed=5 const_change_ppm=320851 prior=wrong k=32 outcome=CORRECTED prior_rank=4 best_roll20=230044 prior_roll20=1775839 noprior_best_roll20=230044
+P0V2P level=L5 seed=5 const_change_ppm=320851 prior=stale k=32 outcome=CORRECTED prior_rank=1 best_roll20=230044 prior_roll20=270053 noprior_best_roll20=230044
+P0V2P-SUM level=L5 prior=wrong k=pre seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/5/0/0 median_best_roll20=32126 median_prior_roll20=2886746
+P0V2P-SUM level=L5 prior=wrong k=4 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/4/1/0 median_best_roll20=341809 median_prior_roll20=2633105 median_noprior_best_roll20=341809
+P0V2P-SUM level=L5 prior=wrong k=8 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/4/1/0 median_best_roll20=340474 median_prior_roll20=2633105 median_noprior_best_roll20=340474
+P0V2P-SUM level=L5 prior=wrong k=16 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/4/1/0 median_best_roll20=331271 median_prior_roll20=2633105 median_noprior_best_roll20=331271
+P0V2P-SUM level=L5 prior=wrong k=32 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/4/1/0 median_best_roll20=304065 median_prior_roll20=2633105 median_noprior_best_roll20=304065
+P0V2P-SUM level=L5 prior=stale k=4 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=1/3/1/0 median_best_roll20=341809 median_prior_roll20=349152 median_noprior_best_roll20=341809
+P0V2P-SUM level=L5 prior=stale k=8 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=1/3/1/0 median_best_roll20=340474 median_prior_roll20=349152 median_noprior_best_roll20=340474
+P0V2P-SUM level=L5 prior=stale k=16 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/4/1/0 median_best_roll20=331271 median_prior_roll20=349152 median_noprior_best_roll20=331271
+P0V2P-SUM level=L5 prior=stale k=32 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/4/1/0 median_best_roll20=304065 median_prior_roll20=349152 median_noprior_best_roll20=304065
+P0V2P level=L6 seed=1 prior=wrong k=pre outcome=CORRECTED prior_rank=2 best_roll20=74437 prior_roll20=2279493
+P0V2P level=L6 seed=1 const_change_ppm=373322 prior=wrong k=4 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=308186 prior_roll20=1842418 noprior_best_roll20=308186
+P0V2P level=L6 seed=1 const_change_ppm=373322 prior=stale k=4 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=308186 prior_roll20=320609 noprior_best_roll20=308186
+P0V2P level=L6 seed=1 const_change_ppm=373322 prior=wrong k=8 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=304006 prior_roll20=1842418 noprior_best_roll20=304006
+P0V2P level=L6 seed=1 const_change_ppm=373322 prior=stale k=8 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=304006 prior_roll20=320609 noprior_best_roll20=304006
+P0V2P level=L6 seed=1 const_change_ppm=373322 prior=wrong k=16 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=291688 prior_roll20=1842418 noprior_best_roll20=291688
+P0V2P level=L6 seed=1 const_change_ppm=373322 prior=stale k=16 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=291688 prior_roll20=320609 noprior_best_roll20=291688
+P0V2P level=L6 seed=1 const_change_ppm=373322 prior=wrong k=32 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=275462 prior_roll20=1842418 noprior_best_roll20=275462
+P0V2P level=L6 seed=1 const_change_ppm=373322 prior=stale k=32 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=275462 prior_roll20=320609 noprior_best_roll20=275462
+P0V2P level=L6 seed=2 prior=wrong k=pre outcome=CORRECTED prior_rank=2 best_roll20=49002 prior_roll20=2597100
+P0V2P level=L6 seed=2 const_change_ppm=140772 prior=wrong k=4 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=199760 prior_roll20=2993028 noprior_best_roll20=199760
+P0V2P level=L6 seed=2 const_change_ppm=140772 prior=stale k=4 outcome=KEPT prior_rank=0 best_roll20=203475 prior_roll20=203475 noprior_best_roll20=199760
+P0V2P level=L6 seed=2 const_change_ppm=140772 prior=wrong k=8 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=195297 prior_roll20=2993028 noprior_best_roll20=195297
+P0V2P level=L6 seed=2 const_change_ppm=140772 prior=stale k=8 outcome=KEPT prior_rank=0 best_roll20=203475 prior_roll20=203475 noprior_best_roll20=195297
+P0V2P level=L6 seed=2 const_change_ppm=140772 prior=wrong k=16 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=187367 prior_roll20=2993028 noprior_best_roll20=187367
+P0V2P level=L6 seed=2 const_change_ppm=140772 prior=stale k=16 outcome=KEPT prior_rank=0 best_roll20=203475 prior_roll20=203475 noprior_best_roll20=187367
+P0V2P level=L6 seed=2 const_change_ppm=140772 prior=wrong k=32 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=175450 prior_roll20=2993028 noprior_best_roll20=175450
+P0V2P level=L6 seed=2 const_change_ppm=140772 prior=stale k=32 outcome=REJECTED_OTHER_TERMS prior_rank=1 best_roll20=175450 prior_roll20=203475 noprior_best_roll20=175450
+P0V2P level=L6 seed=3 prior=wrong k=pre outcome=CORRECTED prior_rank=2 best_roll20=60731 prior_roll20=2329112
+P0V2P level=L6 seed=3 const_change_ppm=150597 prior=wrong k=4 outcome=CORRECTED prior_rank=2 best_roll20=93416 prior_roll20=2373649 noprior_best_roll20=93416
+P0V2P level=L6 seed=3 const_change_ppm=150597 prior=stale k=4 outcome=CORRECTED prior_rank=1 best_roll20=93416 prior_roll20=94824 noprior_best_roll20=93416
+P0V2P level=L6 seed=3 const_change_ppm=150597 prior=wrong k=8 outcome=CORRECTED prior_rank=2 best_roll20=93049 prior_roll20=2373649 noprior_best_roll20=93049
+P0V2P level=L6 seed=3 const_change_ppm=150597 prior=stale k=8 outcome=CORRECTED prior_rank=1 best_roll20=93049 prior_roll20=94824 noprior_best_roll20=93049
+P0V2P level=L6 seed=3 const_change_ppm=150597 prior=wrong k=16 outcome=CORRECTED prior_rank=2 best_roll20=90707 prior_roll20=2373649 noprior_best_roll20=90707
+P0V2P level=L6 seed=3 const_change_ppm=150597 prior=stale k=16 outcome=CORRECTED prior_rank=2 best_roll20=90707 prior_roll20=94824 noprior_best_roll20=90707
+P0V2P level=L6 seed=3 const_change_ppm=150597 prior=wrong k=32 outcome=CORRECTED prior_rank=2 best_roll20=84733 prior_roll20=2373649 noprior_best_roll20=84733
+P0V2P level=L6 seed=3 const_change_ppm=150597 prior=stale k=32 outcome=CORRECTED prior_rank=2 best_roll20=84733 prior_roll20=94824 noprior_best_roll20=84733
+P0V2P level=L6 seed=4 prior=wrong k=pre outcome=CORRECTED prior_rank=2 best_roll20=51023 prior_roll20=2361220
+P0V2P level=L6 seed=4 const_change_ppm=428415 prior=wrong k=4 outcome=CORRECTED prior_rank=2 best_roll20=41519 prior_roll20=2776906 noprior_best_roll20=41519
+P0V2P level=L6 seed=4 const_change_ppm=428415 prior=stale k=4 outcome=CORRECTED prior_rank=1 best_roll20=41519 prior_roll20=41595 noprior_best_roll20=41519
+P0V2P level=L6 seed=4 const_change_ppm=428415 prior=wrong k=8 outcome=CORRECTED prior_rank=2 best_roll20=41555 prior_roll20=2776906 noprior_best_roll20=41555
+P0V2P level=L6 seed=4 const_change_ppm=428415 prior=stale k=8 outcome=CORRECTED prior_rank=1 best_roll20=41555 prior_roll20=41595 noprior_best_roll20=41555
+P0V2P level=L6 seed=4 const_change_ppm=428415 prior=wrong k=16 outcome=CORRECTED prior_rank=2 best_roll20=41536 prior_roll20=2776906 noprior_best_roll20=41536
+P0V2P level=L6 seed=4 const_change_ppm=428415 prior=stale k=16 outcome=CORRECTED prior_rank=2 best_roll20=41536 prior_roll20=41595 noprior_best_roll20=41536
+P0V2P level=L6 seed=4 const_change_ppm=428415 prior=wrong k=32 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=40844 prior_roll20=2776906 noprior_best_roll20=40844
+P0V2P level=L6 seed=4 const_change_ppm=428415 prior=stale k=32 outcome=REJECTED_OTHER_TERMS prior_rank=2 best_roll20=40844 prior_roll20=41595 noprior_best_roll20=40844
+P0V2P level=L6 seed=5 prior=wrong k=pre outcome=CORRECTED prior_rank=2 best_roll20=58044 prior_roll20=2983485
+P0V2P level=L6 seed=5 const_change_ppm=176909 prior=wrong k=4 outcome=CORRECTED prior_rank=2 best_roll20=77419 prior_roll20=2311615 noprior_best_roll20=77419
+P0V2P level=L6 seed=5 const_change_ppm=176909 prior=stale k=4 outcome=CORRECTED prior_rank=1 best_roll20=77419 prior_roll20=78279 noprior_best_roll20=77419
+P0V2P level=L6 seed=5 const_change_ppm=176909 prior=wrong k=8 outcome=CORRECTED prior_rank=2 best_roll20=76888 prior_roll20=2311615 noprior_best_roll20=76888
+P0V2P level=L6 seed=5 const_change_ppm=176909 prior=stale k=8 outcome=CORRECTED prior_rank=1 best_roll20=76888 prior_roll20=78279 noprior_best_roll20=76888
+P0V2P level=L6 seed=5 const_change_ppm=176909 prior=wrong k=16 outcome=CORRECTED prior_rank=2 best_roll20=75560 prior_roll20=2311615 noprior_best_roll20=75560
+P0V2P level=L6 seed=5 const_change_ppm=176909 prior=stale k=16 outcome=CORRECTED prior_rank=1 best_roll20=75560 prior_roll20=78279 noprior_best_roll20=75560
+P0V2P level=L6 seed=5 const_change_ppm=176909 prior=wrong k=32 outcome=CORRECTED prior_rank=2 best_roll20=74084 prior_roll20=2311615 noprior_best_roll20=74084
+P0V2P level=L6 seed=5 const_change_ppm=176909 prior=stale k=32 outcome=CORRECTED prior_rank=2 best_roll20=74084 prior_roll20=78279 noprior_best_roll20=74084
+P0V2P-SUM level=L6 prior=wrong k=pre seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/5/0/0 median_best_roll20=58044 median_prior_roll20=2361220
+P0V2P-SUM level=L6 prior=wrong k=4 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/3/2/0 median_best_roll20=93416 median_prior_roll20=2373649 median_noprior_best_roll20=93416
+P0V2P-SUM level=L6 prior=wrong k=8 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/3/2/0 median_best_roll20=93049 median_prior_roll20=2373649 median_noprior_best_roll20=93049
+P0V2P-SUM level=L6 prior=wrong k=16 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/3/2/0 median_best_roll20=90707 median_prior_roll20=2373649 median_noprior_best_roll20=90707
+P0V2P-SUM level=L6 prior=wrong k=32 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/2/3/0 median_best_roll20=84733 median_prior_roll20=2373649 median_noprior_best_roll20=84733
+P0V2P-SUM level=L6 prior=stale k=4 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=1/3/1/0 median_best_roll20=93416 median_prior_roll20=94824 median_noprior_best_roll20=93416
+P0V2P-SUM level=L6 prior=stale k=8 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=1/3/1/0 median_best_roll20=93049 median_prior_roll20=94824 median_noprior_best_roll20=93049
+P0V2P-SUM level=L6 prior=stale k=16 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=1/3/1/0 median_best_roll20=90707 median_prior_roll20=94824 median_noprior_best_roll20=90707
+P0V2P-SUM level=L6 prior=stale k=32 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/2/3/0 median_best_roll20=84733 median_prior_roll20=94824 median_noprior_best_roll20=84733
+P0V2P level=null seed=1 prior=wrong k=pre outcome=CORRECTED prior_rank=4 best_roll20=1000712 prior_roll20=169535923
+P0V2P level=null seed=1 const_change_ppm=0 prior=wrong k=4 outcome=CORRECTED prior_rank=4 best_roll20=1001243 prior_roll20=164305539 noprior_best_roll20=1001243
+P0V2P level=null seed=1 const_change_ppm=0 prior=stale k=4 outcome=CORRECTED prior_rank=1 best_roll20=1001243 prior_roll20=1001243 noprior_best_roll20=1001243
+P0V2P level=null seed=1 const_change_ppm=0 prior=wrong k=8 outcome=CORRECTED prior_rank=4 best_roll20=1001247 prior_roll20=164305539 noprior_best_roll20=1001247
+P0V2P level=null seed=1 const_change_ppm=0 prior=stale k=8 outcome=CORRECTED prior_rank=1 best_roll20=1001247 prior_roll20=1001243 noprior_best_roll20=1001247
+P0V2P level=null seed=1 const_change_ppm=0 prior=wrong k=16 outcome=CORRECTED prior_rank=4 best_roll20=1001256 prior_roll20=164305539 noprior_best_roll20=1001256
+P0V2P level=null seed=1 const_change_ppm=0 prior=stale k=16 outcome=CORRECTED prior_rank=1 best_roll20=1001256 prior_roll20=1001243 noprior_best_roll20=1001256
+P0V2P level=null seed=1 const_change_ppm=0 prior=wrong k=32 outcome=CORRECTED prior_rank=4 best_roll20=1001243 prior_roll20=164305539 noprior_best_roll20=1001243
+P0V2P level=null seed=1 const_change_ppm=0 prior=stale k=32 outcome=CORRECTED prior_rank=1 best_roll20=1001243 prior_roll20=1001243 noprior_best_roll20=1001243
+P0V2P level=null seed=2 prior=wrong k=pre outcome=CORRECTED prior_rank=4 best_roll20=1001106 prior_roll20=171247544
+P0V2P level=null seed=2 const_change_ppm=0 prior=wrong k=4 outcome=CORRECTED prior_rank=4 best_roll20=1000501 prior_roll20=167080076 noprior_best_roll20=1000501
+P0V2P level=null seed=2 const_change_ppm=0 prior=stale k=4 outcome=KEPT prior_rank=0 best_roll20=1000552 prior_roll20=1000552 noprior_best_roll20=1000501
+P0V2P level=null seed=2 const_change_ppm=0 prior=wrong k=8 outcome=CORRECTED prior_rank=4 best_roll20=1000238 prior_roll20=167080076 noprior_best_roll20=1000238
+P0V2P level=null seed=2 const_change_ppm=0 prior=stale k=8 outcome=CORRECTED prior_rank=1 best_roll20=1000238 prior_roll20=1000552 noprior_best_roll20=1000238
+P0V2P level=null seed=2 const_change_ppm=0 prior=wrong k=16 outcome=CORRECTED prior_rank=4 best_roll20=1000067 prior_roll20=167080076 noprior_best_roll20=1000067
+P0V2P level=null seed=2 const_change_ppm=0 prior=stale k=16 outcome=CORRECTED prior_rank=1 best_roll20=1000067 prior_roll20=1000552 noprior_best_roll20=1000067
+P0V2P level=null seed=2 const_change_ppm=0 prior=wrong k=32 outcome=CORRECTED prior_rank=4 best_roll20=1000103 prior_roll20=167080076 noprior_best_roll20=1000103
+P0V2P level=null seed=2 const_change_ppm=0 prior=stale k=32 outcome=CORRECTED prior_rank=1 best_roll20=1000103 prior_roll20=1000552 noprior_best_roll20=1000103
+P0V2P level=null seed=3 prior=wrong k=pre outcome=CORRECTED prior_rank=4 best_roll20=1000059 prior_roll20=175295356
+P0V2P level=null seed=3 const_change_ppm=0 prior=wrong k=4 outcome=CORRECTED prior_rank=4 best_roll20=1000561 prior_roll20=166875539 noprior_best_roll20=1000561
+P0V2P level=null seed=3 const_change_ppm=0 prior=stale k=4 outcome=CORRECTED prior_rank=1 best_roll20=1000561 prior_roll20=1000383 noprior_best_roll20=1000561
+P0V2P level=null seed=3 const_change_ppm=0 prior=wrong k=8 outcome=CORRECTED prior_rank=4 best_roll20=1000845 prior_roll20=166875539 noprior_best_roll20=1000845
+P0V2P level=null seed=3 const_change_ppm=0 prior=stale k=8 outcome=CORRECTED prior_rank=1 best_roll20=1000845 prior_roll20=1000383 noprior_best_roll20=1000845
+P0V2P level=null seed=3 const_change_ppm=0 prior=wrong k=16 outcome=CORRECTED prior_rank=4 best_roll20=1000510 prior_roll20=166875539 noprior_best_roll20=1000510
+P0V2P level=null seed=3 const_change_ppm=0 prior=stale k=16 outcome=CORRECTED prior_rank=1 best_roll20=1000510 prior_roll20=1000383 noprior_best_roll20=1000510
+P0V2P level=null seed=3 const_change_ppm=0 prior=wrong k=32 outcome=CORRECTED prior_rank=4 best_roll20=1000468 prior_roll20=166875539 noprior_best_roll20=1000468
+P0V2P level=null seed=3 const_change_ppm=0 prior=stale k=32 outcome=CORRECTED prior_rank=1 best_roll20=1000468 prior_roll20=1000383 noprior_best_roll20=1000468
+P0V2P level=null seed=4 prior=wrong k=pre outcome=CORRECTED prior_rank=4 best_roll20=1002635 prior_roll20=176419696
+P0V2P level=null seed=4 const_change_ppm=0 prior=wrong k=4 outcome=CORRECTED prior_rank=4 best_roll20=1005356 prior_roll20=172166092 noprior_best_roll20=1005356
+P0V2P level=null seed=4 const_change_ppm=0 prior=stale k=4 outcome=KEPT prior_rank=0 best_roll20=1005309 prior_roll20=1005309 noprior_best_roll20=1005356
+P0V2P level=null seed=4 const_change_ppm=0 prior=wrong k=8 outcome=CORRECTED prior_rank=4 best_roll20=1005410 prior_roll20=172166092 noprior_best_roll20=1005410
+P0V2P level=null seed=4 const_change_ppm=0 prior=stale k=8 outcome=CORRECTED prior_rank=1 best_roll20=1005410 prior_roll20=1005309 noprior_best_roll20=1005410
+P0V2P level=null seed=4 const_change_ppm=0 prior=wrong k=16 outcome=CORRECTED prior_rank=4 best_roll20=1005573 prior_roll20=172166092 noprior_best_roll20=1005573
+P0V2P level=null seed=4 const_change_ppm=0 prior=stale k=16 outcome=KEPT prior_rank=0 best_roll20=1005309 prior_roll20=1005309 noprior_best_roll20=1005573
+P0V2P level=null seed=4 const_change_ppm=0 prior=wrong k=32 outcome=CORRECTED prior_rank=4 best_roll20=1005477 prior_roll20=172166092 noprior_best_roll20=1005477
+P0V2P level=null seed=4 const_change_ppm=0 prior=stale k=32 outcome=KEPT prior_rank=0 best_roll20=1005309 prior_roll20=1005309 noprior_best_roll20=1005477
+P0V2P level=null seed=5 prior=wrong k=pre outcome=CORRECTED prior_rank=4 best_roll20=1003104 prior_roll20=171974609
+P0V2P level=null seed=5 const_change_ppm=0 prior=wrong k=4 outcome=CORRECTED prior_rank=4 best_roll20=1000124 prior_roll20=167402493 noprior_best_roll20=1000124
+P0V2P level=null seed=5 const_change_ppm=0 prior=stale k=4 outcome=CORRECTED prior_rank=1 best_roll20=1000124 prior_roll20=1000041 noprior_best_roll20=1000124
+P0V2P level=null seed=5 const_change_ppm=0 prior=wrong k=8 outcome=CORRECTED prior_rank=4 best_roll20=1000028 prior_roll20=167402493 noprior_best_roll20=1000028
+P0V2P level=null seed=5 const_change_ppm=0 prior=stale k=8 outcome=CORRECTED prior_rank=1 best_roll20=1000028 prior_roll20=1000041 noprior_best_roll20=1000028
+P0V2P level=null seed=5 const_change_ppm=0 prior=wrong k=16 outcome=CORRECTED prior_rank=4 best_roll20=999966 prior_roll20=167402493 noprior_best_roll20=999966
+P0V2P level=null seed=5 const_change_ppm=0 prior=stale k=16 outcome=CORRECTED prior_rank=1 best_roll20=999966 prior_roll20=1000041 noprior_best_roll20=999966
+P0V2P level=null seed=5 const_change_ppm=0 prior=wrong k=32 outcome=CORRECTED prior_rank=4 best_roll20=1000125 prior_roll20=167402493 noprior_best_roll20=1000125
+P0V2P level=null seed=5 const_change_ppm=0 prior=stale k=32 outcome=CORRECTED prior_rank=1 best_roll20=1000125 prior_roll20=1000041 noprior_best_roll20=1000125
+P0V2P-SUM level=null prior=wrong k=pre seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/5/0/0 median_best_roll20=1001106 median_prior_roll20=171974609
+P0V2P-SUM level=null prior=wrong k=4 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/5/0/0 median_best_roll20=1000561 median_prior_roll20=167080076 median_noprior_best_roll20=1000561
+P0V2P-SUM level=null prior=wrong k=8 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/5/0/0 median_best_roll20=1000845 median_prior_roll20=167080076 median_noprior_best_roll20=1000845
+P0V2P-SUM level=null prior=wrong k=16 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/5/0/0 median_best_roll20=1000510 median_prior_roll20=167080076 median_noprior_best_roll20=1000510
+P0V2P-SUM level=null prior=wrong k=32 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/5/0/0 median_best_roll20=1000468 median_prior_roll20=167080076 median_noprior_best_roll20=1000468
+P0V2P-SUM level=null prior=stale k=4 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=2/3/0/0 median_best_roll20=1000561 median_prior_roll20=1000552 median_noprior_best_roll20=1000561
+P0V2P-SUM level=null prior=stale k=8 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=0/5/0/0 median_best_roll20=1000845 median_prior_roll20=1000552 median_noprior_best_roll20=1000845
+P0V2P-SUM level=null prior=stale k=16 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=1/4/0/0 median_best_roll20=1000510 median_prior_roll20=1000552 median_noprior_best_roll20=1000510
+P0V2P-SUM level=null prior=stale k=32 seeds=5 skipped=0 kept/corrected/rejected_other_terms/rejected_to_null=1/4/0/0 median_best_roll20=1000468 median_prior_roll20=1000552 median_noprior_best_roll20=1000468
