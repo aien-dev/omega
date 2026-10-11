@@ -35,6 +35,7 @@
 #include "rx_aien.h"
 #include "rx_omega.h"
 #include "rx_generation.h"
+#include "rx_cortex_record.h"
 
 /* Objects in the caller's RxWorld. Not a second world, not a device namespace.
  * input:     0 operand a, 1 operand b, 2 search epoch it is for, 3 trial,
@@ -196,5 +197,19 @@ int rx_living_native_authority(void *ctx, uint32_t cap_id, uint64_t generation,
  * "AIEN_RX_OBJECT_V1", type and the eight fields. */
 void rx_living_object_digest(uint32_t type, const uint64_t field[RX_MAX_FIELDS],
                              uint8_t out[32]);
+
+/* ---- Cortex journal of the experience (G1) ----------------------------------
+ * A lesson is a CX_K_CANDIDATE. It becomes a fact only through
+ * rx_living_lesson_promote, which refuses unless the evidence record is a
+ * CX_K_EVIDENCE_REF that verifies and whose payload words
+ * RX_LIVING_EV_DIGEST0.. hold `object_digest`, the rx_living_object_digest of
+ * the R13 evidence object. cx_promote alone only checks record kinds. */
+enum { RX_LIVING_EV_DIGEST0 = 0, RX_LIVING_EV_CRUMB = 4, RX_LIVING_EV_WORDS = 5 };
+/* RX_OK, RX_ERR_NOT_FOUND (no such record), RX_ERR_ARG (wrong kind or digest
+ * mismatch), RX_ERR_IDENTITY (record fails its digest check). */
+int rx_living_lesson_evidence_ok(const CxStore *s, uint64_t evidence, const uint8_t object_digest[32]);
+/* The gate above, then rx_cortex_promote_in on the attached writer of `s`. */
+int rx_living_lesson_promote(RxWorld *w, CxStore *s, uint64_t candidate, uint64_t evidence,
+                             const uint8_t object_digest[32], uint64_t *out_id);
 
 #endif
