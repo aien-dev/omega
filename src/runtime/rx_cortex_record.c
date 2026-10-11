@@ -356,3 +356,31 @@ uint64_t rx_cortex_next_t_in(RxWorld *w, const CxStore *s) {
 }
 
 uint64_t rx_cortex_next_t(RxWorld *w) { return rx_cortex_next_t_in(w, NULL); }
+
+/* The store of the default link (or the one named), NULL if none. The pointer
+ * is stable while attached; reading through it needs the writer's quiet or
+ * rx_cortex_promote_checked_in. */
+CxStore *rx_cortex_store_in(RxWorld *w, const CxStore *s) {
+    if (!w) return NULL;
+    pthread_mutex_lock(&w->mu);
+    CortexLink *l = link_of(w, s);
+    CxStore *out = l ? l->s : NULL;
+    pthread_mutex_unlock(&w->mu);
+    return out;
+}
+
+/* The gate reads the store and cx_promote appends to it under one hold of the
+ * world mutex, so no crumb record lands between check and promotion. */
+int rx_cortex_promote_checked_in(RxWorld *w, CxStore *s, uint64_t candidate, uint64_t evidence,
+                                 int (*gate)(const CxStore *, uint64_t, const void *),
+                                 const void *arg, uint64_t *out_id) {
+    if (!w || !gate) return RX_ERR_ARG;
+    pthread_mutex_lock(&w->mu);
+    CortexLink *l = link_of(w, s);
+    int rc = !l ? RX_ERR_NOT_FOUND : gate(l->s, evidence, arg);
+    if (l && rc == RX_OK)
+        rc = cx_promote(l->s, l->token, candidate, evidence, l->s->n + 1, out_id) == CX_OK
+           ? RX_OK : RX_ERR_ARG;
+    pthread_mutex_unlock(&w->mu);
+    return rc;
+}

@@ -91,5 +91,12 @@ int rx_cortex_append_in(RxWorld *w, CxStore *s, const CxHeader *h, const uint64_
 int rx_cortex_promote_in(RxWorld *w, CxStore *s, uint64_t candidate, uint64_t evidence,
                          uint64_t *out_id);
 uint64_t rx_cortex_next_t_in(RxWorld *w, const CxStore *s);
+/* The store a link writes (NULL = default link; NULL result = none attached). */
+CxStore *rx_cortex_store_in(RxWorld *w, const CxStore *s);
+/* cx_promote preceded by `gate(store, evidence, arg)` under one hold of the
+ * world mutex; the gate's nonzero result is returned and nothing is written. */
+int rx_cortex_promote_checked_in(RxWorld *w, CxStore *s, uint64_t candidate, uint64_t evidence,
+                                 int (*gate)(const CxStore *, uint64_t, const void *),
+                                 const void *arg, uint64_t *out_id);
 
 #endif /* RX_CORTEX_RECORD_H */

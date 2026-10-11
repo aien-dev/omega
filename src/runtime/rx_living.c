@@ -190,6 +190,51 @@ static int halted_wait(RxWorld *w, uint32_t reaction) {
     return RX_FN_DEFER;
 }
 
+static void digest_words(const uint8_t d[32], uint64_t w[4]) {
+    for (int i = 0; i < 4; i++) {
+        w[i] = 0;
+        for (int b = 0; b < 8; b++) w[i] |= (uint64_t)d[8 * i + b] << (8 * b);
+    }
+}
+
+/* G1/N6: with a recorder attached, the body journals its own lesson for the
+ * epoch: the evidence reference (bound to the evidence object's digest) and
+ * the CX_K_CANDIDATE lesson, linked to the evidence and experiment-belief
+ * crumb records. Without a recorder nothing happens. */
+static void record_lesson(RxLiving *l, uint64_t epoch, const RxCrumb *k_evi, const RxCrumb *k_bel,
+                          const RxSnapshotDep *e, const RxLivingEvidence *ev,
+                          const SemanticId *realization, uint64_t cls, uint64_t regime) {
+    RxWorld *w = l->world;
+    CxStore *st = rx_cortex_store_in(w, NULL);
+    if (!st || l->lesson.epoch == epoch) return;
+    uint64_t rec_evi = rx_cortex_record_in(w, st, k_evi->id), rec_bel = rx_cortex_record_in(w, st, k_bel->id);
+    uint8_t dg[32];
+    rx_living_object_digest(RX_OT_LIVING_EVIDENCE, e->field, dg);
+    uint64_t evp[RX_LIVING_EV_WORDS];
+    digest_words(dg, evp);
+    evp[RX_LIVING_EV_CRUMB] = k_evi->id;
+    CxHeader h;
+    memset(&h, 0, sizeof h);
+    h.cls = CX_EVIDENCE; h.kind = CX_K_EVIDENCE_REF; h.protect = CX_PROT_VERIFY_EVIDENCE;
+    h.subject = (uint64_t)l->o.evidence.id + 1u; h.tag = epoch;
+    h.links[0] = rec_evi; h.links[1] = rec_bel;
+    h.t = rx_cortex_next_t_in(w, st);
+    uint64_t ref = 0, cand = 0;
+    if (rx_cortex_append_in(w, st, &h, evp, RX_LIVING_EV_WORDS, &ref) != RX_OK) return;
+    uint64_t lp[RX_LIVING_LESSON_WORDS];
+    _Static_assert(sizeof(RxLivingEvidence) == 7 * sizeof(uint64_t), "lesson layout");
+    memcpy(lp, ev, sizeof *ev);
+    digest_words(realization->bytes, lp + RX_LIVING_LESSON_REALIZATION);
+    lp[RX_LIVING_LESSON_REGIME] = regime;
+    lp[RX_LIVING_LESSON_KEY] = rx_aien_key(cls, regime);
+    h.cls = CX_CLAIM; h.kind = CX_K_CANDIDATE; h.protect = 0;
+    h.links[0] = rec_bel; h.links[1] = ref; h.links[2] = rec_evi;
+    h.t = rx_cortex_next_t_in(w, st);
+    if (rx_cortex_append_in(w, st, &h, lp, RX_LIVING_LESSON_WORDS, &cand) != RX_OK) return;
+    l->lesson = (RxLivingLesson){epoch, cand, ref, 0, st, {0}};
+    memcpy(l->lesson.digest, dg, 32);
+}
+
 static int fn_candidate(RxCtx *c) {
     RxLiving *l = c->user;
     RxWorld *w = l->world;
@@ -367,6 +412,7 @@ static int fn_candidate(RxCtx *c) {
         l->proposed_epoch = epoch;
         l->candidate_id = id;
     }
+    record_lesson(l, epoch, k_evi, k_bel, e, &ev, &real.id, p->field[3], s->field[6]);
     put(c, l->o.candidate, 0, id);
     put(c, l->o.candidate, 1, epoch);
     for (uint32_t j = 0; j < 4; j++) put(c, l->o.candidate, 2 + j, s->field[1 + j]);
@@ -482,6 +528,11 @@ static int fn_promote(RxCtx *c) {
         promote_inline(p, id, &rc, &active, &ns);
     }
     p->result = rc;
+    if (rc == RX_GEN_OK && p->lesson && p->lesson->store && p->lesson->epoch == cand->field[1] &&
+        !p->lesson->promotion) {
+        RxLivingLesson *ls = p->lesson;   /* G1/N6: the matching lesson becomes a fact */
+        (void)rx_living_lesson_promote(p->world, ls->store, ls->candidate, ls->evidence_ref, ls->digest, &ls->promotion);
+    }
     put(c, p->promotion, 0, id);
     put(c, p->promotion, 1, (uint64_t)(int64_t)rc);
     put(c, p->promotion, 2, ns);
@@ -535,6 +586,7 @@ int rx_living_register(RxLiving *l, const RxLivingCaps *caps,
         promoter->inforce.id != l->o.inforce.id) return RX_ERR_ARG;
     const uint32_t R = RX_RIGHT_READ, RW = RX_RIGHT_READ | RX_RIGHT_WRITE;
     l->caps = *caps;
+    promoter->lesson = &l->lesson;
     int rc;
     RxReactionDesc d;
     /* A resident world puts the store's physical work on its own executor so
@@ -765,9 +817,31 @@ int rx_living_lesson_evidence_ok(const CxStore *s, uint64_t evidence, const uint
     return RX_OK;
 }
 
+static int evidence_gate(const CxStore *s, uint64_t evidence, const void *digest) {
+    return rx_living_lesson_evidence_ok(s, evidence, digest);
+}
+
 int rx_living_lesson_promote(RxWorld *w, CxStore *s, uint64_t candidate, uint64_t evidence,
                              const uint8_t object_digest[32], uint64_t *out_id) {
-    int rc = rx_living_lesson_evidence_ok(s, evidence, object_digest);
-    if (rc != RX_OK) return rc;
-    return rx_cortex_promote_in(w, s, candidate, evidence, out_id);
+    if (!object_digest) return RX_ERR_ARG;
+    return rx_cortex_promote_checked_in(w, s, candidate, evidence, evidence_gate, object_digest, out_id);
+}
+
+uint32_t rx_living_explored_keys(CxStore *s, uint64_t subject, uint64_t *keys, uint32_t max) {
+    static CxRecord recs[64];
+    CxFilter f = {CX_EVIDENCE, CX_K_PROMOTION, 0, 1};
+    uint32_t n = 0, got = s && keys ? cx_recall(s, subject, 0, UINT64_MAX, &f, recs, 64) : 0;
+    for (uint32_t i = 0; i < got && n < max; i++) {
+        CxRecord cand, ref;
+        if (!recs[i].verified || recs[i].hdr.n < 8 ||
+            cx_recall_id(s, recs[i].hdr.links[0], &cand) != CX_OK || !cand.verified ||
+            cx_recall_id(s, recs[i].hdr.links[1], &ref) != CX_OK || !ref.verified ||
+            cand.hdr.kind != CX_K_CANDIDATE || cand.hdr.n < RX_LIVING_LESSON_WORDS ||
+            ref.hdr.kind != CX_K_EVIDENCE_REF) continue;
+        uint64_t k = cand.payload[RX_LIVING_LESSON_KEY];
+        uint32_t j = 0;
+        while (j < n && keys[j] != k) j++;
+        if (j == n) keys[n++] = k;
+    }
+    return n;
 }
