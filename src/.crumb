@@ -128,7 +128,7 @@
         },
         {
           "digest": "8c5cf96997407cff3f8a4c78150ae5294d2ed09a8d9076ae933e426a60792037",
-          "last_commit": "70998dd",
+          "last_commit": "e59633e",
           "name": "physics0",
           "purpose": "PD-0 hidden-equation benchmark (Physics-0 Discovery Engine cut 1): world, oracle, scorer, ladder"
         },
@@ -139,8 +139,8 @@
           "purpose": "Directory src/polyglot. Purpose not yet described by a human."
         },
         {
-          "digest": "9ca48dec58f57f6a8b9595fcf03318b766b5f0cf6fe2b7e286428cf2a4a5b98e",
-          "last_commit": "773bc36",
+          "digest": "72229d85f6c1384838c8509aa852daed769ea93190af5f7170aad438fbd16583",
+          "last_commit": "e39d0c5",
           "name": "runtime",
           "purpose": "Directory src/runtime. Purpose not yet described by a human."
         },
@@ -175,15 +175,15 @@
           "purpose": "Directory src/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:862233bb9e134a3a8b42e8aba7489af2b2a71b68a5675a0f03dbb054cf2044f0",
-      "compiled_at": "2026-10-11T15:28:03Z",
+      "children_root": "sha256:e1091a54c66a4e6f3356780dfc0939dc88980cb4e1143d70993ecfd653ef761d",
+      "compiled_at": "2026-10-11T15:34:01Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:078ee785ec85885891d21c67272be609d37d36eb4b516256a74e299d2dbc713d",
+      "digest": "sha256:5a7af4c7ecebc57aae07e6eec5f187b21427ca5f9890364927fb21c344d927df",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 449,
-      "generated_at_commit": "e03ab2063194f0ebde8a29f1835c16fa27a86bfc",
-      "source_tree": "sha256:38d40b0e65f0e13fd152c392130d4fccab4ec93a1f8f6926f67160edb432fc82"
+      "files": 451,
+      "generated_at_commit": "e39d0c58fa08564c61c92d43f1523f06d3a67d66",
+      "source_tree": "sha256:155b4110a0a583d1f3ce1a2e8a32be3525578cc0c0cf0b8723adcfb8d5b4efbf"
     },
     "owner_lane": "",
     "provenance": {
