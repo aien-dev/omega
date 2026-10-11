@@ -473,3 +473,12 @@ int rx_aien_register(RxAienFaculty *f, const RxAienCaps *caps) {
     if ((rc = rx_world_add_reaction_keyed(w, f->keys, &b.d, &f->r_plan)) != RX_OK) return rc;
     return RX_OK;
 }
+
+/* ---- restart: explored-condition memory from outside ---- */
+int rx_aien_seed_explored(RxAienFaculty *f, RxCapRef memory_write, const uint64_t *keys, uint32_t n) {
+    if (!f || !f->w || !keys || n == 0 || n > RX_AIEN_MEMORY_SLOTS) return RX_ERR_ARG;
+    RxMutation m[1 + RX_AIEN_MEMORY_SLOTS];
+    m[0] = (RxMutation){f->o.memory, 0, n};
+    for (uint32_t i = 0; i < n; i++) m[1 + i] = (RxMutation){f->o.memory, 1 + i, keys[i]};
+    return rx_world_publish_external(f->w, memory_write, m, n + 1) > 0 ? RX_OK : RX_ERR_AUTHORITY;
+}

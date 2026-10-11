@@ -156,6 +156,13 @@ int rx_aien_register(RxAienFaculty *f, const RxAienCaps *caps);
 int rx_aien_register_experiment(RxAienFaculty *f, RxObjRef evidence,
                                 RxCapRef evidence_read, RxCapRef belief_write);
 
+/* Restart. Publishes `n` (1..RX_AIEN_MEMORY_SLOTS) explored condition keys into
+ * the memory object as an outside publication (`memory_write` is WRITE on
+ * RX_AIEN_RES_MEMORY for the outside subject), before any goal. The caller
+ * decides what may be remembered: only conditions with a promoted lesson
+ * (rx_living_explored_keys), never a candidate. */
+int rx_aien_seed_explored(RxAienFaculty *f, RxCapRef memory_write, const uint64_t *keys, uint32_t n);
+
 static inline uint64_t rx_aien_regime(uint64_t M, uint64_t N) { return (M << 32) | N; }
 
 /* One explored condition: core class and regime. */

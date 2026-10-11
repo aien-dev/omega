@@ -58,6 +58,48 @@ static int corrupt_copy(const char *src, const char *dst, long off) {
     return 0;
 }
 
+
+/* ---- C2: a second life after a restart ----
+ * A fresh body (new World and faculties, same R9 store) starts from the
+ * journal. Before AIEN plans, its explored-condition memory is seeded from
+ * the PROMOTED lessons in Cortex. `to_x`: the body moves to the X925 cores
+ * (the condition the first life explored); otherwise it stays on the A725. */
+typedef struct { uint32_t seeded; uint64_t status, plan, mem_count, mem_key; } Outcome;
+static int episode(CxStore *src, int to_x, Outcome *o) {
+    memset(o, 0, sizeof *o);
+    Rig *r = calloc(1, sizeof *r);
+    cpu_set_t a, x;
+    if (!r || start(r, POSITIVE) != 0 || core_sets(&a, &x) != 0 || move_threads(&a) <= 0) return -1;
+    uint64_t keys[RX_AIEN_MEMORY_SLOTS];
+    o->seeded = src ? rx_living_explored_keys(src, (uint64_t)r->living.o.evidence.id + 1u, keys, RX_AIEN_MEMORY_SLOTS) : 0;
+    if (o->seeded) {
+        RxCapRef mc = mint(r, EXTERNAL, RX_AIEN_RES_BASE + RX_AIEN_RES_MEMORY, RX_RIGHT_WRITE);
+        if (rx_aien_seed_explored(&r->aien, mc, keys, o->seeded) != RX_OK) return -1;
+    }
+    int bad = publish_placement(r, CLASS_A725) != 0;
+    uint64_t limit = run_clock(r) + 60000000000ull;
+    while (!bad && field(r, r->omega.o.selection, 0) < 1 && run_clock(r) < limit) bad = serve(r) != 0;
+    while (!bad && field(r, r->aien.o.prediction, 6) != RX_AIEN_PRED_CONFIRMED && run_clock(r) < limit) bad = serve(r) != 0;
+    if (bad || field(r, r->aien.o.prediction, 6) != RX_AIEN_PRED_CONFIRMED) { stop(r); free(r); return -2; }
+    uint64_t target = field(r, r->aien.o.prediction, 5) * TARGET_PCT / 100u;
+    if (start_producer(r) != 0) { stop(r); free(r); return -1; }
+    if (to_x && (move_threads(&x) <= 0 || publish_placement(r, CLASS_X925) != 0)) bad = 1;
+    if (bad || publish_goal(r, target) != 0) { stop_producer(r); stop(r); free(r); return -1; }
+    limit = run_clock(r) + 60000000000ull;
+    while (run_clock(r) < limit && !atomic_load(&r->producer_error)) {
+        pause_us(1000);
+        o->plan = field(r, r->aien.o.plan, 0);
+        o->status = field(r, r->aien.o.assessment, 4);
+        if (o->plan || o->status == RX_AIEN_GOAL_UNMET_EXPLORED) break;
+    }
+    o->mem_count = field(r, r->aien.o.memory, 0);
+    o->mem_key = field(r, r->aien.o.plan, 3);
+    stop_producer(r);
+    stop(r);
+    free(r);
+    return 0;
+}
+
 int main(void) {
     signal(SIGPIPE, SIG_IGN);
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -245,6 +287,36 @@ int main(void) {
         ident = before.id[i] == after.id[i] && memcmp(&before.o[i], &after.o[i], sizeof(CxObject)) == 0 &&
                 memcmp(before.pl[i], after.pl[i], before.o[i].n * sizeof(uint64_t)) == 0;
     CHECK(ident, "%u protected records (authority, receipts, verification evidence, promotion) byte-identical after restart", after.n);
+
+    /* ---- C2: related-problem retrieval after a restart ---- */
+    uint64_t want = rx_aien_key(CLASS_X925, rx_omega_regime(M, N));
+    uint64_t k_prom[RX_AIEN_MEMORY_SLOTS];
+    uint32_t nk_prom = rx_living_explored_keys(&s2, sub, k_prom, RX_AIEN_MEMORY_SLOTS);
+    CHECK(nk_prom == 1 && k_prom[0] == want, "Cortex holds %u promoted condition (key %llx; X925 at this regime = %llx)", nk_prom, U(k_prom[0]), U(want));
+    /* the same journal with the promotion left out: the lesson is only a candidate */
+    static CxStore sn;
+    int cp_ok = cx_init(&sn, RX_CORTEX_SUBJECTS) == CX_OK;
+    for (uint64_t i = 1; cp_ok && i < prom; i++) {
+        const CxObject *q = cx_get(&s2, i);
+        CxHeader h = {q->cls, q->kind, q->subject, q->t, q->generation, q->branch, q->protect, q->tag, {q->links[0], q->links[1], q->links[2], q->links[3]}};
+        cp_ok = cx_append(&sn, &h, cx_payload(&s2, q), q->n, NULL) == CX_OK;
+    }
+    uint64_t k_open[RX_AIEN_MEMORY_SLOTS];
+    CHECK(cp_ok && sn.n == prom - 1 && cx_get(&sn, cand)->kind == CX_K_CANDIDATE && rx_living_explored_keys(&sn, sub, k_open, RX_AIEN_MEMORY_SLOTS) == 0,
+          "journal without the promotion: lesson %llu is a candidate and yields no memory", U(cand));
+    Outcome oe, on, ou;
+    int e1 = episode(&s2, 1, &oe), e2 = episode(&s2, 0, &on), e3 = episode(&sn, 1, &ou);
+    printf("C2 explored-not-replanned: seeded %u key, assessment %s, plan seq %llu, memory count %llu\n", oe.seeded,
+           oe.status == RX_AIEN_GOAL_UNMET_EXPLORED ? "UNMET_EXPLORED" : "other", U(oe.plan), U(oe.mem_count));
+    printf("C2 new-condition-planned: seeded %u key, core class A725 (not seeded), assessment status %llu, plan seq %llu, memory count %llu\n", on.seeded, U(on.status), U(on.plan), U(on.mem_count));
+    printf("C2 unpromoted-replanned: seeded %u keys, X925 condition, plan seq %llu for class %llx, memory count %llu\n", ou.seeded, U(ou.plan), U(ou.mem_key), U(ou.mem_count));
+    CHECK(e1 == 0 && oe.seeded == 1 && oe.status == RX_AIEN_GOAL_UNMET_EXPLORED && oe.plan == 0 && oe.mem_count == 1,
+          "second life, same condition: explored, NOT re-planned (rc %d)", e1);
+    CHECK(e2 == 0 && on.seeded == 1 && on.plan != 0 && on.mem_count == 2 && on.mem_key == CLASS_A725,
+          "second life, new core class: still gets a plan (rc %d)", e2);
+    CHECK(e3 == 0 && ou.seeded == 0 && ou.plan != 0 && ou.mem_key == CLASS_X925,
+          "second life, lesson never promoted: the condition IS re-explored (rc %d)", e3);
+    cx_free(&sn);
     cx_close(&s2);
     free(g_seen); free(g_stack);
     printf("R13_CORTEX_EPISODE %s: pass %d fail %d\n", g_fail ? "FAIL" : "PASS", g_pass, g_fail);
