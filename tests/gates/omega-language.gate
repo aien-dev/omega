@@ -1,0 +1,23 @@
+# tests/gates/omega-language.gate
+# Mirrors hosted: pr-smoke.yml 'Language V0 golden' and host-suites-3.yml language: make test-language, PASS n/n, no FAIL (hosted 13 s)
+gate: OMEGA-LANGUAGE
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/
+  - src/
+  - tests/language/
+  - tools/
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["language"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 10m
+exactness: EXACT
+cache_scope: machine

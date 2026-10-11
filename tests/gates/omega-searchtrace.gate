@@ -1,0 +1,23 @@
+# tests/gates/omega-searchtrace.gate
+# Mirrors hosted: host-suites.yml searchtrace: make test-searchtrace (hosted 63 s)
+gate: OMEGA-SEARCHTRACE
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/searchtrace.mk
+  - src/searchtrace/
+  - tests/searchtrace/
+  - src/
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["searchtrace"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 10m
+exactness: EXACT
+cache_scope: machine

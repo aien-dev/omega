@@ -1,0 +1,28 @@
+# tests/gates/omega-visor.gate
+# Mirrors hosted: host-suites-2.yml visor: make test-visor with aienos-src at aienos.lock (hosted 26 s)
+gate: OMEGA-VISOR
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/
+  - src/visor/
+  - src/language/
+  - tests/visor/
+  - tests/language/
+  - tools/omega.c
+  - src/runtime/
+  - aienos.lock
+  - src/
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["visor"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 10m
+exactness: EXACT
+cache_scope: machine

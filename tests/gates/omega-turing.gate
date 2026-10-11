@@ -1,0 +1,30 @@
+# tests/gates/omega-turing.gate
+# Mirrors hosted: host-suites-2.yml turing: test-turing, exp001-a/coders, verify-indep, qcont/qrecord (hosted 155 s)
+gate: OMEGA-TURING
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/
+  - src/turing/
+  - src/algebra/
+  - tests/turing/
+  - tools/
+  - data/crumbline/
+  - data/turing-cal/
+  - evidence/TURING_YIELD/
+  - docs/turing/
+  - calibration/
+  - src/
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["turing"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 20m
+exactness: EXACT
+cache_scope: machine

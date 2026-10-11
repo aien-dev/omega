@@ -1,0 +1,22 @@
+# tests/gates/omega-evidence-immutable.gate
+# Mirrors hosted: evidence-immutable.yml: existing files under evidence/ are never modified, deleted or renamed (hosted compares PR base...head; here origin/main or AIEN_BASE_REF...HEAD)
+# requires: host (git history and a base ref), always-run.
+gate: OMEGA-EVIDENCE-IMMUTABLE
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - evidence/
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["evidence-immutable"]
+expects:
+  exit: 0
+  observe: ["evidence_rewrites == 0"]
+  verdict: PASS
+timeout: 2m
+exactness: EXACT
+cache_scope: portable
+cache: never

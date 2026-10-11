@@ -1,0 +1,27 @@
+# tests/gates/omega-crumbline.gate
+# Mirrors hosted: host-suites-2.yml crumbline: test-crumbline test-library test-vcstore test-resolve test-vcstore-genesis test-resolve-genesis test-genesis test-genesis-real test-program-ir test-vc-bridge (hosted 801 s)
+gate: OMEGA-CRUMBLINE
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/
+  - src/crumbline/
+  - tests/crumbline/
+  - tools/crumbline_learner.c
+  - data/crumbline/
+  - tests/
+  - docs/osc/VC-GENESIS-1.md
+  - src/
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["crumbline"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 40m
+exactness: EXACT
+cache_scope: machine

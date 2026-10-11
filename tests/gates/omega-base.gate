@@ -1,0 +1,24 @@
+# tests/gates/omega-base.gate
+# Mirrors hosted: pr-smoke.yml 'Build and base gates (make test)' with physics-src at physics.lock (hosted job 101 s total)
+gate: OMEGA-BASE
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/
+  - src/
+  - tests/
+  - tools/
+  - tests/gates/
+  - physics.lock
+run:
+  exec: tests/gates/run.sh
+  args: ["base"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 15m
+exactness: EXACT
+cache_scope: machine

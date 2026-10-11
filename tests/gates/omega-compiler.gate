@@ -1,0 +1,23 @@
+# tests/gates/omega-compiler.gate
+# Mirrors hosted: host-suites.yml compiler: test-compiler-quick then test-compiler-full (hosted 253 s; hosted runs full only when src/compiler or src/aarch64_ changed)
+gate: OMEGA-COMPILER
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/compiler.mk
+  - src/compiler/
+  - tests/compiler/
+  - src/
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["compiler"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 20m
+exactness: EXACT
+cache_scope: machine

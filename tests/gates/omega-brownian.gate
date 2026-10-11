@@ -1,0 +1,24 @@
+# tests/gates/omega-brownian.gate
+# Mirrors hosted: host-suites-2.yml brownian: test-brownian-tps, test-brownian-active (hosted 233 s)
+gate: OMEGA-BROWNIAN
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/
+  - tests/brownian/
+  - tools/brownian/
+  - src/turing/
+  - src/
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["brownian"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 20m
+exactness: EXACT
+cache_scope: machine

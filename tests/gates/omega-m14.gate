@@ -1,0 +1,25 @@
+# tests/gates/omega-m14.gate
+# Mirrors hosted: host-suites-3.yml milestones matrix test-m14 with physics-src at physics.lock, TOTAL GATES line with FAILED: 0 (hosted ~18 s)
+gate: OMEGA-M14
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/
+  - src/
+  - tests/run_m14_gates.sh
+  - tests/
+  - tools/omegatool.c
+  - physics.lock
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["m14"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 10m
+exactness: EXACT
+cache_scope: machine

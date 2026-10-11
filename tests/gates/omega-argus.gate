@@ -1,0 +1,30 @@
+# tests/gates/omega-argus.gate
+# Mirrors hosted: host-suites-2.yml argus: test-argus-runtime test-machine-identity-argus with physics-src, aienos-src and aienos-argus at their locks (hosted 22 s)
+gate: OMEGA-ARGUS
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/machine-identity.mk
+  - src/runtime/
+  - tests/runtime/
+  - tests/bench_rx_argus.c
+  - src/sha256.c
+  - src/sha256.h
+  - src/omega_evidence.c
+  - src/omega_evidence.h
+  - physics.lock
+  - aienos.lock
+  - argus.lock
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["argus"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 10m
+exactness: EXACT
+cache_scope: machine

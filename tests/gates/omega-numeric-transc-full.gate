@@ -1,0 +1,25 @@
+# tests/gates/omega-numeric-transc-full.gate
+# Mirrors hosted: host-suites-3.yml numeric-transc-full is SKIP on GitHub (2^32 inputs x 9 ops against the oracle, twice; too long for a hosted runner)
+# requires: operator because this is a multi-hour exhaustive run that needs an explicit operator window on the Spark; no hardware beyond a host is required.
+gate: OMEGA-NUMERIC-TRANSC-FULL
+manifest_version: 2
+owner: omega
+requires:
+  - host
+  - operator
+inputs:
+  - Makefile
+  - mk/
+  - tests/test_omega_transc.c
+  - tests/numeric_native/
+  - src/
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["numeric-transc-full"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 720m
+exactness: EXACT
+cache_scope: machine

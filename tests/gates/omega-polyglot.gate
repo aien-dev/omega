@@ -1,0 +1,26 @@
+# tests/gates/omega-polyglot.gate
+# Mirrors hosted: host-suites-2.yml polyglot: test-polyglot-asm, test-polyglot-encoder (hosted 56 s)
+gate: OMEGA-POLYGLOT
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/
+  - src/polyglot/
+  - src/algebra/
+  - tests/polyglot/
+  - spec/polyglot-0.md
+  - evidence/POLYGLOT/
+  - src/
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["polyglot"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 10m
+exactness: EXACT
+cache_scope: machine

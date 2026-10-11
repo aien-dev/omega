@@ -1,0 +1,24 @@
+# tests/gates/omega-numeric2.gate
+# Mirrors hosted: host-suites-2.yml numeric2: test-numeric-reduce-cpu test-divsqrt-host (hosted 15 s)
+gate: OMEGA-NUMERIC2
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/
+  - tests/test_omega_reduce.c
+  - tests/test_omega_divsqrt_gb10.c
+  - tests/numeric_oracle.h
+  - src/
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["numeric2"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 10m
+exactness: EXACT
+cache_scope: machine

@@ -1,0 +1,24 @@
+# tests/gates/omega-ans.gate
+# Mirrors hosted: host-suites.yml ans: make test-inertial-alignment (hosted 16 s)
+gate: OMEGA-ANS
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/ans.mk
+  - src/ans/
+  - tests/ans/
+  - docs/ans/
+  - src/
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["ans"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 10m
+exactness: EXACT
+cache_scope: machine
