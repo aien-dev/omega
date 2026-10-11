@@ -751,3 +751,23 @@ int rx_living_enroll_callers(RxWorld *w, RxLivingKeyrings *k) {
     }
     return RX_OK;
 }
+
+int rx_living_lesson_evidence_ok(const CxStore *s, uint64_t evidence, const uint8_t object_digest[32]) {
+    CxRecord rec;
+    if (!s || !object_digest || evidence == 0 || evidence > s->n) return RX_ERR_NOT_FOUND;
+    if (cx_recall_id(s, evidence, &rec) == CX_ERR_DIGEST || !rec.verified) return RX_ERR_IDENTITY;
+    if (rec.hdr.kind != CX_K_EVIDENCE_REF || rec.hdr.n < RX_LIVING_EV_WORDS) return RX_ERR_ARG;
+    for (uint32_t i = 0; i < 4; i++) {
+        uint64_t v = 0;
+        for (uint32_t b = 0; b < 8; b++) v |= (uint64_t)object_digest[8 * i + b] << (8 * b);
+        if (rec.payload[RX_LIVING_EV_DIGEST0 + i] != v) return RX_ERR_ARG;
+    }
+    return RX_OK;
+}
+
+int rx_living_lesson_promote(RxWorld *w, CxStore *s, uint64_t candidate, uint64_t evidence,
+                             const uint8_t object_digest[32], uint64_t *out_id) {
+    int rc = rx_living_lesson_evidence_ok(s, evidence, object_digest);
+    if (rc != RX_OK) return rc;
+    return rx_cortex_promote_in(w, s, candidate, evidence, out_id);
+}

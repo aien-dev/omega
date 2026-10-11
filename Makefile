@@ -1305,6 +1305,19 @@ $(RX_R13_HOST): $(RX_R13_SRCS) src/runtime/rx_living.h src/runtime/rx_argus.h $(
 	$(CC) $(CFLAGS) $(RX_PROD_ARGUS_FLAGS) -pthread -o $@ $(RX_R13_SRCS) $(RX_PROD_ARGUS_SRCS) \
 		$(AIENOS_CAP_LIB) -lm
 
+# G1: the R13 living body journals one episode into Cortex (CxStore). Same
+# production recipe as test-r13-host; the program is the R13 rig plus tests/runtime/rx_r13_cortex_episode.c.
+RX_R13_CORTEX = $(OUT_DIR)/rx_r13_cortex_episode
+RX_R13_CORTEX_SRCS = $(filter-out tests/runtime/rx_r13_living.c,$(RX_R13_SRCS)) tests/runtime/rx_r13_cortex_episode.c
+$(RX_R13_CORTEX): $(RX_R13_CORTEX_SRCS) tests/runtime/rx_r13_living.c src/runtime/rx_living.h src/runtime/rx_argus.h \
+	$(RX_COMPOSE_LIVING_CHECKS) $(ARGUS_STAMP) $(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(RX_PROD_REFUSE_TEST)
+	$(CC) $(CFLAGS) $(RX_PROD_ARGUS_FLAGS) -pthread -o $@ $(RX_R13_CORTEX_SRCS) $(RX_PROD_ARGUS_SRCS) \
+		$(AIENOS_CAP_LIB) -lm
+
+test-r13-cortex-episode: $(RX_R13_CORTEX)
+	./$(RX_R13_CORTEX)
+
 $(RX_R13_SILICON): $(RX_R13_SRCS) $(RX_R13_SILICON_EXTRA) src/runtime/rx_living.h src/runtime/rx_argus.h \
 	$(RX_COMPOSE_LIVING_CHECKS) $(ARGUS_STAMP) $(AIENOS_CAP_LIB) | $(OUT_DIR)
 	$(RX_PROD_REFUSE_TEST)
