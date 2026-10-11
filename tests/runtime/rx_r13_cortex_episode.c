@@ -2,8 +2,8 @@
  *
  * Reuses the whole R13 rig by including rx_r13_living.c (its main renamed).
  * Attaches the existing World->Cortex recorder (rx_cortex_record.h) to the
- * living world on a journal file, runs the POSITIVE episode, appends a lesson
- * (CX_K_CANDIDATE) and its evidence reference (CX_K_EVIDENCE_REF), then proves
+ * living world on a journal file, runs the POSITIVE episode, finds the lesson
+ * lesson and evidence reference the BODY wrote (generation.prepare/promote), then proves
  * the provenance chain, the digest-gated promotion, tamper refusal and restart. */
 #define main r13_main_unused
 #include "rx_r13_living.c"
@@ -36,17 +36,6 @@ static uint64_t nearest(const CxStore *s, uint64_t from, uint32_t slot) {
     uint32_t n = cx_provenance(s, from, p, 4096);
     for (uint32_t i = 0; i < n; i++) if (cx_get(s, p[i])->subject == (uint64_t)slot + 1u && cx_get(s, p[i])->kind != CX_K_ENTITY_CREATED) return p[i];
     return 0;
-}
-static uint64_t append(Rig *r, CxStore *s, uint32_t cls, uint32_t kind, uint32_t prot, uint64_t subj,
-                       uint64_t tag, const uint64_t *l, const uint64_t *p, uint32_t n) {
-    CxHeader h;
-    memset(&h, 0, sizeof h);
-    h.cls = cls; h.kind = kind; h.protect = prot; h.subject = subj; h.tag = tag;
-    h.t = rx_cortex_next_t_in(&r->w, s);
-    for (int i = 0; i < 4 && l; i++) h.links[i] = l[i];
-    uint64_t id = 0;
-    if (rx_cortex_append_in(&r->w, s, &h, p, n, &id) != RX_OK) return 0;
-    return id;
 }
 /* Protected records, copied for the byte-identical comparison. */
 typedef struct { uint32_t n; uint64_t id[8192]; CxObject o[8192]; uint64_t pl[8192][CX_WREC_WORDS + 8]; } Prot;
@@ -151,33 +140,42 @@ int main(void) {
     CHECK(memcmp(dg, ev.digest, 32) == 0, "rx_living_object_digest equals the World's digest of the evidence object");
     uint64_t sub = (uint64_t)r->living.o.evidence.id + 1u;
     uint64_t dw[4]; words(dg, dw);
-    uint64_t evp[RX_LIVING_EV_WORDS] = {dw[0], dw[1], dw[2], dw[3], rx_world_explain(&r->w, r->living.o.evidence, 0)};
-    uint64_t evl[4] = {id[8], id[9]};
-    uint64_t ev_ref = append(r, &s, CX_EVIDENCE, CX_K_EVIDENCE_REF, CX_PROT_VERIFY_EVIDENCE, sub, 1, evl, evp, RX_LIVING_EV_WORDS);
+    /* The lesson records are written by the body (generation.prepare and
+     * generation.promote); the test only finds them. */
+    uint64_t ev_ref = 0, cand = 0, prom = 0, n_ref = 0, n_cand = 0, n_prom = 0;
+    for (uint64_t i = 1; i <= s.n; i++) {
+        const CxObject *o = cx_get(&s, i);
+        if (o->subject != sub) continue;
+        if (o->kind == CX_K_EVIDENCE_REF) { ev_ref = i; n_ref++; }
+        if (o->kind == CX_K_CANDIDATE) { cand = i; n_cand++; }
+        if (o->kind == CX_K_PROMOTION) { prom = i; n_prom++; }
+    }
+    CHECK(n_ref == 1 && n_cand == 1 && n_prom == 1, "body wrote one evidence-ref (%llu), one lesson candidate (%llu), one promotion (%llu)",
+          U(ev_ref), U(cand), U(prom));
+    if (n_ref != 1 || n_cand != 1 || n_prom != 1) { printf("R13_CORTEX_EPISODE FAIL %d pass %d fail %d\n", 1, g_pass, g_fail); stop(r); return 1; }
+    const CxObject *co = cx_get(&s, cand), *eo = cx_get(&s, ev_ref), *po = cx_get(&s, prom);
+    CHECK(co->links[0] == id[9] && co->links[1] == ev_ref && co->links[2] == id[8],
+          "lesson links {experiment belief %llu, evidence ref %llu, evidence %llu}", U(co->links[0]), U(co->links[1]), U(co->links[2]));
+    CHECK(eo->links[0] == id[8] && eo->links[1] == id[9] && (eo->protect & CX_PROT_VERIFY_EVIDENCE) && eo->tag == co->tag,
+          "evidence ref links {evidence %llu, experiment belief %llu}, protected, same epoch tag %llu", U(eo->links[0]), U(eo->links[1]), U(eo->tag));
+    const uint64_t *cp = cx_payload(&s, co), *ep = cx_payload(&s, eo);
+    CHECK(eo->n == RX_LIVING_EV_WORDS && memcmp(ep, dw, sizeof dw) == 0 && ep[RX_LIVING_EV_CRUMB] == rx_world_explain(&r->w, r->living.o.evidence, 0),
+          "evidence ref holds the World digest of the evidence object and its crumb");
+    CHECK(co->n == RX_LIVING_LESSON_WORDS && cp[1] == ev.field[0] &&
+          cp[RX_LIVING_LESSON_KEY] == rx_aien_key(field(r, r->aien.o.plan, 3), field(r, r->aien.o.plan, 2)) &&
+          cp[RX_LIVING_LESSON_REGIME] == field(r, r->aien.o.plan, 2),
+          "lesson payload: epoch %llu, regime %llx, condition key %llx", U(cp[1]), U(cp[RX_LIVING_LESSON_REGIME]), U(cp[RX_LIVING_LESSON_KEY]));
+    CHECK(po->links[0] == cand && po->links[1] == ev_ref && (po->protect & CX_PROT_VERIFY_EVIDENCE),
+          "body promotion %llu links {candidate %llu, evidence ref %llu}", U(prom), U(po->links[0]), U(po->links[1]));
     uint8_t other[32];
     RxObject goal; rx_world_read(&r->w, r->aien.o.goal, &goal);
     rx_living_object_digest(goal.type, goal.field, other);
-    uint64_t ow[4]; words(other, ow);
-    uint64_t wrongp[RX_LIVING_EV_WORDS] = {ow[0], ow[1], ow[2], ow[3], 0};
-    uint64_t ev_wrong = append(r, &s, CX_EVIDENCE, CX_K_EVIDENCE_REF, CX_PROT_VERIFY_EVIDENCE, sub, 2, evl, wrongp, RX_LIVING_EV_WORDS);
-    uint64_t lp[2] = {ev.field[0], ev.field[1]};
-    uint64_t cl[4] = {id[9], ev_ref, id[8]};
-    uint64_t cand = append(r, &s, CX_CLAIM, CX_K_CANDIDATE, 0, sub, 1, cl, lp, 2);
-    uint64_t cand_open = append(r, &s, CX_CLAIM, CX_K_CANDIDATE, 0, sub, 2, cl, lp, 2);
-    CHECK(ev_ref && ev_wrong && cand && cand_open, "lesson records appended: evidence-ref %llu (wrong %llu), candidates %llu and %llu",
-          U(ev_ref), U(ev_wrong), U(cand), U(cand_open));
-    uint64_t out = 0;
-    uint64_t n_before = s.n;
-    rc = rx_living_lesson_promote(&r->w, &s, cand, 999999, dg, &out);
-    CHECK(rc == RX_ERR_NOT_FOUND, "promotion with a missing evidence record refused (rc %d)", rc);
-    rc = rx_living_lesson_promote(&r->w, &s, cand, ev_wrong, dg, &out);
-    CHECK(rc == RX_ERR_ARG, "promotion with a wrong-digest evidence record refused (rc %d)", rc);
-    CHECK(s.n == n_before, "no promotion record was written by the refusals");
-    rc = rx_living_lesson_promote(&r->w, &s, cand, ev_ref, dg, &out);
-    CHECK(rc == RX_OK && out && cx_get(&s, out)->kind == CX_K_PROMOTION &&
-          cx_get(&s, out)->links[0] == cand && cx_get(&s, out)->links[1] == ev_ref,
-          "promotion with the matching evidence record accepted: promotion %llu links {%llu,%llu}", U(out), U(cand), U(ev_ref));
-    uint64_t prom = out;
+    uint64_t out = 0, n_before = s.n;
+    int rc2 = rx_living_lesson_promote(&r->w, &s, cand, 999999, dg, &out);
+    CHECK(rc2 == RX_ERR_NOT_FOUND, "promotion with a missing evidence record refused (rc %d)", rc2);
+    rc2 = rx_living_lesson_promote(&r->w, &s, cand, ev_ref, other, &out);
+    CHECK(rc2 == RX_ERR_ARG, "promotion against a different object digest (wrong-digest evidence) refused (rc %d)", rc2);
+    CHECK(s.n == n_before, "no record was written by the refusals");
     CHECK(cx_verify_chain(&s) == CX_OK, "cx_verify_chain passes after promotion (%llu records)", U(s.n));
     static Prot before, after;
     snap(&s, &before);
@@ -214,16 +212,9 @@ int main(void) {
     for (uint32_t i = 0; same && i < na; i++) same = a[i].hdr.id == b[i].hdr.id && a[i].verified;
     for (uint32_t i = 1; same && i < na; i++) same = a[i].hdr.id > a[i - 1].hdr.id;
     CHECK(same, "cx_recall by the evidence subject returns %u records, ordered and repeatable", na);
-    int is_fact = 0, open_cand = 1;
-    for (uint64_t i = 1; i <= s2.n; i++) {
-        const CxObject *o = cx_get(&s2, i);
-        if (o->kind == CX_K_PROMOTION && o->links[0] == cand) is_fact = 1;
-        if (o->kind == CX_K_PROMOTION && o->links[0] == cand_open) open_cand = 0;
-    }
-    CHECK(is_fact && cx_get(&s2, cand)->kind == CX_K_CANDIDATE && cx_get(&s2, prom)->links[0] == cand,
-          "lesson %llu is a promoted fact (promotion %llu)", U(cand), U(prom));
-    CHECK(open_cand && cx_get(&s2, cand_open)->kind == CX_K_CANDIDATE, "lesson %llu is still only a candidate", U(cand_open));
-    CHECK(rx_living_lesson_evidence_ok(&s2, ev_ref, dg) == RX_OK && rx_living_lesson_evidence_ok(&s2, ev_wrong, dg) == RX_ERR_ARG,
+    CHECK(cx_get(&s2, cand)->kind == CX_K_CANDIDATE && cx_get(&s2, prom)->kind == CX_K_PROMOTION && cx_get(&s2, prom)->links[0] == cand,
+          "after restart lesson %llu is a promoted fact (promotion %llu)", U(cand), U(prom));
+    CHECK(rx_living_lesson_evidence_ok(&s2, ev_ref, dg) == RX_OK && rx_living_lesson_evidence_ok(&s2, ev_ref, other) == RX_ERR_ARG,
           "after restart the evidence gate still accepts the match and refuses the wrong digest");
     /* tampered evidence record: refused, chain fails; restored value passes again */
     uint64_t keep = cx_payload(&s2, cx_get(&s2, ev_ref))[0];
