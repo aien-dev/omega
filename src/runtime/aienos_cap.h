@@ -5,7 +5,7 @@
  * reaction world is given the view. Cognition has no path to the admin.
  * The Linux mint process is a separate oracle and is not started here.
  * Layout matches aienos native/capability/aienos_capability.h: generations
- * are 64 bits.
+ * are 64 bits. make test-aienos-cap-abi checks this copy against the pinned header.
  */
 #ifndef AIENOS_CAP_H
 #define AIENOS_CAP_H
