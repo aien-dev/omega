@@ -7,6 +7,8 @@
  *   pd0-dev2 regime <seed_lo> <seed_hi>   C2: regime switch, FIXED vs UPDATING (retain) vs FRESH, per level and seed
  *   pd0-dev2 prior  <seed_lo> <seed_hi>   C3: wrong / stale prior injected into the updating learner
  *   pd0-dev2 detect <seed_lo> <seed_hi>   v2.1 C1: change-detector decision on no-switch and switch runs
+ *   pd0-dev2 shift  <seed_lo> <seed_hi>   v2.1 C2: three arms after a regime switch + no-switch false-alarm run
+ *   pd0-dev2 prior21 <seed_lo> <seed_hi>  v2.1 C3: wrong / stale prior, v2 arm then v2.1 arm
  * Built twice: with -DDEV_V1 against the seal-1 learner (flag mode only, the baseline) and against learner_v2. */
 #include "pd0_learner.h"
 #include "pd0_dev_world.h"
@@ -105,9 +107,13 @@ static r1data *collect_r1(sess *S)
         run_ep(S, tmp, "explore", e); D.train[D.n_train] = *tmp; D.tag[D.n_train] = m == 3 ? TAG_SELECT : TAG_FIT; D.n_train++; }
     free(tmp); return &D;
 }
+static int g_forget;   /* v2.1 switch for build(): 1 = detector + bounded forgetting on */
 static pd0_learner *build(sess *S, const r1data *D, const ep_t *r2, int k2, int with_r1, const pd0_rel *prior)
 {
     pd0_learner *L = pd0_learner_new(&S->d, S->seed);
+#ifndef DEV_V1
+    pd0_learner_set_forgetting(L, g_forget);
+#endif
     if (with_r1) for (int i = 0; i < D->n_train; i++) feed(L, &D->train[i], D->tag[i]);
     for (int i = 0; i < k2; i++) feed(L, &r2[i], i % 4 == 3 ? TAG_SELECT : TAG_FIT);
 #ifndef DEV_V1
@@ -201,6 +207,43 @@ static int mode_detect(uint64_t lo, uint64_t hi)
         printf("P0V21D-SUM level=%s false_alarms=%d/%d switch_detected=%d/%d median_delay_episodes=%lld\n", lname(level), fa, runs, det, nd, (long long)median(delays, det < 64 ? det : 64)); }
     return 0;
 }
+
+/* ================= C2 of v2.1: three arms after a regime switch =================
+ * pd0-dev2 shift <lo> <hi>: per level and seed, the C2 protocol of #397 (regime 1 data, switch, 20 TEST episodes of the new regime,
+ * k regime-2 training episodes) with arms FIXED (regime-1 model, no updating), RETAIN (v2: updating, keeps every old episode),
+ * V21 (v2.1: updating + detector + bounded forgetting), and FRESH (regime-2 episodes only; the reference from #397).
+ * Then one NO-SWITCH run per seed (32 more episodes of the same world) for the false-alarm rate. Error = median 20-step rollout NRMSE (micro) on the TEST episodes. */
+static int mode_shift(uint64_t lo, uint64_t hi)
+{
+    static const int KI[2] = { 0, 3 };            /* k = 4 and k = 32 are the headline cells; 8 and 16 are printed per seed as well */
+    for (int level = 0; level < NLEV; level++) { static int64_t fx[NK][64], rt[NK][64], fr[NK][64], v21[NK][64]; int n = 0, applicable = 0, fa = 0, nfa = 0, det = 0; int64_t delays[64]; (void)KI;
+        for (uint64_t seed = lo; seed <= hi && n < 64; seed++) { sess S; if (open_sess(&S, level, seed)) return 3;
+            r1data *D = collect_r1(&S); int no = S.d.n_obs; g_forget = 0; pd0_learner *L1 = build(&S, D, NULL, 0, 1, NULL); pd0_rel F = best_cand(L1)->rel; pd0_learner_free(L1);
+            int64_t ppm = 0; if (dev_world_switch(S.w, 1, &ppm)) return 3; if (ppm > 0) applicable = 1;
+            static ep_t te[20], tr[32]; for (int i = 0; i < 20; i++) run_ep(&S, &te[i], "test2", (uint32_t)i); for (int i = 0; i < 32; i++) run_ep(&S, &tr[i], "r2", (uint32_t)i);
+            int64_t fx_roll, fx_one; eval_rel(&F, te, 20, no, &fx_roll, &fx_one);
+            for (int ki = 0; ki < NK; ki++) { int64_t rr, fo, hr, o1;
+                g_forget = 0; pd0_learner *Lr = build(&S, D, tr, (int)KS[ki], 1, NULL), *Lf = build(&S, D, tr, (int)KS[ki], 0, NULL); g_forget = 1; pd0_learner *Lv = build(&S, D, tr, (int)KS[ki], 1, NULL); g_forget = 0;
+                int64_t frr; eval_rel(&best_cand(Lr)->rel, te, 20, no, &rr, &o1); eval_rel(&best_cand(Lf)->rel, te, 20, no, &frr, &fo); eval_rel(&best_cand(Lv)->rel, te, 20, no, &hr, &o1);
+                const pd0l_detect *d = pd0_learner_detection(Lv); long delay = d->alarm ? (long)d->alarm_ep - D->n_train + 1 : 0;
+                printf("P0V21R level=%s seed=%llu const_change_ppm=%lld k=%u fixed_roll20=%lld retain_roll20=%lld v21_roll20=%lld fresh_roll20=%lld v21_vs_fresh=%s v21_vs_retain=%s alarm=%d alarm_ep=%u change_ep=%u switch_ep=%d delay=%ld v21_top_is_old=%d\n",
+                       lname(level), (unsigned long long)seed, (long long)ppm, KS[ki], (long long)fx_roll, (long long)rr, (long long)hr, (long long)frr, verdict(hr, frr), verdict(hr, rr), d->alarm, d->alarm_ep, d->change_ep, D->n_train, delay, best_cand(Lv)->is_old);
+                fx[ki][n] = fx_roll; rt[ki][n] = rr; fr[ki][n] = frr; v21[ki][n] = hr;
+                if (ki == NK - 1 && ppm > 0 && d->alarm) { if (det < 64) delays[det] = delay; det++; }
+                pd0_learner_free(Lr); pd0_learner_free(Lf); pd0_learner_free(Lv); }
+            n++; dev_world_close(S.w);
+            { sess S2; if (open_sess(&S2, level, seed)) return 3; r1data *D2 = collect_r1(&S2); static ep_t t2[32]; for (int i = 0; i < 32; i++) run_ep(&S2, &t2[i], "r2", (uint32_t)i);
+              g_forget = 1; pd0_learner *Ln = build(&S2, D2, t2, 32, 1, NULL); g_forget = 0; const pd0l_detect *d = pd0_learner_detection(Ln); fa += d->alarm; nfa++;
+              printf("P0V21N level=%s seed=%llu run=noswitch alarm=%d alarm_ep=%u change_ep=%u cusum_max=%.2f\n", lname(level), (unsigned long long)seed, d->alarm, d->alarm_ep, d->change_ep, d->cusum_max); pd0_learner_free(Ln); dev_world_close(S2.w); } }
+        for (int ki = 0; ki < NK; ki++) { int h = 0, t = 0, x = 0, rh = 0, rt2 = 0, rx = 0; int64_t a[64], b[64], c[64], e[64];
+            for (int i = 0; i < n; i++) { const char *v = verdict(v21[ki][i], fr[ki][i]); if (v[1] == 'E') h++; else if (v[0] == 'T') t++; else x++;
+                const char *u = verdict(v21[ki][i], rt[ki][i]); if (u[1] == 'E') rh++; else if (u[0] == 'T') rt2++; else rx++; }
+            memcpy(a, fx[ki], sizeof a); memcpy(b, rt[ki], sizeof b); memcpy(c, fr[ki], sizeof c); memcpy(e, v21[ki], sizeof e);
+            printf("P0V21R-SUM level=%s applicable=%d k=%u seeds=%d median_fixed=%lld median_retain=%lld median_v21=%lld median_fresh=%lld v21_vs_fresh(helps/tie/harms)=%d/%d/%d v21_vs_retain(helps/tie/harms)=%d/%d/%d\n",
+                   lname(level), applicable, KS[ki], n, (long long)median(a, n), (long long)median(b, n), (long long)median(e, n), (long long)median(c, n), h, t, x, rh, rt2, rx); }
+        printf("P0V21-DETECT level=%s false_alarms_noswitch=%d/%d switch_detected_by_k32=%d/%d median_delay_episodes=%lld\n", lname(level), fa, nfa, det, applicable ? n : 0, (long long)median(delays, det < 64 ? det : 64)); }
+    return 0;
+}
 /* ================= C3 ================= */
 static int same_support(const pd0_rel *a, const pd0_rel *b)
 {
@@ -251,6 +294,11 @@ static int mode_prior(uint64_t lo, uint64_t hi)
             printf("P0V2P-SUM level=%s prior=%s k=%u seeds=%d skipped=%d kept/corrected/rejected_other_terms/rejected_to_null=%d/%d/%d/%d median_best_roll20=%lld median_prior_roll20=%lld median_noprior_best_roll20=%lld\n", lname(level), PN[p], KS[ki], nseed, nskip, cnt[p][ki][0], cnt[p][ki][1], cnt[p][ki][2], cnt[p][ki][3], (long long)median(vb[p][ki], nv[p][ki]), (long long)median(vp[p][ki], nv[p][ki]), (long long)median(vn[p][ki], nv[p][ki])); }
     return 0;
 }
+static int mode_prior21(uint64_t lo, uint64_t hi)
+{
+    for (int arm = 0; arm < 2; arm++) { g_forget = arm; printf("P0V21P-ARM arm=%s (the lines below are in the C3 format of #397)\n", arm ? "v21" : "v2"); int rc = mode_prior(lo, hi); if (rc) return rc; }
+    g_forget = 0; return 0;
+}
 #endif
 
 int main(int argc, char **argv)
@@ -263,6 +311,8 @@ int main(int argc, char **argv)
     if (!strcmp(argv[1], "regime")) return mode_regime(lo, hi);
     if (!strcmp(argv[1], "prior")) return mode_prior(lo, hi);
     if (!strcmp(argv[1], "detect")) return mode_detect(lo, hi);
+    if (!strcmp(argv[1], "shift")) return mode_shift(lo, hi);
+    if (!strcmp(argv[1], "prior21")) return mode_prior21(lo, hi);
 #endif
     fprintf(stderr, "unknown mode\n"); return 2;
 }
