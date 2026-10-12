@@ -21,7 +21,7 @@
     "generated": {
       "children": [
         {
-          "digest": "3f214954194bcbadbaf5a417104541320b3b43bfd75f924361139b8374a51df4",
+          "digest": "027eb4c8d53b989a45c9e586c8d7969ae6ebd5a64eb29014d041751cf6ea7fa5",
           "last_commit": "c02b278c",
           "name": "atemporal",
           "purpose": "AT-0 Clock-Free Universe research program: relational (Page-Wootters) quantum models with no ext"
@@ -31,34 +31,16 @@
           "last_commit": "458c57f5",
           "name": "dirac-oracle",
           "purpose": "Directory research/dirac-oracle. Purpose not yet described by a human."
-        },
-        {
-          "digest": "7ca182d0a6bd90801e4386c4627ac58965e0aa2b381e49bb6c5e0d2226ace248",
-          "last_commit": "72c0c39b",
-          "name": "m15/pmu",
-          "purpose": "Directory research/m15/pmu. Purpose not yet described by a human."
-        },
-        {
-          "digest": "cc7d487eb63f35f0baa47bb0a8c93222655d4bd58b81d413093807c58ebe7a9f",
-          "last_commit": "559f6e5d",
-          "name": "m15/spbm",
-          "purpose": "Directory research/m15/spbm. Purpose not yet described by a human."
-        },
-        {
-          "digest": "db23aeba4580239d67e68e3fadc064d5bd06570da99c3e97ac6b0d3347ae24a3",
-          "last_commit": "65c64a3e",
-          "name": "r14-failure-modes/exact-20260928-130858",
-          "purpose": "Directory research/r14-failure-modes/exact-20260928-130858. Purpose not yet described by a human"
         }
       ],
-      "children_root": "sha256:08fa20b3e02686ec56b44b0da7c693c68a73956e6e4738c16086476aa68bdf3f",
-      "compiled_at": "2026-10-12T05:08:10Z",
+      "children_root": "sha256:54838f75d8f7fecca1b4510a4a96e342b98d9ffdcd24b211c890673c2b3744f2",
+      "compiled_at": "2026-10-12T05:17:54Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:3c7bddebf9d321b786dc3ac6dadaabc061ceb510338de3f9fca7f7417bbdb5fb",
+      "digest": "sha256:2aa8396144fa241f695a99c882fc347425604ac4822d5162be9c3ad80354fc9f",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 538,
-      "generated_at_commit": "fa60e89a1e349a9cb33e6b0d7b548190496b2c40",
+      "generated_at_commit": "6e6f1c8e27b4f3a511bb284e7f51f2a957863ded",
       "source_tree": "sha256:2b75722935643d20739b1553a1dca48917714a788be7eef82940ac28cb4aaf91"
     },
     "owner_lane": "",
