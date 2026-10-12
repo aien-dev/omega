@@ -22,7 +22,7 @@
       "children": [
         {
           "digest": "027eb4c8d53b989a45c9e586c8d7969ae6ebd5a64eb29014d041751cf6ea7fa5",
-          "last_commit": "0863d99e",
+          "last_commit": "c02b278c",
           "name": "atemporal",
           "purpose": "AT-0 Clock-Free Universe research program: relational (Page-Wootters) quantum models with no ext"
         },
@@ -34,13 +34,13 @@
         }
       ],
       "children_root": "sha256:54838f75d8f7fecca1b4510a4a96e342b98d9ffdcd24b211c890673c2b3744f2",
-      "compiled_at": "2026-10-10T06:28:38Z",
+      "compiled_at": "2026-10-12T05:17:54Z",
       "compiler": "crumb-compile/1",
       "digest": "sha256:2aa8396144fa241f695a99c882fc347425604ac4822d5162be9c3ad80354fc9f",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 538,
-      "generated_at_commit": "0863d99ec730f261951b90ec984e9e3924e64c57",
+      "generated_at_commit": "6e6f1c8e27b4f3a511bb284e7f51f2a957863ded",
       "source_tree": "sha256:2b75722935643d20739b1553a1dca48917714a788be7eef82940ac28cb4aaf91"
     },
     "owner_lane": "",
