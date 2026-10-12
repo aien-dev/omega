@@ -601,8 +601,26 @@ $(RX_CX_TEST): $(RX_CX_SRCS) $(OUT_DIR)/rx_cortex.o src/runtime/rx_cortex_record
 	src/runtime/rx_world.h | $(OUT_DIR)
 	$(CC) $(CFLAGS) -pthread -o $@ $(RX_CX_SRCS) $(OUT_DIR)/rx_cortex.o
 
-test-cortex: $(RX_CX_TEST)
+# Journal backend seam (native v1 P06 cut 1): rx_cortex.c built with
+# CX_NO_POSIX must carry no file, lock or libc allocation symbol, and must
+# pass the same append/replay/torn-tail contract over a memory backend.
+RX_CX_FS_OBJ = $(OUT_DIR)/rx_cortex_freestanding.o
+RX_CXJ_TEST = $(OUT_DIR)/rx_cortex_journal_test
+RX_CX_FS_ALLOWED = memcpy|memmove|memset|memcmp|sha256_init|sha256_update|sha256_final|sha256_hash|cx_fs_alloc|cx_fs_realloc|cx_fs_free
+
+$(RX_CX_FS_OBJ): src/runtime/rx_cortex.c src/runtime/rx_cortex.h tests/runtime/cx_config_freestanding.h | $(OUT_DIR)
+	$(CC) $(CFLAGS) -ffreestanding -fno-builtin -DCX_NO_POSIX \
+	  -Itests/runtime -DCX_CONFIG_H='"cx_config_freestanding.h"' -c -o $@ src/runtime/rx_cortex.c
+	@bad=$$(nm -u $@ | awk '{print $$NF}' | grep -Ev '^(_GLOBAL_OFFSET_TABLE_|($(RX_CX_FS_ALLOWED)))$$' || true); \
+	if [ -n "$$bad" ]; then echo "rx_cortex.c (CX_NO_POSIX) still needs: $$bad"; rm -f $@; exit 1; fi
+	@echo "rx_cortex.c (CX_NO_POSIX): no file, lock or libc allocation symbols"
+
+$(RX_CXJ_TEST): tests/runtime/rx_cortex_journal.c $(RX_CX_FS_OBJ) src/sha256.c src/runtime/rx_cortex.h | $(OUT_DIR)
+	$(CC) $(CFLAGS) -o $@ tests/runtime/rx_cortex_journal.c $(RX_CX_FS_OBJ) src/sha256.c
+
+test-cortex: $(RX_CX_TEST) $(RX_CXJ_TEST)
 	./$(RX_CX_TEST)
+	./$(RX_CXJ_TEST)
 
 # Physical graphics seat against the native AIENOS authority. Not part of
 # GitHub checks. A pass on this machine is the only run that may set
