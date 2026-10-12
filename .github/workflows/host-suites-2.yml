@@ -111,6 +111,7 @@ jobs:
       argus: ${{ steps.f.outputs.argus }}
       numeric2: ${{ steps.f.outputs.numeric2 }}
       tensor: ${{ steps.f.outputs.tensor }}
+      gpuengine: ${{ steps.f.outputs.gpuengine }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -154,6 +155,7 @@ jobs:
           sel argus     "^src/runtime/|^tests/runtime/|^tests/bench_rx_argus\.c$|^mk/machine-identity\.mk$|^src/(sha256|omega_evidence)\.|^(physics|aienos|argus)\.lock$"
           sel numeric2  "^tests/(test_omega_reduce|test_omega_divsqrt_gb10)\.c$|^tests/numeric_oracle\.h$|^src/(omega_numeric|omega_blackwell_(encoder|codegen|matmul|qmd)|sha256)"
           sel tensor    "^tools/m20_receipt(_mutations)?\.sh$|^tests/test_m20_receipt\.sh$|^tests/fixtures/m20_receipt/|^src/tensor/|^tests/test_omega_tensor(_store)?\.c$|^tools/tensor_mutations\.sh$|^mk/tensor\.mk$|^src/(omega_numeric|omega_blackwell_(encoder|codegen|matmul|qmd)|sha256)"
+          sel gpuengine "^src/omega_gpu_(engine|platform)\.|^src/omega_blackwell_(encoder|qmd|realize)\.|^src/sha256\.|^tests/test_omega_gpu_(engine|engine_compile|platform)\.c$|^tools/gpu_engine_mutations\.sh$|^mk/omega-gpu-engine\.mk$"
 
   visor:
     needs: changes
@@ -416,6 +418,22 @@ jobs:
           fetch-depth: 0
       - name: Reduce CPU tier and GB10 div/sqrt sequences on the host (CPU only)
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-numeric-reduce-cpu test-divsqrt-host
+
+  gpu-engine:
+    needs: changes
+    if: needs.changes.outputs.gpuengine == 'true'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: GPU engine core against the fake backend (host, no device)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-gpu-engine-compile test-gpu-engine
+      - name: Freestanding GPU link target and contract tests (native v1 P07 cut A)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-gpu-engine-freestanding
+      - name: Engine mutants (each protection removed once must be caught)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-gpu-engine-mutants
 
   tensor:
     needs: changes

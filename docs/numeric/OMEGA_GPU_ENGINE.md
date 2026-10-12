@@ -854,7 +854,18 @@ The `dsb sy` barrier mutants are chip only: a CPU barrier instruction has no
 effect a host test can observe, so they are redundant on the host and belong to
 Phase B. Mutants of the core itself stay in `tools/gpu_engine_mutations.sh`.
 
-## 15. Origin
+## 15. Native boundary (native v1 P07 cut A)
+
+`src/omega_gpu_engine.c` also builds freestanding (`OMEGA_GPU_NO_POSIX`: no
+errno, no default clock, `omega_gpu_engine_set_clock` is the platform time
+service and a missing clock is refused at `STEP_CLOCK_CHECK`). The platform
+contract a native backend programs against is `src/omega_gpu_platform.h`.
+The per-file dependency map, the driver-responsibility table and the cut plan
+live in `docs/numeric/OMEGA_GPU_NATIVE_BOUNDARY.md`; `make
+test-gpu-engine-freestanding` is the host evidence. Device ownership stays
+NOT_RUN until cut B runs on the Spark.
+
+## 16. Origin
 
 The engine core and the Blackwell backend were seeded from the first cut written
 by GPT-6 Astra (branch `fix/omega-gpu-engine-first-cut`, commit 21392ee, dated
