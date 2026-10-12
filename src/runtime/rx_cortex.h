@@ -142,8 +142,10 @@ typedef struct CxStore {
     uint64_t n_subjects;
     uint8_t chain[32];       /* running hash over every digest in append order */
     uint64_t examined;       /* objects touched by queries, cumulative */
-    /* Journal backing (cx_open). fd < 0: memory only. */
-    int fd;
+    /* Journal backing (cx_open_with). jops NULL: memory only. */
+    const struct CxJournalOps *jops;
+    void *jctx;              /* backend context, handed back to every op */
+    void *jh;                /* the open journal, owned by the backend */
     uint32_t open_flags;
     /* The one writer, 0 = unclaimed. While claimed, only cx_append_as with
      * the same token appends. */
@@ -199,6 +201,45 @@ enum {
     CX_OPEN_REPAIR_TAIL = 1u << 2   /* truncate one incomplete trailing record */
 };
 
+/* ---- journal backend ------------------------------------------------------
+ * The store reaches its journal only through this table. cx_journal_posix is
+ * the file backend (one file, flock for the writer lock); it is the default
+ * of cx_open and is compiled out under CX_NO_POSIX, where a freestanding host
+ * (AIENOS: sealed Store objects, P06 adapter) supplies its own table through
+ * cx_open_with. Memory comes from CX_MALLOC / CX_REALLOC / CX_FREE, which a
+ * config header named by CX_CONFIG_H may define; the default is libc.
+ * The record format, the digests, the chain and every check in cx_open are
+ * the same under every backend: a backend stores bytes, it never interprets
+ * them. */
+typedef struct CxJournalOps {
+    /* Open the journal `name`. ro: no lock, no writes, must exist. Writable:
+     * create when absent and take the one-writer lock, CX_ERR_WRITER when
+     * another writer holds it. *h receives the backend's handle. */
+    int  (*open)(void *ctx, const char *name, int ro, void **h);
+    /* Current length in bytes. */
+    int  (*size)(void *ctx, void *h, size_t *len);
+    /* Exactly n bytes at offset off, or an error. */
+    int  (*read)(void *ctx, void *h, size_t off, uint8_t *out, size_t n);
+    /* Append n bytes as ONE unit: on return either all of them are in the
+     * journal (durable when sync != 0) or none of them is, and the length is
+     * as before. A partial write is the backend's to undo. */
+    int  (*append)(void *ctx, void *h, const uint8_t *b, size_t n, int sync);
+    /* Cut the journal back to len bytes, durably (CX_OPEN_REPAIR_TAIL). A
+     * backend whose appends are atomic never holds a torn tail and may
+     * answer CX_ERR_IO. */
+    int  (*truncate)(void *ctx, void *h, size_t len);
+    /* Release the handle; a writer's lock drops here. */
+    void (*close)(void *ctx, void *h);
+} CxJournalOps;
+
+#ifndef CX_NO_POSIX
+extern const CxJournalOps cx_journal_posix;
+#endif
+
+/* cx_open through an explicit backend; the contract below is unchanged. */
+int  cx_open_with(CxStore *s, const CxJournalOps *ops, void *ctx, const char *name,
+                  uint64_t n_subjects, uint32_t flags);
+
 /* Open (creating if absent and writable) a journal-backed store. A writable
  * open takes an exclusive lock; a second writable open of the same file,
  * from this or any process, gets CX_ERR_WRITER. n_subjects must match a
@@ -220,7 +261,9 @@ enum {
  * record digest in the J-Space checkpoint anchor and cross-checks it at open.
  * KNOWN LIMIT: if both the Cortex journal and the J-Space checkpoint roll back
  * together, nothing local detects it (an external anchor problem). */
+#ifndef CX_NO_POSIX
 int  cx_open(CxStore *s, const char *path, uint64_t n_subjects, uint32_t flags);
+#endif
 void cx_close(CxStore *s);   /* = cx_free */
 
 const CxObject *cx_get(const CxStore *s, uint64_t id);

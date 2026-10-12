@@ -5,13 +5,27 @@
 
 #include "sha256.h"
 
+#include <string.h>
+
+/* Allocation hooks: a freestanding host names a config header through
+ * CX_CONFIG_H that defines CX_MALLOC(n), CX_REALLOC(p, n) and CX_FREE(p). */
+#ifdef CX_CONFIG_H
+#include CX_CONFIG_H
+#endif
+#ifndef CX_MALLOC
+#include <stdlib.h>
+#define CX_MALLOC(n) malloc(n)
+#define CX_REALLOC(p, n) realloc((p), (n))
+#define CX_FREE(p) free(p)
+#endif
+
+#ifndef CX_NO_POSIX
 #include <errno.h>
 #include <fcntl.h>
-#include <stdlib.h>
-#include <string.h>
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#endif
 
 static void put_u64(sha256_ctx *c, uint64_t v) {
     uint8_t b[8];
@@ -46,21 +60,21 @@ static void chain_step(uint8_t chain[32], const uint8_t digest[32]) {
 
 int cx_init(CxStore *s, uint64_t n_subjects) {
     memset(s, 0, sizeof(*s));
-    s->fd = -1;
-    s->by_subject = calloc(n_subjects ? n_subjects : 1, sizeof(CxIdList));
+    size_t nb = (size_t)(n_subjects ? n_subjects : 1) * sizeof(CxIdList);
+    s->by_subject = CX_MALLOC(nb);
     if (!s->by_subject) return CX_ERR_NOMEM;
+    memset(s->by_subject, 0, nb);
     s->n_subjects = n_subjects;
     return CX_OK;
 }
 
 void cx_free(CxStore *s) {
-    for (uint64_t i = 0; i < s->n_subjects && s->by_subject; i++) free(s->by_subject[i].ids);
-    free(s->by_subject);
-    free(s->obj);
-    free(s->arena);
-    if (s->fd >= 0) close(s->fd);   /* closing drops the flock */
+    for (uint64_t i = 0; i < s->n_subjects && s->by_subject; i++) CX_FREE(s->by_subject[i].ids);
+    CX_FREE(s->by_subject);
+    CX_FREE(s->obj);
+    CX_FREE(s->arena);
+    if (s->jops) s->jops->close(s->jctx, s->jh);   /* closing drops the writer lock */
     memset(s, 0, sizeof(*s));
-    s->fd = -1;
 }
 
 void cx_close(CxStore *s) { cx_free(s); }
@@ -69,7 +83,7 @@ static int grow(void **p, uint64_t *cap, uint64_t need, size_t elem) {
     if (need <= *cap) return 0;
     uint64_t c = *cap ? *cap : 1024;
     while (c < need) c *= 2;
-    void *q = realloc(*p, c * elem);
+    void *q = CX_REALLOC(*p, c * elem);
     if (!q) return -1;
     *p = q;
     *cap = c;
@@ -94,23 +108,10 @@ static uint64_t le_get(const uint8_t *p) {
     return v;
 }
 
-static int write_all(int fd, const uint8_t *b, size_t n) {
-    while (n) {
-        ssize_t w = write(fd, b, n);
-        if (w < 0) {
-            if (errno == EINTR) continue;
-            return -1;
-        }
-        b += w;
-        n -= (size_t)w;
-    }
-    return 0;
-}
-
 /* Encode one object as a journal record into a fresh buffer. */
 static uint8_t *encode_record(const CxObject *o, const uint64_t *payload, size_t *out_len) {
     size_t words = CX_R_FIXED + o->n + CX_R_DIGEST;
-    uint8_t *b = malloc(words * 8);
+    uint8_t *b = CX_MALLOC(words * 8);
     if (!b) return NULL;
     uint64_t w[CX_R_FIXED] = {
         CX_R_MAGIC, o->id, ((uint64_t)o->cls << 32) | o->kind, o->subject, o->t,
@@ -141,7 +142,7 @@ static int append_mem(CxStore *s, const CxHeader *h, const uint64_t *payload, ui
         return CX_ERR_NOMEM;
     if (l->n == l->cap) {
         uint32_t c = l->cap ? l->cap * 2 : 64;
-        uint64_t *q = realloc(l->ids, (size_t)c * sizeof(uint64_t));
+        uint64_t *q = CX_REALLOC(l->ids, (size_t)c * sizeof(uint64_t));
         if (!q) return CX_ERR_NOMEM;
         l->ids = q;
         l->cap = c;
@@ -189,19 +190,21 @@ int cx_append_as(CxStore *s, uint64_t token, const CxHeader *h, const uint64_t *
     uint64_t id = 0;
     int rc = append_mem(s, h, payload, n, 0, &id);
     if (rc != CX_OK) return rc;
-    if (s->fd >= 0) {
+    if (s->jops) {
         const CxObject *o = &s->obj[id - 1];
         size_t len = 0;
         uint8_t *rec = encode_record(o, s->arena + o->off, &len);
-        off_t end = lseek(s->fd, 0, SEEK_END);
-        int bad = !rec || end < 0 || write_all(s->fd, rec, len) != 0 ||
-                  ((s->open_flags & CX_OPEN_SYNC) && fdatasync(s->fd) != 0);
-        free(rec);
-        if (bad) {
-            /* Never leave memory ahead of the journal, nor a partial record. */
-            if (end >= 0 && ftruncate(s->fd, end) != 0) { /* reopen will see a torn tail */ }
+        if (!rec) {
             unappend_mem(s, prev);
-            return rec ? CX_ERR_IO : CX_ERR_NOMEM;
+            return CX_ERR_NOMEM;
+        }
+        /* The backend appends all of the record or none of it; memory never
+         * runs ahead of the journal. */
+        int rc2 = s->jops->append(s->jctx, s->jh, rec, len, (s->open_flags & CX_OPEN_SYNC) != 0);
+        CX_FREE(rec);
+        if (rc2 != CX_OK) {
+            unappend_mem(s, prev);
+            return rc2;
         }
     }
     if (out_id) *out_id = id;
@@ -226,18 +229,15 @@ void cx_release_writer(CxStore *s, uint64_t token) {
 
 /* ---- journal open / replay ----------------------------------------------- */
 
-static int read_file(int fd, uint8_t **out, size_t *len) {
-    struct stat st;
-    if (fstat(fd, &st) != 0) return CX_ERR_IO;
-    size_t n = (size_t)st.st_size;
-    uint8_t *b = malloc(n ? n : 1);
+static int read_journal(const CxJournalOps *ops, void *ctx, void *h, uint8_t **out, size_t *len) {
+    size_t n = 0;
+    int rc = ops->size(ctx, h, &n);
+    if (rc != CX_OK) return rc;
+    uint8_t *b = CX_MALLOC(n ? n : 1);
     if (!b) return CX_ERR_NOMEM;
-    size_t got = 0;
-    while (got < n) {
-        ssize_t r = pread(fd, b + got, n - got, (off_t)got);
-        if (r < 0 && errno == EINTR) continue;
-        if (r <= 0) { free(b); return CX_ERR_IO; }
-        got += (size_t)r;
+    if (n) {
+        rc = ops->read(ctx, h, 0, b, n);
+        if (rc != CX_OK) { CX_FREE(b); return rc; }
     }
     *out = b;
     *len = n;
@@ -259,7 +259,7 @@ static int replay(CxStore *s, const uint8_t *b, size_t len, size_t *good_end) {
         size_t rec = ((size_t)CX_R_FIXED + n + CX_R_DIGEST) * 8;
         if (len - p < rec) { rc = CX_ERR_TORN; break; }
         if (n > payload_cap) {
-            uint64_t *q = realloc(payload, (size_t)n * sizeof(uint64_t));
+            uint64_t *q = CX_REALLOC(payload, (size_t)n * sizeof(uint64_t));
             if (!q) { rc = CX_ERR_NOMEM; break; }
             payload = q;
             payload_cap = n;
@@ -286,64 +286,147 @@ static int replay(CxStore *s, const uint8_t *b, size_t len, size_t *good_end) {
         p += rec;
         *good_end = p;
     }
-    free(payload);
+    CX_FREE(payload);
     return rc;
 }
 
 /* The single integrity seam: see the guarantee in rx_cortex.h. */
-int cx_open(CxStore *s, const char *path, uint64_t n_subjects, uint32_t flags) {
-    if (!s || !path) return CX_ERR_ARG;
+int cx_open_with(CxStore *s, const CxJournalOps *ops, void *ctx, const char *name,
+                 uint64_t n_subjects, uint32_t flags) {
+    if (!s || !ops || !name || !ops->open || !ops->size || !ops->read || !ops->append ||
+        !ops->truncate || !ops->close)
+        return CX_ERR_ARG;
     int ro = (flags & CX_OPEN_READONLY) != 0;
-    int fd = open(path, ro ? O_RDONLY | O_CLOEXEC : O_RDWR | O_CREAT | O_CLOEXEC, 0644);
-    if (fd < 0) return CX_ERR_IO;
-    if (!ro && flock(fd, LOCK_EX | LOCK_NB) != 0) {
-        int e = errno;
-        close(fd);
-        return e == EWOULDBLOCK ? CX_ERR_WRITER : CX_ERR_IO;
-    }
+    void *jh = NULL;
+    int rc = ops->open(ctx, name, ro, &jh);
+    if (rc != CX_OK) return rc;
     uint8_t *b = NULL;
     size_t len = 0;
-    int rc = read_file(fd, &b, &len);
-    if (rc != CX_OK) { close(fd); return rc; }
+    rc = read_journal(ops, ctx, jh, &b, &len);
+    if (rc != CX_OK) { ops->close(ctx, jh); return rc; }
     if (len == 0) {
-        if (ro || n_subjects == 0) { free(b); close(fd); return CX_ERR_FORMAT; }
+        if (ro || n_subjects == 0) { CX_FREE(b); ops->close(ctx, jh); return CX_ERR_FORMAT; }
         uint8_t h[CX_J_HDR_WORDS * 8] = { 0 };
         le_put(h, CX_J_MAGIC);
         le_put(h + 8, CX_J_VERSION);
         le_put(h + 16, n_subjects);
         le_put(h + 24, 0);   /* reserved: canonical machine identity (M20 A1) */
-        if (write_all(fd, h, sizeof h) != 0 || fdatasync(fd) != 0) {
-            free(b); close(fd); return CX_ERR_IO;
-        }
+        rc = ops->append(ctx, jh, h, sizeof h, 1);
+        if (rc != CX_OK) { CX_FREE(b); ops->close(ctx, jh); return rc; }
     } else {
         if (len < CX_J_HDR_WORDS * 8 || le_get(b) != CX_J_MAGIC || le_get(b + 8) != CX_J_VERSION) {
-            free(b); close(fd); return CX_ERR_FORMAT;
+            CX_FREE(b); ops->close(ctx, jh); return CX_ERR_FORMAT;
         }
         uint64_t file_subjects = le_get(b + 16);
-        if (n_subjects && n_subjects != file_subjects) { free(b); close(fd); return CX_ERR_FORMAT; }
+        if (n_subjects && n_subjects != file_subjects) {
+            CX_FREE(b); ops->close(ctx, jh); return CX_ERR_FORMAT;
+        }
         n_subjects = file_subjects;
     }
     rc = cx_init(s, n_subjects);
-    if (rc != CX_OK) { free(b); close(fd); return rc; }
+    if (rc != CX_OK) { CX_FREE(b); ops->close(ctx, jh); return rc; }
     if (len) {
         size_t good = 0;
         rc = replay(s, b, len, &good);
         if (rc == CX_ERR_TORN && !ro && (flags & CX_OPEN_REPAIR_TAIL)) {
             /* Only an incomplete trailing record is dropped. A complete record
              * whose digest differs is never repaired. */
-            rc = ftruncate(fd, (off_t)good) == 0 && fdatasync(fd) == 0 ? CX_OK : CX_ERR_IO;
+            rc = ops->truncate(ctx, jh, good);
         }
     }
-    free(b);
+    CX_FREE(b);
     if (rc != CX_OK) {
-        close(fd);
+        ops->close(ctx, jh);
         cx_free(s);
         return rc;
     }
-    s->fd = fd;
+    s->jops = ops;
+    s->jctx = ctx;
+    s->jh = jh;
     s->open_flags = flags;
     return CX_OK;
 }
+
+#ifndef CX_NO_POSIX
+/* ---- the file backend ---------------------------------------------------- */
+
+static int write_all(int fd, const uint8_t *b, size_t n) {
+    while (n) {
+        ssize_t w = write(fd, b, n);
+        if (w < 0) {
+            if (errno == EINTR) continue;
+            return -1;
+        }
+        b += w;
+        n -= (size_t)w;
+    }
+    return 0;
+}
+
+static int jp_open(void *ctx, const char *name, int ro, void **h) {
+    (void)ctx;
+    int fd = open(name, ro ? O_RDONLY | O_CLOEXEC : O_RDWR | O_CREAT | O_CLOEXEC, 0644);
+    if (fd < 0) return CX_ERR_IO;
+    if (!ro && flock(fd, LOCK_EX | LOCK_NB) != 0) {
+        int e = errno;
+        close(fd);
+        return e == EWOULDBLOCK ? CX_ERR_WRITER : CX_ERR_IO;
+    }
+    *h = (void *)(intptr_t)fd;
+    return CX_OK;
+}
+
+static int jp_size(void *ctx, void *h, size_t *len) {
+    (void)ctx;
+    struct stat st;
+    if (fstat((int)(intptr_t)h, &st) != 0) return CX_ERR_IO;
+    *len = (size_t)st.st_size;
+    return CX_OK;
+}
+
+static int jp_read(void *ctx, void *h, size_t off, uint8_t *out, size_t n) {
+    (void)ctx;
+    int fd = (int)(intptr_t)h;
+    size_t got = 0;
+    while (got < n) {
+        ssize_t r = pread(fd, out + got, n - got, (off_t)(off + got));
+        if (r < 0 && errno == EINTR) continue;
+        if (r <= 0) return CX_ERR_IO;
+        got += (size_t)r;
+    }
+    return CX_OK;
+}
+
+static int jp_append(void *ctx, void *h, const uint8_t *b, size_t n, int sync) {
+    (void)ctx;
+    int fd = (int)(intptr_t)h;
+    off_t end = lseek(fd, 0, SEEK_END);
+    if (end < 0) return CX_ERR_IO;
+    if (write_all(fd, b, n) != 0 || (sync && fdatasync(fd) != 0)) {
+        /* Never leave a partial record behind. */
+        if (ftruncate(fd, end) != 0) { /* reopen will see a torn tail */ }
+        return CX_ERR_IO;
+    }
+    return CX_OK;
+}
+
+static int jp_truncate(void *ctx, void *h, size_t len) {
+    (void)ctx;
+    int fd = (int)(intptr_t)h;
+    return ftruncate(fd, (off_t)len) == 0 && fdatasync(fd) == 0 ? CX_OK : CX_ERR_IO;
+}
+
+static void jp_close(void *ctx, void *h) {
+    (void)ctx;
+    close((int)(intptr_t)h);   /* closing drops the flock */
+}
+
+const CxJournalOps cx_journal_posix = { jp_open, jp_size, jp_read, jp_append, jp_truncate, jp_close };
+
+int cx_open(CxStore *s, const char *path, uint64_t n_subjects, uint32_t flags) {
+    return cx_open_with(s, &cx_journal_posix, NULL, path, n_subjects, flags);
+}
+#endif /* !CX_NO_POSIX */
 
 /* ---- read ---------------------------------------------------------------- */
 
