@@ -689,6 +689,13 @@ RX_R13_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c \
 	src/omega_verify.c src/omega_matvec.c src/omega_matvec_quad.c \
 	$(RX_COMPOSE_LIVING_SRCS) \
 	tests/runtime/rx_r13_living.c
+# librx_compose.a objects (mk/rx_compose_lib.mk) are compiled with -MMD; include their
+# .d files HERE, after RX_R13_SRCS exists (the mk file is included at the top, where the
+# list is still empty and an include there expands to nothing). Without this a header
+# change (rx_cortex.h, omega#408) left rx_compose.o / rxc_host_abi.o stale in a reused
+# OUT_DIR: the archive mixed two layouts of CxStore and rxc_host_run refused with
+# RX_ERR_AUTHORITY (sovereign-core abi-qualify, 2026-10-12).
+-include $(RXC_LIB_OBJS:.o=.d)
 RX_R13_TEST_SRCS = $(RX_R13_SRCS) $(RX_FABRIC_TEST_SRCS)
 RX_R13_SILICON_EXTRA = src/runtime/rx_resident_gpu.c src/omega_blackwell_codegen.c \
 	src/omega_blackwell_encoder.c src/omega_blackwell_qmd.c src/omega_blackwell_matmul.c \
