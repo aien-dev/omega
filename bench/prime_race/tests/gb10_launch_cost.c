@@ -79,7 +79,7 @@ int main(int argc, char **argv) {
 
     omega_gpu_session_lock();
     if (!omega_gpu_session_open()) { fprintf(stderr, "open failed: %s\n", omega_gpu_session_last_error()); return 2; }
-    NvrmMem code, out, tab;
+    OmegaGpuMem code, out, tab;
     if (omega_gpu_session_alloc(k.code_size, &code) || omega_gpu_session_alloc((size_t)(nwords ? nwords : 1) * 4, &out) ||
         omega_gpu_session_alloc(((size_t)root / 2 + 2) * 12, &tab)) { fprintf(stderr, "alloc failed\n"); return 2; }
     memcpy(code.cpu, k.code, k.code_size);

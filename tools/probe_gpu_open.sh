@@ -43,7 +43,7 @@ run_variant overlap
 grep -c 'rc=OK' "$LOG" > "$OUT/ok_count.txt"
 grep 'rc=' "$LOG" | grep -v 'rc=OK' | grep -v negative_control > "$OUT/failures.txt"
 echo "end $(date -u +%FT%TZ)" >> "$OUT/device.txt"
-cp tests/gpu_session_probe.c src/omega_gpu_session.c tools/probe_gpu_open.sh "$OUT/"
+cp tests/gpu_session_probe.c src/omega_gpu_session.c src/omega_gpu_platform.c src/omega_gpu_platform_linux.c tools/probe_gpu_open.sh "$OUT/"
 (cd "$OUT" && sha256sum -- * > SHA256SUMS)
 echo "PROBE_GPU_OPEN: negative_control_exit=$neg_rc first_call_failures=$fails/$total (details $OUT/failures.txt)"
 [ "$neg_rc" != 0 ] || { echo "PROBE_GPU_OPEN: INSTRUMENT FAIL (negative control passed)"; exit 3; }
