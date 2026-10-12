@@ -912,12 +912,12 @@ static void hd128_checks(void) {
  * (speed/attention-batched-loads; before it, main c0369e6 was pinned at 160 instructions); any change to the head_dim 64 program changes a digest and fails here. */
 typedef struct { bool f32; uint32_t log2bs, log2gqa; size_t insns; const char *sha256; } Pin;
 static const Pin k_pins64[] = {
-    { false, 4, 3, 200, "67ee74d7a7d55342d5be45b935936190df83bfe2e05feda61e91f309e74285b4" }, 
-    { false, 4, 2, 200, "fb31d1a554e2313e48b63087e57cae318c8387315c807289cd2495329667428e" }, 
-    { false, 4, 0, 200, "b7f64d8c7c7ee0f2028d0c4ae2feed0d608e9a0ae798d94cd64e6c244a87b64f" }, 
-    { true, 12, 3, 176, "67cc059967cd9fa3e6632e6f92ee1d1aec8a27a2c3174133e8eac3eb9a0bfb8d" }, 
-    { true, 12, 2, 176, "7336cac33b5c6d11abfa11f7e61d6b42ae41a69a1aaf820680d7e4eefd5e90fb" }, 
-    { true, 12, 0, 176, "1aa0a8e3375e5a3e22dab58dacec751c2c920cea51ab3f1986a2c016f1e44061" },
+    { false, 4, 3, 216, "44d27fae78ea21ee77fd7a0ebd2ebfcac52e9e45a81de84b035868092e13e424" }, 
+    { false, 4, 2, 216, "3bc79d4a54fd0d82024b376dfdb718e8326431917251f13f5c44be6ba8eb6f0c" }, 
+    { false, 4, 0, 216, "83eca9872e32c17321d2f8ec6a6ec92638ed72b136d8958cda5cdfc451c01ef8" }, 
+    { true, 12, 3, 184, "b6a25d8739185bbd944bfcc1ec174abb24ce46529f06c56f8d5ac77bf6883ddd" }, 
+    { true, 12, 2, 184, "46a2b82ebcb55237f4a7585679b42ac9558c7a434e8e80ccef6cc0bfaed8fcb9" }, 
+    { true, 12, 0, 184, "970db9533c836eca7c86783875a2ad898cd69bc3070cae418cc92b3ce2dbbd9c" },
 };
 static void hex_digest(const uint8_t d[32], char out[65]) { for (int i = 0; i < 32; i++) snprintf(out + 2 * i, 3, "%02x", d[i]); }
 static void hd_codegen_checks(void) {

@@ -47,6 +47,7 @@
 #define SB_RD 1u
 #define SB_UGPR 2u
 #define SB_LD2 4u       /* second scoreboard for batched loads (the matmul kernel's B-load word, omega #328) */
+#define SB_LD3 3u       /* third: phase B keeps shared loads and the two halves of the V loads on separate scoreboards */
 #define AT_BATCH_MAX 4  /* loads in flight per scoreboard: 4 complete on the chip, 8 never did (omega #328) */
 
 enum { K_FIXED, K_PRED, K_VAR, K_UVAR, K_STORE, K_SYNC, K_EXIT, K_BRA, K_BSSY, K_BSYNC };
@@ -127,6 +128,15 @@ static void emit_batched(Em *e, BlackwellIRInsn in, uint32_t sb) {
     e->pending |= (1u << sb) | (1u << SB_RD);
     if (omega_bw_ir_append(e->p, &in) < 0) e->err = -1;
 }
+/* A fixed-latency instruction inside an open load batch: it waits on the batch's read barrier (its
+ * destination may be a load's address register, which the load may read late) but not on the loads'
+ * data, so the address of the next load is computed while the earlier loads are in flight. Only for
+ * instructions that read no result of the open batch. */
+static void emit_fixed_in_batch(Em *e, BlackwellIRInsn in) {
+    uint32_t wait = (e->pending & ~e->batch) | (e->batch ? (1u << SB_RD) : 0u);
+    in.control = CW(6, SB_NONE, SB_NONE, wait);
+    if (omega_bw_ir_append(e->p, &in) < 0) e->err = -1;
+}
 static void ldg128_b(Em *e, int dst128, int addr64, uint32_t imm, int udesc, uint32_t sb) { BlackwellIRInsn i = I0(BW_IR_LDG_E_128); i.dst_vreg = dst128; i.src1_vreg = addr64; i.imm = imm; i.ureg = udesc; emit_batched(e, i, sb); }
 static void ldg_b(Em *e, int dst, int addr64, int udesc, uint32_t sb) { BlackwellIRInsn i = I0(BW_IR_LDG_E); i.dst_vreg = dst; i.src1_vreg = addr64; i.ureg = udesc; emit_batched(e, i, sb); }
 static void ldg16_b(Em *e, int dst, int addr64, int udesc, uint32_t sb) { BlackwellIRInsn i = I0(BW_IR_LDG_E_U16); i.dst_vreg = dst; i.src1_vreg = addr64; i.ureg = udesc; emit_batched(e, i, sb); }
@@ -136,6 +146,7 @@ static void e_ffma_s(Em *e, int d, int a, int as, int b, int bs, int c) { Blackw
 static void imadi_s(Em *e, int dst, int a, int as, uint32_t imm, int c) { BlackwellIRInsn i = I0(BW_IR_IMAD); i.dst_vreg = dst; i.src1_vreg = a; i.src1_subreg = (uint8_t)as; i.imm = imm; i.src3_vreg = c; emit(e, i, K_FIXED); }
 static void lop3andi_s(Em *e, int dst, int a, int as, uint32_t imm) { BlackwellIRInsn i = I0(BW_IR_LOP3_AND); i.dst_vreg = dst; i.src1_vreg = a; i.src1_subreg = (uint8_t)as; i.imm = imm; emit(e, i, K_FIXED); }
 static void wide_s(Em *e, int dst64, int idx, int is, uint32_t imm, int base64) { BlackwellIRInsn i = I0(BW_IR_IMAD_WIDE); i.dst_vreg = dst64; i.src1_vreg = idx; i.src1_subreg = (uint8_t)is; i.imm = imm; i.src3_vreg = base64; emit(e, i, K_FIXED); }
+static void wide_s_b(Em *e, int dst64, int idx, int is, uint32_t imm, int base64) { BlackwellIRInsn i = I0(BW_IR_IMAD_WIDE); i.dst_vreg = dst64; i.src1_vreg = idx; i.src1_subreg = (uint8_t)is; i.imm = imm; i.src3_vreg = base64; emit_fixed_in_batch(e, i); }
 static void stg(Em *e, int addr64, int val, int udesc) { BlackwellIRInsn i = I0(BW_IR_STG_E); i.src1_vreg = addr64; i.src2_vreg = val; i.ureg = udesc; emit(e, i, K_STORE); }
 static void e_fadd(Em *e, int d, int a, int b) { BlackwellIRInsn i = I0(BW_IR_FADD); i.dst_vreg = d; i.src1_vreg = a; i.src2_vreg = b; emit(e, i, K_FIXED); }
 static void e_fsub(Em *e, int d, int a, int b) { BlackwellIRInsn i = I0(BW_IR_FSUB); i.dst_vreg = d; i.src1_vreg = a; i.src2_vreg = b; emit(e, i, K_FIXED); }
@@ -451,13 +462,15 @@ static void gen_attention(Em *e, const KSpec *k) {
     if (k->mutant != OMEGA_GPU_ATTN_MUTANT_NO_RESCALE) e_fmul(e, acc, acc, alpha);
 
     /* phase B (batched, 2026-10-12): dimension tid over the chunk's tokens, AT_TOK tokens per pass. The
-     * token offsets and p of a pass come in two 128-bit shared loads each (SB_LD2), the V elements in
-     * AT_TOK loads over SB_GPR and SB_LD2; one wait for each group instead of one per load. A token past
+     * token offsets of a pass come in two 128-bit shared loads (SB_LD2, one wait), then each V address is
+     * computed into one register pair while the earlier V loads are in flight (emit_fixed_in_batch: the
+     * read barrier orders the overwrite after the load has read it) and its load issued on SB_GPR or
+     * SB_LD3; the p values follow as two more shared loads on SB_LD2; one wait for all of it. A token past
      * ctx inside a pass has p = 0 and the offset of a real token (phase A), so it adds exactly 0. */
-    enum { AT_TOK = 4 }; /* 8 tokens per pass needs 68 registers, over AT_GPR_BUDGET 64 (the QMD declaration) */
-    int kk = V(e), tt = V(e), oa = V(e), pa = V(e), ko4[2], pv4[2], va[AT_TOK], v[AT_TOK];
+    enum { AT_TOK = 8 };
+    int kk = V(e), tt = V(e), oa = V(e), pa = V(e), ko4[2], pv4[2], va = V64(e), v[AT_TOK];
     for (int i = 0; i < 2; i++) { ko4[i] = V128(e); pv4[i] = V128(e); }
-    for (int i = 0; i < AT_TOK; i++) { va[i] = V64(e); v[i] = V(e); }
+    for (int i = 0; i < AT_TOK; i++) v[i] = V(e);
     movrz(e, kk);
     loop_begin(e);
     int LB = here(e);
@@ -467,12 +480,13 @@ static void gen_attention(Em *e, const KSpec *k) {
     imadi(e, oa, kk, 4, c512);
     imadi(e, pa, kk, 4, c256);
     for (int i = 0; i < 2; i++) lds128_b(e, ko4[i], oa, (uint32_t)i * 16u, SB_LD2);
-    for (int i = 0; i < 2; i++) lds128_b(e, pv4[i], pa, (uint32_t)i * 16u, SB_LD2);
-    for (int i = 0; i < AT_TOK; i++) wide_s(e, va[i], ko4[i / 4], i % 4, 1, vb);
     for (int i = 0; i < AT_TOK; i++) {
-        uint32_t sb = (i < AT_TOK / 2) ? SB_GPR : SB_LD2;
-        if (k->f32) ldg_b(e, v[i], va[i], udesc, sb); else ldg16_b(e, v[i], va[i], udesc, sb);
+        if (i == 0) wide_s(e, va, ko4[0], 0, 1, vb); /* ordinary: waits for the offsets */
+        else wide_s_b(e, va, ko4[i / 4], i % 4, 1, vb);
+        uint32_t sb = (i < AT_TOK / 2) ? SB_GPR : SB_LD3;
+        if (k->f32) ldg_b(e, v[i], va, udesc, sb); else ldg16_b(e, v[i], va, udesc, sb);
     }
+    for (int i = 0; i < 2; i++) lds128_b(e, pv4[i], pa, (uint32_t)i * 16u, SB_LD2);
     for (int i = 0; i < AT_TOK; i++) {
         if (!k->f32) imadi(e, v[i], v[i], 0x10000u, NOREG);
         e_ffma_s(e, acc, pv4[i / 4], i % 4, v[i], 0, acc);
