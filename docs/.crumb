@@ -81,8 +81,8 @@
           "purpose": "Directory docs/estimation. Purpose not yet described by a human."
         },
         {
-          "digest": "4814693fa8bfdb9b4c6a1270714aea1625edb47eb360b95dd57509ccb9fa507e",
-          "last_commit": "15c7666",
+          "digest": "82617b47b6fee43e883fa67d97ecf12e15b112dfce8c5729a8ff77c1ef48bcba",
+          "last_commit": "a073db7",
           "name": "numeric",
           "purpose": "Directory docs/numeric. Purpose not yet described by a human."
         },
@@ -117,15 +117,15 @@
           "purpose": "Directory docs/turing. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:58266768b4537aa7e4a3706895d03421952f342a27e67e1a84d53a1d48f9d1e8",
-      "compiled_at": "2026-10-12T16:18:14Z",
+      "children_root": "sha256:9352f505ab6ddff156505d8092d938451e40a2d1f40e86df9abe0e10e327c0ee",
+      "compiled_at": "2026-10-12T16:47:44Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:9140b57d45416f04c6fb5c625e57ae0d64b05f40e2fccb7aba5b189c39230158",
+      "digest": "sha256:0790547d35025c5b3000f1fbb6da5f46eac7177f936af129ef1f54fd417aabab",
       "evidence_files": 34,
       "evidence_root": "sha256:589d8b3706e6d7a202ab20b278dac5fc5bafc973f1c2a867b2668aa7210b65cc",
       "files": 119,
-      "generated_at_commit": "15c7666a3d3183750adc61edb60b7a84141c104a",
-      "source_tree": "sha256:30350b853fc40afad9169bd8e543adcd422d0366516028f0d7e529689fc3c8ad"
+      "generated_at_commit": "a073db70e22eec13128c00554683dd8c59b6f456",
+      "source_tree": "sha256:7275e5a9943a6e9572ac4295a7b0ffb4f0bf754cd42277bb148862c67bfe0327"
     },
     "owner_lane": "",
     "provenance": {

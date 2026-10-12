@@ -105,7 +105,7 @@ typedef struct {
     uint32_t entries;       /* table entries for this limit, sentinel included (fixed by the limit) */
     uint32_t shared_bytes;  /* 0: global-table kernel; else the staged kernel's shared memory per CTA */
     OmegaBlackwellKernel k;
-    NvrmMem code, out, table;
+    OmegaGpuMem code, out, table;
     uint64_t diag_ns, launches;
     int locked, opened;
 } gb_state;

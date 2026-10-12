@@ -1,6 +1,7 @@
 # Omega GPU native boundary: dependency map and freestanding link target
 
-Native v1 P07 cut A and A.2. Tracks aienos#286 (cut A) and aien-architecture#190.
+Native v1 P07 cut A, A.2 and the session part of cut C (omega#419 for A.2,
+omega#421 for cut C session part). Tracks aienos#286 and aien-architecture#190.
 Companion of `docs/numeric/OMEGA_GPU_ENGINE.md` (the engine contract) and
 `src/omega_gpu_platform.h` (the platform contract this cut adds).
 
@@ -26,7 +27,7 @@ Claimed (host evidence, `make test-gpu-engine-freestanding`):
   platform clock installed, every job is refused at `STEP_CLOCK_CHECK` before
   any backend call.
 - The platform contract (`src/omega_gpu_platform.h`) has a test
-  (`tests/test_omega_gpu_platform.c`, 6 cases) reaching every refusal name.
+  (`tests/test_omega_gpu_platform.c`, 7 cases in ABI 1.1) reaching every refusal name.
 - The engine mutation sweep still kills all 49 mutants (`make test-gpu-engine-mutants`).
 - Cut A.2 (`make test-codegen-freestanding`): code generation runs without an
   allocator. The caller supplies the code buffer and its capacity
@@ -42,6 +43,49 @@ Claimed (host evidence, `make test-gpu-engine-freestanding`):
   `__truncsfbf2`) and equals the hosted cast on all 2^32 inputs. A control
   links a `malloc` caller into the freestanding object and requires the `nm -u`
   check to refuse it.
+- Cut C, session part (`make test-gpu-session-platform`): the persistent GPU
+  session, the serving allocator and the matmul and attention tensor APIs run
+  over `OmegaGpuPlatform` (ABI 1.1) instead of calling `physics/nvrm` and
+  `physics/m16` directly. The freestanding closure grows from 8 to 14 files:
+  `src/omega_gpu_session.c`, `src/omega_gpu_serving.c`,
+  `src/omega_gpu_matmul_api.c`, `src/omega_gpu_attention_api.c`,
+  `src/omega_gpu_wait.c` and the new bounded formatter `src/omega_gpu_fmt.c`
+  (the session's only text path; it replaces `snprintf`/`strncpy` and a test
+  compares it to `snprintf` on every format the session uses). The partial link
+  still leaves only `memcpy`, `memset`, `strcmp` and `strlen` undefined.
+  - Typed resources: every session buffer is an `OmegaGpuMem` carrying an
+    `OmegaGpuBufferHandle` (index + generation), its kind (DATA, CODE, QUEUE),
+    CPU view, GPU VA and size. `omega_gpu_session.h` no longer names `NvrmMem`.
+  - Same allocations as before, in the same order and sizes (ring, marker,
+    method block, scratch), all GPU-uncached; the marker is `HOST_POLLED`. The
+    GB10 completion-flag rule (section 2) is enforced by the platform check,
+    not by convention.
+  - Completion is polling and says so: `OmegaGpuPlatform.poll_word` (renamed
+    from `wait_word`), `omega_gpu_session_completion_mode()` returns
+    `OMEGA_GPU_COMPLETION_POLLING`, and neither the session nor the Linux
+    reference claims `OMEGA_GPU_SVC_IRQ`.
+  - Cancel, timeout and uncertain completion: a cancel before submit refuses
+    with nothing in flight and no latch; a cancel or timeout after the doorbell
+    latches the session as uncertain and parks (never frees) every buffer the
+    device may still touch; a free of a latched buffer parks it; close, reopen
+    and platform install are refused while latched. Parked bytes and counts are
+    reported.
+  - Stale handles: after close and reopen, a handle from the earlier
+    incarnation is refused and counted (`stale_refusals`), never reused.
+  - Explicit visibility: the old `dsb` barriers become
+    `omega_gpu_session_sync_to_gpu` / `sync_to_cpu` calls on named buffers.
+  - The Linux driver path is a separate reference implementation,
+    `src/omega_gpu_platform_linux.c` (reference only, hosted only, excluded from
+    the freestanding closure, with its own test
+    `tests/test_omega_gpu_platform_linux.c`, 6 cases including "same driver
+    calls in the same order as before"). Hosted builds install it by default;
+    the freestanding build has no default platform and refuses until one is
+    installed.
+  - Tests: session platform 13 of 13 cases (fork-isolated), Linux reference 6
+    of 6, six session mutants all killed (`make test-gpu-session-mutants`),
+    serving-alloc output byte-identical to main in all six modes apart from
+    test line numbers, matmul-api host-only 171/0, attention host-only 107/0
+    and simulator 219/0, engine 50/0, platform 7/0.
 
 Not claimed:
 
@@ -52,6 +96,11 @@ Not claimed:
   GPU. Device discovery, bounded MMIO/DMA/IRQ ownership and the SMMU path are
   cut B, and their evidence is NOT_RUN until an attended hardware window
   (native v1 gate N4; the B7b one-page SMMU probe is not GPU compute).
+- No native GPU backend yet. Cut C's session part moves the dependency onto
+  `OmegaGpuPlatform`; the only platform that drives a real GB10 today is the
+  Linux reference. Native GB10 execution through any of this is NOT_RUN.
+- The elementwise API, the numeric launchers, the vector executor and the
+  resident runtime still depend on Linux (section 3).
 - No production use of the test-only hooks. `omega_gpu_engine_test_set_clock`
   remains test-only; the production time service is
   `omega_gpu_engine_set_clock`, which the native platform calls once at init.
@@ -72,7 +121,7 @@ files in section 3.
 | Bus addresses / SMMU translation | kernel DMA API inside RM | AIENOS SMMU, `OmegaGpuBusAddr` (no raw physical address type exists) | B | NOT_RUN |
 | Channel / queue creation (GPFIFO, USERD) | `m16_native_create_channel`, `nvrm_channel` | native queue behind `OmegaGpuQueueHandle`, ring is a `BUF_QUEUE` buffer | B/C | NOT_RUN |
 | Submit token / doorbell | `m16_native_submit_methods`, `nvrm_enqueue`, `nvrm_ring` | `OmegaGpuPlatform.mmio_write32` on the doorbell region | C | NOT_RUN |
-| Completion (marker words, semaphores) | `m16_native_wait_marker*`, host polling | `OmegaGpuPlatform.wait_word` on a HOST_POLLED, GPU-uncached buffer | C | contract DONE, device NOT_RUN |
+| Completion (marker words, semaphores) | `m16_native_wait_marker*`, host polling | `OmegaGpuPlatform.poll_word` (polling, ABI 1.1) on a HOST_POLLED, GPU-uncached buffer | C | contract and session DONE (cut C), device NOT_RUN |
 | Interrupts | RM interrupt handling (not used by our launchers: they poll) | `OMEGA_GPU_SVC_IRQ` only when a real interrupt wait exists; polling never claims it | B | NOT_RUN |
 | Visibility / cache maintenance | L2 flush mem-op + uncached marker (C3 block) | `OmegaGpuPlatform.sync_*` plus the same mem-op sequence in the encoder | C | NOT_RUN |
 | Time, waiting, locking | `clock_gettime`, `usleep`, pthread | `OmegaGpuPlatform.time_now_ms`, `wait_ms`, `lock`/`unlock` | A (contract) | DONE |
@@ -105,11 +154,14 @@ development-host measurement or gating and is not part of the native product
 | `src/sha256.c` | 0 | 0 | none | A | DONE |
 | `src/omega_blackwell_codegen.c` | 0 | 0 | none in the freestanding build (stdio, stdlib only in the hosted build) | A.2 | DONE: caller-provided code buffer (`omega_blackwell_kernel_encode_into`); allocating generators, diagnostics and the printing variation self-test are hosted only |
 | `src/omega_blackwell_matmul.c` | 0 | 0 | none in the freestanding build (stdlib only in the hosted build) | A.2 | DONE: `omega_blackwell_kernel_free` and the dispatcher hosted only; integer bf16 rounding in the freestanding build |
-| `src/omega_gpu_wait.c` | 0 | 0 | time.h | C | clock from the platform time service |
-| `src/omega_gpu_serving.c` | 0 | 0 | none | C | moves with the session |
-| `src/omega_gpu_matmul_api.c` | 0 | 0 | stdlib, stdio, time | C | moves with the session |
-| `src/omega_gpu_attention_api.c` | 0 | 0 | stdio, stdlib, time | C | moves with the session |
-| `src/omega_gpu_session.c` (+ `.h` leaks `NvrmMem`) | 19 | 7 | pthread, stdio, time | C | `NvrmMem` in the session header becomes `OmegaGpuBufferHandle`; lock from the platform |
+| `src/omega_gpu_wait.c` | 0 | 0 | none in the freestanding build (time only in the hosted build) | C | DONE (session part): freestanding has no default clock and refuses without `cfg->now_ns` |
+| `src/omega_gpu_serving.c` | 0 | 0 | none | C | DONE (session part): in the freestanding closure |
+| `src/omega_gpu_matmul_api.c` | 0 | 0 | none (string.h only for mem*/str*) | C | DONE (session part): host memory and clock from the session, code encoded in place into a CODE buffer, explicit sync calls |
+| `src/omega_gpu_attention_api.c` | 0 | 0 | none (stdio only under `OMEGA_ATTN_DEBUG`) | C | DONE (session part): same as matmul API |
+| `src/omega_gpu_session.c` | 0 | 0 | none in the freestanding build (pthread only for the hosted default install) | C | DONE (session part): every device call through `OmegaGpuPlatform` ABI 1.1; header names `OmegaGpuMem`, not `NvrmMem` |
+| `src/omega_gpu_fmt.c` | 0 | 0 | none (stdarg) | C | new: bounded formatter for session and API text |
+| `src/omega_gpu_platform_linux.c` | 13 | 15 | pthread, stdio, stdlib, time | reference only | new: the Linux RM/UVM implementation of `OmegaGpuPlatform`, hosted only, never in the freestanding closure; its own test |
+| `src/omega_gpu_elementwise_api.c` | 0 | 0 | stdio, stdlib, time | C (later part) | uses `OmegaGpuMem` from the session; still hosted |
 | `src/omega_blackwell_engine.c` | 19 | 13 | errno, stdio, time | stays Linux-private | the Linux backend of `OmegaGpuBackend`; a sibling native backend over `OmegaGpuPlatform` arrives in B/C |
 | `src/omega_numeric_gb10.c` | 21 | 2 | stdio, stdlib, errno, time | C/D | numeric launchers follow the engine Phase B order |
 | `src/omega_numeric_divsqrt_gb10.c` | 20 | 2 | stdio, stdlib, errno, time | C/D | same |
@@ -122,10 +174,9 @@ development-host measurement or gating and is not part of the native product
 | `src/omega_blackwell_gates.c` | 0 | 1 | stdio, stdlib, time | host tooling | stays on Linux |
 
 Headers that still expose a Linux driver type and must lose it before the cut
-that migrates their users: `src/omega_gpu_session.h` (`NvrmMem`, cut C),
-`src/omega_numeric_native.h` (C/D), `src/forge_realization.h`,
+that migrates their users: `src/omega_numeric_native.h` (C/D), `src/forge_realization.h`,
 `src/omega_evidence.h`, `src/omega_accelerator_world.h`,
-`src/omega_physics_dir.h` (host tooling; they keep it).
+`src/omega_physics_dir.h` (host tooling; they keep it). `src/omega_gpu_session.h` lost `NvrmMem` in cut C (session part).
 
 Distinct driver entry points in use (count of call sites, same snapshot):
 `nvrm_mthd` 188, `m16_native_close` 46, `nvrm_alloc` 33,
@@ -146,8 +197,10 @@ an RM method table.
 `.github/workflows/host-suites-2.yml`.
 
 - Flags: `-std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-builtin
-  -fno-stack-protector -DOMEGA_GPU_NO_POSIX -DOMEGA_NUMERIC_CPU_ONLY`.
-- The eight objects are partially linked (`gcc -r -nostdlib`); `nm -u` on the
+  -fno-stack-protector -U_FORTIFY_SOURCE -DOMEGA_GPU_NO_POSIX -DOMEGA_NUMERIC_CPU_ONLY`.
+  `-U_FORTIFY_SOURCE` (cut C) keeps glibc from redirecting `memcpy` to
+  `__memcpy_chk` when a distribution compiler enables fortify by default.
+- The fourteen objects (eight from A and A.2, six from cut C) are partially linked (`gcc -r -nostdlib`); `nm -u` on the
   result may show only `memcpy|memmove|memset|memcmp|strlen|strcmp` (and the
   GOT symbol). Anything else fails the build with the symbol named.
 - `OMEGA_GPU_NO_POSIX` in `src/omega_gpu_engine.c`: `err_no` is recorded as 0
@@ -161,7 +214,7 @@ an RM method table.
 
 ## 5. The platform contract in one page
 
-`src/omega_gpu_platform.h`, ABI 1.0.
+`src/omega_gpu_platform.h`, ABI 1.1 (1.0 in cut A; 1.1 adds the session services in cut C).
 
 - Handles: `OmegaGpuDeviceHandle`, `OmegaGpuBufferHandle`, `OmegaGpuQueueHandle`,
   each `index + generation`; generation 0 is never issued; a closed handle is
@@ -177,6 +230,16 @@ an RM method table.
   `omega_gpu_platform_check` refuses a claimed service without a function and
   refuses a function that no claimed service declares (a hidden path is a
   silent fallback).
+- ABI 1.1 (cut C, session part): services DEVICE (open, close, driver text of
+  the last failure), QUEUE (open, submit, retire, close over a `BUF_QUEUE`
+  ring), CLOCK_NS and HOST_MEM, required together as
+  `OMEGA_GPU_SVC_REQUIRED_SESSION` (no MMIO, no IRQ) and checked by
+  `omega_gpu_platform_check_for`. COMPLETION is `poll_word` (renamed from
+  `wait_word`): reached in serial-number order, `OMEGA_GPU_POLL_TIMED_OUT` when
+  not, and a timeout says nothing about the device. New refusal
+  `OMEGA_GPU_PLAT_REFUSED_DEVICE`. Handle slots raised from 64 to 1024 (a
+  serving session holds one buffer per weight tensor). A refused
+  `queue_submit` rang no doorbell, so nothing of it is in flight.
 - Limits and concurrency: `OmegaGpuPlatformCaps` carries device, buffer,
   queue, in-flight, per-buffer and total byte limits;
   `omega_gpu_platform_negotiate` refuses a required set the platform does not
@@ -190,15 +253,21 @@ an RM method table.
   `omega_blackwell_codegen.c` and `omega_blackwell_matmul.c`, both in the
   freestanding target. The kernels each API builds for itself
   (`omega_gpu_attention_api.c`, `omega_gpu_elementwise_api.c`) still malloc
-  their code and move with the session in cut C.
+  their code and move with the session in cut C (the attention API moved in
+  cut C session part; the elementwise API has not).
 - B (needs an attended window, native v1 gate order N1 then N4): AIENOS-side
   discovery and bounded device ownership through the platform services; a
   discovery-only run makes zero configuration writes; SMMU/DMA resolved;
   polling does not claim IRQ. Implement aienos#285 before any domain-1
   resource number is reused or persisted. The arch#163 native-order conflict
   is resolved explicitly in that cut, not implied here.
-- C: native backend of `OmegaGpuBackend` over `OmegaGpuPlatform`; the
-  session, serving and API files drop `NvrmMem` and libc time/lock calls.
+- C, session part: DONE (see section 1): session, serving, matmul and
+  attention APIs and the bounded wait run over `OmegaGpuPlatform` ABI 1.1 and
+  are in the freestanding closure; the Linux driver path is the separate
+  reference `src/omega_gpu_platform_linux.c`.
+- C, remaining: a native implementation of `OmegaGpuPlatform` and a native
+  backend of `OmegaGpuBackend` (both need cut B device ownership first); the
+  elementwise API (`omega_gpu_elementwise_api.c`) joins the closure.
 - D: vector executor (sha256 pin re-sealed on chip), numeric launchers,
   resident runtime.
 
@@ -206,3 +275,7 @@ Pre-existing, unrelated to this cut: `make test-gpu-serving-alloc` fails its
 `bounds` mode on omega main 536870f1 ("in-bounds paged calls touched the
 driver (1 allocs)"), reproduced on an untouched checkout on 2026-10-12. It
 belongs to the matmul serving lane (cut I, omega#414), and is reported there.
+On main 4d0bb36 its `sweep` mode fails 130 checks as well; cut C leaves both
+failures unchanged (the output of all six modes is identical to main apart
+from test line numbers). `gpu_attention_test --hd 128 --host-only` fails 16
+of 107 on main 4d0bb36 and on this branch with the same list.
