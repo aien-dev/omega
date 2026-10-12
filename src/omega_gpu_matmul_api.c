@@ -58,6 +58,11 @@ static struct {
     unsigned cache_next;
     unsigned slots; /* active kernel cache slots, <= CACHE_SLOTS_MAX */
     int sealed;     /* omega_gpu_matmul_seal: a kernel cache miss is refused, never built */
+    /* m == 1 fast path: a_buf holds a row-0-only pack (omega_matmul_frag_pack_row0) for row0_kp and
+     * every other halfword is zero. True until a wider pack, a different kp or a new allocation
+     * (a_buf.gen) invalidates it; then the whole pack region is zeroed once more. */
+    bool row0_only;
+    uint32_t row0_kp, row0_gen;
 } g = { .cta_budget = OMEGA_GPU_MATMUL_MAX_CTAS, .oracle = 1, .slots = CACHE_SLOTS };
 
 #define FAILAT(s) (omega_gpu_session_set_error(s), 1)
@@ -380,12 +385,23 @@ static int matmul_core(uint32_t m, const uint16_t *a, const OmegaGpuTensor *b, f
         return src == OMEGA_GPU_SESSION_SCRATCH_RESERVED ? OMEGA_GPU_MATMUL_TOO_LARGE : OMEGA_GPU_MATMUL_CHIP_FAIL;
     }
     /* activation rows in, fragment order (omega_matmul_frag_pack_a), zero padded, packed on the
-     * host and copied in order into the uncached buffer; result rows poisoned */
-    uint16_t *ah = malloc((size_t)mp * kp * sizeof *ah);
-    if (!ah) { omega_gpu_session_unlock(); return OMEGA_GPU_MATMUL_BAD_ARGS; }
-    omega_matmul_frag_pack_a(a, m, k, mp, kp, ah);
-    memcpy(g.a_buf.mem.cpu, ah, (size_t)mp * kp * sizeof *ah);
-    free(ah);
+     * host and copied in order into the uncached buffer; result rows poisoned. One row (decode)
+     * writes only its 64 bytes per K-step block into a region zeroed once (row0_only). */
+    if (m == 1) {
+        uint16_t *ad = g.a_buf.mem.cpu;
+        if (!g.row0_only || g.row0_kp != kp || g.row0_gen != g.a_buf.gen) {
+            memset(ad, 0, (size_t)mp * kp * sizeof *ad);
+            g.row0_only = true; g.row0_kp = kp; g.row0_gen = g.a_buf.gen;
+        }
+        omega_matmul_frag_pack_row0(a, k, kp, ad);
+    } else {
+        uint16_t *ah = malloc((size_t)mp * kp * sizeof *ah);
+        if (!ah) { omega_gpu_session_unlock(); return OMEGA_GPU_MATMUL_BAD_ARGS; }
+        omega_matmul_frag_pack_a(a, m, k, mp, kp, ah);
+        memcpy(g.a_buf.mem.cpu, ah, (size_t)mp * kp * sizeof *ah);
+        free(ah);
+        g.row0_only = false;
+    }
     float *cd = g.c_buf.mem.cpu;
     for (size_t i = 0; i < (size_t)m * np; i++) cd[i] = POISON_F32;
     __asm__ volatile("dsb sy" ::: "memory");

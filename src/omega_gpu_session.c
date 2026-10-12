@@ -126,12 +126,14 @@ int omega_gpu_session_scratch(OmegaGpuScratch *s, size_t bytes) {
     s->cap = 0;
     if (omega_gpu_session_alloc(s->high_water, &s->mem) != 0) return -1;
     s->cap = (size_t)s->mem.size;
+    s->gen++;
     return 0;
 }
 
 void omega_gpu_session_scratch_free(OmegaGpuScratch *s) {
     omega_gpu_session_free(&s->mem);
     s->cap = 0;
+    s->gen++;
     s->reserved = false;
 }
 

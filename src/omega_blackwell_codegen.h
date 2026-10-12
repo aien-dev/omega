@@ -236,6 +236,11 @@ int omega_blackwell_codegen_matmul_frag(const OmegaMatMulSpec *spec, uint32_t gr
 uint32_t omega_matmul_frag_unroll(uint32_t kp);
 /* a: m x k row-major. dst: mp x kp elements, fully written (zero padding). */
 void omega_matmul_frag_pack_a(const uint16_t *a, uint32_t m, uint32_t k, uint32_t mp, uint32_t kp, uint16_t *dst);
+/* Row 0 only, for m == 1: writes the 4 lanes (64 bytes) of every K-step block that hold row 0
+ * (group 0, hi 0) as whole 16-byte lane words, zeros in the row-8 halfwords; the other 28 lanes
+ * (rows 1-7 and 9-15) are not touched and must already be zero. Equal to pack_a(m = 1) over a
+ * zeroed buffer; 16 KB of stores for k = 4096 instead of a 128 KB pack and copy. */
+void omega_matmul_frag_pack_row0(const uint16_t *a, uint32_t k, uint32_t kp, uint16_t *dst);
 /* b: k x n row-major. dst: the column tiles [nt0, nt1), (nt1 - nt0) * kp * 8 elements, fully
  * written; it is the part of the packed tensor starting at element nt0 * kp * 8. */
 void omega_matmul_frag_pack_b(const uint16_t *b, uint32_t k, uint32_t n, uint32_t kp,

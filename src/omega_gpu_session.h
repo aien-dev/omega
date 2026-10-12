@@ -58,6 +58,7 @@ typedef struct {
     NvrmMem mem;
     size_t cap;        /* usable bytes */
     size_t high_water; /* largest request so far */
+    uint32_t gen;      /* bumped whenever mem is (re)allocated or freed: a caller that caches facts about the contents compares it */
     bool reserved;     /* serving reservation active: a request past cap is refused, never allocated (omega_gpu_session_scratch_reserve) */
 } OmegaGpuScratch;
 

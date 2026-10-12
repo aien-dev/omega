@@ -2295,6 +2295,15 @@ $(OUT_DIR)/libomega_gpu.a: check-physics-lock $(GPU_API_OBJS)
 libomega_gpu: $(OUT_DIR)/libomega_gpu.a
 $(GPU_API_TEST): tests/gpu_matmul_api_test.c src/omega_gpu_matmul_api.h $(OUT_DIR)/libomega_gpu.a
 	$(CC) $(CFLAGS) -o $@ tests/gpu_matmul_api_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+
+# Host-only: the m == 1 row-0 pack equals the full pack (sovereign-core#384 decode speed).
+PACK_ROW0_TEST = $(OUT_DIR)/gpu_matmul_pack_row0_test
+$(PACK_ROW0_TEST): tests/gpu_matmul_pack_row0_test.c src/omega_blackwell_codegen.h $(OUT_DIR)/libomega_gpu.a
+	$(CC) $(CFLAGS) -o $@ tests/gpu_matmul_pack_row0_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+
+.PHONY: test-matmul-pack-row0
+test-matmul-pack-row0: $(PACK_ROW0_TEST)
+	./$(PACK_ROW0_TEST)
 test-gpu-matmul-api: $(GPU_API_TEST)
 	./$(GPU_API_TEST) --host-only
 

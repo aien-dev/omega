@@ -1893,6 +1893,21 @@ void omega_matmul_frag_pack_a(const uint16_t *a, uint32_t m, uint32_t k, uint32_
     }
 }
 
+void omega_matmul_frag_pack_row0(const uint16_t *a, uint32_t k, uint32_t kp, uint16_t *dst) {
+    const uint32_t KS = kp / 16u;
+    for (uint32_t ks = 0; ks < KS; ks++) {
+        for (uint32_t tig = 0; tig < 4u; tig++) {
+            uint16_t w[8] = { 0 };
+            for (uint32_t khi = 0; khi < 2u; khi++)
+                for (uint32_t lo = 0; lo < 2u; lo++) {
+                    const uint32_t c = ks * 16u + khi * 8u + tig * 2u + lo;
+                    if (c < k) w[khi * 4u + lo] = a[c];
+                }
+            memcpy(dst + ((size_t)ks * 32u + tig) * 8u, w, sizeof w);
+        }
+    }
+}
+
 void omega_matmul_frag_pack_b(const uint16_t *b, uint32_t k, uint32_t n, uint32_t kp,
                               uint32_t nt0, uint32_t nt1, uint16_t *dst) {
     const uint32_t KS = kp / 16u;
