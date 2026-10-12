@@ -1,6 +1,6 @@
 # Omega GPU native boundary: dependency map and freestanding link target
 
-Native v1 P07 cut A. Tracks aienos#286 (cut A) and aien-architecture#190.
+Native v1 P07 cut A and A.2. Tracks aienos#286 (cut A) and aien-architecture#190.
 Companion of `docs/numeric/OMEGA_GPU_ENGINE.md` (the engine contract) and
 `src/omega_gpu_platform.h` (the platform contract this cut adds).
 
@@ -12,10 +12,11 @@ cut). NOT_RUN is never PASS.
 
 Claimed (host evidence, `make test-gpu-engine-freestanding`):
 
-- Six files of the first-compute path build with `-ffreestanding -fno-builtin`
+- Eight files of the first-compute path build with `-ffreestanding -fno-builtin`
   and `OMEGA_GPU_NO_POSIX`, and their partial link leaves only `memcpy`,
   `memset`, `strcmp` and `strlen` undefined: `src/omega_gpu_engine.c`,
   `src/omega_gpu_platform.c`, `src/omega_blackwell_encoder.c`,
+  `src/omega_blackwell_codegen.c` and `src/omega_blackwell_matmul.c` (cut A.2),
   `src/omega_blackwell_qmd.c`, `src/omega_blackwell_realize.c`, `src/sha256.c`.
   No Linux header, no `errno`, no `clock_gettime`, no `printf`, no `malloc`,
   no `pthread_*`, no `nvrm_*`, no `m16_*`. The make target fails on any other
@@ -27,6 +28,20 @@ Claimed (host evidence, `make test-gpu-engine-freestanding`):
 - The platform contract (`src/omega_gpu_platform.h`) has a test
   (`tests/test_omega_gpu_platform.c`, 6 cases) reaching every refusal name.
 - The engine mutation sweep still kills all 49 mutants (`make test-gpu-engine-mutants`).
+- Cut A.2 (`make test-codegen-freestanding`): code generation runs without an
+  allocator. The caller supplies the code buffer and its capacity
+  (`omega_blackwell_kernel_encode_into`); a buffer one byte short, of size 0 or
+  NULL is refused before any byte is written, and nothing is written past the
+  reported code size. The hosted allocating generators keep their names and
+  caps and encode through the same function. The instruction streams of 14
+  fixtures (integer, K=16 tensor, looped, decode fragment and blocked prefill
+  kernels; 24,448 code bytes) are byte-identical between the hosted and the
+  freestanding build (`cmp` of the two dumps). The golden-word fixture
+  verifiers pass on the freestanding object. The freestanding
+  `omega_fp32_to_bf16` rounds in integer form (the `__bf16` cast needs libgcc
+  `__truncsfbf2`) and equals the hosted cast on all 2^32 inputs. A control
+  links a `malloc` caller into the freestanding object and requires the `nm -u`
+  check to refuse it.
 
 Not claimed:
 
@@ -88,8 +103,8 @@ development-host measurement or gating and is not part of the native product
 | `src/omega_blackwell_qmd.c` | 0 | 0 | none | A | DONE |
 | `src/omega_blackwell_realize.c` | 0 | 0 | none | A | DONE |
 | `src/sha256.c` | 0 | 0 | none | A | DONE |
-| `src/omega_blackwell_codegen.c` | 0 | 0 | stdio, stdlib (malloc/free for kernel code, printf in the variation self-test) | A.2 | allocator seam: caller-provided code buffer, self-test moved to the test |
-| `src/omega_blackwell_matmul.c` | 0 | 0 | stdlib (free) | A.2 | same allocator seam |
+| `src/omega_blackwell_codegen.c` | 0 | 0 | none in the freestanding build (stdio, stdlib only in the hosted build) | A.2 | DONE: caller-provided code buffer (`omega_blackwell_kernel_encode_into`); allocating generators, diagnostics and the printing variation self-test are hosted only |
+| `src/omega_blackwell_matmul.c` | 0 | 0 | none in the freestanding build (stdlib only in the hosted build) | A.2 | DONE: `omega_blackwell_kernel_free` and the dispatcher hosted only; integer bf16 rounding in the freestanding build |
 | `src/omega_gpu_wait.c` | 0 | 0 | time.h | C | clock from the platform time service |
 | `src/omega_gpu_serving.c` | 0 | 0 | none | C | moves with the session |
 | `src/omega_gpu_matmul_api.c` | 0 | 0 | stdlib, stdio, time | C | moves with the session |
@@ -132,7 +147,7 @@ an RM method table.
 
 - Flags: `-std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-builtin
   -fno-stack-protector -DOMEGA_GPU_NO_POSIX -DOMEGA_NUMERIC_CPU_ONLY`.
-- The six objects are partially linked (`gcc -r -nostdlib`); `nm -u` on the
+- The eight objects are partially linked (`gcc -r -nostdlib`); `nm -u` on the
   result may show only `memcpy|memmove|memset|memcmp|strlen|strcmp` (and the
   GOT symbol). Anything else fails the build with the symbol named.
 - `OMEGA_GPU_NO_POSIX` in `src/omega_gpu_engine.c`: `err_no` is recorded as 0
@@ -171,9 +186,11 @@ an RM method table.
 
 ## 6. Next cuts
 
-- A.2: allocator seam for `omega_blackwell_codegen.c` and
-  `omega_blackwell_matmul.c` (caller-provided code buffers, self-test printf
-  moved into the test), adding them to the freestanding target.
+- A.2: DONE (see section 1): caller-provided code buffers for
+  `omega_blackwell_codegen.c` and `omega_blackwell_matmul.c`, both in the
+  freestanding target. The kernels each API builds for itself
+  (`omega_gpu_attention_api.c`, `omega_gpu_elementwise_api.c`) still malloc
+  their code and move with the session in cut C.
 - B (needs an attended window, native v1 gate order N1 then N4): AIENOS-side
   discovery and bounded device ownership through the platform services; a
   discovery-only run makes zero configuration writes; SMMU/DMA resolved;
