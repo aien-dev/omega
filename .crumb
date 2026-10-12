@@ -87,14 +87,14 @@
           "purpose": "Directory spec. Purpose not yet described by a human."
         },
         {
-          "digest": "a0886818e3da6cdc8deeb7830808467b75798b7f3a538204557da7998b52e564",
-          "last_commit": "45eef1d1",
+          "digest": "7f1978d218d30126cc74ab22cfd18fe2283632fec4ba3518685dc3e5121c03e0",
+          "last_commit": "32a2a62a",
           "name": "src",
           "purpose": "Directory src. Purpose not yet described by a human."
         },
         {
-          "digest": "57ed2a1bfe7a7a524224ed3b38f88a32b0bda81322a3f1267fdf9da2db161d45",
-          "last_commit": "89913b0b",
+          "digest": "ba0c62a71a9a3f069b7afd3ea71d0900f34321f2e5b0f55bad347c9487879fef",
+          "last_commit": "32a2a62a",
           "name": "tests",
           "purpose": "Directory tests. Purpose not yet described by a human."
         },
@@ -105,15 +105,15 @@
           "purpose": "Directory tools. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:5f18309aa63bf3ef664c738098ca2d7b13b088fd79ee1ee2aebc66552213fb4a",
-      "compiled_at": "2026-10-12T09:00:14Z",
+      "children_root": "sha256:b68cc59a22835e3342cddb4d6607df0352f62a5d17dc5b2fc19177c306dc325f",
+      "compiled_at": "2026-10-12T09:36:47Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:fb21f51a731200840f038c9f2da76a3f2cf8001f7d8d6c7d851968eacc05f2e6",
+      "digest": "sha256:6bfafa6e43ae0a9cf9fe7a5f69a3f62cd94203c9651ecbbbc7900c50d7e96317",
       "evidence_files": 7245,
       "evidence_root": "sha256:035beef5cdb99afaefd1743640f5e7eeaaed13c4a5ec6c8b4b6a4cb0c528407a",
       "files": 9734,
-      "generated_at_commit": "45eef1d18b4cd6cf5daf3f02a329a6e4d5b6fd23",
-      "source_tree": "sha256:a76f7787d26bcef60783f61ba0d87844a6d9872dcd2d2bb8bfa0010e746a510e"
+      "generated_at_commit": "32a2a62a7b2d306884cd58743bfa51917dff3487",
+      "source_tree": "sha256:8a5db9e1d0a438a9157e8dc683ed598af1f24528eca38df120281da4ab943ea4"
     },
     "owner_lane": "",
     "provenance": {
