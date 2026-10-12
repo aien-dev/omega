@@ -1038,6 +1038,27 @@ static uint32_t own_log2split(uint32_t ctx, uint32_t HD) {
     return l;
 }
 
+/* 2^x in float without the math library (the engine archive also links where there is none): round x to the
+ * nearest integer n, 2^f on f in [-0.5, 0.5] by the Cephes exp2f polynomial, scale by 2^n through the exponent
+ * bits. x <= -127 (so also -inf, an empty split) is 0. The combine only passes x <= 0. */
+static float host_exp2(float x) {
+    if (x <= -127.0f) return 0.0f;
+    if (x > 127.0f) x = 127.0f;
+    int n = (int)(x + (x < 0.0f ? -0.5f : 0.5f));
+    const float f = x - (float)n;
+    float px = 1.535336188319500e-4f;
+    px = px * f + 1.339887440266574e-3f;
+    px = px * f + 9.618437357674640e-3f;
+    px = px * f + 5.550332471162809e-2f;
+    px = px * f + 2.402264791363012e-1f;
+    px = px * f + 6.931472028550421e-1f;
+    px = 1.0f + f * px;
+    if (n < -126) { px *= 0.5f; n = -126; }
+    union { uint32_t u; float f; } sc;
+    sc.u = (uint32_t)(n + 127) << 23;
+    return px * sc.f;
+}
+
 /* cut F: fold the per-split partials of each (sequence, head) row into out. w_s = 2^(M_s - max M): the kernel's
  * running max and sum live in the log2 domain (scale carries log2 e, MUFU.EX2). A row whose every split is empty
  * (context 0) is 0. */
@@ -1050,7 +1071,7 @@ static void combine_splits(const float *part, float *out, size_t rows, uint32_t 
         for (uint32_t s = 0; s < S; s++) if (p[s * pw + HD] > mx) mx = p[s * pw + HD];
         if (!(mx > -INFINITY)) { memset(o, 0, (size_t)HD * 4); continue; }
         float w[1u << OMEGA_GPU_ATTN_MAX_LOG2SPLIT], lsum = 0.0f;
-        for (uint32_t s = 0; s < S; s++) { w[s] = exp2f(p[s * pw + HD] - mx); lsum += w[s] * p[s * pw + HD + 1]; }
+        for (uint32_t s = 0; s < S; s++) { w[s] = host_exp2(p[s * pw + HD] - mx); lsum += w[s] * p[s * pw + HD + 1]; }
         const float inv = 1.0f / lsum;
         for (uint32_t d = 0; d < HD; d++) {
             float a = 0.0f;
