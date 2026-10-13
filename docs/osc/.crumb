@@ -14,20 +14,20 @@
       "children": [
         {
           "digest": "ae58633db1f1b69f46c1e1b5bcf86878e8aae8ebd048dafa126eaf96b0054804",
-          "last_commit": "a927bd6",
+          "last_commit": "a927bd6c",
           "name": "audit",
           "purpose": "Directory docs/osc/audit. Purpose not yet described by a human."
         }
       ],
       "children_root": "sha256:33192ccd879c26130c2aba2fb02d7d8f03b093e64bb571d14403152ecbfeb3ae",
-      "compiled_at": "2026-10-08T00:52:21Z",
+      "compiled_at": "2026-10-13T04:20:26Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:b74a984c8e826ce7525ba56043963b3d38655ec32356f264a9329baa9b51dbdb",
+      "digest": "sha256:44cae10373883994f017f3da0ad598b9444dbe653fc4173fdd24c4a7df795f06",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 13,
-      "generated_at_commit": "e55e2af915671d324f1b12bb9f21c1f51de050cc",
-      "source_tree": "sha256:a3865de44cf26a17ecef5d0f76f5f4cfe05984d24a85d9ee7d699196e9aff9ab"
+      "files": 14,
+      "generated_at_commit": "5d3c36c90f0ff9be46a4bb988ee47b96077a5c8a",
+      "source_tree": "sha256:a4d9ea1dd66576bd8bfdf4fba9b4840f6cbf313e4758604d4eace6111cd66196"
     },
     "owner_lane": "",
     "provenance": {
