@@ -8,7 +8,8 @@
 #   2. main: parity battery at the automatic shape (one-hot conversion on the chip, 14 shapes, grouped experts,
 #      cache hit bit-identical, mutants caught), bandwidth per shape in receipt-main.json
 #   3. one variable per run, informational: --no-evict (host caches warm after upload: the flattering number),
-#      rows per warp 2/4/8 (default 1), warps 4, CTA budget 128/512
+#      --depth 0 (step-by-step kernel; the default is the deep kernel where the row fits), rows per warp 2 (default 1),
+#      warps 4, CTA budget 128/512
 # Verdict line last: "GPU_FP8_CHIP: PASS|FAIL". Steps 0 and 2 decide; 1 and 3 are recorded.
 set -u
 EVID="${1:?evidence dir}"; PHYS="${2:-$HOME/workspace/physics-own30b-k}"
@@ -28,7 +29,8 @@ $T --sim 2>&1 | tee "$EVID/sim.log"; [ "${PIPESTATUS[0]}" = 0 ] || fail=1
 echo "baseline exit ${PIPESTATUS[0]} (recorded)" | tee -a "$EVID/baseline-matmul.log"
 $T --reps 50 --out "$EVID/receipt-main.json" 2>&1 | tee "$EVID/main.log"; [ "${PIPESTATUS[0]}" = 0 ] || fail=1
 $T --reps 50 --no-evict --out "$EVID/receipt-noevict.json" 2>&1 | tee "$EVID/noevict.log"; echo "no-evict exit ${PIPESTATUS[0]} (informational)" | tee -a "$EVID/noevict.log"
-for r in 2 4 8; do
+$T --reps 50 --depth 0 --out "$EVID/receipt-depth0.json" 2>&1 | tee "$EVID/depth0.log"; echo "depth 0 exit ${PIPESTATUS[0]} (informational)" | tee -a "$EVID/depth0.log"
+for r in 2; do
   $T --reps 20 --rows $r --out "$EVID/receipt-rows$r.json" 2>&1 | tee "$EVID/rows$r.log"
   echo "rows $r exit ${PIPESTATUS[0]} (informational)" | tee -a "$EVID/rows$r.log"
 done
