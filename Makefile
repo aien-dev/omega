@@ -2397,3 +2397,13 @@ $(GPU_DATTN_TEST): tests/gpu_decode_attn_test.c tests/bw_warp_sim_k.h src/omega_
 test-gpu-decode-attn: $(GPU_DATTN_TEST)
 	$(GPU_DATTN_TEST) --host-only
 	$(GPU_DATTN_TEST) --sim
+
+# OWN-30B cut 8 item 2 (2026-10-13): one-launch MoE router (omega_gpu_router_api.h). test-gpu-router is host-only
+# (oracle, budgets) plus the warp simulator; the chip gate is tools/run_gpu_router_chip.sh under the GB10 lock.
+.PHONY: test-gpu-router
+GPU_ROUTER_TEST = $(OUT_DIR)/gpu_router_test
+$(GPU_ROUTER_TEST): tests/gpu_router_test.c tests/bw_warp_sim_k.h src/omega_gpu_router_api.h src/omega_blackwell_codegen_router.h src/omega_gpu_fp8_api.h $(OUT_DIR)/libomega_gpu.a
+	$(CC) $(CFLAGS) -ffp-contract=off -Itests -o $@ tests/gpu_router_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+test-gpu-router: $(GPU_ROUTER_TEST)
+	./$(GPU_ROUTER_TEST) --host-only
+	./$(GPU_ROUTER_TEST) --sim
