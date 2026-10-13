@@ -21,7 +21,8 @@ for w in $WHAT; do case $w in
         QMMA_PROBE_SEED=0x1234567 run qmma-probe-seed2 "$OUT/gpu_qmma_probe_test" --no-peak ;;
   pfgemm) run pfgemm-chip "$OUT/gpu_pfgemm_test" --shape-knob 4 16 1 --chip --tokens 3600 --reps 7 ;;
   qgemm) run qgemm-chip "$OUT/gpu_qgemm_test" --chip --tokens 3600 --reps 7
-         run qgemm-wait0 "$OUT/gpu_qgemm_test" --chip --shape gateup --wait 0 --tokens 3600 --reps 7 ;;
+         run qgemm-cached "$OUT/gpu_qgemm_test" --chip --cached --tokens 3600 --reps 7
+         for s in gateup down; do run qgemm-cached-wait0-$s "$OUT/gpu_qgemm_test" --chip --cached --shape $s --wait 0 --tokens 3600 --reps 7; done ;;
 esac; done
 echo "end $(date -u +%FT%TZ)" >> "$EVID/device.txt"
 (cd "$EVID" && sha256sum * 2>/dev/null | grep -v SHA256SUMS > SHA256SUMS)
