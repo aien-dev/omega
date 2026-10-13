@@ -181,6 +181,20 @@ int main(void) {
     CHECK(cx_append(&s, &h, pay, 1, NULL) == CX_OK && j.appends == appends_before,
           "memory-only append hit the backend");
     cx_close(&s);
+
+    /* 8. a subject count too large to index is refused, never wrapped into a small allocation */
+    const uint64_t wraps = (uint64_t)(SIZE_MAX / sizeof(CxIdList)) + 1;   /* * size wraps to one entry */
+    CHECK(cx_init(&t, UINT64_MAX) == CX_ERR_NOMEM, "oversized subject count initialised");
+    CHECK(cx_init(&t, wraps) == CX_ERR_NOMEM, "wrapping subject count initialised");
+    uint8_t saved[8];
+    memcpy(saved, j.b + 16, 8);
+    const uint64_t hostile[2] = { UINT64_MAX, wraps };
+    for (int k = 0; k < 2; k++) {
+        for (int i = 0; i < 8; i++) j.b[16 + i] = (uint8_t)(hostile[k] >> (8 * i));   /* header word 2 */
+        CHECK(cx_open_with(&t, &mem_ops, &j, "m", 0, CX_OPEN_READONLY) == CX_ERR_FORMAT,
+              "journal with subject count %llu opened", (unsigned long long)hostile[k]);
+    }
+    memcpy(j.b + 16, saved, 8);
     CHECK(g_live == 0, "live allocations after close: %ld", g_live);
 
     free(j.b);
