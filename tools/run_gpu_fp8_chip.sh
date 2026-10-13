@@ -29,6 +29,8 @@ echo "baseline exit ${PIPESTATUS[0]} (recorded)" | tee -a "$EVID/baseline-matmul
 $T --reps 50 --out "$EVID/receipt-main.json" 2>&1 | tee "$EVID/main.log"; [ "${PIPESTATUS[0]}" = 0 ] || fail=1
 $T --reps 50 --no-evict --out "$EVID/receipt-noevict.json" 2>&1 | tee "$EVID/noevict.log"; echo "no-evict exit ${PIPESTATUS[0]} (informational)" | tee -a "$EVID/noevict.log"
 $T --reps 50 --depth 0 --out "$EVID/receipt-depth0.json" 2>&1 | tee "$EVID/depth0.log"; echo "depth 0 exit ${PIPESTATUS[0]} (informational)" | tee -a "$EVID/depth0.log"
+# Control: the pre-cut grouped shape (8 warps, 256 CTAs per group) on the 8-expert points; one variable (the grouped default) versus main.
+$T --reps 50 --warps 8 --cta-budget 256 --only "8 experts" --out "$EVID/receipt-grouped-old.json" 2>&1 | tee "$EVID/grouped-old.log"; echo "grouped-old exit ${PIPESTATUS[0]} (control)" | tee -a "$EVID/grouped-old.log"
 
 echo "end $(date -u +%FT%TZ)" >> "$EVID/device.txt"
 (cd "$EVID" && sha256sum *.json *.log device.txt > SHA256SUMS)
