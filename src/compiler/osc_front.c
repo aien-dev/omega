@@ -10,13 +10,15 @@
 #include <stdlib.h>
 #include <string.h>
 
-int osc_compile_imports(const char *src, size_t len, OscUnit *out, OscDiag *diag, OscTrace *trace,
-                        OscImportResolver resolver, void *resolver_ctx)
+int osc_compile_imports_a(const OscAlloc *a, const char *src, size_t len, OscUnit *out, OscDiag *diag, OscTrace *trace,
+                          OscImportResolver resolver, void *resolver_ctx)
 {
+    if (!a) a = osc_alloc_libc();
     memset(diag, 0, sizeof *diag);
     if (trace) { trace->n = 0; trace->overflow = 0; trace->refused = 0; trace->nfuncs = 0; }
-    OscToken *toks = malloc(sizeof(OscToken) * OSC_LEX_MAX_TOKENS);
-    OscAst *ast = malloc(sizeof *ast);
+    const size_t toks_sz = sizeof(OscToken) * OSC_LEX_MAX_TOKENS;
+    OscToken *toks = a->alloc(a->ctx, toks_sz);
+    OscAst *ast = a->alloc(a->ctx, sizeof *ast);
     int rc = -1;
     if (!toks || !ast) {
         osc_diag_set(diag, OSC_DIAG_CAPACITY, 0, 0, "unit", 0, NULL, "compiler memory", "out of memory");
@@ -54,22 +56,38 @@ int osc_compile_imports(const char *src, size_t len, OscUnit *out, OscDiag *diag
                      "a unit must define at least one function");
         goto out;
     }
-    if (osc_check(ast, diag, trace)) goto out;
-    if (osc_lower(ast, out, diag)) goto out;
+    if (osc_check(a, ast, diag, trace)) goto out;
+    if (osc_lower(a, ast, out, diag)) goto out;
     char err[160];
-    if (osc_ir_validate(out, err, sizeof err)) {
+    int vr = osc_ir_validate_a(a, out, err, sizeof err);
+    if (vr == -2) {
+        osc_diag_set(diag, OSC_DIAG_CAPACITY, 0, 0, "unit", 0, NULL, "validator memory", "out of memory");
+        goto out;
+    }
+    if (vr) {
         osc_diag_set(diag, OSC_DIAG_UNSUPPORTED, 0, 0, "internal", 0, NULL, "IR validation",
                      "internal error: lowered IR refused by the validator: %s", err);
         goto out;
     }
     rc = 0;
 out:
-    free(toks);
-    free(ast);
+    a->free(a->ctx, toks, toks_sz);
+    a->free(a->ctx, ast, sizeof *ast);
     return rc;
+}
+
+int osc_compile_imports(const char *src, size_t len, OscUnit *out, OscDiag *diag, OscTrace *trace,
+                        OscImportResolver resolver, void *resolver_ctx)
+{
+    return osc_compile_imports_a(osc_alloc_libc(), src, len, out, diag, trace, resolver, resolver_ctx);
+}
+
+int osc_compile_a(const OscAlloc *a, const char *src, size_t len, OscUnit *out, OscDiag *diag, OscTrace *trace)
+{
+    return osc_compile_imports_a(a, src, len, out, diag, trace, NULL, NULL);
 }
 
 int osc_compile(const char *src, size_t len, OscUnit *out, OscDiag *diag, OscTrace *trace)
 {
-    return osc_compile_imports(src, len, out, diag, trace, NULL, NULL);
+    return osc_compile_imports_a(osc_alloc_libc(), src, len, out, diag, trace, NULL, NULL);
 }

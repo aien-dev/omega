@@ -4,6 +4,7 @@
  * See osc_check.h and docs/osc/OSC-1-DESIGN.md section 3.
  * OSC-1 slice; not a general Omega compiler; no self-hosting.
  */
+#include "osc_alloc.h"
 #include "osc_check.h"
 
 #include <stdio.h>
@@ -82,6 +83,7 @@ typedef struct {
 #define MAX_SCOPES (OSC_AST_MAX_DEPTH * 2 + 8)
 
 typedef struct {
+    const OscAlloc *a;    /* every heap byte of the checker (state snapshots, this struct) comes from here */
     OscAst *ast;
     OscDiag *d;
     OscTrace *tr;
@@ -503,7 +505,7 @@ static void pop_scope(C *c)
 /* ------------------------------------------------------------ state snapshots */
 static Snap *snap_take(C *c)
 {
-    Snap *s = malloc(sizeof *s);
+    Snap *s = c->a->alloc(c->a->ctx, sizeof *s);
     if (!s) return NULL;
     memcpy(s->obj, c->obj, sizeof(Obj) * (size_t)c->nobj);
     memcpy(s->bor, c->bor, sizeof(Bor) * (size_t)c->nbor);
@@ -513,10 +515,11 @@ static Snap *snap_take(C *c)
     s->nsym = c->nsym;
     return s;
 }
+static void snap_free(C *c, Snap *s) { c->a->free(c->a->ctx, s, sizeof *s); }
 /* OSC-3 item 2: handle state (freed provenances, provenance per handle) */
 static HSave *hs_take(C *c)
 {
-    HSave *s = malloc(sizeof *s);
+    HSave *s = c->a->alloc(c->a->ctx, sizeof *s);
     if (!s) return NULL;
     memcpy(s->pfreed, c->pfreed, (size_t)c->nprov);
     for (int i = 0; i < c->nsym; i++) s->hprov[i] = c->sym[i].prov;
@@ -524,6 +527,7 @@ static HSave *hs_take(C *c)
     s->nsym = c->nsym;
     return s;
 }
+static void hs_free(C *c, HSave *s) { c->a->free(c->a->ctx, s, sizeof *s); }
 static void hs_restore(C *c, const HSave *s)
 {
     memcpy(c->pfreed, s->pfreed, (size_t)s->nprov);
@@ -1814,10 +1818,10 @@ static int chk_if(C *c, int i)
     rc = 0;
 out:
     c->cond_depth--;
-    free(s0);
-    free(s1);
-    free(h0);
-    free(h1);
+    snap_free(c, s0);
+    snap_free(c, s1);
+    hs_free(c, h0);
+    hs_free(c, h1);
     return rc;
 }
 
@@ -1826,7 +1830,7 @@ static int chk_loop_body(C *c, OscNode *n, int is_for)
     Snap *s0 = snap_take(c);
     if (!s0) return cap_fail(c, n->line, "checker memory");
     HSave *h0 = hs_take(c); /* OSC-3 item 2 */
-    if (!h0) { free(s0); return cap_fail(c, n->line, "checker memory"); }
+    if (!h0) { snap_free(c, s0); return cap_fail(c, n->line, "checker memory"); }
     int rc = -1;
     tr_save(c, n->line);
     c->loop_depth++;
@@ -1858,8 +1862,8 @@ static int chk_loop_body(C *c, OscNode *n, int is_for)
     c->term = 0;
     rc = 0;
 out:
-    free(s0);
-    free(h0);
+    snap_free(c, s0);
+    hs_free(c, h0);
     return rc;
 }
 
@@ -2327,13 +2331,14 @@ static int chk_fn(C *c, int fi)
     return 0;
 }
 
-int osc_check(OscAst *ast, OscDiag *d, OscTrace *trace)
+int osc_check(const OscAlloc *a, OscAst *ast, OscDiag *d, OscTrace *trace)
 {
-    C *c = calloc(1, sizeof *c);
+    C *c = osc_alloc_zero(a, sizeof *c);
     if (!c) {
         osc_diag_set(d, OSC_DIAG_CAPACITY, 0, 0, "unit", 0, NULL, "checker memory", "out of memory");
         return -1;
     }
+    c->a = a;
     c->ast = ast;
     c->d = d;
     c->tr = trace;
@@ -2345,6 +2350,6 @@ int osc_check(OscAst *ast, OscDiag *d, OscTrace *trace)
         osc_diag_set(d, OSC_DIAG_CAPACITY, 0, 0, "unit", 0, NULL, "release list capacity", "too many scope-exit releases");
         rc = -1;
     }
-    free(c);
+    a->free(a->ctx, c, sizeof *c);
     return rc;
 }
