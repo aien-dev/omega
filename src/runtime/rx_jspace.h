@@ -383,8 +383,10 @@ typedef struct {
 } JsBranchInfo;
 int  js_branch_info(JsSpace *s, JsBranchRef b, JsBranchInfo *out);
 
-/* Measure the costs the policy reads, for this realizer on this machine. */
-void js_calibrate(JsSpace *s, const JsRealizer *r);
+/* Measure the costs the policy reads, for this realizer on this machine.
+ * JS_ERR_ARG for a missing realizer or a zero unit size, JS_ERR_NOMEM when the
+ * scratch buffers cannot be allocated; s->costs is unchanged on either error. */
+int  js_calibrate(JsSpace *s, const JsRealizer *r);
 
 /* Semantic identities. */
 JsSemId js_sem_root(uint64_t seed);

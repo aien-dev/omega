@@ -1222,16 +1222,18 @@ static int enforce_u(JsSpace *s, uint64_t budget_bytes, JsPolicyReport *rep) {
 
 /* ---- calibration ------------------------------------------------------------ */
 
-static void calibrate_u(JsSpace *s, const JsRealizer *rz) {
+static int calibrate_u(JsSpace *s, const JsRealizer *rz) {
+    if (!rz || !rz->derive || rz->unit_bytes == 0) return JS_ERR_ARG;
     size_t n = rz->unit_bytes;
     const int reps = 32;
     uint8_t *a = malloc(n), *b = malloc(n), *p = malloc(n + (n / 8) * 8 + 16);
+    if (!a || !b || !p) { free(a); free(b); free(p); return JS_ERR_NOMEM; }
     JsCosts *c = &s->costs;
     rz->derive(NULL, 7, a, n);
     uint64_t t0 = now_ns();
     for (int i = 0; i < reps; i++) { rz->derive(a, (uint64_t)i, b, n); memcpy(a, b, n); }
     uint64_t t1 = now_ns();
-    for (int i = 0; i < reps; i++) memcpy(b, a, n), a[i] ^= 1;
+    for (int i = 0; i < reps; i++) memcpy(b, a, n), a[(size_t)i % n] ^= 1;
     uint64_t t2 = now_ns();
     c->derive_ns = (double)(t1 - t0) / reps - (double)(t2 - t1) / reps;
     if (c->derive_ns < 1) c->derive_ns = 1;
@@ -1274,6 +1276,7 @@ static void calibrate_u(JsSpace *s, const JsRealizer *rz) {
     t1 = now_ns();
     c->retain_ns_per_byte = (double)(t1 - t0) / (double)m;
     free(a); free(b); free(p);
+    return JS_OK;
 }
 
 /* ---- inspection ------------------------------------------------------------- */
@@ -1349,8 +1352,9 @@ void js_branch_realization(JsSpace *s, uint32_t b, JsSharedStateRealization *out
     LOCK(s); realization_u(s, b, out); UNLOCK(s);
 }
 
-void js_calibrate(JsSpace *s, const JsRealizer *r) {
-    LOCK(s); calibrate_u(s, r); UNLOCK(s);
+int js_calibrate(JsSpace *s, const JsRealizer *r) {
+    LOCK(s); int rc = calibrate_u(s, r); UNLOCK(s);
+    return rc;
 }
 
 /* ---- stable references, ownership, staging, placement ---------------------- */
