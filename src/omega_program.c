@@ -31,8 +31,9 @@ int omega_build_constraint_id(ConstraintKind kind, const char *annotation, Seman
     OmegaObject obj;
     memset(&obj, 0, sizeof(OmegaObject));
     obj.kind = KIND_CONSTRAINT;
-    uint16_t len = annotation ? (uint16_t)strlen(annotation) : 0;
-    omega_object_add_constraint(&obj, kind, (const uint8_t*)annotation, len);
+    size_t len = annotation ? strlen(annotation) : 0;
+    if (len > UINT16_MAX) return -1;
+    if (omega_object_add_constraint(&obj, kind, (const uint8_t*)annotation, (uint16_t)len) != 0) return -1;
     if (omega_compute_semantic_id(&obj) != 0) return -1;
     *out_id = obj.id;
     return 0;
