@@ -95,6 +95,10 @@ on:
       - 'evidence/MIXED_ALGEBRA/**'
       - 'evidence/R15/**'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   changes:
     runs-on: ubuntu-24.04-arm
@@ -262,16 +266,33 @@ jobs:
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-path
 
   crumbline:
+    name: crumbline (${{ matrix.name }})
     needs: changes
     if: needs.changes.outputs.crumbline == 'true'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # test-*-genesis depend on test-vcstore / test-resolve in the Makefile,
+          # so each pair stays together in one make invocation (as before).
+          - name: learner and library
+            targets: test-crumbline test-library
+          - name: vcstore
+            targets: test-vcstore test-vcstore-genesis
+          - name: resolve
+            targets: test-resolve test-resolve-genesis
+          - name: genesis
+            targets: test-genesis test-genesis-real
+          - name: program-ir and vc-bridge
+            targets: test-program-ir test-vc-bridge
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Crumbline learner conformance vectors
-        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-crumbline test-library test-vcstore test-resolve test-vcstore-genesis test-resolve-genesis test-genesis test-genesis-real test-program-ir test-vc-bridge
+      - name: Crumbline learner conformance vectors (${{ matrix.name }})
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 ${{ matrix.targets }}
 
   runtime:
     needs: changes
@@ -341,12 +362,6 @@ jobs:
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
         run: make test-r16-surface
-      - name: R16 G4 every guard load-bearing (36 mutants, each must turn the G4 test red)
-        if: ${{ !cancelled() }}
-        env:
-          PHYSICS_DIR: ${{ github.workspace }}/physics-src
-          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
-        run: make test-r16-negative-mutants
       - name: R16 qualify script self-test (dirty tree refused, NOT_RUN honest, failing check exits non-zero)
         if: ${{ !cancelled() }}
         run: make test-r16-qualify-selftest
@@ -359,6 +374,45 @@ jobs:
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
         run: make test-allen
+
+  # Split out of `runtime` so the 36-mutant sweep runs in parallel with the other R15/R16 steps.
+  runtime-mutants:
+    needs: changes
+    if: needs.changes.outputs.runtime == 'true'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Read pinned Physics and AIENOS commits
+        id: pins
+        run: |
+          p=$(tr -d '[:space:]' < physics.lock)
+          a=$(awk 'NF && $1 !~ /^#/ {print $1; exit}' aienos.lock)
+          test -n "$p" && test -n "$a"
+          echo "physics=$p" >> "$GITHUB_OUTPUT"
+          echo "aienos=$a" >> "$GITHUB_OUTPUT"
+      - name: Checkout pinned Physics headers
+        uses: actions/checkout@v4
+        with:
+          repository: aien-dev/physics
+          ref: ${{ steps.pins.outputs.physics }}
+          path: physics-src
+      - name: Checkout pinned AIENOS authority
+        uses: actions/checkout@v4
+        with:
+          repository: aien-dev/aienos
+          ref: ${{ steps.pins.outputs.aienos }}
+          path: aienos-src
+      - name: Keep dependency checkouts out of Omega tree status
+        run: printf 'physics-src/\naienos-src/\n' >> .git/info/exclude
+      - name: R16 G4 every guard load-bearing (36 mutants, each must turn the G4 test red)
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+        run: make test-r16-negative-mutants
 
   argus:
     needs: changes

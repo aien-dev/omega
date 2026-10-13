@@ -12,6 +12,10 @@ on:
       - 'tools/r15_reduce.c'
       - 'mk/turing_yield*'
       - '.github/workflows/turing-yield.yml'
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   portable-boundaries:
     runs-on: ubuntu-latest
