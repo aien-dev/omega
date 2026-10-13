@@ -30,6 +30,7 @@ typedef struct {
 } Fix;
 
 typedef struct {
+    const OscAlloc *a;
     uint32_t *w;
     size_t n, cap;
     int bad;
@@ -59,9 +60,10 @@ static void cg_fail(Cg *g, const char *fmt, ...) {
 static size_t here(Cg *g) { return g->n; }
 
 static void put(Cg *g, uint32_t word) {
+    if (g->bad) return;  /* a failed unit is discarded; do not ask the allocator again */
     if (g->n == g->cap) {
         size_t nc = g->cap ? g->cap * 2 : 4096;
-        uint32_t *p = realloc(g->w, nc * sizeof *p);
+        uint32_t *p = g->a->realloc(g->a->ctx, g->w, g->cap * sizeof *p, nc * sizeof *p);
         if (!p) { cg_fail(g, "out of memory"); return; }
         g->w = p;
         g->cap = nc;
@@ -77,9 +79,10 @@ static void E(Cg *g, OscA64Insn i) {
 }
 
 static void fix(Cg *g, OscA64Insn i, int kind, int target) {
+    if (g->bad) return;
     if (g->nfx == g->capfx) {
         size_t nc = g->capfx ? g->capfx * 2 : 256;
-        Fix *p = realloc(g->fx, nc * sizeof *p);
+        Fix *p = g->a->realloc(g->a->ctx, g->fx, g->capfx * sizeof *p, nc * sizeof *p);
         if (!p) { cg_fail(g, "out of memory"); return; }
         g->fx = p;
         g->capfx = nc;
@@ -545,31 +548,38 @@ int osc_cg_verify(const OscCode *c, char *err, size_t n) {
     return 0;
 }
 
-int osc_cg_compile(const OscUnit *u, OscCode *out, char *err, size_t n) {
+/* the word and fixup buffers, released with the sizes they were last grown to */
+static void cg_drop(Cg *g) {
+    g->a->free(g->a->ctx, g->w, g->cap * sizeof *g->w);
+    g->a->free(g->a->ctx, g->fx, g->capfx * sizeof *g->fx);
+}
+
+int osc_cg_compile_a(const OscAlloc *a, const OscUnit *u, OscCode *out, char *err, size_t n) {
     if (!out) return -1;
     memset(out, 0, sizeof *out);
+    if (!a) a = osc_alloc_libc();
+    out->a = a;
     if (!u) return -1;
-    if (osc_ir_validate(u, err, n)) return -1;
+    if (osc_ir_validate_a(a, u, err, n)) return -1;
     Cg g;
     memset(&g, 0, sizeof g);
+    g.a = a;
     g.err = err;
     g.errn = n;
     for (int fi = 0; fi < u->nfuncs && !g.bad; fi++) gen_func(&g, u, fi);
     if (!g.bad && g.n == 0) cg_fail(&g, "empty unit");
     if (g.bad) {
-        free(g.w);
-        free(g.fx);
+        cg_drop(&g);
         return -1;
     }
-    out->code = malloc(g.n * 4);
-    if (!out->code) { free(g.w); free(g.fx); return -1; }
+    out->code = a->alloc(a->ctx, g.n * 4);
+    if (!out->code) { cg_fail(&g, "out of memory"); cg_drop(&g); return -1; }
     for (size_t i = 0; i < g.n; i++)
         for (int b = 0; b < 4; b++) out->code[4 * i + b] = (uint8_t)(g.w[i] >> (8 * b));
     out->len = g.n * 4;
     out->nfuncs = u->nfuncs;
     for (int fi = 0; fi < u->nfuncs; fi++) out->entry[fi] = g.entry_word[fi] * 4;
-    free(g.w);
-    free(g.fx);
+    cg_drop(&g);
     if (osc_cg_verify(out, err, n)) {
         osc_cg_free(out);
         return -1;
@@ -577,8 +587,13 @@ int osc_cg_compile(const OscUnit *u, OscCode *out, char *err, size_t n) {
     return 0;
 }
 
+int osc_cg_compile(const OscUnit *u, OscCode *out, char *err, size_t n) {
+    return osc_cg_compile_a(osc_alloc_libc(), u, out, err, n);
+}
+
 void osc_cg_free(OscCode *c) {
     if (!c) return;
-    free(c->code);
+    const OscAlloc *a = c->a ? c->a : osc_alloc_libc();
+    if (c->code) a->free(a->ctx, c->code, c->len);
     memset(c, 0, sizeof *c);
 }

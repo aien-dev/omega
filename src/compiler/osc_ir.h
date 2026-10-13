@@ -27,6 +27,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "osc_alloc.h"
 
 #define OSC_MAX_FUNCS     32
 #define OSC_MAX_PARAMS     6     /* x0..x5; x7 carries the hidden runtime ctx */
@@ -236,7 +237,11 @@ typedef struct {
  * terminator and has no terminator before its end, branch targets valid,
  * calls only to earlier functions with matching arity/types, REF kinds legal
  * for LOAD/STORE/RELEASE). 0 ok, -1 invalid with message in err. Both the
- * interpreter and the back end refuse a unit that does not validate. */
+ * interpreter and the back end refuse a unit that does not validate.
+ * osc_ir_validate_a takes its scratch (one definite-assignment bitset pair per
+ * function) from `a` (NULL = libc) and returns -2 instead of -1, with "out of
+ * memory" in err, when `a` refuses; osc_ir_validate is the same over libc. */
+int osc_ir_validate_a(const OscAlloc *a, const OscUnit *u, char *err, size_t n);
 int osc_ir_validate(const OscUnit *u, char *err, size_t n);
 
 /* Canonical encoding of the IR (WireLayout, declared little-endian, no

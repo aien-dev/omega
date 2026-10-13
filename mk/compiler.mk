@@ -40,6 +40,14 @@ $(OSC_DIR)/test_osc_backend_asan: tests/compiler/test_osc_backend.c $(OSC_LIB) $
 	@mkdir -p $(OSC_DIR)
 	$(CC) $(OSC_CFLAGS) $(OSC_ASAN) -o $@ tests/compiler/test_osc_backend.c $(OSC_LIB)
 
+$(OSC_DIR)/test_osc_alloc: tests/compiler/test_osc_alloc.c $(OSC_LIB) $(OSC_HDRS)
+	@mkdir -p $(OSC_DIR)
+	$(CC) $(OSC_CFLAGS) -o $@ tests/compiler/test_osc_alloc.c $(OSC_LIB)
+
+$(OSC_DIR)/test_osc_alloc_asan: tests/compiler/test_osc_alloc.c $(OSC_LIB) $(OSC_HDRS)
+	@mkdir -p $(OSC_DIR)
+	$(CC) $(OSC_CFLAGS) $(OSC_ASAN) -o $@ tests/compiler/test_osc_alloc.c $(OSC_LIB)
+
 $(OSC_DIR)/test_osc_compiler: tests/compiler/test_osc_compiler.c $(OSC_LIB) $(OSC_MODEL) $(OSC_HDRS)
 	@mkdir -p $(OSC_DIR)
 	$(CC) $(OSC_CFLAGS) -o $@ tests/compiler/test_osc_compiler.c $(OSC_LIB) $(OSC_MODEL)
@@ -71,6 +79,7 @@ $(OSC_DIR)/test_legacy_a64_asan: tests/compiler/test_legacy_a64.c $(OSC_LEGACY_A
 # the 3-minute single-core budget; the plain legs run the full counts.
 test-compiler: $(OSC_DIR)/test_osc_model $(OSC_DIR)/test_osc_model_asan \
 		$(OSC_DIR)/test_osc_backend $(OSC_DIR)/test_osc_backend_asan \
+		$(OSC_DIR)/test_osc_alloc $(OSC_DIR)/test_osc_alloc_asan \
 		$(OSC_DIR)/test_osc_compiler $(OSC_DIR)/test_osc_compiler_asan $(OSC_DIR)/oscc \
 		$(OSC_DIR)/test_legacy_a64 $(OSC_DIR)/test_legacy_a64_asan
 	$(abspath $(OSC_DIR)/test_osc_model) > $(OSC_DIR)/model.out
@@ -81,6 +90,12 @@ test-compiler: $(OSC_DIR)/test_osc_model $(OSC_DIR)/test_osc_model_asan \
 	@tail -1 $(OSC_DIR)/backend.out; grep -q '^OSC1_BACKEND_PASS$$' $(OSC_DIR)/backend.out
 	$(abspath $(OSC_DIR)/test_osc_backend_asan) > $(OSC_DIR)/backend_asan.out
 	@tail -1 $(OSC_DIR)/backend_asan.out; grep -q '^OSC1_BACKEND_PASS$$' $(OSC_DIR)/backend_asan.out
+	$(abspath $(OSC_DIR)/test_osc_alloc) > $(OSC_DIR)/alloc.out
+	@tail -1 $(OSC_DIR)/alloc.out; grep -Eq '^PASS [0-9]+ [0-9]+$$' $(OSC_DIR)/alloc.out
+	@grep "^alloc sweep: " $(OSC_DIR)/alloc.out
+	$(abspath $(OSC_DIR)/test_osc_alloc_asan) > $(OSC_DIR)/alloc_asan.out
+	@tail -1 $(OSC_DIR)/alloc_asan.out; grep -Eq '^PASS [0-9]+ [0-9]+$$' $(OSC_DIR)/alloc_asan.out
+	@echo "test-osc-alloc: PASS"
 	$(abspath $(OSC_DIR)/test_osc_compiler) > $(OSC_DIR)/compiler.out
 	@tail -1 $(OSC_DIR)/compiler.out; grep -Eq '^OSC1_COMPILER_PASS( |$$)' $(OSC_DIR)/compiler.out
 	$(abspath $(OSC_DIR)/test_osc_compiler_asan) $(OSC_COMPILER_ASAN_ARGS) > $(OSC_DIR)/compiler_asan.out
@@ -118,6 +133,7 @@ OSC_QUICK_ASAN_FUZZ ?= 120
 test-compiler-full: test-compiler
 
 test-compiler-quick: $(OSC_DIR)/test_osc_model $(OSC_DIR)/test_osc_backend $(OSC_DIR)/test_osc_backend_asan \
+		$(OSC_DIR)/test_osc_alloc $(OSC_DIR)/test_osc_alloc_asan \
 		$(OSC_DIR)/test_osc_compiler $(OSC_DIR)/test_osc_compiler_asan $(OSC_DIR)/oscc \
 		$(OSC_DIR)/test_legacy_a64 $(OSC_DIR)/test_legacy_a64_asan
 	@mkdir -p $(OSC_QDIR)
@@ -127,6 +143,12 @@ test-compiler-quick: $(OSC_DIR)/test_osc_model $(OSC_DIR)/test_osc_backend $(OSC
 	@tail -1 $(OSC_QDIR)/backend.out; grep -q '^OSC1_BACKEND_PASS$$' $(OSC_QDIR)/backend.out
 	$(abspath $(OSC_DIR)/test_osc_backend_asan) > $(OSC_QDIR)/backend_asan.out
 	@tail -1 $(OSC_QDIR)/backend_asan.out; grep -q '^OSC1_BACKEND_PASS$$' $(OSC_QDIR)/backend_asan.out
+	$(abspath $(OSC_DIR)/test_osc_alloc) > $(OSC_QDIR)/alloc.out
+	@tail -1 $(OSC_QDIR)/alloc.out; grep -Eq '^PASS [0-9]+ [0-9]+$$' $(OSC_QDIR)/alloc.out
+	@grep "^alloc sweep: " $(OSC_QDIR)/alloc.out
+	$(abspath $(OSC_DIR)/test_osc_alloc_asan) > $(OSC_QDIR)/alloc_asan.out
+	@tail -1 $(OSC_QDIR)/alloc_asan.out; grep -Eq '^PASS [0-9]+ [0-9]+$$' $(OSC_QDIR)/alloc_asan.out
+	@echo "test-osc-alloc: PASS"
 	$(abspath $(OSC_DIR)/test_osc_compiler) $(OSC_QUICK_FUZZ) > $(OSC_QDIR)/compiler.out
 	@tail -1 $(OSC_QDIR)/compiler.out; grep -Eq '^OSC1_COMPILER_PASS( |$$)' $(OSC_QDIR)/compiler.out
 	$(abspath $(OSC_DIR)/test_osc_compiler_asan) $(OSC_QUICK_ASAN_FUZZ) > $(OSC_QDIR)/compiler_asan.out

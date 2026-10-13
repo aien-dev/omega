@@ -9,6 +9,7 @@
 #define OSC_FRONT_H
 
 #include <stddef.h>
+#include "osc_alloc.h"
 #include "osc_check.h"
 #include "osc_diag.h"
 #include "osc_ir.h"
@@ -29,5 +30,15 @@ int osc_compile_imports(const char *src, size_t len, OscUnit *out, OscDiag *diag
  * trace_or_NULL receives the per-function ownership event trace (also on a
  * refusal: the refused event is the last one, flagged). */
 int osc_compile(const char *src, size_t len, OscUnit *out, OscDiag *diag, OscTrace *trace_or_NULL);
+
+/* Explicit allocation (osc_alloc.h): the same entry points with every heap byte the front end
+ * takes (token array, AST, checker state and snapshots, lowering state, validator scratch) drawn
+ * from `a` (NULL = libc) and returned to it before the call returns. An allocator refusal is an
+ * ordinary failure: -1 with diag->kind == OSC_DIAG_CAPACITY. out and diag are the caller's. The
+ * IR produced is identical for every allocator; osc_compile and osc_compile_imports are these
+ * two over osc_alloc_libc(). */
+int osc_compile_imports_a(const OscAlloc *a, const char *src, size_t len, OscUnit *out, OscDiag *diag,
+                          OscTrace *trace_or_NULL, OscImportResolver resolver, void *resolver_ctx);
+int osc_compile_a(const OscAlloc *a, const char *src, size_t len, OscUnit *out, OscDiag *diag, OscTrace *trace_or_NULL);
 
 #endif /* OSC_FRONT_H */

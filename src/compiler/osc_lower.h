@@ -9,11 +9,13 @@
 #ifndef OSC_LOWER_H
 #define OSC_LOWER_H
 
+#include "osc_alloc.h"
 #include "osc_diag.h"
 #include "osc_ir.h"
 #include "osc_parse.h"
 
-/* 0 ok; -1 with *d filled (CAPACITY when a function exceeds the IR limits). */
-int osc_lower(const OscAst *ast, OscUnit *out, OscDiag *d);
+/* 0 ok; -1 with *d filled (CAPACITY when a function exceeds the IR limits, or `a` refuses the
+ * lowering state). `a` is not NULL here. */
+int osc_lower(const OscAlloc *a, const OscAst *ast, OscUnit *out, OscDiag *d);
 
 #endif /* OSC_LOWER_H */
