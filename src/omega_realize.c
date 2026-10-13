@@ -13,7 +13,7 @@ static void write_u32_be(uint8_t *p, uint32_t v) {
 }
 
 int omega_compute_realization_id(RealizationObject *real) {
-    if (!real) return -1;
+    if (!real || real->code_len > sizeof(real->code_bytes)) return -1;
     uint8_t buf[AARCH64_MAX_CODE_BYTES + 64];
     size_t pos = 0;
 
