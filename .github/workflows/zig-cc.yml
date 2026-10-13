@@ -45,6 +45,10 @@ env:
   ZIG_VERSION: "0.17.0"
   ZIG_SHA256: "9e8d11661d4ae3bd57702a3832781e23ad151dde5798e16a5ccd503f65234ff8"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   zig-cc:
     name: omega-zig-cc
