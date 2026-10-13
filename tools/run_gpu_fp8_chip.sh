@@ -8,8 +8,7 @@
 #   2. main: parity battery at the automatic shape (one-hot conversion on the chip, 14 shapes, grouped experts,
 #      cache hit bit-identical, mutants caught), bandwidth per shape in receipt-main.json
 #   3. one variable per run, informational: --no-evict (host caches warm after upload: the flattering number),
-#      --depth 0 (step-by-step kernel; the default is the deep kernel where the row fits), rows per warp 2 (default 1),
-#      warps 4, CTA budget 128/512
+#      --depth 0 (step-by-step kernel everywhere). Rows/warps/CTA-budget sweeps: evidence/OWN30B-FP8-GEMV-7ce5dd4b-* and -fc05176a-*.
 # Verdict line last: "GPU_FP8_CHIP: PASS|FAIL". Steps 0 and 2 decide; 1 and 3 are recorded.
 set -u
 EVID="${1:?evidence dir}"; PHYS="${2:-$HOME/workspace/physics-own30b-k}"
@@ -30,15 +29,7 @@ echo "baseline exit ${PIPESTATUS[0]} (recorded)" | tee -a "$EVID/baseline-matmul
 $T --reps 50 --out "$EVID/receipt-main.json" 2>&1 | tee "$EVID/main.log"; [ "${PIPESTATUS[0]}" = 0 ] || fail=1
 $T --reps 50 --no-evict --out "$EVID/receipt-noevict.json" 2>&1 | tee "$EVID/noevict.log"; echo "no-evict exit ${PIPESTATUS[0]} (informational)" | tee -a "$EVID/noevict.log"
 $T --reps 50 --depth 0 --out "$EVID/receipt-depth0.json" 2>&1 | tee "$EVID/depth0.log"; echo "depth 0 exit ${PIPESTATUS[0]} (informational)" | tee -a "$EVID/depth0.log"
-for r in 2; do
-  $T --reps 20 --rows $r --out "$EVID/receipt-rows$r.json" 2>&1 | tee "$EVID/rows$r.log"
-  echo "rows $r exit ${PIPESTATUS[0]} (informational)" | tee -a "$EVID/rows$r.log"
-done
-$T --reps 20 --warps 4 --out "$EVID/receipt-warps4.json" 2>&1 | tee "$EVID/warps4.log"; echo "warps 4 exit ${PIPESTATUS[0]} (informational)" | tee -a "$EVID/warps4.log"
-for b in 128 512; do
-  $T --reps 20 --cta-budget $b --out "$EVID/receipt-cta$b.json" 2>&1 | tee "$EVID/cta$b.log"
-  echo "cta budget $b exit ${PIPESTATUS[0]} (informational)" | tee -a "$EVID/cta$b.log"
-done
+
 echo "end $(date -u +%FT%TZ)" >> "$EVID/device.txt"
 (cd "$EVID" && sha256sum *.json *.log device.txt > SHA256SUMS)
 if [ $fail = 0 ]; then echo "GPU_FP8_CHIP: PASS"; else echo "GPU_FP8_CHIP: FAIL"; exit 1; fi
