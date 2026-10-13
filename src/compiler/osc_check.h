@@ -58,7 +58,7 @@ typedef struct OscTrace {
 
 /* Check ast (after osc_parse). 0 ok; -1 with *d filled (CAPACITY when `a` refuses the checker state
  * or one of its branch/loop snapshots). trace may be NULL.
- * `a` is not NULL here: osc_compile_imports_a resolves NULL to libc. */
+ * `a` is not NULL here: the front end resolves NULL to libc. */
 int osc_check(const OscAlloc *a, OscAst *ast, OscDiag *d, OscTrace *trace);
 
 #endif /* OSC_CHECK_H */
