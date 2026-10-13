@@ -58,8 +58,12 @@ static void chain_step(uint8_t chain[32], const uint8_t digest[32]) {
     sha256_hash(buf, sizeof buf, chain);
 }
 
+/* Largest subject count whose index fits in a size_t without wrapping. */
+#define CX_MAX_SUBJECTS ((uint64_t)(SIZE_MAX / sizeof(CxIdList)))
+
 int cx_init(CxStore *s, uint64_t n_subjects) {
     memset(s, 0, sizeof(*s));
+    if (n_subjects > CX_MAX_SUBJECTS) return CX_ERR_NOMEM;
     size_t nb = (size_t)(n_subjects ? n_subjects : 1) * sizeof(CxIdList);
     s->by_subject = CX_MALLOC(nb);
     if (!s->by_subject) return CX_ERR_NOMEM;
@@ -318,7 +322,9 @@ int cx_open_with(CxStore *s, const CxJournalOps *ops, void *ctx, const char *nam
             CX_FREE(b); ops->close(ctx, jh); return CX_ERR_FORMAT;
         }
         uint64_t file_subjects = le_get(b + 16);
-        if (n_subjects && n_subjects != file_subjects) {
+        /* The count comes from the file: one too large to index is not a journal
+         * this build can open, and must not reach the allocation size. */
+        if (file_subjects > CX_MAX_SUBJECTS || (n_subjects && n_subjects != file_subjects)) {
             CX_FREE(b); ops->close(ctx, jh); return CX_ERR_FORMAT;
         }
         n_subjects = file_subjects;
