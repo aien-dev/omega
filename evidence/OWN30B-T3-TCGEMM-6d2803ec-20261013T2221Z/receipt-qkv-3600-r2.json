@@ -1,0 +1,1 @@
+{"shape":"qkv","tokens":3600,"rows":3600,"tiles":57,"reps":9,"chip_median_ns":6948291,"call_median_ns":27290533,"tflops":10.866,"streamed_bytes":597688320,"act_bytes":597688320,"fail":0}
