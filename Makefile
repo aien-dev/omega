@@ -41,6 +41,8 @@ SRCS += src/omega_blackwell_codegen_gemm.c src/omega_gpu_fp8gemm_api.c
 # OWN-30B T3 (2026-10-13): tensor-core prefill kernels (omega_blackwell_codegen_tc.h), new files only
 SRCS += src/omega_blackwell_codegen_tc.c
 SRCS += src/omega_gpu_tcgemm_api.c
+# OWN-30B T3b (2026-10-13): device-resident prefill (omega_gpu_prefill.h), new files only
+SRCS += src/omega_blackwell_codegen_pf.c src/omega_gpu_prefill.c
 OBJS = $(patsubst %.c,$(OUT_DIR)/%.o,$(notdir $(SRCS)))
 DEPS = $(OBJS:.o=.d)
 -include $(DEPS)
@@ -2473,3 +2475,8 @@ $(GPU_TCGEMM_TEST): tests/gpu_tcgemm_test.c tests/bw_hmma_model.h tests/bw_warp_
 GPU_TC_PEAK_TEST = $(OUT_DIR)/gpu_tc_peak_test
 $(GPU_TC_PEAK_TEST): tests/gpu_tc_peak_test.c tests/bw_hmma_model.h tests/bw_warp_sim_tc.h src/omega_blackwell_codegen_tc.h $(OUT_DIR)/libomega_gpu.a
 	$(CC) $(CFLAGS) -ffp-contract=off -DWS_MAX_THREADS=512 -Itests -o $@ tests/gpu_tc_peak_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+
+# OWN-30B T3b (2026-10-13): device-resident prefill module tests (host sim first; chip parts under the GB10 lock)
+GPU_PF_MEM_TEST = $(OUT_DIR)/gpu_pf_mem_test
+$(GPU_PF_MEM_TEST): tests/gpu_pf_mem_test.c tests/bw_warp_sim_tc.h src/omega_gpu_prefill.h src/omega_blackwell_codegen_pf.h $(OUT_DIR)/libomega_gpu.a
+	$(CC) $(CFLAGS) -ffp-contract=off -DWS_MAX_THREADS=512 -Itests -o $@ tests/gpu_pf_mem_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
