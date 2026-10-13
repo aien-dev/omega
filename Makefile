@@ -40,6 +40,7 @@ SRCS += src/omega_blackwell_codegen_bf16.c src/omega_gpu_bf16_gemv_api.c
 SRCS += src/omega_blackwell_codegen_gemm.c src/omega_gpu_fp8gemm_api.c
 # OWN-30B T3 (2026-10-13): tensor-core prefill kernels (omega_blackwell_codegen_tc.h), new files only
 SRCS += src/omega_blackwell_codegen_tc.c
+SRCS += src/omega_gpu_tcgemm_api.c
 OBJS = $(patsubst %.c,$(OUT_DIR)/%.o,$(notdir $(SRCS)))
 DEPS = $(OBJS:.o=.d)
 -include $(DEPS)
