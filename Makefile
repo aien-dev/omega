@@ -25,6 +25,8 @@ SRCS = src/sha256.c src/omega_canonical.c src/omega_validate.c src/omega_core.c 
 
 # OWN-30B Cut 6 / Cut 5 (2026-10-13): FP8 e4m3 GEMV kernel family, new files only (omega_gpu_fp8_api.h)
 SRCS += src/omega_blackwell_codegen_moe.c src/omega_gpu_fp8_pack.c src/omega_gpu_fp8_api.c
+# OWN-30B cut 8 (2026-10-13): one-launch decode attention (omega_gpu_decode_attn_api.h), new files only
+SRCS += src/omega_blackwell_codegen_attn.c
 OBJS = $(patsubst %.c,$(OUT_DIR)/%.o,$(notdir $(SRCS)))
 DEPS = $(OBJS:.o=.d)
 -include $(DEPS)
