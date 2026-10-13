@@ -443,7 +443,7 @@ static void shared_rep(void *p) {
 static void run_shared(const JsRealizer *rz, RunResult *R, const char *spill) {
     JsSpace *S = calloc(1, sizeof *S);
     if (!S || js_space_init(S, spill) != JS_OK) { fail(R, "space init"); return; }
-    js_calibrate(S, rz);
+    if (js_calibrate(S, rz) != JS_OK) { fail(R, "calibrate"); js_space_destroy(S); free(S); return; }
     R->costs = S->costs;
     uint64_t derives0 = S->stats.derives;
     memset(S->stats.actions, 0, sizeof S->stats.actions);

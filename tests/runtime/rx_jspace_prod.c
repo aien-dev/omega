@@ -883,6 +883,23 @@ done:
     rmdir(dir);
 }
 
+/* js_calibrate on a unit shorter than its 32 repetitions stays inside the
+ * buffer (ASan reports the old a[i] write past the end), and a zero-size unit
+ * is refused instead of dividing by zero. */
+static void test_calibrate(void) {
+    static const JsRealizer small = { JS_REAL_WORLD_PROJECTION, "test_small", 16, derive_t };
+    static const JsRealizer empty = { JS_REAL_WORLD_PROJECTION, "test_empty", 0, derive_t };
+    JsSpace s;
+    CHECK(js_space_init(&s, "/tmp/jspace_prod_spill") == JS_OK, "init");
+    CHECK(js_calibrate(&s, &small) == JS_OK, "calibrate 16-byte unit");
+    CHECK(s.costs.copy_ns_per_byte >= 0 && s.costs.derive_ns >= 1, "calibrated costs are sane");
+    JsCosts before = s.costs;
+    CHECK(js_calibrate(&s, &empty) == JS_ERR_ARG, "zero-size unit refused");
+    CHECK(js_calibrate(&s, NULL) == JS_ERR_ARG, "missing realizer refused");
+    CHECK(memcmp(&before, &s.costs, sizeof before) == 0, "costs unchanged on refusal");
+    js_space_destroy(&s);
+}
+
 int main(void) {
     struct { const char *name; void (*fn)(void); } t[] = {
         { "alloc_reclaim", test_alloc_reclaim },
@@ -895,6 +912,7 @@ int main(void) {
         { "gen_exhaustion", test_gen_exhaustion },
         { "gen_durable", test_gen_durable },
         { "anchor", test_anchor },
+        { "calibrate", test_calibrate },
     };
     for (size_t i = 0; i < sizeof t / sizeof *t; i++) {
         int before = g_fail;
