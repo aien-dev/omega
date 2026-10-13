@@ -30,6 +30,12 @@ SRCS += src/omega_gpu_moe_api.c
 SRCS += src/omega_blackwell_codegen_moe.c src/omega_gpu_fp8_pack.c src/omega_gpu_fp8_api.c
 # OWN-30B cut 8 (2026-10-13): one-launch decode attention (omega_gpu_decode_attn_api.h), new files only
 SRCS += src/omega_blackwell_codegen_attn.c src/omega_gpu_decode_attn_api.c
+# OWN-30B (2026-10-13): libm-free host math (omega_gpu_hostmath.h) so libomega_gpu.a links without -lm
+SRCS += src/omega_gpu_hostmath.c
+# OWN-30B cut 8 item 2 (2026-10-13): one-launch MoE router (omega_gpu_router_api.h), new files only
+SRCS += src/omega_blackwell_codegen_router.c src/omega_gpu_router_api.c
+# OWN-30B (2026-10-13): bf16 streaming GEMV for the lm_head (omega_gpu_bf16_gemv_api.h), new files only
+SRCS += src/omega_blackwell_codegen_bf16.c src/omega_gpu_bf16_gemv_api.c
 OBJS = $(patsubst %.c,$(OUT_DIR)/%.o,$(notdir $(SRCS)))
 DEPS = $(OBJS:.o=.d)
 -include $(DEPS)
@@ -2406,3 +2412,28 @@ $(GPU_DATTN_TEST): tests/gpu_decode_attn_test.c tests/bw_warp_sim_k.h src/omega_
 test-gpu-decode-attn: $(GPU_DATTN_TEST)
 	$(GPU_DATTN_TEST) --host-only
 	$(GPU_DATTN_TEST) --sim
+
+# OWN-30B cut 8 item 2 (2026-10-13): one-launch MoE router (omega_gpu_router_api.h). test-gpu-router is host-only
+# (oracle, budgets) plus the warp simulator; the chip gate is tools/run_gpu_router_chip.sh under the GB10 lock.
+.PHONY: test-gpu-router
+GPU_ROUTER_TEST = $(OUT_DIR)/gpu_router_test
+$(GPU_ROUTER_TEST): tests/gpu_router_test.c tests/bw_warp_sim_k.h src/omega_gpu_router_api.h src/omega_blackwell_codegen_router.h src/omega_gpu_fp8_api.h $(OUT_DIR)/libomega_gpu.a
+	$(CC) $(CFLAGS) -ffp-contract=off -Itests -o $@ tests/gpu_router_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+test-gpu-router: $(GPU_ROUTER_TEST)
+	./$(GPU_ROUTER_TEST) --host-only
+	./$(GPU_ROUTER_TEST) --sim
+
+# OWN-30B (2026-10-13): bf16 streaming GEMV, the lm_head (omega_gpu_bf16_gemv_api.h). test-gpu-bf16-gemv is host-only
+# (emulation, budgets) plus the warp simulator (bit-identical to the host f32 emulation, mutants 1-3 caught); the chip
+# gate is tools/run_gpu_bf16_gemv_chip.sh under the GB10 lock.
+.PHONY: test-gpu-bf16-gemv
+GPU_BF16_TEST = $(OUT_DIR)/gpu_bf16_gemv_test
+$(GPU_BF16_TEST): tests/gpu_bf16_gemv_test.c tests/bw_warp_sim_k.h src/omega_gpu_bf16_gemv_api.h src/omega_blackwell_codegen_bf16.h $(OUT_DIR)/libomega_gpu.a
+	$(CC) $(CFLAGS) -ffp-contract=off -Itests -o $@ tests/gpu_bf16_gemv_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+test-gpu-bf16-gemv: $(GPU_BF16_TEST)
+	$(GPU_BF16_TEST) --host-only
+	$(GPU_BF16_TEST) --sim
+
+# OWN-30B (2026-10-13): report-only lm_head study, fp8 vs bf16 argmax agreement on the real checkpoint (chip, GB10 lock).
+$(OUT_DIR)/gpu_lmhead_fp8_study: tests/gpu_lmhead_fp8_study.c src/omega_gpu_bf16_gemv_api.h src/omega_gpu_fp8_api.h $(OUT_DIR)/libomega_gpu.a
+	$(CC) $(CFLAGS) -O2 -o $@ tests/gpu_lmhead_fp8_study.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
