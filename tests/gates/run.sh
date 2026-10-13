@@ -206,7 +206,6 @@ case "$step" in
     receipt 'rx_plan_reuse_receipt.*.json' '"failures": 0,' '"G3_outcome_and_evidence": "PASS"' '"G4_false_applicability_zero": "PASS"' '"G5_identity": "PASS"'
     make test-rx-deadline-cancel
     make test-i11-wake-merge
-    make test-r11-own-hold
     make test-c4-requal
     ;;
   # rx-host.yml chip-only-declared and spark-only targets (SKIP on GitHub, never a pass there)

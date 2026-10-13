@@ -423,12 +423,6 @@ jobs:
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
           AIENOS_COMMIT: ${{ steps.aienos.outputs.sha }}
         run: make test-i11-wake-merge
-      - name: R11 faculty owns its hold (test-r11-own-hold)
-        env:
-          PHYSICS_DIR: ${{ github.workspace }}/physics-src
-          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
-          AIENOS_COMMIT: ${{ steps.aienos.outputs.sha }}
-        run: make test-r11-own-hold
       - name: C4 requalification under interruption and recovery (test-c4-requal)
         env:
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
@@ -466,6 +460,8 @@ jobs:
         run: tools/ci_declare_skip.sh test-prod-hygiene-silicon chip-only "the probe run of the silicon production binary is a Spark check; its static link map and strings checks run in omega-faculty-arm"
       - name: R14 living recovery silicon (SKIP chip-only)
         run: tools/ci_declare_skip.sh test-r14-silicon chip-only "needs the GB10 resident seat and both Spark core classes; qualified only by a candidate-bound Spark receipt"
+      - name: R11 own quiet hold living run (SKIP spark-only)
+        run: tools/ci_declare_skip.sh test-r11-own-hold spark-only "the q1-abc case must start the R11 living run, which needs both Spark core classes (X925 + A725); omega #425"
       - name: R15 G7 and parity host runs (SKIP spark-only)
         run: |
           tools/ci_declare_skip.sh test-r15-g7-host spark-only "runs R13 living episodes; needs both Spark core classes (X925 + A725)"

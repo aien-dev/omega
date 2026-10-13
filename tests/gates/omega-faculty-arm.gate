@@ -1,5 +1,5 @@
 # tests/gates/omega-faculty-arm.gate
-# Mirrors hosted: rx-host.yml omega-faculty-arm: program-id, program-realize, R10, regulate, R11, R13/R14 host and silicon builds, R16-G3 link maps, production hygiene, negative build, empirical optimizer, plan reuse, and the host-only HD-09 deadline, I11 wake merge, R11 own hold and C4 requalification gates (omega #425); pinned physics, aienos and ARGUS (hosted 157 s)
+# Mirrors hosted: rx-host.yml omega-faculty-arm: program-id, program-realize, R10, regulate, R11, R13/R14 host and silicon builds, R16-G3 link maps, production hygiene, negative build, empirical optimizer, plan reuse, and the host-only HD-09 deadline, I11 wake merge and C4 requalification gates (omega #425); pinned physics, aienos and ARGUS (hosted 157 s)
 # cache: never because receipts bind the candidate commit and the step reads pinned sibling sources.
 gate: OMEGA-FACULTY-ARM
 manifest_version: 2
