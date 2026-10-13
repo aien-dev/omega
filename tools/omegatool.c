@@ -433,6 +433,101 @@ static bool test_cross_build_determinism(void) {
 }
 
 /* =========================================================================
+ * GATE 13: OMEGA_REALIZATION_ID_COVERS_ALL_CODE_PASS
+ * Every code byte reaches the realization identity, up to full capacity.
+ * Lengths past capacity are refused, not hashed short.
+ * ========================================================================= */
+static bool test_realization_id_covers_all_code(void) {
+    static RealizationObject a, b;
+    SemanticId sem, mach, id_a, id_b;
+    memset(&a, 0, sizeof(a));
+    memset(sem.bytes, 0x5A, sizeof(sem.bytes));
+    memset(mach.bytes, 0xA5, sizeof(mach.bytes));
+    a.target_profile = 1;
+    a.entry_offset = 0x10;
+    for (size_t i = 0; i < sizeof(a.code_bytes); ++i) a.code_bytes[i] = (uint8_t)(i * 7 + 3);
+
+    /* Known answer: a small realization hashes exactly the OMG0 layout, so
+     * identities already on record do not move. */
+    a.code_len = 64;
+    uint8_t expect_in[78 + 64];
+    size_t p = 0;
+    expect_in[p++] = 'O'; expect_in[p++] = 'M'; expect_in[p++] = 'G'; expect_in[p++] = '0';
+    expect_in[p++] = KIND_REALIZATION;
+    expect_in[p++] = 1;
+    expect_in[p++] = 0; expect_in[p++] = 0; expect_in[p++] = 0; expect_in[p++] = 0x10;
+    expect_in[p++] = 0; expect_in[p++] = 0; expect_in[p++] = 0; expect_in[p++] = 64;
+    memcpy(&expect_in[p], sem.bytes, OMEGA_ID_BYTES); p += OMEGA_ID_BYTES;
+    memcpy(&expect_in[p], mach.bytes, OMEGA_ID_BYTES); p += OMEGA_ID_BYTES;
+    memcpy(&expect_in[p], a.code_bytes, 64); p += 64;
+    uint8_t expect[SHA256_DIGEST_SIZE];
+    sha256_hash(expect_in, p, expect);
+    if (omega_realize_compute_triple_id(&sem, &mach, &a, &id_a) != 0) return false;
+    if (memcmp(id_a.bytes, expect, sizeof(expect)) != 0) return false;
+
+    /* Full capacity: code differing only in the last byte gets a distinct ID. */
+    a.code_len = sizeof(a.code_bytes);
+    b = a;
+    b.code_bytes[sizeof(b.code_bytes) - 1] ^= 0xFF;
+    if (omega_realize_compute_triple_id(&sem, &mach, &a, &id_a) != 0) return false;
+    if (omega_realize_compute_triple_id(&sem, &mach, &b, &id_b) != 0) return false;
+    if (memcmp(id_a.bytes, id_b.bytes, OMEGA_ID_BYTES) == 0) return false;
+
+    a.semantic_id = sem;
+    b.semantic_id = sem;
+    if (omega_compute_realization_id(&a) != 0 || omega_compute_realization_id(&b) != 0) return false;
+    if (memcmp(a.realization_id.bytes, b.realization_id.bytes, OMEGA_ID_BYTES) == 0) return false;
+
+    /* Past capacity: refused by both identity functions. */
+    a.code_len = sizeof(a.code_bytes) + 1;
+    if (omega_realize_compute_triple_id(&sem, &mach, &a, &id_a) == 0) return false;
+    if (omega_compute_realization_id(&a) == 0) return false;
+    return true;
+}
+
+/* =========================================================================
+ * GATE 14: OMEGA_OVERSIZED_FIELD_REFUSAL_PASS
+ * Attribute keys and values and constraint payloads that do not fit are
+ * refused and leave the object unchanged; they are never truncated.
+ * ========================================================================= */
+static bool test_oversized_field_refusal(void) {
+    static OmegaObject obj;
+    static uint8_t val[OMEGA_MAX_VAL_LEN + 1];
+    char key[OMEGA_MAX_KEY_LEN + 1];
+    memset(&obj, 0, sizeof(obj));
+    obj.kind = KIND_VALUE;
+    memset(val, 'v', sizeof(val));
+
+    if (omega_object_add_attribute(&obj, "big", val, OMEGA_MAX_VAL_LEN + 1) == 0) return false;
+    if (obj.attr_count != 0) return false;
+    if (omega_object_add_attribute(&obj, "fits", val, OMEGA_MAX_VAL_LEN) != 0) return false;
+    if (obj.attr_count != 1 || obj.attributes[0].val_len != OMEGA_MAX_VAL_LEN) return false;
+
+    memset(key, 'k', sizeof(key));
+    key[OMEGA_MAX_KEY_LEN] = '\0';           /* one char longer than the key field holds */
+    if (omega_object_add_attribute(&obj, key, val, 1) == 0) return false;
+    if (obj.attr_count != 1) return false;
+    key[OMEGA_MAX_KEY_LEN - 1] = '\0';       /* longest key that fits */
+    if (omega_object_add_attribute(&obj, key, val, 1) != 0) return false;
+    if (obj.attr_count != 2) return false;
+
+    uint8_t payload[sizeof(obj.constraints[0].payload) + 1];
+    memset(payload, 'c', sizeof(payload));
+    if (omega_object_add_constraint(&obj, CONST_RANGE, payload, sizeof(payload)) == 0) return false;
+    if (obj.const_count != 0) return false;
+    if (omega_object_add_constraint(&obj, CONST_RANGE, payload, sizeof(payload) - 1) != 0) return false;
+    if (obj.const_count != 1) return false;
+
+    /* A constraint annotation too long to store yields no identity at all. */
+    char note[sizeof(obj.constraints[0].payload) + 2];
+    memset(note, 'n', sizeof(note) - 1);
+    note[sizeof(note) - 1] = '\0';
+    SemanticId cid;
+    if (omega_build_constraint_id(CONST_INVARIANT, note, &cid) == 0) return false;
+    return true;
+}
+
+/* =========================================================================
  * DEMONSTRATION 1: Pure Arithmetic Equivalence Across 4 Representations
  * ========================================================================= */
 static void run_demonstration_arithmetic(void) {
@@ -3514,6 +3609,8 @@ int omega_run_m4_gates(void) {
     report_gate("OMEGA_PURE_EFFECT_SEPARATION_PASS", test_pure_effect_separation(), "Pure computation decoupled from physical effect tokens");
     report_gate("OMEGA_MALFORMED_OBJECT_REFUSAL_PASS", test_malformed_refusal(), "Structural cycles and corrupt wire packets rejected");
     report_gate("OMEGA_CROSS_BUILD_DETERMINISM_PASS", test_cross_build_determinism(), "Known-answer test evaluation matches specification");
+    report_gate("OMEGA_REALIZATION_ID_COVERS_ALL_CODE_PASS", test_realization_id_covers_all_code(), "Full-capacity code hashed in full; overlong code refused");
+    report_gate("OMEGA_OVERSIZED_FIELD_REFUSAL_PASS", test_oversized_field_refusal(), "Oversized keys, values and payloads refused, never truncated");
     printf("================================================================================\n");
     printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
     printf("================================================================================\n");

@@ -26,8 +26,11 @@ int omega_realize_compute_triple_id(const SemanticId *semantic_id,
                                     const RealizationObject *real,
                                     SemanticId *out_id) {
     if (!semantic_id || !machine_id || !real || !out_id) return -1;
+    if (real->code_len > sizeof(real->code_bytes)) return -1;
 
-    uint8_t buffer[4096];
+    /* Header is buffered; code bytes are streamed after it, so every byte up
+     * to full capacity reaches the hash. */
+    uint8_t buffer[4 + 1 + 1 + 4 + 4 + OMEGA_ID_BYTES + OMEGA_ID_BYTES];
     size_t pos = 0;
 
     /* Canonical OMG0 wire header */
@@ -60,12 +63,11 @@ int omega_realize_compute_triple_id(const SemanticId *semantic_id,
     pos += OMEGA_ID_BYTES;
 
     /* Raw Machine Code Bytes */
-    if (pos + real->code_len <= sizeof(buffer)) {
-        memcpy(&buffer[pos], real->code_bytes, real->code_len);
-        pos += real->code_len;
-    }
-
-    sha256_hash(buffer, pos, out_id->bytes);
+    sha256_ctx ctx;
+    sha256_init(&ctx);
+    sha256_update(&ctx, buffer, pos);
+    sha256_update(&ctx, real->code_bytes, real->code_len);
+    sha256_final(&ctx, out_id->bytes);
     return 0;
 }
 
