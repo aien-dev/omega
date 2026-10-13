@@ -22,6 +22,9 @@ SRCS = src/sha256.c src/omega_canonical.c src/omega_validate.c src/omega_core.c 
 	src/omega_evidence.c \
 	$(PHYSICS_DIR)/m16/m16_native.c $(PHYSICS_DIR)/nvrm/nvrm.c \
 	tools/omegatool.c
+# OWN-30B cut 2 (2026-10-13): column windows over a resident bf16 tensor for the MoE path. New file,
+# adds exports only (8B decode-speed lane collision rule: no existing GPU source moves).
+SRCS += src/omega_gpu_moe_api.c
 
 OBJS = $(patsubst %.c,$(OUT_DIR)/%.o,$(notdir $(SRCS)))
 DEPS = $(OBJS:.o=.d)
@@ -2367,3 +2370,13 @@ test-gpu-attention: $(GPU_ATTN_TEST)
 # FB-1 cut 4b: fresh-process device-open probe (flake investigation, tools/probe_gpu_open.sh)
 $(OUT_DIR)/gpu_session_probe: tests/gpu_session_probe.c src/omega_gpu_session.h $(OUT_DIR)/libomega_gpu.a
 	$(CC) $(CFLAGS) -o $@ tests/gpu_session_probe.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+
+# OWN-30B cut 2: window matmul gate (tests/gpu_moe_window_test.c). test-gpu-moe-window runs the host-only
+# refusals and the packed-window byte rule; the chip gate is `./build/gpu_moe_window_test --out r.json`
+# under /tmp/aien-gb10.lock (equivalence to the whole-tensor columns, mutants, window timing).
+GPU_MOE_TEST = $(OUT_DIR)/gpu_moe_window_test
+$(GPU_MOE_TEST): tests/gpu_moe_window_test.c src/omega_gpu_moe_api.h src/omega_gpu_matmul_api.h $(OUT_DIR)/libomega_gpu.a
+	$(CC) $(CFLAGS) -o $@ tests/gpu_moe_window_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+.PHONY: test-gpu-moe-window
+test-gpu-moe-window: $(GPU_MOE_TEST)
+	./$(GPU_MOE_TEST) --host-only
