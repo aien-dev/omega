@@ -34,6 +34,8 @@ SRCS += src/omega_blackwell_codegen_attn.c src/omega_gpu_decode_attn_api.c
 SRCS += src/omega_gpu_hostmath.c
 # OWN-30B cut 8 item 2 (2026-10-13): one-launch MoE router (omega_gpu_router_api.h), new files only
 SRCS += src/omega_blackwell_codegen_router.c src/omega_gpu_router_api.c
+# OWN-30B W-L2 (2026-10-13): decode launch collapse, new files only: command list (N launches, one submit) + glue kernels
+SRCS += src/omega_gpu_cmdlist.c src/omega_blackwell_codegen_dec.c
 # OWN-30B (2026-10-13): bf16 streaming GEMV for the lm_head (omega_gpu_bf16_gemv_api.h), new files only
 SRCS += src/omega_blackwell_codegen_bf16.c src/omega_gpu_bf16_gemv_api.c
 # OWN-30B prefill (2026-10-13): FP8 grouped GEMM, each expert streamed once per pass (omega_gpu_fp8gemm_api.h), new files only
@@ -2457,3 +2459,13 @@ $(GPU_GPR_BOUNDARY_TEST): tests/gpu_gpr_boundary_test.c src/omega_blackwell_code
 	$(CC) $(CFLAGS) -o $@ tests/gpu_gpr_boundary_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
 test-gpu-gpr-boundary: $(GPU_GPR_BOUNDARY_TEST)
 	$(GPU_GPR_BOUNDARY_TEST)
+
+# OWN-30B W-L2 (2026-10-13): command list (many launches, one submission) + decode glue kernels. test-gpu-cmdlist is
+# host-only + warp simulator; the chip gate is tools/run_gpu_cmdlist_chip.sh under the GB10 lock.
+.PHONY: test-gpu-cmdlist
+GPU_CMDLIST_TEST = $(OUT_DIR)/gpu_cmdlist_test
+$(GPU_CMDLIST_TEST): tests/gpu_cmdlist_test.c tests/bw_warp_sim_k.h src/omega_gpu_cmdlist.h src/omega_blackwell_codegen_dec.h $(OUT_DIR)/libomega_gpu.a
+	$(CC) $(CFLAGS) -ffp-contract=off -Itests -o $@ tests/gpu_cmdlist_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+test-gpu-cmdlist: $(GPU_CMDLIST_TEST)
+	./$(GPU_CMDLIST_TEST) --host-only
+	./$(GPU_CMDLIST_TEST) --sim
