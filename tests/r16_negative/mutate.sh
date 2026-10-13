@@ -27,7 +27,7 @@ lib=${R16_CAP_LIB:-$r7/native/capability/out/libaienos_capability.a}   # make pa
 [ -f "$lib" ] || { echo "R16-G4 mutants: missing $lib" >&2; exit 2; }
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/r16-mutants.XXXXXX") || exit 2
 trap 'rm -rf "$tmp"' EXIT INT TERM
-killed=0; survived=0; broken=0; total=0
+. "$(dirname "$0")/../../tools/mutpool.sh"; mp_init || exit 2
 
 # replace FILE OUT OCCURRENCE: literal OLD (env R16_OLD) -> NEW (env R16_NEW).
 # OCCURRENCE is a number (only that match) or "all". Fails unless it applied.
@@ -64,9 +64,10 @@ build_run() {  # name out-dir sources lib
 }
 
 # mutant NAME FILE OCCURRENCE OLD NEW   (FILE is an omega source, or "aienos")
-mutant() {
+# (mutants run on a bounded parallel pool, tools/mutpool.sh, MUTANT_JOBS; output order is the order below)
+mutant() { mp_run mutant_job "$@"; }
+mutant_job() {
     name=$1; file=$2; nth=$3
-    total=$((total + 1))
     d="$tmp/$name"; mkdir -p "$d"
     use_srcs=$srcs; use_lib=$lib
     if [ "$file" = aienos ]; then
@@ -74,15 +75,15 @@ mutant() {
         rm -rf "$d/cap/out"
         if ! R16_OLD=$4 R16_NEW=$5 replace "$r7/native/capability/aienos_capability.c" \
             "$d/cap/aienos_capability.c" "$nth"; then
-            echo "R16-G4 mutant $name: edit did not apply  BROKEN"; broken=$((broken + 1)); return
+            echo "R16-G4 mutant $name: edit did not apply  BROKEN"; return
         fi
         make -s -C "$d/cap" CC="$cc" > "$d/lib.log" 2>&1 \
-            || { echo "R16-G4 mutant $name: library build failed  BROKEN"; broken=$((broken + 1)); return; }
+            || { echo "R16-G4 mutant $name: library build failed  BROKEN"; return; }
         use_lib="$d/cap/out/libaienos_capability.a"
     else
         base=$(basename "$file")
         if ! R16_OLD=$4 R16_NEW=$5 replace "$file" "$d/$base" "$nth"; then
-            echo "R16-G4 mutant $name: edit did not apply  BROKEN"; broken=$((broken + 1)); return
+            echo "R16-G4 mutant $name: edit did not apply  BROKEN"; return
         fi
         use_srcs=""
         for s in $srcs; do
@@ -91,12 +92,11 @@ mutant() {
     fi
     build_run "$name" "$d" "$use_srcs" "$use_lib"
     case $? in
-        0) echo "R16-G4 mutant $name: test still PASSES  SURVIVED"; survived=$((survived + 1)) ;;
+        0) echo "R16-G4 mutant $name: test still PASSES  SURVIVED" ;;
         1) why=$(grep -E 'FAIL|not refused|ACCEPTED|changed' "$d/run.log" | head -1)
            [ -n "$why" ] || why="exit or missing gate line: $(tail -1 "$d/run.log")"
-           echo "R16-G4 mutant $name: test red  KILLED  ($why)"; killed=$((killed + 1)) ;;
+           echo "R16-G4 mutant $name: test red  KILLED  ($why)" ;;
         *) echo "R16-G4 mutant $name: build failed  BROKEN ($(grep -m1 error "$d/build.log"))"
-           broken=$((broken + 1)) ;;
     esac
 }
 
@@ -192,8 +192,14 @@ mutant c7_finish_work_credential $G 2 \
     'int crc = store->caller(store->caller_ctx, subject, cred, RX_CALLER_OP_CHECK);' 'int crc = 0; (void)subject; (void)cred;'
 mutant c7_add_work_state $G 1 'if (!starts_open) return RX_GEN_ERR_ARG;' '(void)starts_open;'
 
+mp_wait > "$tmp/mutants.log"; pool_rc=$?
+cat "$tmp/mutants.log"
+total=$(grep -c '^R16-G4 mutant ' "$tmp/mutants.log")
+killed=$(grep -c '^R16-G4 mutant .*: test red  KILLED  (' "$tmp/mutants.log")
+survived=$(grep -c '^R16-G4 mutant .*: test still PASSES  SURVIVED$' "$tmp/mutants.log")
+broken=$(grep -c '^R16-G4 mutant .*  BROKEN' "$tmp/mutants.log")
 echo "R16 G4 mutants: $total total, $killed killed, $survived survived, $broken broken"
-if [ $survived -eq 0 ] && [ $broken -eq 0 ]; then
+if [ $survived -eq 0 ] && [ $broken -eq 0 ] && [ $pool_rc -eq 0 ] && [ $killed -eq $total ]; then
     echo "R16 gate: R16_G4_GUARDS_LOAD_BEARING=PASS"; exit 0
 fi
 echo "R16 gate: R16_G4_GUARDS_LOAD_BEARING=FAIL"; exit 1
