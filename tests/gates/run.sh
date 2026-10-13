@@ -98,6 +98,7 @@ case "$step" in
   train)              make $NOPHYS test-train ;;
   compiler)           make $NOPHYS test-compiler-quick; make $NOPHYS test-compiler-full ;;
   physics0)           make $NOPHYS physics0-test ;;
+  chip-tool-selftests) for t in test-m19r-qualify test-gate14-combine test-window-lane-guard test-unwritten-trap-host test-ldst-host; do make $NOPHYS $t; done ;;
   # host-suites-2.yml
   visor)              aienos_pin; make $NOPHYS test-visor ;;
   turing)             make $NOPHYS test-turing; make $NOPHYS test-turing-exp001-a test-turing-exp001-coders; make $NOPHYS test-turing-verify-indep; make $NOPHYS test-turing-qcont test-turing-qrecord ;;
@@ -203,6 +204,10 @@ case "$step" in
     receipt rx_empirical_optimizer_receipt.json '"failures": 0,' '"candidate_bound": true,' '"tree_dirty": false,' '"mismatches": 0,' '"OMEGA_EMPIRICAL_OPTIMIZER_PASS": "\(PASS\|CHAIN_PASS_NO_WIN\)"'
     PLAN_REUSE_NO_ENERGY=1 make test-plan-reuse
     receipt 'rx_plan_reuse_receipt.*.json' '"failures": 0,' '"G3_outcome_and_evidence": "PASS"' '"G4_false_applicability_zero": "PASS"' '"G5_identity": "PASS"'
+    make test-rx-deadline-cancel
+    make test-i11-wake-merge
+    make test-r11-own-hold
+    make test-c4-requal
     ;;
   # rx-host.yml chip-only-declared and spark-only targets (SKIP on GitHub, never a pass there)
   chip:*|spark:*)

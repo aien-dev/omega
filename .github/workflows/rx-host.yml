@@ -409,6 +409,32 @@ jobs:
           grep -q '"G5_identity": "PASS"' "$receipt"
           sha256sum "$receipt"
           cat "$receipt"
+      # Host-only runtime gates that existed in the Makefile but ran nowhere in CI
+      # (omega #425). CPU only; built against the pinned AIENOS and Physics checkouts.
+      - name: HD-09 declared deadline cancels a late reaction (test-rx-deadline-cancel)
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+          AIENOS_COMMIT: ${{ steps.aienos.outputs.sha }}
+        run: make test-rx-deadline-cancel
+      - name: I11 held dependent merges the writer's wake; the no-hold mutant must fail (test-i11-wake-merge)
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+          AIENOS_COMMIT: ${{ steps.aienos.outputs.sha }}
+        run: make test-i11-wake-merge
+      - name: R11 faculty owns its hold (test-r11-own-hold)
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+          AIENOS_COMMIT: ${{ steps.aienos.outputs.sha }}
+        run: make test-r11-own-hold
+      - name: C4 requalification under interruption and recovery (test-c4-requal)
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+          AIENOS_COMMIT: ${{ steps.aienos.outputs.sha }}
+        run: make test-c4-requal
 
   chip-only-declared:
     # Checks that cannot run on a GitHub runner, declared explicitly so their
@@ -452,8 +478,8 @@ jobs:
         run: tools/ci_declare_skip.sh test-r16-authpath-silicon chip-only "needs the GB10 resident seat; qualified only by a candidate-bound Spark receipt; checks 1-3 on the silicon build run in omega-faculty-arm"
       - name: Composition gate on the GPU (SKIP chip-only)
         run: tools/ci_declare_skip.sh test-composition-gate-gpu chip-only "needs the GB10 resident seat"
-      - name: Chip milestones M5, M19, M19R, gate 14 (SKIP chip-only; M6-M15 run and M17 is declared in host-suites-3.yml)
+      - name: Chip milestones M5, M19 (SKIP chip-only; M6-M15 run and M17 is declared in host-suites-3.yml; the M19R qualifier and gate 14 combiner self-tests run in host-suites.yml)
         run: |
-          for t in test-m5 test-m19 test-m19r-qualify test-gate14-combine; do
+          for t in test-m5 test-m19; do
             tools/ci_declare_skip.sh "$t" chip-only "chip milestone gate; needs the GB10 (declared not-on-GitHub in host-suites.yml)"
           done

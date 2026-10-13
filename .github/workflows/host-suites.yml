@@ -23,14 +23,16 @@ name: Host suites
 #   this file : searchtrace, estimation est-tools estimation-v3 est3c-tools,
 #       ans (test-inertial-alignment: ANS Inertial Alignment v1, ARCH-0032),
 #       numeric-cpu numeric-qualify, train (M22 substrate, Lane 21),
-#       compiler (OSC-1, own path guard)
+#       compiler (OSC-1, own path guard),
+#       chip-tool-selftests (test-m19r-qualify test-gate14-combine
+#       test-window-lane-guard test-unwritten-trap-host test-ldst-host: the
+#       host-only self-tests of chip tooling; omega #425)
 #
 # Deliberately NOT on GitHub (no GB10, no resident seat, no quiet flag here):
 #   test-composition-gate-gpu, test-r12-silicon, test-r13-silicon,
 #   test-r14-silicon, test-r15-parity-silicon, test-r16-authpath-silicon,
 #   test-m5, test-m16..test-m19 (chip milestones; test-m17 is a skipped job in
-#   host-suites-3.yml), test-m19r-qualify, test-gate14-combine,
-#   test-polyglot-mojo (needs Mojo toolchain), test-r13-host / test-r14-host
+#   host-suites-3.yml), test-polyglot-mojo (needs Mojo toolchain), test-r13-host / test-r14-host
 #   (need both GB10 core classes; rx-host builds them only).
 # Not yet wired (host-only, follow-up): test-numeric-sweep,
 #   test-numeric-e1-exhaustive (2^32 inputs per op, too long), visor-*,
@@ -78,6 +80,13 @@ on:
       - 'tools/test_chipwait_campaign.sh'
       - 'tools/json_canon.c'
       - 'tools/e1_*'
+      # chip-tool-selftests (host-only self-tests of chip tooling, omega #425)
+      - 'tools/gate14_combine.sh'
+      - 'tools/test_gate14_combine.sh'
+      - 'tools/window_lane_guard.sh'
+      - 'tests/window_lane_guard_test.sh'
+      - 'tests/test_omega_unwritten_trap.c'
+      - 'tests/test_omega_ldst_gb10.c'
       # train (M22 optimizer substrate + E5 provenance)
       - 'src/train/**'
       - 'tests/train/**'
@@ -213,3 +222,23 @@ jobs:
       - name: PD-0 substrate gates (plain + ASan/UBSan; V3 breach rates are recorded, not gated)
         if: steps.guard.outputs.run == 'true'
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 physics0-test
+
+  chip-tool-selftests:
+    # Host-only self-tests of chip tooling that previously ran nowhere in CI
+    # (omega #425): stub qualifier, synthetic receipts, CPU references. No GPU.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: M19R qualifier (candidate binding, immutable emission, stubbed qualification)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-m19r-qualify
+      - name: Gate 14 combiner (host-only, hostile inputs refused)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-gate14-combine
+      - name: Window lane guard (an unarchived receipt blocks the next lane)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-window-lane-guard
+      - name: Unwritten-register trap (host-only)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-unwritten-trap-host
+      - name: E1 row 2 global load/store tables (host-only, no device)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-ldst-host
