@@ -1,0 +1,127 @@
+name: Zig cc cross-check
+
+# Purpose: an independent toolchain cross-check. The same Omega sources are built
+# with `zig cc` (clang 22: a different front end, optimiser and code generator
+# than the gcc used everywhere else; it reads the same system C headers) and
+# must pass the same host gates.
+# The identities the gates print (64-hex SHA-256 values) must be byte-for-byte
+# the same as a gcc build of the same commit prints. A gate that passes under gcc
+# only, or an identity that changes with the compiler, is a portability or
+# undefined-behaviour finding in Omega, not a Zig problem.
+#
+# Pinned toolchain: Zig 0.17.0, aarch64-linux, from
+#   https://ziglang.org/download/0.17.0/zig-aarch64-linux-0.17.0.tar.xz
+#   sha256 9e8d11661d4ae3bd57702a3832781e23ad151dde5798e16a5ccd503f65234ff8
+# The tarball is checked against that digest before it is unpacked. Raising the
+# version is a deliberate change to this file (new URL and new digest together).
+#
+# The gcc lanes remain authoritative: pr-smoke.yml and the host-suites workflows
+# define what "passes" means. This lane never replaces them and is not a
+# migration to Zig. Not covered here: any GPU or chip suite, the Makefile targets
+# that hard-code `gcc` (numeric CPU/reduce/transcendental), the ASan half of
+# test-compiler-quick (zig cc builds the _asan binaries without AddressSanitizer;
+# UBSan is applied), and the QEMU-backed gates (M5 and the realization demo),
+# because no omega workflow installs QEMU. See docs/zig-cc-lane.md.
+#
+# OPEN: clang 22 warns on src/omega_blackwell_encoder.c:87 (`char HEXDIGITS[16] =
+# "0123456789abcdef"` drops the NUL; -Wunterminated-string-initialization), gcc
+# does not. That file is GPU encoder code and this lane does not edit it, so the
+# one diagnostic is demoted from error to warning with -Wno-error=<flag> on the
+# compiler command below. It stays visible in the build log. Every other
+# warning is still an error (-Werror from the Makefile).
+#
+# Like pr-smoke.yml this runs on every pull request (no path filter), against the
+# merged result that actions/checkout produces for pull_request events.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  ZIG_VERSION: "0.17.0"
+  ZIG_SHA256: "9e8d11661d4ae3bd57702a3832781e23ad151dde5798e16a5ccd503f65234ff8"
+
+jobs:
+  zig-cc:
+    name: omega-zig-cc
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Read pinned Physics
+        id: pins
+        run: |
+          sha=$(tr -d '[:space:]' < physics.lock)
+          test -n "$sha"
+          echo "physics=$sha" >> "$GITHUB_OUTPUT"
+      - name: Checkout pinned Physics
+        uses: actions/checkout@v4
+        with:
+          repository: aien-dev/physics
+          ref: ${{ steps.pins.outputs.physics }}
+          path: physics-src
+      - name: Keep Physics checkout out of Omega tree status
+        run: echo 'physics-src/' >> .git/info/exclude
+      - name: Install pinned Zig (checksum verified before unpacking)
+        run: |
+          set -euo pipefail
+          tarball="zig-aarch64-linux-${ZIG_VERSION}.tar.xz"
+          cd "$RUNNER_TEMP"
+          curl -fsSL --retry 3 -o "$tarball" "https://ziglang.org/download/${ZIG_VERSION}/${tarball}"
+          echo "${ZIG_SHA256}  ${tarball}" | sha256sum -c -
+          tar -xJf "$tarball"
+          rm -f "$tarball"
+          zig="$RUNNER_TEMP/zig-aarch64-linux-${ZIG_VERSION}/zig"
+          test "$("$zig" version)" = "${ZIG_VERSION}"
+          "$zig" cc --version | head -2
+          echo "ZIGCC=$zig cc -Wno-error=unterminated-string-initialization" >> "$GITHUB_ENV"
+      - name: Build with zig cc and base gates (make test)
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+        run: |
+          set -o pipefail
+          make -j"$(nproc)" CC="$ZIGCC" build/omegatool
+          make CC="$ZIGCC" test | tee base.log
+          grep -E 'TOTAL GATES: ([0-9]+) \| PASSED: \1 \| FAILED: 0' base.log
+          ! grep -qE 'FAILED: [1-9]|\[FAIL\]|\(FAIL\)' base.log
+      - name: Language V0 golden (zig cc)
+        run: |
+          set -o pipefail
+          make CC="$ZIGCC" PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-language | tee lang.log
+          grep -E '^PASS ([0-9]+)/\1$' lang.log
+          ! grep -q '^FAIL' lang.log
+      - name: Compiler quick smoke (zig cc)
+        run: |
+          set -o pipefail
+          make CC="$ZIGCC" PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-compiler-quick | tee compiler.log
+          grep -E '^test-compiler-quick: PASS' compiler.log
+      - name: Cross-check against a gcc build (same gates, same identities)
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+        run: |
+          set -o pipefail
+          make -j"$(nproc)" CC=gcc OUT_DIR=build-gcc build-gcc/omegatool
+          mkdir -p xcheck
+          # QEMU-backed suites (run-m5-gates, reference-demonstrate-realization) are left out: no QEMU on this runner.
+          for flag in run-gates run-m6-gates run-m7-gates run-m8-gates run-m9-gates run-m10-gates \
+                      run-m11-gates run-m12-gates run-m13-gates run-m14-gates \
+                      reference-demonstrate-arithmetic reference-demonstrate-physics \
+                      reference-demonstrate-self-host reference-demonstrate-verify \
+                      reference-demonstrate-program reference-demonstrate-synthesis \
+                      reference-demonstrate-library reference-demonstrate-discovery; do
+            build-gcc/omegatool "--$flag" > "xcheck/gcc-$flag.log" 2>&1
+            build/omegatool "--$flag" > "xcheck/zig-$flag.log" 2>&1
+            cmp "xcheck/gcc-$flag.log" "xcheck/zig-$flag.log" || { diff "xcheck/gcc-$flag.log" "xcheck/zig-$flag.log" | head -20; exit 1; }
+          done
+          cat xcheck/gcc-*.log | grep -ohE '\b[0-9a-f]{64}\b' | sort -u > xcheck/ids-gcc.txt
+          cat xcheck/zig-*.log | grep -ohE '\b[0-9a-f]{64}\b' | sort -u > xcheck/ids-zig.txt
+          diff xcheck/ids-gcc.txt xcheck/ids-zig.txt
+          test -s xcheck/ids-zig.txt
+          echo "identities identical: $(wc -l < xcheck/ids-zig.txt) distinct 64-hex values across 18 suites"
+          cat xcheck/zig-*.log | grep -E 'TOTAL GATES' | sort | uniq -c
