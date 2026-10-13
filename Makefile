@@ -26,6 +26,8 @@ SRCS = src/sha256.c src/omega_canonical.c src/omega_validate.c src/omega_core.c 
 # adds exports only (8B decode-speed lane collision rule: no existing GPU source moves).
 SRCS += src/omega_gpu_moe_api.c
 
+# OWN-30B Cut 6 / Cut 5 (2026-10-13): FP8 e4m3 GEMV kernel family, new files only (omega_gpu_fp8_api.h)
+SRCS += src/omega_blackwell_codegen_moe.c src/omega_gpu_fp8_pack.c src/omega_gpu_fp8_api.c
 OBJS = $(patsubst %.c,$(OUT_DIR)/%.o,$(notdir $(SRCS)))
 DEPS = $(OBJS:.o=.d)
 -include $(DEPS)
@@ -2380,3 +2382,15 @@ $(GPU_MOE_TEST): tests/gpu_moe_window_test.c src/omega_gpu_moe_api.h src/omega_g
 .PHONY: test-gpu-moe-window
 test-gpu-moe-window: $(GPU_MOE_TEST)
 	./$(GPU_MOE_TEST) --host-only
+
+# OWN-30B Cut 6 / Cut 5 (2026-10-13): FP8 e4m3 block-scaled GEMV (omega_gpu_fp8_api.h). test-gpu-fp8 is host-only
+# (exhaustive conversion, pack refusals, codegen budgets, nvdisasm listing) then the warp-simulator battery
+# (parity, grouped experts, mutants, both fragment orders); the chip gate is tools/run_gpu_fp8_chip.sh.
+# -ffp-contract=off keeps the double oracle free of FMA.
+.PHONY: test-gpu-fp8
+GPU_FP8_TEST = $(OUT_DIR)/gpu_fp8_api_test
+$(GPU_FP8_TEST): tests/gpu_fp8_api_test.c tests/bw_warp_sim.h src/omega_gpu_fp8_api.h src/omega_blackwell_codegen_moe.h $(OUT_DIR)/libomega_gpu.a
+	$(CC) $(CFLAGS) -ffp-contract=off -Itests -o $@ tests/gpu_fp8_api_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+test-gpu-fp8: $(GPU_FP8_TEST)
+	./$(GPU_FP8_TEST) --host-only
+	./$(GPU_FP8_TEST) --sim

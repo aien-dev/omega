@@ -1,0 +1,8 @@
+chip one-hot conversion: rc=OK 256/256 rows exact (subnormal codes 0x01..0x07 included: no flush to zero)
+chip k256 n128                        rc=OK        bad=0 worst_rel=3.713e-08 grid=16x1 lb=8 rows=1 warps=8 depth=1 bytes=32776 upload=0.1ms chip_med=18.4us (1.8 GB/s) call_med=19.1us (1.7 GB/s) reps=20
+chip k768 n256                        rc=OK        bad=0 worst_rel=2.681e-08 grid=32x1 lb=8 rows=1 warps=8 depth=3 bytes=196656 upload=0.3ms chip_med=18.7us (10.5 GB/s) call_med=20.2us (9.7 GB/s) reps=20
+FAIL: chip k2048 n384: rc=CHIP_FAIL bad=0 worst_rel=1.000e+00 second-call-identical=0 (marker wait timed out (latched))
+chip k2048 n384                       rc=CHIP_FAIL bad=0 worst_rel=1.000e+00 grid=48x1 lb=16 rows=1 warps=8 depth=4 bytes=786624 upload=0.5ms chip_med=0.0us (0.0 GB/s) call_med=0.0us (0.0 GB/s) reps=0
+session latched: stopping
+gpu_fp8_api_test: 4 checks, 1 failed: FAIL
+cta budget 512 exit 1 (informational)
