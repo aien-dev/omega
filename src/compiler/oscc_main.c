@@ -4,6 +4,8 @@
  *   ir_sha256=<hex>  code_sha256=<hex>  funcs=<n>
  * With OUT, also write OUT.ir, OUT.code and OUT.entries (see emit_files).
  * On a refusal print the diagnostic fields and exit 1.
+ * Allocation: oscc is a one-shot CLI, so its own buffers (source text, OscUnit, the .ir staging
+ * buffer) stay on libc; the compiler calls it makes run over osc_alloc_libc() (osc_alloc.h).
  * OSC-1 slice; not a general Omega compiler; no self-hosting.
  */
 #include <stdio.h>

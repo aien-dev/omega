@@ -707,9 +707,9 @@ static int lower_fn(L *l, int fi)
     return 0;
 }
 
-int osc_lower(const OscAst *ast, OscUnit *out, OscDiag *d)
+int osc_lower(const OscAlloc *a, const OscAst *ast, OscUnit *out, OscDiag *d)
 {
-    L *l = calloc(1, sizeof *l);
+    L *l = osc_alloc_zero(a, sizeof *l);
     if (!l) {
         osc_diag_set(d, OSC_DIAG_CAPACITY, 0, 0, "unit", 0, NULL, "lowering memory", "out of memory");
         return -1;
@@ -725,6 +725,6 @@ int osc_lower(const OscAst *ast, OscUnit *out, OscDiag *d)
     out->nfuncs = (uint16_t)ast->nfns;
     memcpy(out->structs, ast->structs, sizeof out->structs);
     out->nstructs = ast->nstructs;
-    free(l);
+    a->free(a->ctx, l, sizeof *l);
     return rc;
 }

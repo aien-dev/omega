@@ -253,3 +253,26 @@ self-hosting claim.
   arithmetic computed exactly in 128 bits and range-checked), not a copy of the
   codegen's flag logic. It is a differential oracle; agreement between two
   implementations is evidence, not proof.
+
+## 11. Explicit allocation
+
+Every heap byte the compiler takes comes from one `OscAlloc` (`src/compiler/osc_alloc.h`) the
+caller passes in: `alloc(ctx, n)`, `realloc(ctx, p, old_n, new_n)`, `free(ctx, p, n)`. Sizes travel
+with every call (Zig style), so an allocator needs no per-block header and a test allocator can
+check them. Memory is never assumed zeroed; the checker and lowerer clear what they need.
+
+- Entry points: `osc_compile_a`, `osc_compile_imports_a`, `osc_cg_compile_a`, `osc_ir_validate_a`
+  take the allocator first (NULL means libc). `osc_compile`, `osc_compile_imports`,
+  `osc_cg_compile`, `osc_ir_validate` are the same over `osc_alloc_libc()`, so no caller changes.
+  `OscCode.a` records the allocator that owns `.code`; `osc_cg_free` frees with it (NULL = libc).
+- A refusal is an ordinary failure: `OSC_DIAG_CAPACITY` from the front end; `-1` with "out of memory"
+  in `err` from the back end; `osc_ir_validate_a` returns `-2` with the same text. All scratch is
+  freed on every failure path.
+- Output is a pure function of the source, whatever the allocator.
+- `OscAllocMeter` wraps any allocator: it counts calls, tracks live and peak bytes, refuses the k-th
+  call (`fail_at`) or any call past a byte `budget`, and flags a free or realloc with a wrong size.
+- `tests/compiler/test_osc_alloc.c` refuses every allocation call of every golden program in turn
+  (plus a generated unit that grows the back end buffers), requires a clean failure and zero live
+  bytes each time, and checks that a budget of the measured peak P succeeds and P-1 fails.
+- Not covered: `osc_ir_encode`, `osc_ir_digest` and the interpreter entry validate over libc; the
+  `oscc` driver keeps its own file buffers on libc.

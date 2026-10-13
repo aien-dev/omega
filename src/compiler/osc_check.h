@@ -29,6 +29,7 @@
 
 #include <stdint.h>
 #include "model/osc_model.h"
+#include "osc_alloc.h"
 #include "osc_diag.h"
 #include "osc_parse.h"
 
@@ -55,7 +56,9 @@ typedef struct OscTrace {
     OscTraceEntry e[OSC_TRACE_MAX];
 } OscTrace;
 
-/* Check ast (after osc_parse). 0 ok; -1 with *d filled. trace may be NULL. */
-int osc_check(OscAst *ast, OscDiag *d, OscTrace *trace);
+/* Check ast (after osc_parse). 0 ok; -1 with *d filled (CAPACITY when `a` refuses the checker state
+ * or one of its branch/loop snapshots). trace may be NULL.
+ * `a` is not NULL here: osc_compile_imports_a resolves NULL to libc. */
+int osc_check(const OscAlloc *a, OscAst *ast, OscDiag *d, OscTrace *trace);
 
 #endif /* OSC_CHECK_H */

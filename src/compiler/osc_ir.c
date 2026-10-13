@@ -321,7 +321,7 @@ static int validate_insn(const OscUnit *u, int fi, const OscFunc *f, uint32_t ii
 
 static bool str_ok(const char *s, size_t cap) { return memchr(s, 0, cap) != NULL; }
 
-static int validate_func(const OscUnit *u, int fi, char *err, size_t n) {
+static int validate_func(const OscAlloc *a, const OscUnit *u, int fi, char *err, size_t n) {
     const OscFunc *f = &u->funcs[fi];
     if (!str_ok(f->name, sizeof f->name)) return vfail(err, n, "func %d: name not terminated", fi);
     if (!str_ok(f->requires_text, sizeof f->requires_text) || !str_ok(f->ensures_text, sizeof f->ensures_text))
@@ -446,8 +446,9 @@ static int validate_func(const OscUnit *u, int fi, char *err, size_t n) {
 
     /* definite assignment: every use reads a vreg defined on every path */
     int nb = f->nblocks;
-    uint64_t *in = malloc(sizeof(uint64_t) * BSW * nb), *out = malloc(sizeof(uint64_t) * BSW * nb);
-    if (!in || !out) { free(in); free(out); return vfail(err, n, "out of memory"); }
+    size_t bsz = sizeof(uint64_t) * BSW * (size_t)nb;
+    uint64_t *in = a->alloc(a->ctx, bsz), *out = a->alloc(a->ctx, bsz);
+    if (!in || !out) { a->free(a->ctx, in, bsz); a->free(a->ctx, out, bsz); vfail(err, n, "out of memory"); return -2; }
     uint64_t params[BSW] = {0};
     for (int v = 0; v < f->nparams; v++) params[v / 64] |= 1ULL << (v % 64);
     for (int b = 0; b < nb; b++) for (int k = 0; k < BSW; k++) { in[b * BSW + k] = ~0ULL; out[b * BSW + k] = ~0ULL; }
@@ -487,8 +488,8 @@ static int validate_func(const OscUnit *u, int fi, char *err, size_t n) {
             if (d >= 0) cur[d / 64] |= 1ULL << (d % 64);
         }
     }
-    free(in);
-    free(out);
+    a->free(a->ctx, in, bsz);
+    a->free(a->ctx, out, bsz);
     return rc;
 }
 
@@ -518,16 +519,21 @@ static int validate_structs(const OscUnit *u, char *err, size_t n) {
     return 0;
 }
 
-int osc_ir_validate(const OscUnit *u, char *err, size_t n) {
+int osc_ir_validate_a(const OscAlloc *a, const OscUnit *u, char *err, size_t n) {
+    if (!a) a = osc_alloc_libc();
     if (!u) return vfail(err, n, "null unit");
     if (u->nfuncs > OSC_MAX_FUNCS) return vfail(err, n, "too many functions");
     g_unit = u;
     if (validate_structs(u, err, n)) return -1;
-    for (int fi = 0; fi < u->nfuncs; fi++)
-        if (validate_func(u, fi, err, n)) return -1;
+    for (int fi = 0; fi < u->nfuncs; fi++) {
+        int rc = validate_func(a, u, fi, err, n);
+        if (rc) return rc;
+    }
     if (err && n) err[0] = 0;
     return 0;
 }
+
+int osc_ir_validate(const OscUnit *u, char *err, size_t n) { return osc_ir_validate_a(osc_alloc_libc(), u, err, n); }
 
 /* ---- canonical encoding ------------------------------------------------ */
 typedef struct {
