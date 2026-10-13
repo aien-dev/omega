@@ -5,10 +5,11 @@ name: evidence-immutable
 # exists on the base branch. New receipts are content-addressed
 # (<name>.<sha256>.json), so a rerun adds a file instead of replacing one.
 
+# Runs on every pull request, not only ones that touch evidence/, so it can be
+# a required check: a path-filtered required check never reports on other PRs
+# and would block them. The diff below is the only step and takes seconds.
 on:
   pull_request:
-    paths:
-      - 'evidence/**'
 
 jobs:
   evidence-immutable:
