@@ -26,7 +26,7 @@ SRCS = src/sha256.c src/omega_canonical.c src/omega_validate.c src/omega_core.c 
 # OWN-30B Cut 6 / Cut 5 (2026-10-13): FP8 e4m3 GEMV kernel family, new files only (omega_gpu_fp8_api.h)
 SRCS += src/omega_blackwell_codegen_moe.c src/omega_gpu_fp8_pack.c src/omega_gpu_fp8_api.c
 # OWN-30B cut 8 (2026-10-13): one-launch decode attention (omega_gpu_decode_attn_api.h), new files only
-SRCS += src/omega_blackwell_codegen_attn.c
+SRCS += src/omega_blackwell_codegen_attn.c src/omega_gpu_decode_attn_api.c
 OBJS = $(patsubst %.c,$(OUT_DIR)/%.o,$(notdir $(SRCS)))
 DEPS = $(OBJS:.o=.d)
 -include $(DEPS)
@@ -2383,3 +2383,13 @@ $(GPU_FP8_TEST): tests/gpu_fp8_api_test.c tests/bw_warp_sim.h src/omega_gpu_fp8_
 test-gpu-fp8: $(GPU_FP8_TEST)
 	./$(GPU_FP8_TEST) --host-only
 	./$(GPU_FP8_TEST) --sim
+
+# OWN-30B cut 8 (2026-10-13): one-launch decode attention (omega_gpu_decode_attn_api.h). test-gpu-decode-attn is
+# host-only + simulator; the chip gate is tools/run_gpu_decode_attn_chip.sh.
+.PHONY: test-gpu-decode-attn
+GPU_DATTN_TEST = $(OUT_DIR)/gpu_decode_attn_test
+$(GPU_DATTN_TEST): tests/gpu_decode_attn_test.c tests/bw_warp_sim_k.h src/omega_gpu_decode_attn_api.h src/omega_blackwell_codegen_attn.h $(OUT_DIR)/libomega_gpu.a
+	$(CC) $(CFLAGS) -ffp-contract=off -Itests -o $@ tests/gpu_decode_attn_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+test-gpu-decode-attn: $(GPU_DATTN_TEST)
+	$(GPU_DATTN_TEST) --host-only
+	$(GPU_DATTN_TEST) --sim
