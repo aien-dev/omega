@@ -97,6 +97,10 @@ on:
       - 'tests/compiler/**'
       - 'mk/compiler.mk'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   searchtrace:
     runs-on: ubuntu-24.04-arm
@@ -109,20 +113,27 @@ jobs:
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-searchtrace
 
   estimation:
+    name: estimation (${{ matrix.name }})
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: EST-0/EST-1 types, filter, reference (plain + ASan/UBSan, purity)
+            target: test-estimation
+          - name: EST-2/EST-3 replay, fit and evaluation tools (synthetic + run A data)
+            target: test-est-tools
+          - name: ESTIMATION-2 v3 predictive layer
+            target: test-estimation-v3
+          - name: EST-3c v3 tools (synthetic data; no sealed run)
+            target: test-est3c-tools
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: EST-0/EST-1 types, filter, reference (plain + ASan/UBSan, purity)
-        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-estimation
-      - name: EST-2/EST-3 replay, fit and evaluation tools (synthetic + run A data)
-        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-est-tools
-      - name: ESTIMATION-2 v3 predictive layer
-        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-estimation-v3
-      - name: EST-3c v3 tools (synthetic data; no sealed run)
-        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-est3c-tools
+      - name: ${{ matrix.name }}
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 ${{ matrix.target }}
 
   ans:
     runs-on: ubuntu-24.04-arm

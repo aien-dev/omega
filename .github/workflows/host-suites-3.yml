@@ -37,6 +37,10 @@ on:
       - 'tests/run_m*_gates.sh'
       - 'docs/numeric/E1_TRANSCENDENTAL_CONTRACT.md'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   numeric-lifecycle:
     # Simulated driver only. No device-parity or hardware qualification claim.
