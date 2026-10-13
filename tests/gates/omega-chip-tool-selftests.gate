@@ -1,0 +1,23 @@
+# tests/gates/omega-chip-tool-selftests.gate
+# Mirrors hosted: host-suites.yml chip-tool-selftests: test-m19r-qualify test-gate14-combine test-window-lane-guard test-unwritten-trap-host test-ldst-host (omega #425; replaces the chip-only OMEGA-M19R-QUALIFY and OMEGA-GATE14-COMBINE manifests: both targets are host-only self-tests)
+gate: OMEGA-CHIP-TOOL-SELFTESTS
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/
+  - src/
+  - tests/
+  - tools/
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["chip-tool-selftests"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 15m
+exactness: EXACT
+cache_scope: machine
