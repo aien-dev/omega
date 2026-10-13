@@ -41,6 +41,8 @@ SRCS += src/omega_blackwell_codegen_gemm.c src/omega_gpu_fp8gemm_api.c
 # OWN-30B T3 (2026-10-13): tensor-core prefill kernels (omega_blackwell_codegen_tc.h), new files only
 SRCS += src/omega_blackwell_codegen_tc.c
 SRCS += src/omega_gpu_tcgemm_api.c
+# OWN-30B L1 attention (2026-10-13): tensor-core causal prefill attention (omega_gpu_prefill_attn_api.h), new files only
+SRCS += src/omega_blackwell_codegen_pattn.c src/omega_gpu_prefill_attn_api.c
 OBJS = $(patsubst %.c,$(OUT_DIR)/%.o,$(notdir $(SRCS)))
 DEPS = $(OBJS:.o=.d)
 -include $(DEPS)
@@ -2473,3 +2475,9 @@ $(GPU_TCGEMM_TEST): tests/gpu_tcgemm_test.c tests/bw_hmma_model.h tests/bw_warp_
 GPU_TC_PEAK_TEST = $(OUT_DIR)/gpu_tc_peak_test
 $(GPU_TC_PEAK_TEST): tests/gpu_tc_peak_test.c tests/bw_hmma_model.h tests/bw_warp_sim_tc.h src/omega_blackwell_codegen_tc.h $(OUT_DIR)/libomega_gpu.a
 	$(CC) $(CFLAGS) -ffp-contract=off -DWS_MAX_THREADS=512 -Itests -o $@ tests/gpu_tc_peak_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+
+# OWN-30B L1 attention (2026-10-13): tensor-core causal prefill attention. --host-only and --sim are host proofs;
+# the chip gate is tools/run_gpu_prefill_attn_chip.sh.
+GPU_PATTN_TEST = $(OUT_DIR)/gpu_prefill_attn_test
+$(GPU_PATTN_TEST): tests/gpu_prefill_attn_test.c tests/bw_hmma_model.h tests/bw_warp_sim_pa.h src/omega_gpu_prefill_attn_api.h src/omega_blackwell_codegen_pattn.h $(OUT_DIR)/libomega_gpu.a
+	$(CC) $(CFLAGS) -ffp-contract=off -DWS_MAX_THREADS=256 -Itests -o $@ tests/gpu_prefill_attn_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
