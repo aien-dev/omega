@@ -29,7 +29,11 @@ run_family() {
     for name in $(grep -o 'GUARD:[a-z0-9-]*' "$src" | sed 's/GUARD://' | sort -u); do
         total=$((total + 1))
         m="$base.$name.c"
-        grep -v "GUARD:$name\b" "$src" > "$m"
+        # drop the tagged line; a tagged "if (...)" line without ";" also drops its one-line body
+        awk -v tag="GUARD:$name" '
+            skip { skip = 0; next }
+            index($0, tag) && substr($0, index($0, tag) + length(tag)) ~ /^([^a-z0-9-]|$)/ { if ($0 !~ /;/) skip = 1; next }
+            { print }' "$src" > "$m"
         # shellcheck disable=SC2086
         if ! $CC $CFLAGS -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable \
             -Wno-error -o "$base.$name" "$test_c" "$m" $others 2>"$base.$name.log"; then
