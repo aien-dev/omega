@@ -10,6 +10,7 @@ Every model below did real work. A model is listed only for work it did. The orc
 | Codex (GPT-6.1 Sol) | Code review of the numeric changes (patch checks, receipt blobs, GPU lock handling) |
 | Gemini 3.8 Flash | Code review of the numeric changes (patch checks, qualifier script, build rules) |
 | Codex | Numeric uncertain-completion retention, exact completion checks, and simulated-driver lifecycle regression tests |
+| Claude Opus 5.5 | Ionic-droplet reservoir (#440): pinned reference, CPU simulator and readout, `.mat` reader, Gate 2 comparison, benchmarks, timing and receipt |
 
 This table starts with the numeric work on this branch. Earlier work in this repository is not yet attributed here; add rows only for work that can be traced to a model.
 

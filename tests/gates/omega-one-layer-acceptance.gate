@@ -1,0 +1,26 @@
+# tests/gates/omega-one-layer-acceptance.gate
+# Mirrors hosted: host-suites.yml one-layer-acceptance: test-one-layer-acceptance (selftest of the
+# stage-1 hostile acceptance harness on the PUBLIC sample corpus; omega#443). Scoring the sealed
+# corpus is a separate, manual step (tests/one_layer/acceptance/ola.sh score).
+gate: OMEGA-ONE-LAYER-ACCEPTANCE
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/one-layer-acceptance.mk
+  - tests/one_layer/
+  - evidence/ONE-LAYER-1/INVENTORY.txt
+  - src/compiler/
+  - src/
+  - tests/gates/
+run:
+  exec: tests/gates/run.sh
+  args: ["one-layer-acceptance"]
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 10m
+exactness: EXACT
+cache_scope: machine

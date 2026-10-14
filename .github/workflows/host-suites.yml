@@ -24,6 +24,8 @@ name: Host suites
 #       ans (test-inertial-alignment: ANS Inertial Alignment v1, ARCH-0032),
 #       numeric-cpu numeric-qualify, train (M22 substrate, Lane 21),
 #       compiler (OSC-1, own path guard),
+#       one-layer-acceptance (test-one-layer-acceptance: stage-1 harness
+#       selftest on the public sample corpus; omega #443),
 #       chip-tool-selftests (test-m19r-qualify test-gate14-combine
 #       test-window-lane-guard test-unwritten-trap-host test-ldst-host: the
 #       host-only self-tests of chip tooling; omega #425)
@@ -263,6 +265,33 @@ jobs:
       - name: PD-0 substrate gates (plain + ASan/UBSan; V3 breach rates are recorded, not gated)
         if: steps.guard.outputs.run == 'true'
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 physics0-test
+
+  one-layer-acceptance:
+    # One-layer stage 1 hostile acceptance harness (omega#443): selftest on the PUBLIC sample
+    # corpus (verdicts, receipts, isolation probes with negative controls, replays, mutants).
+    # Needs Landlock + seccomp on the runner kernel; the harness fails closed without them.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Changed-path guard (one-layer acceptance files only)
+        id: guard
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          CHANGED=$(git diff --name-only HEAD^1 HEAD)
+          if echo "$CHANGED" | grep -Eq '^(tests/one_layer/|mk/one-layer-acceptance\.mk$|evidence/ONE-LAYER-1/|src/compiler/|src/omega_program|src/omega_exec|src/omega_realize|src/aarch64_|src/sha256\.|\.github/workflows/host-suites\.yml$)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"; echo "no one-layer acceptance files changed; skipping"
+          fi
+      - name: Kernel sandbox support (Landlock in the LSM list)
+        if: steps.guard.outputs.run == 'true'
+        run: cat /sys/kernel/security/lsm || true
+      - name: Stage-1 acceptance harness selftest (sample corpus)
+        if: steps.guard.outputs.run == 'true'
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-one-layer-acceptance
 
   chip-tool-selftests:
     # Host-only self-tests of chip tooling that previously ran nowhere in CI

@@ -1,0 +1,5 @@
+# SAMPLE
+kind osc
+entry quot
+params u16 u16
+ret u16
