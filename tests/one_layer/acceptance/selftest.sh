@@ -98,9 +98,9 @@ else grep -q "not sealed yet" "$T/unsealed.err" && ok "missing SEALED.sha256 ref
 # ---- 3. hostile corpora are refused whole, nothing extracted ---------------------------------------
 refused() { # refused <label> <dir>: ola untar must fail and leave the destination empty
   mkdir -p "$2/x"
-  if "$BIN/ola" untar "$2/corpus.tar" "$2/SEALED.sha256" "$2/x" cases > /dev/null 2> "$2/err" || [ -n "$(ls -A "$2/x")" ]; then
-    if [ -z "$(ls -A "$2/x")" ] && [ -s "$2/err" ]; then ok "refused: $1 ($(sed 's/^ola: untar: //' "$2/err" | cut -c1-70))"; else bad "$1: partial extraction"; fi
-  else bad "$1 accepted"; fi
+  if "$BIN/ola" untar "$2/corpus.tar" "$2/SEALED.sha256" "$2/x" cases > /dev/null 2> "$2/err"; then bad "$1 accepted"
+  elif [ -n "$(ls -A "$2/x")" ] || [ ! -s "$2/err" ]; then bad "$1: partial extraction or no reason"
+  else ok "refused: $1 ($(sed 's/^ola: untar: //' "$2/err" | cut -c1-70))"; fi
 }
 mkcorpus "$T/sym" 'rm corpus/cases/s01/candidate.osc && ln -s ../s05/candidate.osc corpus/cases/s01/candidate.osc'
 refused "symlink member" "$T/sym"
@@ -168,12 +168,12 @@ for s in $OLA_RUNNER_SRCS; do o="$T/obj/$(echo "$s" | tr / _).o"; $CC $OLA_CFLAG
 mut_ola() { # mut_ola <name> <sed script>
   sed "$2" "$HERE/ola.c" > "$T/mut/$1.c"
   cmp -s "$HERE/ola.c" "$T/mut/$1.c" && { bad "mutant $1: sed changed nothing"; return 1; }
-  $CC $OLA_CFLAGS -Wno-unused-variable -Wno-unused-parameter -Wno-unused-but-set-variable -o "$T/mut/$1" "$T/mut/$1.c" src/sha256.c
+  $CC ${OLA_CFLAGS/-Werror/} -w -o "$T/mut/$1" "$T/mut/$1.c" src/sha256.c || { bad "mutant $1 does not compile"; return 1; }
 }
 mut_runner() {
   sed "$2" "$HERE/ola_runner.c" > "$T/mut/$1.c"
   cmp -s "$HERE/ola_runner.c" "$T/mut/$1.c" && { bad "mutant $1: sed changed nothing"; return 1; }
-  $CC $OLA_CFLAGS -Wno-unused-function -o "$T/mut/$1" "$T/mut/$1.c" "${objs[@]}"
+  $CC ${OLA_CFLAGS/-Werror/} -w -o "$T/mut/$1" "$T/mut/$1.c" "${objs[@]}" || { bad "mutant $1 does not compile"; return 1; }
 }
 probe_fails() { # probe_fails <ola> <runner> <probe>: that probe must come out FAIL
   local d="$T/mp-$RANDOM$RANDOM"; mkdir -p "$d/s" "$d/o"; echo k > "$d/key"
@@ -200,13 +200,13 @@ M="no CPU or wall limit"; mut_ola no-time '/OLA:rlimit-cpu/s/setrlimit(RLIMIT_CP
   caught probe_fails "$T/mut/no-time" "$BIN/ola_runner" outlive_time
 M="no nonce check (replayed transcript)"; mut_ola no-nonce '/OLA:nonce-check/s/return .*/return 1;/' && caught probe_fails "$T/mut/no-nonce" "$BIN/ola_runner" replay_verdict
 M="probe verdict ignores the sandboxed outcome"; mut_ola probe-lax '/OLA:probe-verdict/s/!strncmp(res\[0\], "BLOCKED:", 8)/1/' &&
-  caught probe_fails "$T/mut/probe-lax" "$T/mut/no-landlock" read_expected
+  caught not probe_fails "$T/mut/probe-lax" "$T/mut/no-landlock" read_expected
 # verdict mutants
 M="value comparison off"; mut_ola no-value '/OLA:value-compare/s/if (.*) {/if (0) {/' && caught verdicts_wrong "$T/mut/no-value"
 M="trap code ignored"; mut_ola no-trapcode '/OLA:trap-code/s/x->trap == 2 \&\&/0 \&\&/' && caught verdicts_wrong "$T/mut/no-trapcode"
-M="no sign extension at width"; mut_ola no-sext '/OLA:sign-extend/s/r |= ~m;//' && caught verdicts_wrong "$T/mut/no-sext"
+M="no sign extension at width"; mut_ola no-sext '/OLA:sign-extend/s/r |= ~m;/r |= 0;/' && caught verdicts_wrong "$T/mut/no-sext"
 # corpus and evidence mutants
-M="seal check off"; mut_ola no-seal '/OLA:seal-check/s/if (/if (0 \&\& /' && caught not refuses_badhash "$T/mut/no-seal"
+M="seal check off"; mut_ola no-seal '/OLA:seal-check/s/if (.*) \/\*/if (0) \/*/' && caught not refuses_badhash "$T/mut/no-seal"
 M="layout check off"; mut_ola no-layout '/OLA:layout/s/if (lay != kind)/if (0)/' && caught not refuses_unknown "$T/mut/no-layout"
 M="LABELS-late check off"; mut_ola no-labels-late '/OLA:labels-late/s/if (!lstat(lpath, \&lst))/if (0)/' && caught not labels_early "$T/mut/no-labels-late"
 M="gate ignores defect count"; mut_ola gate-lax '/int gate = /s/drej == 30 \&\&//' && caught not tally_ok "$T/mut/gate-lax"
