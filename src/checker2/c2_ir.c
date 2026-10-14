@@ -1,6 +1,6 @@
 /* c2_ir.c: checker2 decoder, re-encoder and acceptance rules for canonical OSC IR bytes.
  * See c2_ir.h for the independence statement and spec/one-layer-receipts.md section 9 for the
- * rules. Every rejection names its rule; GUARD:<name> lines are removed one at a time by
+ * rules. Every rejection names its rule; lines tagged GUARD, colon, name are removed one at a time by
  * tests/checker2/mutants.sh and each removal must make a test fail. */
 #include "c2_ir.h"
 

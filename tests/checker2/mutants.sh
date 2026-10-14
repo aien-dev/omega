@@ -13,6 +13,7 @@ CFLAGS="-std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -O1 -Isrc -Isrc/checker2"
 SIG="src/searchtrace/sig/ed25519.c src/searchtrace/sig/sha512.c src/searchtrace/sig/ct.c"
 mkdir -p "$OUT"
 total=0
+tagged=0
 killed=0
 survived=""
 
@@ -28,7 +29,19 @@ run_family() {
     if ! "$base.orig" $targs >/dev/null 2>&1; then
         echo "mutants: baseline test fails for $src; negative controls are meaningless"; exit 1
     fi
-    for name in $(grep -o 'GUARD:[a-z0-9-]*' "$src" | sed 's/GUARD://' | sort -u); do
+    # every "GUARD:" occurrence must be exactly one well-formed, unique tag on its own line, so the
+    # number of mutants run equals the number of tags (an empty, malformed, repeated or doubled
+    # tag would otherwise be skipped silently)
+    occ=$(grep -o "GUARD:" "$src" | wc -l)
+    names=$(grep -o "GUARD:[a-z0-9-]*" "$src" | sed "s/GUARD://" | grep -c . )
+    uniq_names=$(grep -o "GUARD:[a-z0-9-]*" "$src" | sed "s/GUARD://" | grep . | sort -u | wc -l)
+    lines=$(grep -c "GUARD:" "$src")
+    if [ "$occ" -ne "$names" ] || [ "$names" -ne "$uniq_names" ] || [ "$names" -ne "$lines" ]; then
+        echo "mutants: $src has $occ GUARD: occurrences on $lines lines but $uniq_names distinct well-formed tags"
+        exit 1
+    fi
+    tagged=$((tagged + occ))
+    for name in $(grep -o "GUARD:[a-z0-9-]*" "$src" | sed "s/GUARD://" | sort -u); do
         total=$((total + 1))
         m="$base.$name.c"
         # drop the tagged line; a tagged "if (...)" line without ";" also drops its one-line body
@@ -59,6 +72,11 @@ run_family src/checker2/c2_lrat.c tests/checker2/test_c2_lrat.c "" ""
 run_family src/checker2/c2_blast.c tests/checker2/test_c2_blast.c "src/checker2/c2_ir.c src/checker2/c2_check.c src/checker2/c2_lrat.c" "$IRDIR $LRATDIR"
 
 echo "checker2 mutants: $killed of $total killed"
+# every GUARD tag in the checker2 sources is covered by a family above (none silently skipped)
+all=$(cat src/checker2/*.c src/checker2/*.h | grep -o "GUARD:" | wc -l)
+if [ "$all" -ne "$total" ] || [ "$tagged" -ne "$total" ]; then
+    echo "mutants: $all GUARD tags in src/checker2 but $total mutants run"; exit 1
+fi
 if [ -n "$survived" ]; then
     echo "SURVIVED (a test cannot see this check):$survived"
     exit 1
