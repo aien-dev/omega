@@ -300,8 +300,10 @@ Same model as section 3.1, written in Omega's own form:
 - Stiffness guard: refuses a step with h * lambda > 2 (lambda bounds the
   fastest decay rate).
 - Refusals with error codes for invalid topology or parameters, NaN or
-  infinity, |V| > 1 V, ln N outside [-80, 80], |I| > 1 uA, time past the
-  last knot, state of another configuration, aliasing.
+  infinity, a membrane voltage |V_a - V_b| > 1 V (node voltages: finite
+  only; section 12), ln N outside [-80, 80], |I| > 1 uA, time past the
+  last knot, state of another configuration, aliasing. Membranes above
+  0.3 V are counted as physically implausible and recorded, not refused.
 - Caller-owned fixed-size buffers (up to 64 nodes, degree 6), no
   allocation (checked by `reservoir-purity` with `nm -u`), no OmegaTensor use.
 - Content identity: SHA-256 with domain separation through `src/sha256.c`
@@ -503,11 +505,26 @@ Decided by Drake on 2026-10-14:
    model is the authors' code, because the archived numbers come from the
    code. The discrepancy list (section 4) is kept.
 
-Open, raised by the Gate 2 results (section 11), not yet decided:
+Decided by the orchestrator on 2026-10-14, under Drake's standing
+delegation, after the first Gate 2 run (receipt `6d1c5abb...`):
 
-3. Whether the simulator's range bound of 1 V should apply to the membrane
-   voltage instead of the node voltage. As it stands, the 50-node NARMA
-   chain of the paper's best configuration is refused (section 11.2).
+3. The simulator's 1 V refusal applies to each membrane voltage
+   |V_a - V_b|, not to the node voltages. Node voltages are referenced to
+   the common ground and add up along a chain; the pores see only the
+   voltage across their own membrane. 1 V is a numerical guard against
+   blowups, not physics. The paper says rupture can occur "when voltages
+   exceed ~200 to 300 mV", so a membrane above 0.3 V is flagged as
+   physically implausible and recorded, never refused. Node voltages are
+   checked for finiteness only. Full rule, reasoning and evidence:
+   section 12. Under this rule the 50-node NARMA chain is still refused,
+   now by the stiffness guard (section 11.2).
+
+Open, raised by the rerun (section 11.2), not decided:
+
+4. Whether to run the 50-node chain at a step smaller than the declared
+   h = 1e-5 s. A smaller step raises the decay rate the guard accepts
+   (h * lambda <= 2); whether the run would then complete is UNVERIFIED.
+   Any such run would be post hoc and labeled so. None has been run.
 
 ## 10. Gate 2 benchmark protocol (declared 2026-10-14, before any benchmark run)
 
@@ -610,23 +627,44 @@ masks are the first four of the 49 drawn for that seed. Nothing else
 changes, and no network size or current was searched. The 50-node runs are
 kept in the output.
 
+Update after the voltage guard decision (section 12; the text above is
+kept as written): the node-voltage bound named above (`OMEGA_RES_V_LIMIT`)
+no longer exists. Under the membrane rule (`OMEGA_RES_VM_LIMIT`) the same
+50-node chain is refused later, by the stiffness guard, at step 1,312 to
+1,465 (section 11.2). The post hoc 5-node runs stay as declared here.
+
 ## 11. Gate 2 results
 
 All numbers in this section come from one receipt,
-`evidence/RESERVOIR/6d1c5abbb524ca557989a1dc9a9eae53469892d096ab9ae4ed712e9d1eacedcb.json`
+`evidence/RESERVOIR/0043b137712388079be90ab408afc6a7bffc93146a8fbabd530fc01fe2dae9e4.json`
 **[measured]**, written by `make qualify-reservoir` on commit
-`ac35a16615c2ebe0e6916b23a8234172f6362849` (tree `f0f68308`), clean tree,
-unchanged during the run, 2026-10-14 15:55 to 16:00 UTC, host NVIDIA DGX
-Spark (Linux 7.0.0-1019-nvidia aarch64, 20 cores), gcc 13.3.0, CPU only.
-The receipt status is RECORDED: every step ran, the tree was clean and
-stable, the 22 archive pins matched, the unit tests passed (656 + 656
-simulator checks, 67 + 52 reader checks, plain and ASan/UBSan) and both
-negative controls failed as they must. RECORDED says the run is complete
-and clean; it is not a PASS of Gate 2 (11.1). Later commits on the branch
-change only this document, crumbs, CONTRIBUTORS.md and evidence/, plus a
-merge of main (d58023e6, #441: link and mutant-test rules in `Makefile`,
-and `tests/gates/run.sh`; the reservoir rules in `mk/reservoir.mk` are
-unchanged, and `make test-reservoir` passes after the merge).
+`48c6ed7175909543be6098c1866d179c27c61c1d` (tree `fb52582c`), clean tree
+(`tree_dirty` false), unchanged during the run (`tree_stable_during_run`
+true), 2026-10-14 16:49:49 to 16:54:30 UTC, host NVIDIA DGX Spark (Linux
+7.0.0-1019-nvidia aarch64, 20 cores), gcc 13.3.0, CPU only. That commit
+carries the membrane-voltage guard of section 12. The receipt status is
+RECORDED: every step ran, the tree was clean and stable, the 22 archive
+pins matched, the unit tests passed (681 + 681 simulator checks, 67 + 52
+reader checks, plain and ASan/UBSan; `unit_tests`) and both negative
+controls failed as they must. RECORDED says the run is complete and clean;
+it is not a PASS of Gate 2 (11.1). Later commits on the branch change only
+this document, crumbs and evidence/.
+
+History. The first Gate 2 receipt,
+`evidence/RESERVOIR/6d1c5abbb524ca557989a1dc9a9eae53469892d096ab9ae4ed712e9d1eacedcb.json`
+(commit `ac35a166`, 2026-10-14 15:55 to 16:00 UTC, 656 + 656 simulator
+checks), ran with the earlier node-voltage bound. It stays in evidence/
+unchanged. Comparing the two receipts field by field, with the per-run
+`membranes` objects (new), `config_id`, `run_id`, `final_state_digest`,
+the performance section (11.3) and the wall-clock fields (`wall_s`,
+`cv.seconds`, `timing.note`) set aside, the only differences are the candidate
+commit and tree, the start and finish times, the unit-test counts and log
+digest, and the 50-node NARMA chain: its 10 runs and 15 fits changed from
+ERR_RANGE to ERR_STIFF and its stop steps moved (11.2). Every verdict and
+every other number is identical. The ids and digests differ because the
+numeric policy string, which states the guard, is part of the config id
+(`src/reservoir/omega_reservoir.c:200`), and the state digest binds the
+config id (`omega_reservoir.c:607`).
 
 ### 11.1 Comparison with the archived reference outputs (section 7)
 
@@ -670,7 +708,7 @@ NARMA (one output; lower is better):
 
 | Model | NARMA-2 | NARMA-5 | NARMA-10 |
 |---|---|---|---|
-| RC-connected, 50-node chain (declared) | REFUSED (5 of 5 seeds) | REFUSED | REFUSED |
+| RC-connected, 50-node chain (declared) | REFUSED, ERR_STIFF (5 of 5 seeds) | REFUSED | REFUSED |
 | RC-disconnected, 50-node ablation | 0.0876 | 0.491 | 0.544 |
 | BL-linear (12 delays) | 0.334 | 0.381 | 0.446 |
 | BL-quadratic (90 features) | **0.0068** | **0.0189** | **0.299** |
@@ -678,17 +716,44 @@ NARMA (one output; lower is better):
 | RC-disconnected, 5-node ablation (post hoc) | 0.220 | 0.534 | 0.567 |
 
 - The declared connected 50-node chain is refused in every seed, training
-  and test: a node voltage leaves |V| <= 1 V at step 347 to 359 (3.5 ms).
-  The paper's best NARMA configuration is this network size; the chain sums
-  49 injected currents toward one ground, and the reference drive is
-  one-signed (every current in [0, I_hi]). Omega's bound is on the node
-  voltage: in a diagnostic run of the same chain with one-signed currents,
-  the largest membrane voltage was about 0.83 V when a node voltage reached
-  1 V. Whether the bound should apply to the membrane voltage instead is
-  an open question for the model, not decided here. Whether the authors'
-  50-node runs also pass 1 V cannot be checked without MATLAB
-  (UNVERIFIED, 70 % that they do: same model, same chain, same current
-  range).
+  and test, now by the stiffness guard (ERR_STIFF), at step 1,312 to 1,465
+  (13.1 to 14.7 ms of a 6 s training or 3 s test run;
+  `results.bench-narma.per_seed[*].runs[0..1].stopped_at_step`). The 15
+  RC-connected fits are ERR_STIFF with no numbers
+  (`per_seed[*].fits[0..2]`). The paper's best NARMA configuration is this
+  network size; the chain sums 49 injected currents toward one ground, and
+  the reference drive is one-signed (every current in [0, I_hi]).
+- Why it is refused **[code]**. Before every step the simulator bounds the
+  fastest decay rate lambda as the larger of a conductance term
+  (`lambda_unit * (N_ab + N_ba)`, `src/reservoir/omega_reservoir.c:374-379`)
+  and a pore-kinetics term (`alpha * Z * e^w`, `omega_reservoir.c:351`), and
+  refuses with ERR_STIFF when h * lambda > 2 (`omega_reservoir.c:476`,
+  `OMEGA_RES_STABILITY_LIMIT`). The pore rate is
+  alpha = rate_scale / (tau0 * e^(dV / v_tau)) (`omega_reservoir.c:347`),
+  so it grows e-fold for every 45 mV (NARMA v_tau) that the voltage across a
+  membrane goes negative on that side.
+- Which term trips **[measured, diagnostic, not in the receipt]**: a
+  throwaway build of the same commit with a print at the refusal, run on
+  seeds 1 to 5, reproduced all ten stop steps of the receipt exactly. In
+  every case the pore-kinetics term tripped, on the same membrane (edge 47,
+  droplets 45 and 49 in Omega's zero-based numbering, the side owned by
+  droplet 49) at a membrane voltage of -0.2202 to -0.2203 V: alpha 1.334e9 to 1.337e9 /s,
+  times Z = 1.5e-4, gives lambda about 2.0e5 /s, so h * lambda = 2.0004 to
+  2.0059. The conductance term was 242 to 469 /s, more than 400 times
+  smaller.
+- Voltages **[measured]** (`runs[*].membranes`): in the 10 refused runs the
+  largest membrane voltage was 0.2202 to 0.2203 V (below the 0.3 V flag;
+  inside the 200 to 300 mV band where the paper says rupture can begin)
+  while node voltages reached 2.85 to 2.96 V. No membrane passed 0.3 V in
+  any run of the receipt (section 12).
+- History: the first receipt refused the same runs at step 316 to 377
+  (3.2 to 3.8 ms) with ERR_RANGE, because a node voltage passed the old
+  1 V node bound. Its text also cited a diagnostic in which the largest
+  membrane voltage was about 0.83 V when a node voltage reached 1 V; that
+  diagnostic is in no receipt, and the receipt measurement above (0.2203 V
+  membrane at 2.96 V node, stiffness refusal) supersedes it. Whether the
+  authors' ode15s runs of this chain stay below 0.3 V per membrane cannot
+  be checked without MATLAB (UNVERIFIED).
 - Post hoc 5-node chain: connected beats disconnected in 2 of 5 seeds
   (NARMA-2, mean difference +0.010), 5 of 5 (NARMA-5, -0.048) and 1 of 5
   (NARMA-10, +0.023). It never beats the best baseline (0 of 15 seed-task
@@ -730,12 +795,18 @@ X925), gcc 13.3.0 `-O2 -ffp-contract=off -fno-fast-math`, 5 repetitions of
 
 | Network | p50 | p95 | p99 | steps/s | simulated s per wall s |
 |---|---|---|---|---|---|
-| 5-node chain (G2-N1) | 752 ns | 784 ns | 800 ns | 1.31 M | 13.1 |
-| 50-node chain | 10.9 us | 11.0 us | 12.1 us | 91.4 k | 0.91 |
-| 43-node lattice (99 membranes) | 14.9 us | 15.1 us | 16.9 us | 67.0 k | 0.67 |
+| 5-node chain (G2-N1) | 768 ns | 800 ns | 816 ns | 1.30 M | 13.0 |
+| 50-node chain | 10.6 us | 10.7 us | 11.5 us | 94.4 k | 0.94 |
+| 43-node lattice (99 membranes) | 14.8 us | 14.9 us | 16.5 us | 67.6 k | 0.68 |
 
-CPU time over wall time 0.9997 to 0.9999 (one core busy). Peak resident
-memory of the process 8,536 KiB. Fixed struct sizes: config 19,948 B, state
+Percentiles are pooled over the 5 repetitions
+(`results.perf.networks[*].pooled`). CPU time over wall time 0.9999 (one
+core busy). Peak resident memory of the process 8,528 KiB. History: the
+first receipt measured 752 / 784 / 800 ns, 10.9 / 11.0 / 12.1 us and
+14.9 / 15.1 / 16.9 us on the same host. The guard change moves the 1 V
+check from each node to each membrane (`state_check`,
+`src/reservoir/omega_reservoir.c:320-340`); the run-to-run spread of these
+figures was not measured, so no speed change is claimed. Fixed struct sizes: config 19,948 B, state
 3,632 B, workspace 13,360 B, readout workspace 538,672 B. Energy and power:
 NOT_RUN (not instrumented). No efficiency claim is made, and nothing here is
 GPU qualification.
@@ -743,12 +814,14 @@ GPU qualification.
 ### 11.4 Timing inputs
 
 The NARMA drive cannot be used for the 50-node timing run: it is refused
-after about 350 steps (11.2), which would end the loop. The two chains are
+after 1,312 to 1,465 steps (11.2; about 350 steps under the first
+receipt's node bound), which would end the loop. The two chains are
 timed instead with zero-mean pulses of 1 ms on every non-ground node,
 uniform in +-0.1 nA divided by the number of driven nodes, drawn from the
-benchmark generator (seed 1). A diagnostic run showed these keep the
-50-node chain inside the range for the whole run, while one-signed pulses
-of the same size do not. The 43-node lattice is timed with the reference
+benchmark generator (seed 1). These keep the 50-node chain running for the
+whole timed loop (`results.perf.networks[1].status` OK in both receipts),
+while one-signed pulses of the same size do not (diagnostic run under the
+first receipt's node bound, not in any receipt). The 43-node lattice is timed with the reference
 Lorenz currents of a trajectory. The simulator is fixed-step RK4 with no
 adaptive step or iteration, so the timing input mainly has to stay in
 range; any value-dependent cost inside the math library (exp) was not
@@ -784,17 +857,92 @@ archive says MIT; both permit this with attribution). They let CI test the
 
 ### 11.7 What the Gate 2 receipt proves, and what it does not
 
-It proves, for commit `ac35a166` with gcc 13.3.0 on this host: agreement,
-under the tolerances declared before the runs, between Omega's binary32
-simulator with its binary64 readout and the authors' archived outputs for
-the three Lorenz networks (13, 25 and 43 nodes; targets, predictions and
-NRMSE on the archived inputs); that G2-N1 does not meet the declared
-criteria, in all three variants, with the diagnostics above; and the
-benchmark and timing numbers of 11.2 and 11.3. Anyone with the archive can
-rerun `make qualify-reservoir RES_ARCHIVE=...` and compare.
+It proves, for commit `48c6ed71` with gcc 13.3.0 on this host (receipt
+`0043b137...`): agreement, under the tolerances declared before the runs,
+between Omega's binary32 simulator with its binary64 readout and the
+authors' archived outputs for the three Lorenz networks (13, 25 and 43
+nodes; targets, predictions and NRMSE on the archived inputs); that G2-N1
+does not meet the declared criteria, in all three variants, with the
+diagnostics above; the benchmark and timing numbers of 11.2 and 11.3; that
+under the membrane-voltage guard of section 12 every run that completed
+kept every membrane below 0.3 V (0 implausible states in 76 recorded runs;
+largest membrane voltage 0.0970 V in a completed run, 0.2203 V in a
+refused one); and that the declared 50-node NARMA chain is refused by the
+stiffness guard at the declared step in every seed. All verdicts and
+numbers of the first receipt (`6d1c5abb...`, commit `ac35a166`) are
+reproduced unchanged except the 50-node chain's refusal code and stop step
+(11, history). Anyone with the archive can rerun
+`make qualify-reservoir RES_ARCHIVE=...` and compare.
 
 It does not prove: anything about real droplets or devices; agreement on
 the BLOCKED cases or with the authors' code beyond its archived outputs;
 that a reservoir beats a conventional baseline (it does not, in any seed
-or task here); GPU qualification of any kind; energy, power or efficiency;
-production readiness.
+or task here); that the 50-node chain would run at a smaller step, or what
+the authors' ode15s does on it; that 0.3 V is the right plausibility line
+for real membranes (it is the upper end of the paper's 200 to 300 mV
+rupture range); GPU qualification of any kind; energy, power or
+efficiency; production readiness.
+
+## 12. Voltage guard decision
+
+Decided by the orchestrator on 2026-10-14, under Drake's standing
+delegation, after the first Gate 2 run (receipt `6d1c5abb...`, section 11
+history). Recorded as section 9, item 3. Implemented in commits `cc6db6cd`
+and `48c6ed71`; header comment in `src/reservoir/omega_reservoir.h`.
+
+**Rule.**
+
+- Refused (ERR_RANGE): any membrane voltage |V_a - V_b| > 1 V
+  (`OMEGA_RES_VM_LIMIT`), checked on every state (`state_check`,
+  `src/reservoir/omega_reservoir.c:320-340`).
+- Flagged, recorded, never refused: any membrane voltage above 0.3 V
+  (`OMEGA_RES_VM_PLAUSIBLE`). Every bench and Gate 2 run records a
+  `membranes` object: `states_observed`, `states_implausible` (states with
+  at least one membrane above 0.3 V), `membranes_implausible`,
+  `max_membrane_abs_v` and `max_node_abs_v`.
+- Node voltages: finite only, no bound. Ground nodes stay exactly 0.
+- Everything else is unchanged: the stiffness guard (h * lambda <= 2), ln N
+  bounds, current bound, finiteness and the declared step.
+
+**Reasoning.**
+
+1. Node voltages are measured against the one common ground. Along a chain
+   they add up membrane by membrane, so a long chain can carry node
+   voltages of several volts while each membrane sees a fraction of a volt.
+   A bound on the node voltage therefore depends on chain length, not on
+   anything a membrane experiences.
+2. The pore kinetics in the model see only the voltage across their own
+   membrane (dV_ab = V_a - V_b in alpha and Nss, header comment). That is
+   the physically meaningful quantity to guard.
+3. 1 V is a numerical guard that catches blowups; it is not a physical
+   limit. It sits far above the 200 to 300 mV the paper gives for rupture
+   (point 4), so a membrane that reaches it means the numbers have run away.
+4. The paper (main text) says the current-driven mode "minimizes the risk
+   of electroporation or membrane rupture, which can occur when voltages
+   exceed ∼200 to 300 mV". A membrane above 0.3 V is therefore outside what
+   the authors consider physical, so it is flagged. It is recorded instead
+   of refused: the model has no rupture term (section 3.1), and recording
+   shows where a run leaves the physical range instead of hiding it.
+
+**Tests.** `test_membrane_guard` (`tests/reservoir/test_reservoir.c`): a
+30-node chain whose membranes neither conduct nor adapt, 10 nA into node 0.
+The run must continue past a node voltage of 1 V (where the old guard
+refused), flag every membrane once it passes 0.3 V, and refuse only when a
+membrane passes 1 V. `make test-reservoir` runs it, plain and with
+ASan/UBSan (681 checks each in the receipt's `unit_tests`).
+
+**Effect on Gate 2 [measured], receipt `0043b137...`.**
+
+- 76 runs record membrane statistics (16 Gate 2 runs, 20 Lorenz and 40
+  NARMA benchmark runs). Across all of them `states_implausible` and
+  `membranes_implausible` are 0: no membrane passed 0.3 V in any state.
+- The 66 completed runs: largest membrane voltage 0.0970 V
+  (`results.g2-lorenz-13-NC-L.runs[1].membranes.max_membrane_abs_v`),
+  largest node voltage 0.349 V
+  (`results.g2-lorenz-43.runs[0].membranes.max_node_abs_v`).
+- The 10 refused runs (50-node NARMA chain, 5 seeds, train and test):
+  largest membrane voltage 0.2202 to 0.2203 V, node voltages up to 2.85 to
+  2.96 V, refused by the stiffness guard at step 1,312 to 1,465, where the
+  old node bound refused them at step 316 to 377 (11.2).
+- No verdict changed. Every other number is identical to the first receipt
+  (11, history).
