@@ -79,8 +79,8 @@
           "purpose": "M21 OMEGA_AUTODIFF: reverse-mode tape over M20 tensor CPU ops, caller-owned nodes and scratch, p"
         },
         {
-          "digest": "436bd3a2666c7573fe572fc3078a75748d06255b4e64168877dad1adb6de3420",
-          "last_commit": "18531691",
+          "digest": "bdc017bf3baddb9034478651fb3f170f045ce8aa27187481d15ac5da7fbfd18c",
+          "last_commit": "f77bfef7",
           "name": "compiler",
           "purpose": "Directory src/compiler. Purpose not yet described by a human."
         },
@@ -140,13 +140,13 @@
         },
         {
           "digest": "9e27882accc1db2881793e3f389519f5dd37f83cd37c4d1a6e19f2aa2e84d217",
-          "last_commit": "e0abd0b5",
+          "last_commit": "5901baa5",
           "name": "runtime",
           "purpose": "Directory src/runtime. Purpose not yet described by a human."
         },
         {
           "digest": "d7bb5fb627dfe92066f94fa556e86be5d025c0ff5e81d823ba177a56ea099d31",
-          "last_commit": "e0abd0b5",
+          "last_commit": "5901baa5",
           "name": "searchtrace",
           "purpose": "Directory src/searchtrace. Purpose not yet described by a human."
         },
@@ -175,15 +175,15 @@
           "purpose": "Directory src/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:ca0aa9172b90a62bf95822a7fd9b264c5450204b82c13db7a473ed242e9c2257",
-      "compiled_at": "2026-10-14T01:16:48Z",
+      "children_root": "sha256:ee7220e78df1bb3a7e3dc4d4480dd4068b2dea4bb5a432b99bf64ab958be9992",
+      "compiled_at": "2026-10-14T17:37:01Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:10a7c4a3722e34cc5476cb9feb128616b59dfb58bcf33f6aad7db51c014576ef",
+      "digest": "sha256:40a17e7cb4768497566c0e970a1696034d817cbbc82d2010cea9bf339b10dcea",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 459,
-      "generated_at_commit": "e0abd0b524f5bf8e3ba6960b53868980bdd41b4e",
-      "source_tree": "sha256:795ed92eff7a070b7c6e4a4262945e9245cae22c971e84f3a4496958fd126ee9"
+      "generated_at_commit": "e9943ed23f0712a7dd1f7248a7d6bb00eabf5ea5",
+      "source_tree": "sha256:c7cfd91478f341c8c12f7aa594c92a8356276e9ee707848d009987b3d42589af"
     },
     "owner_lane": "",
     "provenance": {
