@@ -1,0 +1,7 @@
+// prove: nn
+// expect: holds
+// double negation is the identity away from -128.
+fn nn(x: i8) -> i8 requires x != -128 ensures result == x {
+    let y: i8 = -x;
+    return -y;
+}

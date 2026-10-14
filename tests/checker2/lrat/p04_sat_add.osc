@@ -1,0 +1,7 @@
+// prove: sat_add
+// expect: holds
+// saturating byte add never wraps below its first operand.
+fn sat_add(a: u8, b: u8) -> u8 ensures result >= a {
+    if a > 255 - b { return 255; }
+    return a + b;
+}

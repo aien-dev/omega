@@ -1,0 +1,10 @@
+// prove: pop8
+// expect: holds
+// SWAR population count of a byte is at most 8.
+fn pop8(x: u8) -> u8 ensures result <= 8 {
+    let mut v: u8 = x;
+    v = (v & 0x55) + ((v >> 1) & 0x55);
+    v = (v & 0x33) + ((v >> 2) & 0x33);
+    v = (v & 0x0f) + ((v >> 4) & 0x0f);
+    return v;
+}

@@ -1,0 +1,7 @@
+// prove: abs8
+// expect: trap
+// negative control: without the precondition -(-128) overflows.
+fn abs8(x: i8) -> i8 {
+    if x < 0 { return -x; }
+    return x;
+}

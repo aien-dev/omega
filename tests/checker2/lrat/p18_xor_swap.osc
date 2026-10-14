@@ -1,0 +1,11 @@
+// prove: xs
+// expect: holds
+// three XORs swap two bytes.
+fn xs(a: u8, b: u8) -> u8 ensures result == b {
+    let mut x: u8 = a;
+    let mut y: u8 = b;
+    x = x ^ y;
+    y = x ^ y;
+    x = x ^ y;
+    return x;
+}

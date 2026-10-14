@@ -2,6 +2,8 @@
  *
  *   checker2 check <unit.ir>                   judge canonical OSC IR bytes
  *   checker2 version                           print the checker identity
+ *   checker2 prove-cnf <unit.ir> <func> <out.cnf>    NO-TRAP formula of func (c2_blast.h)
+ *   checker2 prove-check <unit.ir> <func> <proof>    rebuild that formula, check an LRAT proof
  *   checker2 receipt issue <unit.ir> <exe> --target T --epoch E --expiry X --out-dir D
  *                    [--firmware F.bin] [--requirements R] [--input I] [--producer P]
  *                    [--dep ID]... [--evidence 1]
@@ -22,7 +24,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "c2_blast.h"
 #include "c2_ir.h"
+#include "c2_lrat.h"
 #include "c2_receipt.h"
 #include "sha256.h"
 
@@ -313,6 +317,66 @@ static int receipt_verify(int argc, char **argv)
     return e ? 1 : 0;
 }
 
+/* decode + accept the unit, locate the function, build its NO-TRAP formula (never read from disk) */
+static int property_cnf(const char *ir, const char *func, C2Cnf *cnf, C2BlastInfo *bi, uint8_t ir_sha[32])
+{
+    size_t n;
+    uint8_t *b = slurp(ir, &n);
+    if (!b) return 2;
+    sha256_hash(b, n, ir_sha);
+    C2Unit *u = malloc(sizeof *u);
+    C2Verdict v;
+    int rc = 1;
+    if (!u) { free(b); return 2; }
+    if (c2_decode(b, n, u, &v)) printf("checker2=REJECT rule=%s detail=%s\n", v.rule, v.detail);
+    else if (c2_blast_notrap(u, c2_func_index(u, func), cnf, bi)) printf("prove=REFUSED rule=%s detail=%s\n", bi->rule, bi->detail);
+    else rc = 0;
+    c2_unit_free(u);
+    free(u);
+    free(b);
+    return rc;
+}
+
+static int prove_cnf(const char *ir, const char *func, const char *out)
+{
+    C2Cnf cnf;
+    C2BlastInfo bi;
+    uint8_t s[32];
+    int rc = property_cnf(ir, func, &cnf, &bi, s);
+    if (rc) return rc;
+    size_t n;
+    char *t = c2_cnf_print(&cnf, &n);
+    rc = t ? write_new(out, (const uint8_t *)t, n) : 2;
+    if (!rc) printf("property=%s func=%s inputs=%d paths=%d trap_sites=%d vars=%d clauses=%d\n", C2_PROPERTY_NOTRAP, func,
+                    bi.inputs, bi.paths, bi.trap_sites, cnf.nvars, cnf.nclauses);
+    free(t);
+    c2_cnf_free(&cnf);
+    return rc;
+}
+
+static int prove_check(const char *ir, const char *func, const char *proof)
+{
+    C2Cnf cnf;
+    C2BlastInfo bi;
+    uint8_t s[32], ps[32];
+    int rc = property_cnf(ir, func, &cnf, &bi, s);
+    if (rc) return rc;
+    size_t n;
+    uint8_t *p = slurp(proof, &n);
+    if (!p) { c2_cnf_free(&cnf); return 2; }
+    sha256_hash(p, n, ps);
+    C2LratResult r;
+    int e = c2_lrat_check(&cnf, (const char *)p, n, &r);
+    free(p);
+    c2_cnf_free(&cnf);
+    char h1[65], h2[65];
+    hex(s, 32, h1);
+    hex(ps, 32, h2);
+    if (e) { printf("lrat=REFUSED rule=%s line=%ld\n", r.rule, r.line); return 1; }
+    printf("lrat=VERIFIED property=%s func=%s ir_sha256=%s proof_sha256=%s steps=%ld\n", C2_PROPERTY_NOTRAP, func, h1, h2, r.steps);
+    return 0;
+}
+
 static int usage(void)
 {
     fprintf(stderr, "usage: checker2 check <unit.ir> | version | receipt issue|tbs|attach|verify ... (see source header)\n");
@@ -330,6 +394,8 @@ int main(int argc, char **argv)
         printf("%s\nsources_sha256=%s\nchecker_id=%s\n", C2_CHECKER_VERSION, C2_SOURCES_SHA256, h);
         return 0;
     }
+    if (strcmp(argv[1], "prove-cnf") == 0 && argc == 5) return prove_cnf(argv[2], argv[3], argv[4]);
+    if (strcmp(argv[1], "prove-check") == 0 && argc == 5) return prove_check(argv[2], argv[3], argv[4]);
     if (strcmp(argv[1], "check") == 0 && argc == 3) {
         uint8_t s[32];
         return judge(argv[2], s, 0);

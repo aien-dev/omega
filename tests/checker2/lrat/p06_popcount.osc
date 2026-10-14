@@ -1,0 +1,10 @@
+// prove: popcount
+// expect: holds
+// loop with a constant trip count; the count never exceeds 8.
+fn popcount(x: u8) -> u8 ensures result <= 8 {
+    let mut n: u8 = 0;
+    for i in 0 .. 8 {
+        if (x >> (i as u8)) & 1 == 1 { n = n + 1; }
+    }
+    return n;
+}
