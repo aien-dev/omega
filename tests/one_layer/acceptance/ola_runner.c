@@ -41,6 +41,7 @@
 #include <sys/prctl.h>
 #include <sys/socket.h>
 #include <sys/syscall.h>
+#include <sys/utsname.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -55,6 +56,16 @@
 #define OLA_EXIT_MEMORY 98    /* an allocation failed (RLIMIT_AS) */
 #define OLA_EXIT_UNAVAIL 96   /* the sandbox could not be built: the parent fails closed */
 #define OLA_EXIT_USAGE 95
+
+/* The seccomp allow-list below uses aarch64 syscall numbers and admits only this audit arch. */
+#define OLA_FILTER_ARCH AUDIT_ARCH_AARCH64 /* OLA:filter-arch */
+#if defined(__aarch64__)
+#define OLA_BUILD_ARCH AUDIT_ARCH_AARCH64
+#elif defined(__x86_64__)
+#define OLA_BUILD_ARCH AUDIT_ARCH_X86_64
+#else
+#define OLA_BUILD_ARCH 0u
+#endif
 
 static const char *g_nonce = "-";
 static int g_header; /* "OLA1 <nonce>" already printed */
@@ -147,7 +158,7 @@ static int enter_seccomp(void)
     if (sigaction(SIGSYS, &sa, NULL)) return -1;
     struct sock_filter f[] = {
         BPF_STMT(BPF_LD | BPF_W | BPF_ABS, offsetof(struct seccomp_data, arch)),
-        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, AUDIT_ARCH_AARCH64, 1, 0),
+        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, OLA_FILTER_ARCH, 1, 0),
         BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_KILL_PROCESS),
         BPF_STMT(BPF_LD | BPF_W | BPF_ABS, offsetof(struct seccomp_data, nr)),
         ALLOW(__NR_read), ALLOW(__NR_write), ALLOW(__NR_close), ALLOW(__NR_lseek),
@@ -168,6 +179,13 @@ static int enter_seccomp(void)
 
 static void enter_sandbox(const char *scratch)
 {
+    /* A machine the allow-list was not written for would have every syscall killed and every case
+     * reported as a sandbox violation: refuse the whole run instead (the parent fails closed). */
+    struct utsname un;
+    if (OLA_BUILD_ARCH != OLA_FILTER_ARCH || uname(&un) || strcmp(un.machine, "aarch64")) { /* OLA:arch-check */
+        dprintf(2, "SANDBOX_UNAVAILABLE arch: the seccomp allow-list is aarch64-only; this machine or build is not aarch64\n");
+        _exit(OLA_EXIT_UNAVAIL);
+    }
     if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)) { dprintf(2, "SANDBOX_UNAVAILABLE no_new_privs\n"); _exit(OLA_EXIT_UNAVAIL); }
     if (enter_landlock(scratch)) _exit(OLA_EXIT_UNAVAIL); /* OLA:enter-landlock */
     if (enter_seccomp()) _exit(OLA_EXIT_UNAVAIL);          /* OLA:enter-seccomp */
@@ -376,8 +394,8 @@ static int probe_open(const char *path, int flags, const char *what)
         ssize_t r = read(fd, &c, 1);
         if (r < 0) { printf("BLOCKED errno=%d read\n", errno); return 0; }
     }
+    printf("ESCAPED %s\n", what); /* OLA:probe-report */
     close(fd);
-    printf("ESCAPED %s\n", what);
     return 0;
 }
 
@@ -387,7 +405,7 @@ static int run_probe(int argc, char **argv)
     if (argc < 6) return OLA_EXIT_USAGE;
     const char *scratch = argv[3], *name = argv[5], *target = argc > 6 ? argv[6] : "";
     int control = !strcmp(argv[4], "1");
-    if (!control) enter_sandbox(scratch);
+    if (!control) enter_sandbox(scratch); /* OLA:probe-sandbox */
     setvbuf(stdout, NULL, _IONBF, 0);
     if (!strcmp(name, "read_hidden_inputs") || !strcmp(name, "read_expected") || !strcmp(name, "read_labels") ||
         !strcmp(name, "read_corpus_tar") || !strcmp(name, "read_key"))

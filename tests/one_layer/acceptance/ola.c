@@ -12,8 +12,10 @@
  *   ola probes <ola_runner> <scratch_root> <probes.log> <time_ms> <mem_mb> name=path...
  *        every isolation probe sandboxed (must be blocked) and as a negative control without the
  *        defence (must escape); "PROBES PASS" only if every probe is blocked AND its control escaped.
- *   ola tally  <verdicts.txt> <LABELS> <replay_identical 0|1> <probes_pass 0|1> <clean 0|1>
- *        prints the score.txt lines.
+ *        Where the scorer can observe the outcome itself (target files unchanged, outside file absent,
+ *        listener saw no connection, scratch file written) that observation overrides the runner.
+ *   ola tally  <verdicts.txt> <LABELS> <replay_identical 0|1> <probes.log> <clean 0|1>
+ *        prints the score.txt lines; probes count only if probes.log holds every probe, each PASS.
  *   ola cmp    <a> <b>                      byte-identical files (exit 0) or not (exit 1)
  *
  * Hosted C (glibc, Linux syscalls) is a temporary dependency: see evidence/ONE-LAYER-1/INVENTORY.txt.
@@ -904,16 +906,79 @@ static void classify(const Run *r, const char *nonce_or_null, char *out, size_t 
     snprintf(out, n, "UNKNOWN:exit=%d", r->exited ? r->code : -1);
 }
 
+/* ---- independent checks: what the parent observes itself, never taken from the runner's report ---- */
+
+#define MAX_TARGETS 16
+typedef struct { const char *key, *path; char sha[65]; size_t len; } Target;
+
+static void target_hash(const char *path, char out[65], size_t *len)
+{
+    uint8_t *b = slurp(path, MAX_TAR, len);
+    if (!b) die("probe target %s cannot be read by the scorer: %s", path, strerror(errno));
+    sha_hex(b, *len, out);
+    free(b);
+}
+
+/* Name of the first file target whose bytes differ from the snapshot, or NULL. */
+static const char *targets_changed(const Target *t, size_t nt)
+{
+    for (size_t i = 0; i < nt; i++) {
+        char h[65];
+        size_t len;
+        target_hash(t[i].path, h, &len);
+        if (len != t[i].len || strcmp(h, t[i].sha)) return t[i].key; /* OLA:targets-unchanged */
+    }
+    return NULL;
+}
+
+static int path_exists(const char *p) { struct stat st; return !lstat(p, &st); }
+
+/* Connections the local listener has seen since the last call (listener is non-blocking). */
+static int drain_accepts(int ls)
+{
+    int n = 0, c;
+    while ((c = accept4(ls, NULL, NULL, SOCK_CLOEXEC)) >= 0) { close(c); n++; }
+    return n;
+}
+
+static int scratch_has_ok(const char *scratch)
+{
+    char p[4200];
+    size_t n;
+    snprintf(p, sizeof p, "%s/scratch_ok", scratch);
+    uint8_t *b = slurp(p, 64, &n);
+    int ok = b && n == 3 && !memcmp(b, "ok\n", 3);
+    free(b);
+    return ok;
+}
+
 static int cmd_probes(int argc, char **argv)
 {
     if (argc < 7) die("usage: ola probes <ola_runner> <scratch_root> <probes.log> <time_ms> <mem_mb> key=path...");
     const char *runner = argv[2], *sroot = argv[3];
     unsigned time_ms = (unsigned)atoi(argv[5]), mem_mb = (unsigned)atoi(argv[6]);
-    const char *only = getenv("OLA_PROBE_ONLY"); /* selftest: run a subset */
+    const char *only = getenv("OLA_PROBE_ONLY"); /* selftest: run a subset (ola.sh score refuses it) */
+    if (only && !*only) only = NULL;
     FILE *log = fopen(argv[4], "wx");
     if (!log) die("probes log %s exists or cannot be created", argv[4]);
-    /* a local listener so the network probe's control has something real to reach */
-    int ls = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
+    /* every file a probe aims at (except the one write_outside_scratch tries to create) is hashed now
+     * and re-hashed after every probe execution: a runner that changes one fails, whatever it reports */
+    Target tg[MAX_TARGETS];
+    size_t nt = 0;
+    for (int i = 7; i < argc; i++) {
+        char *eq = strchr(argv[i], '=');
+        if (!eq || eq == argv[i]) die("probe target %s is not key=path", argv[i]);
+        if (!strncmp(argv[i], "outside=", 8)) continue;
+        if (nt == MAX_TARGETS) die("too many probe targets");
+        tg[nt].key = strndup(argv[i], (size_t)(eq - argv[i]));
+        tg[nt].path = eq + 1;
+        if (!tg[nt].key) die("out of memory");
+        target_hash(tg[nt].path, tg[nt].sha, &tg[nt].len);
+        nt++;
+    }
+    /* a local listener so the network probe's control has something real to reach; the parent counts
+     * the connections it accepts instead of believing the runner */
+    int ls = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
     struct sockaddr_in a;
     memset(&a, 0, sizeof a);
     a.sin_family = AF_INET;
@@ -938,7 +1003,8 @@ static int cmd_probes(int argc, char **argv)
                 if (!strncmp(argv[i], k_probes[pi].target_key, kl) && argv[i][kl] == '=') target = argv[i] + kl + 1;
             if (!*target) die("probe %s: no target %s=", name, k_probes[pi].target_key);
         }
-        if (!strcmp(name, "network")) target = port;
+        int is_outside = !strcmp(name, "write_outside_scratch"), is_net = !strcmp(name, "network");
+        if (is_net) target = port;
         if (!strcmp(name, "outlive_time")) target = tbuf;
         if (!strcmp(name, "exceed_memory")) target = mbuf;
         char res[2][160];
@@ -948,6 +1014,8 @@ static int cmd_probes(int argc, char **argv)
             new_nonce(stale); /* the "recorded earlier" nonce a replayed transcript carries */
             fresh_scratch(sroot, "probe", scratch, sizeof scratch);
             if (!strcmp(name, "replay_verdict")) target = stale;
+            if (is_outside && (unlink(target), path_exists(target))) die("probe %s: %s cannot be cleared", name, target);
+            if (is_net) drain_accepts(ls);
             char *av[] = {(char *)"ola_runner", (char *)"probe", nonce, scratch, (char *)(control ? "1" : "0"),
                           (char *)name, (char *)target, NULL};
             Limits lim = {time_ms, mem_mb, !control};
@@ -957,7 +1025,20 @@ static int cmd_probes(int argc, char **argv)
             const char *chk = !strcmp(name, "replay_verdict") ? (control ? stale : nonce) : NULL;
             classify(&r, chk, res[control], sizeof res[control]);
             run_free(&r);
-            if (!strcmp(name, "write_outside_scratch")) unlink(target); /* the control really created it */
+            /* independent checks override the runner's own report (OLA:probe-independent) */
+            const char *changed = targets_changed(tg, nt);
+            if (changed) snprintf(res[control], sizeof res[control], "TAMPERED:%s_changed", changed);
+            else if (is_outside) {
+                int made = path_exists(target);
+                if (!control && made) snprintf(res[0], sizeof res[0], "ESCAPED:file_created_seen_by_scorer");
+                if (control && !made) snprintf(res[1], sizeof res[1], "BLOCKED:no_file_seen_by_scorer");
+                unlink(target); /* the control really created it */
+            } else if (is_net) {
+                int seen = drain_accepts(ls);
+                if (!control && seen) snprintf(res[0], sizeof res[0], "ESCAPED:connection_seen_by_listener");
+                if (control && !seen) snprintf(res[1], sizeof res[1], "BLOCKED:no_connection_seen_by_listener");
+            } else if (is_pos && !scratch_has_ok(scratch))
+                snprintf(res[control], sizeof res[control], "BLOCKED:scratch_file_missing");
         }
         int pass = is_pos ? !strncmp(res[0], "ESCAPED:", 8) && !strncmp(res[1], "ESCAPED:", 8)
                           : !strncmp(res[0], "BLOCKED:", 8) && !strncmp(res[1], "ESCAPED:", 8); /* OLA:probe-verdict */
@@ -975,9 +1056,40 @@ static int cmd_probes(int argc, char **argv)
 
 /* ====================================================================================== tally */
 
+/* probes.log is complete: every probe (and scratch_ok) exactly once with result=PASS, no other
+ * line, and the closing "PROBES PASS count=<all>". A subset run (OLA_PROBE_ONLY) never passes. */
+static int probes_complete(const char *path)
+{
+    size_t n;
+    char *b = (char *)slurp(path, MAX_FILE, &n);
+    if (!b) return 0;
+    const size_t np = sizeof k_probes / sizeof k_probes[0] + 1;
+    int seen[sizeof k_probes / sizeof k_probes[0] + 1] = {0};
+    size_t lines = 0;
+    int ok = 1, closed = 0;
+    char *cur = b, *line, want_end[48];
+    snprintf(want_end, sizeof want_end, "PROBES PASS count=%zu", np);
+    while ((line = next_line(&cur))) {
+        if (closed) { ok = 0; break; }
+        if (!strncmp(line, "PROBES ", 7)) { closed = 1; ok &= !strcmp(line, want_end); continue; } /* OLA:probe-count */
+        size_t ll = strlen(line);
+        if (strncmp(line, "probe=", 6) || ll < 12 || strcmp(line + ll - 12, " result=PASS")) { ok = 0; break; }
+        size_t k;
+        for (k = 0; k < np; k++) {
+            const char *nm = k + 1 == np ? "scratch_ok" : k_probes[k].name;
+            size_t nl = strlen(nm);
+            if (!strncmp(line + 6, nm, nl) && line[6 + nl] == ' ') break;
+        }
+        if (k == np || seen[k]++) { ok = 0; break; }
+        lines++;
+    }
+    free(b);
+    return ok && closed && lines == np; /* OLA:probe-all */
+}
+
 static int cmd_tally(int argc, char **argv)
 {
-    if (argc != 7) die("usage: ola tally <verdicts> <LABELS> <replay_identical> <probes_pass> <clean>");
+    if (argc != 7) die("usage: ola tally <verdicts> <LABELS> <replay_identical> <probes.log> <clean>");
     size_t vn, ln;
     char *v = (char *)slurp(argv[2], MAX_FILE, &vn), *l = (char *)slurp(argv[3], MAX_FILE, &ln);
     if (!v || !l) die("tally: cannot read verdicts or LABELS");
@@ -1005,7 +1117,7 @@ static int cmd_tally(int argc, char **argv)
         if (!strcmp(lab[i], "DEFECT") && !strcmp(verdict, "REJECT")) drej++; /* ERROR never counts as a rejection */
         if (!strcmp(lab[i], "CONTROL") && !strcmp(verdict, "ACCEPT")) cacc++;
     }
-    int replay = !strcmp(argv[4], "1"), probes = !strcmp(argv[5], "1"), clean = !strcmp(argv[6], "1");
+    int replay = !strcmp(argv[4], "1"), probes = probes_complete(argv[5]), clean = !strcmp(argv[6], "1");
     int gate = defects == 30 && controls == 10 && drej == 30 && cacc == 10 && errors == 0 && seen == nl && !unlabelled &&
                replay && probes && clean; /* OLA:gate */
     printf("defects_rejected=%u/30 controls_accepted=%u/10 errors=%u\n", drej, cacc, errors);
