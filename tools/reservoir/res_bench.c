@@ -45,6 +45,7 @@ typedef struct {
     OmegaResStatus st;
     OmegaResRunReceipt rc;
     uint64_t stopped_at;
+    OmegaResMembraneStats ms; /* every accepted state of the run */
 } Run;
 
 static void run_json(FILE *o, const char *name, const Run *r)
@@ -58,6 +59,7 @@ static void run_json(FILE *o, const char *name, const Run *r)
         fprintf(o, ", \"steps\": %llu", (unsigned long long)r->rc.steps);
     } else
         fprintf(o, ", \"stopped_at_step\": %llu", (unsigned long long)r->stopped_at);
+    res_mstats_json(o, &r->ms);
     fputc('}', o);
 }
 
@@ -82,6 +84,7 @@ static Run simulate(const OmegaResTopology *t, const OmegaResParams *p, OmegaRes
         r.st = omega_res_advance_observed(&sim->cfg, &in, &sim->ws, &sim->s, last - sim->s.step, &sim->mstats);
     if (r.st == OMEGA_RES_OK) r.st = omega_res_run_receipt(&sim->cfg, &in, &sim->s, &r.rc);
     r.stopped_at = sim->s.step;
+    r.ms = sim->mstats;
     free(sim);
     return r;
 }

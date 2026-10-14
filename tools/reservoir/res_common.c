@@ -141,6 +141,15 @@ void res_json_str(FILE *o, const char *s)
     fputc('"', o);
 }
 
+void res_mstats_json(FILE *o, const OmegaResMembraneStats *m)
+{
+    fprintf(o,
+            ", \"membranes\": {\"states_observed\": %llu, \"states_implausible\": %llu, \"membranes_implausible\": %u, "
+            "\"max_membrane_abs_v\": %.9g, \"max_node_abs_v\": %.9g}",
+            (unsigned long long)m->states_observed, (unsigned long long)m->states_implausible, m->membranes_implausible,
+            (double)m->max_membrane_abs_v, (double)m->max_node_abs_v);
+}
+
 double res_now_s(void)
 {
     struct timespec t;

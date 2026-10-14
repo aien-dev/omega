@@ -36,6 +36,8 @@ int res_check_pinned(const char *root, const ResPin *p, char got_hex[65]);
 
 void res_hex(const uint8_t *d, size_t n, char *out); /* 2n chars + NUL */
 void res_json_str(FILE *o, const char *s);
+/* Writes ", \"membranes\": {...}": the physical-plausibility record of a run. */
+void res_mstats_json(FILE *o, const OmegaResMembraneStats *m);
 double res_now_s(void); /* CLOCK_MONOTONIC */
 const char *res_status_name(OmegaResStatus s);
 
@@ -52,7 +54,7 @@ typedef struct {
     OmegaResConfig cfg;
     OmegaResState s, next;
     OmegaResWorkspace ws;
-    OmegaResMembraneStats mstats; /* every accepted state of the run; reset with the state */
+    OmegaResMembraneStats mstats; /* accepted states since the last omega_res_membrane_stats_init */
 } ResSim;
 
 /* Runs from the state in sim->s (already initialised) and records the node

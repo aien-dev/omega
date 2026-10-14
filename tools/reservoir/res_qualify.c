@@ -54,7 +54,8 @@ static void jhex(FILE *o, const uint8_t *d)
     fprintf(o, "\"%s\"", h);
 }
 
-static void receipt_json(FILE *o, const char *split, OmegaResStatus st, const OmegaResRunReceipt *r)
+static void receipt_json(FILE *o, const char *split, OmegaResStatus st, const OmegaResRunReceipt *r,
+                         const OmegaResMembraneStats *ms)
 {
     fprintf(o, "{\"split\": \"%s\", \"status\": \"%s\"", split, res_status_name(st));
     if (st == OMEGA_RES_OK) {
@@ -67,6 +68,7 @@ static void receipt_json(FILE *o, const char *split, OmegaResStatus st, const Om
         fprintf(o, ", \"steps\": %llu, \"run_id\": ", (unsigned long long)r->steps);
         jhex(o, r->run_id);
     }
+    res_mstats_json(o, ms);
     fputc('}', o);
 }
 
@@ -269,6 +271,7 @@ static int cmd_g2_narma(const char *root, const char *variant, const char *v2_re
     double isum_lo = 1.0 / 0.0, isum_hi = -1.0 / 0.0; /* total current into the non-ground nodes */
     OmegaResRunReceipt rc[2];
     OmegaResStatus rst[2];
+    OmegaResMembraneStats ms[2];
     for (int sp = 0; sp < 2; sp++) {
         const NarmaSignal *s = &sig[sp];
         feat[sp] = calloc((size_t)nrow * ncol, sizeof(double));
@@ -314,11 +317,13 @@ static int cmd_g2_narma(const char *root, const char *variant, const char *v2_re
             for (uint32_t k = 1; k <= M; k++) steps[ns++] = ((uint64_t)i * M + k) * PW;
             nvalid++;
         }
+        omega_res_membrane_stats_init(&sim->mstats);
         rst[sp] = omega_res_state_init(&sim->cfg, OMEGA_RES_INIT_N0, 0.0f, &sim->s);
         if (rst[sp] == OMEGA_RES_OK) rst[sp] = res_sim_at_steps(sim, &in, steps, ns, vs);
         if (rst[sp] == OMEGA_RES_OK && sim->s.step < last)
             rst[sp] = omega_res_advance_observed(&sim->cfg, &in, &sim->ws, &sim->s, last - sim->s.step, &sim->mstats);
         if (rst[sp] == OMEGA_RES_OK) rst[sp] = omega_res_run_receipt(&sim->cfg, &in, &sim->s, &rc[sp]);
+        ms[sp] = sim->mstats;
         /* features: row 0 zeros; row r >= 1 = reference sample row r (1-based), node-major */
         for (uint32_t r = 1; r <= nvalid; r++)
             for (uint32_t node = 0; node < L; node++)
@@ -401,9 +406,9 @@ static int cmd_g2_narma(const char *root, const char *variant, const char *v2_re
     fprintf(o, "], \"mask_inconsistent_slots\": [%u, %u], \"masks_equal_train_test\": %s},\n", mask_incons[0],
             mask_incons[1], memcmp(mask_bits[0], mask_bits[1], sizeof mask_bits[0]) == 0 ? "true" : "false");
     fputs("  \"runs\": [", o);
-    receipt_json(o, "train", rst[0], &rc[0]);
+    receipt_json(o, "train", rst[0], &rc[0], &ms[0]);
     fputs(", ", o);
-    receipt_json(o, "test", rst[1], &rc[1]);
+    receipt_json(o, "test", rst[1], &rc[1], &ms[1]);
     fprintf(o, "],\n  \"fit\": {\"rows_1based\": [100, 995], \"columns\": %u, \"columns_dropped_zero\": [", ncol);
     for (uint32_t k = 0; k < nd; k++) fprintf(o, "%s%u", k ? ", " : "", dropped[k]);
     uint32_t argp = 0;
@@ -601,6 +606,7 @@ static int cmd_g2_lorenz(const char *root, int nodes, int control, FILE *o)
     int yeq[2], t_ok = 1;
     OmegaResRunReceipt rc[2];
     OmegaResStatus rst[2];
+    OmegaResMembraneStats ms[2];
     for (int sp = 0; sp < 2; sp++) {
         const LorenzData *d = &D[sp];
         if (d->t[0] != 0.0 || d->t[d->n - 1u] != 40.0) t_ok = 0;
@@ -634,11 +640,13 @@ static int cmd_g2_lorenz(const char *root, int nodes, int control, FILE *o)
         T[sp] = malloc((size_t)nts[sp] * 3u * sizeof(double));
         if (!pos || !V[sp] || !T[sp]) return 2;
         for (uint32_t k = 0; k < nts[sp]; k++) pos[k] = ts[sp][k] * 1e5;
+        omega_res_membrane_stats_init(&sim->mstats);
         rst[sp] = omega_res_state_init(&sim->cfg, OMEGA_RES_INIT_CONST, 1.0f, &sim->s);
         if (rst[sp] == OMEGA_RES_OK) rst[sp] = res_sim_at_positions(sim, &in, pos, nts[sp], last, V[sp]);
         if (rst[sp] == OMEGA_RES_OK && sim->s.step < last)
             rst[sp] = omega_res_advance_observed(&sim->cfg, &in, &sim->ws, &sim->s, last - sim->s.step, &sim->mstats);
         if (rst[sp] == OMEGA_RES_OK) rst[sp] = omega_res_run_receipt(&sim->cfg, &in, &sim->s, &rc[sp]);
+        ms[sp] = sim->mstats;
         for (int c = 0; c < 3; c++) { /* targets: interp1(t, X, timeSolution) */
             uint32_t hint = 0;
             for (uint32_t k = 0; k < nts[sp]; k++)
@@ -732,9 +740,9 @@ static int cmd_g2_lorenz(const char *root, int nodes, int control, FILE *o)
         jd(o, max_err[c] / max_i[c]);
     }
     fputs("]},\n  \"runs\": [", o);
-    receipt_json(o, "train", rst[0], &rc[0]);
+    receipt_json(o, "train", rst[0], &rc[0], &ms[0]);
     fputs(", ", o);
-    receipt_json(o, "test", rst[1], &rc[1]);
+    receipt_json(o, "test", rst[1], &rc[1], &ms[1]);
     fprintf(o, "],\n  \"samples\": [%u, %u],\n  \"cv\": {\"grid\": \"linspace(0.033, 0.035, 101)\", \"folds\": 5, "
                "\"chosen_lambda\": ", nts[0], nts[1]);
     jd(o, best_l);
