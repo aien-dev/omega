@@ -1,0 +1,5 @@
+fp8 knobs: cta_budget 0 shape 16/1/16 cached 0
+model built in 1.3 s (layers 2, vocab 151936, pos 300)
+A down: fp8 codegen refused the shape
+FAIL: A (baseline, host glue) 5 reps ran
+chip: 1 checks, 1 failed: FAIL
