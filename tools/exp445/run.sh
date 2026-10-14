@@ -2,12 +2,13 @@
 # tools/exp445/run.sh -- generation driver of the machine-first representation experiment (omega#445,
 # docs/one_layer/EXP445_PROTOCOL.md). Shell + curl + jq + the repo's C tools; no Python.
 #
-#   run.sh --base-url URL --model NAME --config A|B --tasks <public tasks dir> --out <run dir>
+#   run.sh --config A|B --tasks <public tasks dir> --out <run dir> [--base-url URL] [--model NAME]
 #          [--arms text,bytes,structured] [--only id,id] [--attempts N] [--max-tokens N]
 #          [--temperature T] [--top-p P] [--seed-base S]
 #
 # <public tasks dir> holds tasks/cases/<id>/{requirement,prompt} (ola.sh tasks-public output); the
-# driver never sees hidden data. Defaults come from tools/exp445/PARAMS (frozen by the protocol); any
+# driver never sees hidden data. Defaults come from tools/exp445/PARAMS (frozen by the protocol; EXP445_PARAMS
+# names another file, for tests only), including the configuration's model, endpoint and request extra; any
 # override is recorded in meta.txt as protocol=OVERRIDDEN. For every task x arm x attempt:
 #   1 system prompt = arms/common.md + the arm document; user prompt = signature + task prompt
 #   2 POST <base-url>/chat/completions (max_tokens = the per-round cap), raw request and response saved
@@ -23,11 +24,13 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 die() { echo "run.sh: $*" >&2; exit 2; }
-kv() { awk -F= -v k="$1" '$1 == k { print substr($0, length(k) + 2); exit }' "$HERE/PARAMS"; }
+PARAMS="${EXP445_PARAMS:-$HERE/PARAMS}"
+[ -f "$PARAMS" ] || die "no PARAMS file $PARAMS"
+kv() { awk -F= -v k="$1" '$1 == k { print substr($0, length(k) + 2); exit }' "$PARAMS"; }
 command -v jq > /dev/null || die "jq is required"
 command -v curl > /dev/null || die "curl is required"
 
-BASE="" MODEL="" CONFIG="" TASKS="" OUT="" ARMS="text,bytes,structured" ONLY="" over=""
+BASE="" MODEL="" CONFIG="" TASKS="" OUT="" ARMS="$(kv arms)" ONLY="" over=""
 ATTEMPTS="$(kv attempts)" MAXT="$(kv max_tokens)" TEMP="$(kv temperature)" TOPP="$(kv top_p)" SEED="$(kv seed_base)"
 TIMEOUT="$(kv timeout_s)" RETRIES="$(kv retries)"
 while [ $# -gt 0 ]; do
@@ -47,9 +50,19 @@ while [ $# -gt 0 ]; do
     *) die "unknown argument $1" ;;
   esac
 done
-[ -n "$BASE" ] && [ -n "$MODEL" ] && [ -n "$CONFIG" ] && [ -n "$TASKS" ] && [ -n "$OUT" ] ||
-  die "usage: run.sh --base-url URL --model NAME --config A|B --tasks DIR --out DIR [options]"
+[ -n "$CONFIG" ] && [ -n "$TASKS" ] && [ -n "$OUT" ] ||
+  die "usage: run.sh --config A|B --tasks DIR --out DIR [--base-url URL] [--model NAME] [options]"
 [[ "$CONFIG" =~ ^[A-Za-z0-9]{1,8}$ ]] || die "config must be [A-Za-z0-9]{1,8}"
+# The configuration must be named in PARAMS (frozen by the protocol, section 9): model id, endpoint and
+# request extra come from there. A different --base-url or --model is recorded as an override, which
+# score.sh treats as an invalid run.
+FMODEL="$(kv "config.$CONFIG.model")" FBASE="$(kv "config.$CONFIG.base_url")" EXTRA="$(kv "config.$CONFIG.extra")"
+[ -n "$FMODEL" ] && [ -n "$FBASE" ] && [ -n "$EXTRA" ] || die "config $CONFIG is not named in $PARAMS (protocol section 9): refused"
+jq -e 'type == "object" and ([keys[] | select(IN("model", "messages", "max_tokens", "temperature", "top_p", "seed", "stream"))] | length == 0)' \
+  <<< "$EXTRA" > /dev/null 2>&1 || die "config.$CONFIG.extra must be a JSON object that sets none of the fixed request fields"
+EXTRA="$(jq -c . <<< "$EXTRA")"
+if [ -z "$BASE" ]; then BASE="$FBASE"; elif [ "$BASE" != "$FBASE" ]; then over="$over base_url"; fi
+if [ -z "$MODEL" ]; then MODEL="$FMODEL"; elif [ "$MODEL" != "$FMODEL" ]; then over="$over model"; fi
 [[ "$MAXT" =~ ^[0-9]+$ ]] && [ "$MAXT" -gt 0 ] || die "max_tokens must be a positive integer (PARAMS or --max-tokens)"
 [[ "$ATTEMPTS" =~ ^[1-9]$ ]] || die "attempts 1..9"
 cfg="$(echo "$CONFIG" | tr 'A-Z' 'a-z')"
@@ -58,6 +71,7 @@ find "$TASKS/tasks/cases" -path '*/hidden*' | grep -q . && die "$TASKS contains 
 B="$ROOT/build/omega_emit"
 make -s -C "$ROOT" PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 omega-emit >&2
 X="$B/x445" EMIT="$B/omega_emit"
+. "$HERE/reader.sh"
 mkdir -p "$OUT/prompts" "$OUT/gen" "$OUT/cands"
 OUT="$(realpath -e "$OUT")"
 
@@ -79,12 +93,12 @@ if [ -n "$ONLY" ]; then sel=(); for t in "${ids[@]}"; do [[ ",$ONLY," == *",$t,"
 [ "${#ids[@]}" -gt 0 ] || die "no tasks selected"
 meta="$OUT/meta.txt"
 {
-  echo "base_url=$BASE"; echo "model=$MODEL"; echo "config=$CONFIG"; echo "arms=$ARMS"; echo "attempts=$ATTEMPTS"
+  echo "base_url=$BASE"; echo "model=$MODEL"; echo "config=$CONFIG"; echo "request_extra=$EXTRA"; echo "arms=$ARMS"; echo "attempts=$ATTEMPTS"
   echo "max_tokens_per_round=$MAXT"; echo "repair_rounds=1"; echo "temperature=$TEMP"; echo "top_p=$TOPP"; echo "seed_base=$SEED"
   echo "timeout_s=$TIMEOUT"; echo "retries=$RETRIES"
   echo "protocol=$([ -z "$over" ] && echo PARAMS || echo "OVERRIDDEN:$over")"
-  echo "commit=$(git -C "$ROOT" rev-parse HEAD)$(git -C "$ROOT" diff --quiet HEAD -- tools tests/one_layer || echo -dirty)"
-  echo "params_sha256=$(sha256sum "$HERE/PARAMS" | cut -d' ' -f1)"
+  echo "commit=$(git -C "$ROOT" rev-parse HEAD)$(git -C "$ROOT" diff --quiet HEAD -- tools tests/one_layer docs/one_layer || echo -dirty)"
+  echo "params_sha256=$(sha256sum "$PARAMS" | cut -d' ' -f1)"
   for arm in ${ARMS//,/ }; do echo "prompt_${arm}_sha256=$(sha256sum "$OUT/prompts/$arm.system.txt" | cut -d' ' -f1)"; done
   echo "tasks=${#ids[@]}"
   echo "tasks_public_sha256=$(cd "$TASKS" && find tasks -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)"
@@ -97,8 +111,8 @@ else mv "$meta.new" "$meta"; fi
 # Sets: content, ptok, ctok, finish, wall. Writes rN.req.json, rN.resp.json (+ rN.err.K on failures).
 ask() {
   local d="$1" r="$2" msgs="$3" seed="$4" k code t
-  jq -n -c --arg m "$MODEL" --argjson msgs "$msgs" --argjson mt "$MAXT" --argjson t "$TEMP" --argjson p "$TOPP" --argjson s "$seed" \
-    '{model: $m, messages: $msgs, max_tokens: $mt, temperature: $t, top_p: $p, seed: $s, stream: false}' > "$d/r$r.req.json"
+  jq -n -c --arg m "$MODEL" --argjson msgs "$msgs" --argjson mt "$MAXT" --argjson t "$TEMP" --argjson p "$TOPP" --argjson s "$seed" --argjson x "$EXTRA" \
+    '{model: $m, messages: $msgs, max_tokens: $mt, temperature: $t, top_p: $p, seed: $s, stream: false} + $x' > "$d/r$r.req.json"
   wall=0; content=""; ptok=0; ctok=0; finish=error
   for k in $(seq 0 "$RETRIES"); do
     if out="$(curl -sS -m "$TIMEOUT" -o "$d/r$r.resp.json" -w '%{http_code} %{time_total}' -H 'Content-Type: application/json' \
@@ -118,19 +132,7 @@ ask() {
 }
 
 # candidate <arm> <dir> <round> <requirement>: payload -> candidate file + one check line in rN.check
-candidate() {
-  local arm="$1" d="$2" r="$3" req="$4" line
-  "$X" extract "$d/r$r.content" "$d/r$r.payload" > "$d/r$r.fence"
-  rm -f "$d/r$r.candidate.osc" "$d/r$r.candidate.oscir"
-  case "$arm" in
-    text) cp "$d/r$r.payload" "$d/r$r.candidate.osc"; line="$("$X" check osc "$d/r$r.candidate.osc" "$req" || true)" ;;
-    bytes) if line="$("$X" hex "$d/r$r.payload" "$d/r$r.candidate.oscir")"; then line="$("$X" check oscir "$d/r$r.candidate.oscir" "$req" || true)"; fi ;;
-    structured) if line="$("$EMIT" emit "$d/r$r.payload" "$d/r$r.candidate.oscir" 2>&1)"; then line="$("$X" check oscir "$d/r$r.candidate.oscir" "$req" || true)"
-                else rm -f "$d/r$r.candidate.oscir"; fi ;;
-  esac
-  [ -n "$line" ] || line="REFUSED checker: no result"
-  printf '%s\n' "$line" | head -n 1 > "$d/r$r.check"
-}
+candidate() { reader "$X" "$EMIT" "$1" "$2/r$3.content" "$2/r$3" "$4"; }
 
 ti=0
 for task in "${ids[@]}"; do
