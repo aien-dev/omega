@@ -96,12 +96,42 @@ on:
       - 'src/compiler/**'
       - 'tests/compiler/**'
       - 'mk/compiler.mk'
+      # checker2 + signed realization receipts (one-layer stage 3, omega#446); its differential
+      # and LRAT gate also run when the compiler, sha256 or the vendored Ed25519 change
+      - 'src/checker2/**'
+      - 'tests/checker2/**'
+      - 'mk/checker2.mk'
+      - 'spec/one-layer-receipts.md'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  checker2:
+    # Independent checker2 (src/checker2), LRAT gate and receipts (spec/one-layer-receipts.md):
+    # plain + ASan/UBSan unit tests, black-box differential against oscc, 20-program LRAT gate,
+    # receipt signature tests, and the GUARD-line mutant negative controls.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Changed-path guard (checker2 inputs only)
+        id: guard
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          CHANGED=$(git diff --name-only HEAD^1 HEAD)
+          if echo "$CHANGED" | grep -Eq '^(src/checker2/|tests/checker2/|mk/checker2\.mk$|spec/one-layer-receipts\.md$|src/compiler/|tests/compiler/|mk/compiler\.mk$|src/sha256\.|src/searchtrace/sig/|\.github/workflows/host-suites\.yml$)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"; echo "no checker2 inputs changed; skipping"
+          fi
+      - name: checker2 unit, differential, LRAT gate, receipts, mutants (plain + ASan/UBSan)
+        if: steps.guard.outputs.run == 'true'
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-checker2
+
   searchtrace:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 15
