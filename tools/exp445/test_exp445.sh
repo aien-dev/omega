@@ -240,56 +240,56 @@ smut() {
   else bad "  score mutant ($n): still refused, that check is not the only guard tested"; fi
 }
 cpr() { rm -rf "$T/neg"; mkdir -p "$T/neg"; cp -R "$FA" "$T/neg/a"; cp -R "$FB" "$T/neg/b"; }
-PK=("$T/pack/tasks.tar" "$T/pack/TASKS.sha256"); NG=("${PK[@]}" "$T/neg/a" "$T/neg/b")
+PK=("$T/pack/tasks.tar" "$T/pack/TASKS.sha256"); NA=(--configs A "${PK[@]}" "$T/neg/a"); NB=(--configs B "${PK[@]}" "$T/neg/b")
 jqi() { jq -c "$1" "$2" > "$2.tmp"; mv "$2.tmp" "$2"; }
 cpr; printf ' ' >> "$T/neg/a/cands/a-text-1/dev01/candidate.osc"
-invalid "tampered candidate" "a-text-1 dev01 candidate in cands/ does not match" "${NG[@]}"
+invalid "tampered candidate" "a-text-1 dev01 candidate in cands/ does not match" "${NA[@]}"
 cpr; sed -i 's/"stop"/"stop" /' "$T/neg/b/gen/b-text-1/dev01/r1.resp.json"
-invalid "tampered response" "SHA256SUMS does not verify" "${NG[@]}"
+invalid "tampered response" "SHA256SUMS does not verify" "${NB[@]}"
 cpr; rm -rf "$T/neg/b/gen/b-bytes-1/dev07" "$T/neg/b/cands/b-bytes-1/dev07"; awk -F'\t' '!($1 == "b-bytes-1" && $2 == "dev07")' "$FB/log.tsv" > "$T/neg/b/log.tsv"; rehash "$T/neg/b"
-invalid "missing generation (re-hashed)" "1 of 60 generations missing (first: b-bytes-1 dev07)" "${NG[@]}"
+invalid "missing generation (re-hashed)" "1 of 30 generations missing (first: b-bytes-1 dev07)" "${NB[@]}"
 # log.tsv: hashed, and every row cross-checked against the raw responses (tokens, finish, wall, checks)
 cpr; awk -F'\t' -v OFS='\t' '$1 == "b-bytes-1" { $5 = 1 } { print }' "$FB/log.tsv" > "$T/neg/b/log.tsv"
-invalid "edited token column (not re-hashed)" "b: SHA256SUMS does not verify" "${NG[@]}"
+invalid "edited token column (not re-hashed)" "b: SHA256SUMS does not verify" "${NB[@]}"
 rehash "$T/neg/b"
-invalid "edited token column (re-hashed: only the cross-check sees it)" "log.tsv differs from the rows re-derived from the raw files (first: b-bytes-1" "${NG[@]}"
-smut 's/^  if ! cmp -s "\$W\/derived_s" "\$W\/log_s"; then$/  if false; then/' "the log.tsv cross-check" "${NG[@]}"
+invalid "edited token column (re-hashed: only the cross-check sees it)" "log.tsv differs from the rows re-derived from the raw files (first: b-bytes-1" "${NB[@]}"
+smut 's/^  if ! cmp -s "\$W\/derived_s" "\$W\/log_s"; then$/  if false; then/' "the log.tsv cross-check" "${NB[@]}"
 cpr; awk -F'\t' -v OFS='\t' '$1 == "a-structured-1" && $2 == "dev01" { $12 = "0000" } { print }' "$FA/log.tsv" > "$T/neg/a/log.tsv"; rehash "$T/neg/a"
-invalid "log candidate hash edited (re-hashed)" "log.tsv differs from the rows re-derived from the raw files (first: a-structured-1 dev01)" "${NG[@]}"
+invalid "log candidate hash edited (re-hashed)" "log.tsv differs from the rows re-derived from the raw files (first: a-structured-1 dev01)" "${NA[@]}"
 # requests: settings, seed, config extra and the repair chain are checked in the hashed requests themselves
 rm -rf "$T/hov"; cw A "$T/hov"; "$HERE/run.sh" --config A --tasks "$T/pub" --out "$T/hov" --temperature 0.6 > /dev/null 2>&1
 sed -i 's/^protocol=.*/protocol=PARAMS/; s/^temperature=.*/temperature=0.7/' "$T/hov/meta.txt"; rehash "$T/hov"
 invalid "override hidden by editing meta.txt (re-hashed)" "a-text-1 dev01 r1 request differs from the frozen request in: temperature" --configs A "${PK[@]}" "$T/hov"
 cpr; jqi '.seed += 1' "$T/neg/a/gen/a-text-1/dev01/r1.req.json"; rehash "$T/neg/a"
-invalid "wrong seed (re-hashed)" "a-text-1 dev01 r1 request differs from the frozen request in: seed" "${NG[@]}"
-smut 's/why="\$(req_same "\$d\/r1.req.json" "\$q")" || inval/true || inval/' "the round-1 request check" "${NG[@]}"
+invalid "wrong seed (re-hashed)" "a-text-1 dev01 r1 request differs from the frozen request in: seed" "${NA[@]}"
+smut 's/why="\$(req_same "\$d\/r1.req.json" "\$q")" || inval/true || inval/' "the round-1 request check" "${NA[@]}"
 cpr; jqi 'del(.chat_template_kwargs)' "$T/neg/b/gen/b-text-1/dev01/r1.req.json"; rehash "$T/neg/b"
-invalid "B request without its extra field (re-hashed)" "b-text-1 dev01 r1 request differs from the frozen request in: chat_template_kwargs" "${NG[@]}"
+invalid "B request without its extra field (re-hashed)" "b-text-1 dev01 r1 request differs from the frozen request in: chat_template_kwargs" "${NB[@]}"
 cpr; cp "$FA"/gen/a-text-1/dev02/r2.{req.json,transport,resp.json} "$T/neg/a/gen/a-text-1/dev01/"; rehash "$T/neg/a"
-invalid "round 2 without a round-1 refusal (re-hashed)" "a-text-1 dev01 has a round 2 without a round-1 refusal" "${NG[@]}"
+invalid "round 2 without a round-1 refusal (re-hashed)" "a-text-1 dev01 has a round 2 without a round-1 refusal" "${NA[@]}"
 cpr; rm "$T/neg/a/gen/a-text-1/dev02"/r2.*; rehash "$T/neg/a"
-invalid "refused round 1 without its repair round (re-hashed)" "a-text-1 dev02 round 1 was refused (REFUSED compiler: SYNTAX" "${NG[@]}"
+invalid "refused round 1 without its repair round (re-hashed)" "a-text-1 dev02 round 1 was refused (REFUSED compiler: SYNTAX" "${NA[@]}"
 cpr; jqi '.messages[3].content = "Try again."' "$T/neg/a/gen/a-text-1/dev02/r2.req.json"; rehash "$T/neg/a"
-invalid "repair message not the frozen format (re-hashed)" "a-text-1 dev02 round 1 was refused .* differs in: messages" "${NG[@]}"
+invalid "repair message not the frozen format (re-hashed)" "a-text-1 dev02 round 1 was refused .* differs in: messages" "${NA[@]}"
 # transport records: a failed round shows every try with its HTTP status and curl exit
 cpr; sed -i '$d' "$T/neg/a/gen/a-text-1/dev03/r1.transport"; rehash "$T/neg/a"
-invalid "failed round with a try missing (re-hashed)" "a-text-1 dev03 failed round r1 has 2 tries, the protocol makes 3" "${NG[@]}"
+invalid "failed round with a try missing (re-hashed)" "a-text-1 dev03 failed round r1 has 2 tries, the protocol makes 3" "${NA[@]}"
 cpr; rm "$T/neg/a/gen/a-text-1/dev01/r1.transport"; rehash "$T/neg/a"
-invalid "round without a transport record (re-hashed)" "a-text-1 dev01 r1 has no transport record" "${NG[@]}"
+invalid "round without a transport record (re-hashed)" "a-text-1 dev01 r1 has no transport record" "${NA[@]}"
 # operator weight and server check recorded with the run
 cpr; rm "$T/neg/a/weights.check"
-invalid "no weights.check" "a: weights.check / server.json missing or not all OK for config A" "${NG[@]}"
+invalid "no weights.check" "a: weights.check / server.json missing or not all OK for config A" "${NA[@]}"
 cpr; sed -i '1s/: OK$/: FAILED/' "$T/neg/a/weights.check"; rehash "$T/neg/a"
-invalid "a FAILED weight line (re-hashed)" "a: weights.check / server.json missing or not all OK for config A" "${NG[@]}"
+invalid "a FAILED weight line (re-hashed)" "a: weights.check / server.json missing or not all OK for config A" "${NA[@]}"
 cpr; jqi '.data |= map(select(.id != "qwen3-8b"))' "$T/neg/b/server.json"; rehash "$T/neg/b"
-invalid "server does not list the model (re-hashed)" "b: weights.check / server.json missing or not all OK for config B" "${NG[@]}"
+invalid "server does not list the model (re-hashed)" "b: weights.check / server.json missing or not all OK for config B" "${NB[@]}"
 sed 's/^temperature=.*/temperature=0.6/' "$TP" > "$T/PARAMS2"
 EXP445_PARAMS="$T/PARAMS2" invalid "changed PARAMS" "PARAMS changed since generation" "${PK[@]}" "$FA" "$FB"
 invalid "override flag used" "settings overridden on the command line (OVERRIDDEN: only)" --configs A "${PK[@]}" "$R"
 invalid "same run twice" "generations appear more than once" "${PK[@]}" "$FA" "$FA" "$FB"
 invalid "config outside --configs" "config 'B' is not one of the configs scored (A)" --configs A "${PK[@]}" "$FA" "$FB"
 cpr; printf ' ' >> "$T/neg/a/cands/a-text-1/dev01/candidate.osc"
-smut 's/\[ "\$n" -le 1 \] && \[ "\$got" = "\$want" \] ||/true ||/' "the cands/ check" "${NG[@]}"
+smut 's/\[ "\$n" -le 1 \] && \[ "\$got" = "\$want" \] ||/true ||/' "the cands/ check" "${NA[@]}"
 # the killed-and-resumed run scores as a valid run
 if SC "${PK[@]}" "$K" "$FB" > /dev/null 2> "$T/ks.err"; then
   grep -q '^provenance OK: 2 runs, 60 generations' "$(sed -n 's/^score.sh: output in //p' "$T/ks.err")/validity.txt" &&
