@@ -2,7 +2,7 @@
 
 Issue: aien-spark/omega#445 (stage 2 of the one-layer plan,
 `~/workspace/omega-vision/OMEGA-ONE-LAYER-PLAN.md`). This file is committed BEFORE any generation of
-the experiment. Every setting below is frozen by that commit; a change needs a new protocol revision
+the experiment (revision r1), and revised (r2, section 12) before any held-out generation. Every setting below is frozen by that commit; a change needs a new protocol revision
 committed before the generation it affects, and every run records the commit it used (`meta.txt`).
 
 ## 1. Question and gate
@@ -90,7 +90,7 @@ arm's from the hex reader or the decoder (a class name and its meaning), the `st
 
 ## 6. Generation procedure (`tools/exp445/run.sh`)
 
-1. System message: `arms/common.md` + the arm document (+ `SCHEMA.md` for `structured`). User message:
+1. System message: `arms/common.md` + the arm document (+ `SCHEMA.md` for `structured`). Every request also carries the configuration's frozen request extra (section 9). User message:
    `Write the function described below.`, the requirement's `entry`, `params`, `ret` lines, the task
    prompt. Prompts are written to `prompts/<arm>.system.txt` and their sha256 to `meta.txt`.
 2. One POST to `<base-url>/chat/completions` (OpenAI-compatible, `stream: false`).
@@ -116,8 +116,9 @@ refuses otherwise); finished generations are never redone.
 
 - Fixed sampling, identical in every arm: `temperature=0.7`, `top_p=0.8`,
   `seed = 445000 + 1000 x attempt + task index` (task index = 1-based position in the sorted task list; the same seed for the three arms of one task and
-  attempt), `timeout_s=900` per request. Whether the served engine honours `seed` and `top_p` is
-  UNVERIFIED; the values are sent and logged either way.
+  attempt), `timeout_s=900` per request. `seed` is honoured by config B's server (verified, section 9) and
+  UNVERIFIED for config A; whether `top_p` is honoured is UNVERIFIED for both. The values are sent
+  and logged either way.
 - **Cost** per configuration x arm: completion tokens (total and mean per generation, both rounds),
   prompt tokens per generation, wall seconds (sum of request times). The **hex penalty** is reported
   as the ratio of mean completion tokens per generation, `bytes` / `text` and `structured` / `text`
@@ -130,31 +131,107 @@ refuses otherwise); finished generations are never redone.
 - **Structured gate** (each configuration): PASS when structured attempt-1 success is at least
   48/60 (80%) AND text attempt-1 success minus structured attempt-1 success is at most 10 percentage
   points. The experiment's gate is PASS when it passes in both configurations.
-- **Bytes rule:** bytes "wins" over structured only if bytes attempt-1 success is at least
-  structured's minus 5 points (3 of 60 tasks: equal success) AND bytes mean completion tokens per
-  generation are lower than structured's (lower cost). Otherwise structured is the production path.
+- **Bytes rule** (orchestrator decision, r2): bytes "wins" over structured only if, in BOTH
+  configurations, bytes attempt-1 successes are at least structured attempt-1 successes (equal
+  success: no tolerance) AND bytes mean completion tokens per generation are lower than
+  structured's (lower cost). Otherwise structured is the production path.
 - **Otherwise:** improve the builders (`omega_emit`, readers, arm documents) and repeat the
   experiment once, under a revision of this protocol committed before the repeat. Improvements use
   only aggregate results and refusal classes; no held-out task content is opened by a builder.
 - Text is the research control only; it never becomes the production source.
 
-## 9. Configurations and scale
+## 9. Configurations (FROZEN before any held-out generation) and scale
 
-- **Config A:** `qwen3-30b-a3b-instruct-2507`, local server `http://127.0.0.1:18091/v1`.
-- **Config B:** a second free or local model, named (model id and endpoint) in a revision of this file
-  committed before its first generation. Paid models need Drake's approval with an estimated cost.
+Both configurations are named here and in `tools/exp445/PARAMS` (`config.<X>.model`, `.base_url`,
+`.extra`). `run.sh` refuses any configuration not named in PARAMS; `score.sh` refuses any run whose
+model id, endpoint or request extra differs from the frozen values. No held-out generation may start
+before this revision is committed. Paid models need Drake's approval with an estimated cost.
+
+| | Config A | Config B |
+|---|---|---|
+| model | Qwen3-30B-A3B-Instruct-2507, FP8 | Qwen3-8B, bf16 |
+| weights | `~/models/qwen3-30b-a3b-instruct-2507-fp8` | `~/models/qwen3-8b` |
+| server | Omega's own `aien-serve-http` (`~/handoffs/rc3-bin-0826a25`, sha256 `c83fef926696562f63975082e5360818feb8acfe6df92353cb32c9d1ecdd4bde`), `--engine omega --spec on` | MAX 26.5.0, `max serve --model /home/drakestapleton/models/qwen3-8b --port 18097 --served-model-name qwen3-8b` |
+| endpoint | `http://127.0.0.1:18091/v1` | `http://127.0.0.1:18097/v1` |
+| model id | `qwen3-30b-a3b-instruct-2507` | `qwen3-8b` |
+| request extra | none (`{}`) | `{"chat_template_kwargs":{"enable_thinking":false}}` |
+| seed honoured | UNVERIFIED | VERIFIED by the orchestrator's probe on MAX: the same seed gave byte-identical answers twice at temperature 0.7 / top_p 0.8, a different seed a different answer |
+
+The request extra is merged into every request of that configuration (so it is in the hashed
+request files) and recorded in `meta.txt`. Without it Qwen3-8B writes a thinking block first (about
+600 tokens before the answer in the orchestrator's probe); with it the model answers directly, as
+config A's non-thinking instruct model does.
+
+Weight files, sha256 (computed 2026-10-14):
+
+```
+002ebe91531ec67011b3d0c923234ef708c7da7d3b246045c4475d90b3d94628  qwen3-30b-a3b-instruct-2507-fp8/config.json
+270f54aead2ae634567310218340069621fd8dfa2ad80001b69888ea5cc03477  qwen3-30b-a3b-instruct-2507-fp8/model.safetensors.index.json
+fed0a80c29eac54690eb6a39499c80aae9df06d04189479bb74b649411a9b419  qwen3-30b-a3b-instruct-2507-fp8/model-00001-of-00004.safetensors
+c72b1debd3bc4e55e1c6db6919e82d22de2c9d5cbd6d46f89cb1ba51b05bdc90  qwen3-30b-a3b-instruct-2507-fp8/model-00002-of-00004.safetensors
+84a55173edab143768a98307114b71dc51245124f116a893f310141d43bc4302  qwen3-30b-a3b-instruct-2507-fp8/model-00003-of-00004.safetensors
+169d89f49b646a0a8329d9a2570650f5f5a0eb78740cb1952b76caab2f21c09e  qwen3-30b-a3b-instruct-2507-fp8/model-00004-of-00004.safetensors
+aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4  qwen3-30b-a3b-instruct-2507-fp8/tokenizer.json
+a62ff0a2472a0fa1b8eaabcb57c59b58afa42a22831dc141400b6e0cf2b65ce3  qwen3-30b-a3b-instruct-2507-fp8/tokenizer_config.json
+19d306dd769db12a9d710b44cf7f83b635efbe5166b84fb4358a08fb7d88bb53  qwen3-30b-a3b-instruct-2507-fp8/generation_config.json
+f7c4eadfbbf522470667b797a3c89be2524832d2d599797248dc304fff447c30  qwen3-8b/config.json
+f9fdbcb91c23971c13ec5d5f2573d2349e8f61f2f049371ec699281748fdb1bc  qwen3-8b/model.safetensors.index.json
+31d6a825ae35f11fb85b195b4c42c146c051e446433125a215336abdf95cbf5f  qwen3-8b/model-00001-of-00005.safetensors
+5991236cea6fe21f3d43cab0f0e84448734fbbe0789816202989f2ddc9d18282  qwen3-8b/model-00002-of-00005.safetensors
+c5185c4794be2d8a9784d5753c9922db38df478ce11f9ed0b415b7304d896836  qwen3-8b/model-00003-of-00005.safetensors
+b5ee7de71fbf17db3d5704e0c8f2bc7d005ca9e1d7ca2aeb19827b0cfcaa917a  qwen3-8b/model-00004-of-00005.safetensors
+20c2d6366ab85c90786ccdd829cd2b9e7d30ef3b2ebbb998280e7e4014b542ff  qwen3-8b/model-00005-of-00005.safetensors
+aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4  qwen3-8b/tokenizer.json
+d5d09f07b48c3086c508b30d1c9114bd1189145b74e982a265350c923acd8101  qwen3-8b/tokenizer_config.json
+2325da0f15bb848e018c5ae071b7943332e9f871d6b60e2ed22ca97d4cb993d2  qwen3-8b/generation_config.json
+```
+
+The operator re-checks these hashes (`cd ~/models && sha256sum -c`) before each configuration's
+held-out run and records the result with the run. The weight hashes and server identity are not
+checked by `run.sh` itself (it only sees the endpoint); that is the operator's step.
+
 - Scale: 60 tasks x 3 arms x 3 attempts x 2 configurations = 1080 generations (plus repair rounds).
-- Set ids: `<config>-<arm>-<attempt>`, e.g. `a-structured-1`. Scoring: `tools/exp445/score.sh
-  <tasks.tar> <TASKS.sha256> <run dirs...>` on a clean tree.
+- Set ids: `<config>-<arm>-<attempt>`, e.g. `a-structured-1`.
 
-## 10. Commands
+## 10. Validity of a run (checked by `score.sh` before any statistic)
+
+`score.sh` prints no success table and exits non-zero (RUN INVALID) unless all of these hold:
+
+- every run: `protocol=PARAMS` (no command-line override), `params_sha256` equal to the PARAMS in
+  force, the configuration named in PARAMS with its frozen model id, endpoint and request extra, arm
+  prompts equal to what the current arm documents give, the public view of the scored tarball, a
+  clean generation commit whose `tools/`, `tests/one_layer/` and `docs/one_layer/` equal the
+  scoring commit's;
+- every run's `SHA256SUMS` verifies and lists exactly its saved requests, responses and prompts;
+- every generation's candidate, re-derived from its hashed final response with the same reader
+  (`tools/exp445/reader.sh`), matches `log.tsv` and the file in `cands/`;
+- the matrix is complete: every task of the tarball x every arm x attempts 1..3 x every scored
+  configuration, exactly once (held-out tarball: exactly 60 tasks);
+- the harness run (`ola.sh experiment`) ends `RUN VALID`.
+
+The gate (section 8) is evaluated only when both configurations are scored together.
+
+## 11. Commands
 
 ```
 make omega-emit build/compiler/oscc
 tests/one_layer/acceptance/ola.sh tasks-check <tasks.tar> <TASKS.sha256>
 tests/one_layer/acceptance/ola.sh tasks-public <tasks.tar> <TASKS.sha256> <pub>
-tools/exp445/run.sh --base-url URL --model NAME --config A --tasks <pub> --out evidence/ONE-LAYER-2/generations/<run>
-tools/exp445/score.sh <tasks.tar> <TASKS.sha256> evidence/ONE-LAYER-2/generations/<run> [...]
+tools/exp445/run.sh --config A --tasks <pub> --out evidence/ONE-LAYER-2/generations/<run-a>
+tools/exp445/run.sh --config B --tasks <pub> --out evidence/ONE-LAYER-2/generations/<run-b>
+tools/exp445/score.sh <tasks.tar> <TASKS.sha256> evidence/ONE-LAYER-2/generations/<run-a> evidence/ONE-LAYER-2/generations/<run-b>
 ```
 
-Dry-run tests of the driver (fake local endpoint, no model): `make test-exp445`.
+Dry-run tests of the driver and the validity check (fake local endpoint, no model): `make test-exp445`.
+
+## 12. Revisions
+
+- **r1** (commit d23d9c3c): first registration.
+- **r2** (this revision, before any held-out generation), after the independent review of PR #452:
+  both configurations frozen (section 9) with the per-configuration request extra; the bytes rule
+  set by the orchestrator (section 8: at least as many successes as structured, no tolerance, and
+  fewer tokens, in both configurations); the validity check (section 10). `omega_emit` now accepts
+  moves between array registers that the decoder accepts (`mov` into `own:`, `mut:` or `shared:`,
+  as for call arguments), so the `mov` row of `tools/omega_emit/SCHEMA.md`, which is part of the
+  structured arm's system prompt, changed; the structured prompt's sha256 changes with it. The
+  config A dev smoke of r1 used the old prompt and is not comparable; no held-out generation used it.
