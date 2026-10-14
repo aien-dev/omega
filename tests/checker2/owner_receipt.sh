@@ -41,6 +41,7 @@ head -c 352 "$F/a01.owner-draft.rcpt" >"$W/head.draft"
 cmp -s "$W/head.signed" "$W/head.draft" || bad "signed receipt differs from the draft in the signed bytes"
 tail -c 64 "$F/a01.owner.rcpt" | cmp -s - "$F/a01.owner.sig" || bad "signed receipt does not carry the committed signature"
 # attach again from the committed draft and signature: verifies against the compiled-in owner root
+mkdir -p "$W/store"
 "$C2" receipt attach "$F/a01.owner-draft.rcpt" "$F/a01.owner.sig" --out-dir "$W/store" >"$W/attach.out" || bad "attach refuses the committed signature"
 cmp -s "$(sed -n 's/^receipt=//p' "$W/attach.out" | cut -d' ' -f1)" "$F/a01.owner.rcpt" || bad "attach does not rebuild the committed receipt"
 
@@ -56,7 +57,7 @@ expect() {
     got=$(v "$@")
     if [ "$got" = "receipt=$want" ]; then ctl=$((ctl + 1)); else bad "control $n: want $want, got $got"; fi
 }
-flip() { cp "$F/a01.owner.rcpt" "$2"; printf '\377' | dd of="$2" bs=1 seek="$1" conv=notrunc status=none; }
+flip() { cat "$F/a01.owner.rcpt" >"$2"; printf '\377' | dd of="$2" bs=1 seek="$1" conv=notrunc status=none; }
 flip 400 "$W/sig.flip"; expect signature-byte BAD_SIGNATURE "$W/sig.flip" "" "" "" --production
 flip 48 "$W/prog.flip"; expect program-hash BAD_SIGNATURE "$W/prog.flip" "" "" "" --production
 expect wrong-target WRONG_TARGET "$F/a01.owner.rcpt" "" aarch64-linux-host "" --production
