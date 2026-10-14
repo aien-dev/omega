@@ -579,3 +579,20 @@ instrumented). No efficiency claim.
 **AIEN telemetry workload (task d).** Run only if real telemetry with a
 time-ordered train/validation/test split exists in the repository or on
 this machine; otherwise NOT_RUN with the reason.
+
+### 10.1 Amendment after the first NARMA benchmark run (post hoc, labeled)
+
+The declared RC-connected NARMA network (the 50-node chain, 49 driven nodes
+at up to 0.1 nA each) is refused by the simulator in every seed, training
+and test alike: a node voltage leaves the model's declared range
+(|V| <= 1 V, `OMEGA_RES_V_LIMIT`) after about 3.5 ms (step 347 to 359). The
+currents of 49 nodes add up along the chain toward its single ground. That
+refusal stands as the declared result and is reported as such.
+
+Added after seeing it, and marked post hoc wherever it is reported: the
+same NARMA protocol on the 5-node reference chain (`Length5.mat`, the G2-N1
+network: 4 driven nodes, ground node 5, 13 features) and its disconnected
+ablation built the same way (4 driven nodes and 3 grounded droplets). Its
+masks are the first four of the 49 drawn for that seed. Nothing else
+changes, and no network size or current was searched. The 50-node runs are
+kept in the output.
