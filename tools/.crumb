@@ -49,8 +49,8 @@
           "purpose": "Directory tools/estimation. Purpose not yet described by a human."
         },
         {
-          "digest": "83017928ceafc8c795955908a7ddab9e73969bf443c1443ca7ea0d86444ce853",
-          "last_commit": "ac35a166",
+          "digest": "b91acbb0b29060651bc17dc79406adeb9376748f4d4a3005175cd307aa52b9c8",
+          "last_commit": "48c6ed71",
           "name": "reservoir",
           "purpose": "Gate 2 tooling for the reservoir (omega#440): in-house zlib inflate and MAT v5 reader, the archi"
         },
@@ -61,15 +61,15 @@
           "purpose": "Directory tools/turing_verify_indep. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:abf1168122db3d47dad68f59158ebd639aa483409dad91de953155f50d11fc8e",
-      "compiled_at": "2026-10-14T16:14:21Z",
+      "children_root": "sha256:e1f826c2beb8604bb0dcba49575f7c6b48cf5488c40b616b212fda2ed70c62ee",
+      "compiled_at": "2026-10-14T17:03:15Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:f53e24f1e8efe037a10fce04f8b0261efcd9f1cd93c59f4b84159830b5725d42",
+      "digest": "sha256:830418862bdcd02444691e0b076e753a6eea237d4a018ce1704b58fdfa1da16d",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 149,
-      "generated_at_commit": "1978e2b4aa4c1e3639e11c6950ba7e509fad9924",
-      "source_tree": "sha256:4dcdf036578e133bb1f17fc7967f5d9aee54d0e887f61ef7104b9e5ac58a9796"
+      "generated_at_commit": "0f6d71513dfd29b85b22fe2ca15e4287991e7303",
+      "source_tree": "sha256:84179359bda279e6cd62a846a714c9b52f66482a1b9dfe1fc689786d49b8f283"
     },
     "owner_lane": "",
     "provenance": {

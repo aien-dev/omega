@@ -75,7 +75,7 @@
           "purpose": "DUAL (ARCH-0031) documents in omega: applicability experiment method and findings (APPLICABILITY"
         },
         {
-          "digest": "56a5a999ce726e90d89c1c88b9e20c81857c8e6ee82af8d651ac80ea70e2c46d",
+          "digest": "1c554227f29c8c6d4f81ca2a5f5380d3646c8c925f4ab0248df73f88138f5432",
           "last_commit": "38a6a569",
           "name": "estimation",
           "purpose": "Directory docs/estimation. Purpose not yet described by a human."
@@ -99,8 +99,8 @@
           "purpose": "Directory docs/polyglot. Purpose not yet described by a human."
         },
         {
-          "digest": "44d0b1daddff0c7a50f2538f76f30688733ba93eff7aa380c7dc6863d305ace7",
-          "last_commit": "ac35a166",
+          "digest": "46d3e2d59a468271e044ccd2398eb32345df6436c15eb6d8c703953c838023a9",
+          "last_commit": "0f6d7151",
           "name": "reservoir",
           "purpose": "Reservoir reference and contracts (omega#440): RESERVOIR_REFERENCE.md pins the authors' paper an"
         },
@@ -123,15 +123,15 @@
           "purpose": "Directory docs/turing. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:0d8cf44c9b89cfe40c6e552e602b9aabf10a7196a199d7dfd27af38e2b5bf944",
-      "compiled_at": "2026-10-14T16:14:56Z",
+      "children_root": "sha256:c709654f17c64bdb71b9a8c5354e71936fc18c7b78bfe1dc11fbeb0fe5c8d39e",
+      "compiled_at": "2026-10-14T17:03:15Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:0c9b353c06389a23e8b4b938d32c3b572b6a8f6f105cadb48fdc5cf78079341d",
+      "digest": "sha256:6f311448e42c0d38c5a49873b39ad36fc45c5767fb6df967b25da567c05196f5",
       "evidence_files": 34,
       "evidence_root": "sha256:589d8b3706e6d7a202ab20b278dac5fc5bafc973f1c2a867b2668aa7210b65cc",
       "files": 123,
-      "generated_at_commit": "1978e2b4aa4c1e3639e11c6950ba7e509fad9924",
-      "source_tree": "sha256:eabc24ac7f2008a3733dc67e4a454eb33d447b45b10768a3d1d8cf2fe26d00ea"
+      "generated_at_commit": "0f6d71513dfd29b85b22fe2ca15e4287991e7303",
+      "source_tree": "sha256:637aaa352dd331f567968c2c14f136e91ac1b7629e3725a1dbfc1bda13ea484e"
     },
     "owner_lane": "",
     "provenance": {

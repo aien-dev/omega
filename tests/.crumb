@@ -229,7 +229,7 @@
           "purpose": "Directory tests/program. Purpose not yet described by a human."
         },
         {
-          "digest": "ba0c09f67d12b5d7de906129bdbe2f6e0a228e1a34236ecc4b779c523cb2061e",
+          "digest": "f6d89b21e8eee52d45a45d38627562b70d91a3ff8153b5a3656257f1ae4af7e4",
           "last_commit": "6fdc4c33",
           "name": "r16_inventory",
           "purpose": "Directory tests/r16_inventory. Purpose not yet described by a human."
@@ -259,8 +259,8 @@
           "purpose": "Directory tests/relations. Purpose not yet described by a human."
         },
         {
-          "digest": "f4d940e357b707df0b3491677f4a6212c222b0396984c75272dd017e4d4ffd9e",
-          "last_commit": "ac35a166",
+          "digest": "f426ba3a440a584c47a9893318111d7cbefabeaf6cf659fc7126b685b5af2a3a",
+          "last_commit": "cc6db6cd",
           "name": "reservoir",
           "purpose": "Reservoir tests (omega#440): Gate 1 simulator and readout checks against an independent binary64"
         },
@@ -295,15 +295,15 @@
           "purpose": "Directory tests/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:e1fd934d01139bc867778fa464f54c64145dc9b74d9d9be71822cde6e94d35c5",
-      "compiled_at": "2026-10-14T16:14:21Z",
+      "children_root": "sha256:3eccb20f2e932e406198de3167a5742ad3c5887de29b4666b1b6a35af61aef02",
+      "compiled_at": "2026-10-14T17:03:15Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:8afc098062a898344ad6dfeb45ab0217ae98801b8df0c056395ff05fde92e425",
+      "digest": "sha256:a57254032270657f4fe2614524be016534bce0f1961466d9bcc32058980a6e9d",
       "evidence_files": 16,
       "evidence_root": "sha256:96d08097822ad95f4e562c19e0ba5df5a035774c48632f1832912c40a27bd27a",
       "files": 1036,
-      "generated_at_commit": "1978e2b4aa4c1e3639e11c6950ba7e509fad9924",
-      "source_tree": "sha256:0c75ae574e11753c5d1515aa43e5fef286a3d25149309c5174e05cb5706d0216"
+      "generated_at_commit": "0f6d71513dfd29b85b22fe2ca15e4287991e7303",
+      "source_tree": "sha256:7bc72f3cfc66aa4dcd54ce13b8e465fb3586c8b9399fb3befed1ba080e7c9a50"
     },
     "owner_lane": "",
     "provenance": {
