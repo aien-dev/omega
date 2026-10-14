@@ -11,6 +11,8 @@
 #   every proof with its final (empty clause) line removed;
 #   every proof whose final step has its hints removed;
 #   the abs8 proof replayed against the unguarded abs8 IR (a proof binds to one program).
+# Receipts (evidence class 2): issue checks the proofs; verify replays them and refuses missing,
+#   corrupted, substituted or misapplied proofs, and proofs offered for a class 1 receipt.
 # Replay: c2sat is run twice per program; the two proofs must be byte-identical.
 # Usage: lrat.sh <osc_emit_ir> <checker2> <c2sat> <work-dir> [timeout-seconds]
 set -u
@@ -56,6 +58,36 @@ if [ -f "$W/p01_abs8.lrat" ] && [ -f "$W/n01_abs8_unguarded.ir" ]; then
     "$C2" prove-check "$W/n01_abs8_unguarded.ir" abs8 "$W/p01_abs8.lrat" 2>&1 | grep -q '^lrat=REFUSED' && ctl=$((ctl + 1)) || bad "abs8 proof verified the unguarded program"
 else
     bad "cross-program control inputs missing"
+fi
+
+# receipts with LRAT evidence (class 2): proofs are checked at issue and replayed at verify
+R=$W/rcpt
+mkdir -p "$R/out" "$R/out1"
+printf 'exe\n' >"$R/exe"
+iss() { "$C2" receipt issue "$1" "$R/exe" --target lrat-gate --epoch 5 --expiry 9 --out-dir "$2" "$3" "$4" >/dev/null 2>&1; }
+want() { # want <expected receipt= line> <name> <verify args...>
+    w=$1 n=$2
+    shift 2
+    got=$("$C2" receipt verify "$@" 2>/dev/null | grep '^receipt=')
+    [ "$got" = "receipt=$w" ] && ctl=$((ctl + 1)) || bad "receipt $n: got '$got', want receipt=$w"
+}
+if iss "$W/p01_abs8.ir" "$R/out" --lrat "abs8=$W/p01_abs8.lrat"; then
+    rc2=$(ls "$R/out"/*.rcpt)
+    V="$rc2 $W/p01_abs8.ir $R/exe --target lrat-gate --epoch 6"
+    { cat "$W/p01_abs8.lrat"; echo "c same proof, different bytes"; } >"$W/p01_abs8.other"
+    want VALID class2-replayed $V --lrat "abs8=$W/p01_abs8.lrat"
+    want LRAT-PROOFS-REQUIRED class2-without-proofs $V
+    want LRAT-REPLAY-FAILED class2-bad-proof $V --lrat "abs8=$W/p01_abs8.cut"
+    want LRAT-REQUIREMENTS-MISMATCH class2-other-proof $V --lrat "abs8=$W/p01_abs8.other"
+    want PROGRAM_MISMATCH class2-wrong-program "$rc2" "$W/n01_abs8_unguarded.ir" "$R/exe" --target lrat-gate --epoch 6 --lrat "abs8=$W/p01_abs8.lrat"
+else
+    bad "receipt issue with a verified proof failed"
+fi
+iss "$W/n01_abs8_unguarded.ir" "$R/out" --lrat "abs8=$W/p01_abs8.lrat" && bad "receipt issued for a program its proof does not cover" || ctl=$((ctl + 1))
+if iss "$W/p02_avg_u8.ir" "$R/out1" --input "$R/exe"; then
+    want LRAT-NOT-CLAIMED class1-with-proof "$(ls "$R/out1"/*.rcpt)" "$W/p02_avg_u8.ir" "$R/exe" --target lrat-gate --epoch 6 --lrat "avg=$W/p02_avg_u8.lrat"
+else
+    bad "class 1 receipt issue failed"
 fi
 
 echo "lrat: verified=$verified expected-traps=$traps controls-refused=$ctl failures=$fail"

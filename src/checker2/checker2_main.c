@@ -6,14 +6,14 @@
  *   checker2 prove-check <unit.ir> <func> <proof>    rebuild that formula, check an LRAT proof
  *   checker2 receipt issue <unit.ir> <exe> --target T --epoch E --expiry X --out-dir D
  *                    [--firmware F.bin] [--requirements R] [--input I] [--producer P]
- *                    [--dep ID]... [--evidence 1]
+ *                    [--dep ID]... [--lrat FUNC=PROOF]...  (proofs checked, evidence class 2)
  *                                              check, sign with the TEST key, store by id
  *   checker2 receipt tbs <receipt> <out65>     write the 65-byte message an owner key signs
  *   checker2 receipt attach <receipt> <sig64> --out-dir D
  *                                              verify an OWNER signature, store by id
  *   checker2 receipt verify <receipt> <unit.ir> <exe> --target T --epoch E
  *                    [--production] [--floor N] [--firmware F.bin] [--revoked-id HEX]...
- *                    [--revoked-key HEX]...
+ *                    [--revoked-key HEX]... [--lrat FUNC=PROOF]...  (required for evidence class 2)
  *
  * Exit: 0 accept / done, 1 reject / refused, 2 usage or I/O error. */
 #include <errno.h>
@@ -192,6 +192,54 @@ static int opt_sha_file(int argc, char **argv, const char *name, uint8_t out[32]
     return s ? file_sha(s, out) : 0;
 }
 
+static int property_cnf(const char *ir, const char *func, C2Cnf *cnf, C2BlastInfo *bi, uint8_t ir_sha[32]);
+
+/* Every "--lrat FUNC=PROOF" pair: rebuild FUNC's NO-TRAP formula from the IR bytes and check the
+ * proof. The requirements object (spec section 10) is
+ *   "OMEGA-REQUIREMENTS-V1\n" then per pair, FUNC strictly ascending:
+ *   "no-trap-except-requires <FUNC> proof_sha256=<hex>\n"
+ * Returns 0 with *count pairs and req = SHA-256 of the object (object text in obj, may be NULL),
+ * 1 if a proof is refused or the order is wrong, 2 on usage or I/O error. */
+static int lrat_requirements(int argc, char **argv, const char *ir, uint8_t req[32], int *count, char *obj, size_t objcap)
+{
+    char text[8192], prev[256] = "";
+    size_t tn = (size_t)snprintf(text, sizeof text, "OMEGA-REQUIREMENTS-V1\n");
+    *count = 0;
+    for (int i = 0; i + 1 < argc; i++) {
+        if (strcmp(argv[i], "--lrat") != 0) continue;
+        const char *arg = argv[i + 1], *eq = strchr(arg, '=');
+        if (!eq || eq == arg || (size_t)(eq - arg) >= sizeof prev) { fprintf(stderr, "checker2: --lrat wants FUNC=PROOF\n"); return 2; }
+        char func[256];
+        memcpy(func, arg, (size_t)(eq - arg));
+        func[eq - arg] = 0;
+        if (*count && strcmp(prev, func) >= 0) { fprintf(stderr, "checker2: --lrat functions must be strictly ascending\n"); return 1; }
+        snprintf(prev, sizeof prev, "%s", func);
+        C2Cnf cnf;
+        C2BlastInfo bi;
+        uint8_t s[32], ps[32];
+        int rc = property_cnf(ir, func, &cnf, &bi, s);
+        if (rc) return rc;
+        size_t n;
+        uint8_t *p = slurp(eq + 1, &n);
+        if (!p) { c2_cnf_free(&cnf); return 2; }
+        sha256_hash(p, n, ps);
+        C2LratResult r;
+        int e = c2_lrat_check(&cnf, (const char *)p, n, &r);
+        free(p);
+        c2_cnf_free(&cnf);
+        if (e) { printf("lrat=REFUSED func=%s rule=%s line=%ld\n", func, r.rule, r.line); return 1; }
+        char h[65];
+        hex(ps, 32, h);
+        int k = snprintf(text + tn, sizeof text - tn, "%s %s proof_sha256=%s\n", C2_PROPERTY_NOTRAP, func, h);
+        if (k < 0 || (size_t)k >= sizeof text - tn) { fprintf(stderr, "checker2: too many --lrat\n"); return 2; }
+        tn += (size_t)k;
+        (*count)++;
+    }
+    sha256_hash((const uint8_t *)text, tn, req);
+    if (obj) snprintf(obj, objcap, "%s", text);
+    return 0;
+}
+
 static int receipt_issue(int argc, char **argv)
 {
     if (argc < 2) return 2;
@@ -211,6 +259,17 @@ static int receipt_issue(int argc, char **argv)
     if (opt_sha_file(argc, argv, "--firmware", r.firmware) || opt_sha_file(argc, argv, "--requirements", r.requirements) ||
         opt_sha_file(argc, argv, "--input", r.input) || opt_sha_file(argc, argv, "--producer", r.producer_checker))
         return 2;
+    if (opt(argc, argv, "--lrat")) {
+        if (opt(argc, argv, "--requirements")) { fprintf(stderr, "checker2: --lrat and --requirements are exclusive\n"); return 2; }
+        int nproofs;
+        char obj[8192];
+        rc = lrat_requirements(argc, argv, ir, r.requirements, &nproofs, obj, sizeof obj);
+        if (rc) { fprintf(stderr, "checker2: refusing to issue: a proof did not check\n"); return rc; }
+        r.evidence_class = C2R_EV_IR_CHECKED_LRAT;
+        char h[65];
+        hex(r.requirements, 32, h);
+        printf("requirements_sha256=%s proofs=%d\n%s", h, nproofs, obj);
+    }
     uint8_t deps[64][32];
     unsigned nd = 0;
     for (int i = 0; i + 1 < argc; i++)
@@ -311,10 +370,23 @@ static int receipt_verify(int argc, char **argv)
     size_t n;
     uint8_t *b = slurp(argv[0], &n);
     if (!b) return 2;
-    int e = c2r_verify(b, n, &p, &ex, NULL);
+    C2Receipt got;
+    int e = c2r_verify(b, n, &p, &ex, &got);
     free(b);
-    printf("receipt=%s\n", e ? c2r_reason(e) : "VALID");
-    return e ? 1 : 0;
+    if (e) { printf("receipt=%s\n", c2r_reason(e)); return 1; }
+    /* LRAT evidence is replayed, never taken on trust: the proofs must be given, must check
+     * against these IR bytes, and must hash to the receipt's requirements digest. */
+    if (got.evidence_class == C2R_EV_IR_CHECKED_LRAT || opt(argc, argv, "--lrat")) {
+        uint8_t req[32];
+        int nproofs;
+        rc = lrat_requirements(argc, argv, argv[1], req, &nproofs, NULL, 0);
+        if (rc) { printf("receipt=LRAT-REPLAY-FAILED\n"); return rc; }
+        if (got.evidence_class != C2R_EV_IR_CHECKED_LRAT) { printf("receipt=LRAT-NOT-CLAIMED\n"); return 1; }
+        if (nproofs == 0) { printf("receipt=LRAT-PROOFS-REQUIRED\n"); return 1; }
+        if (memcmp(req, got.requirements, 32)) { printf("receipt=LRAT-REQUIREMENTS-MISMATCH\n"); return 1; }
+    }
+    printf("receipt=VALID\n");
+    return 0;
 }
 
 /* decode + accept the unit, locate the function, build its NO-TRAP formula (never read from disk) */
