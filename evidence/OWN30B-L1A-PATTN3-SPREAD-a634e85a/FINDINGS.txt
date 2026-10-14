@@ -1,0 +1,17 @@
+2048-token timing spread study (W-L1A, 2026-10-13). Tags: OBSERVED = in these logs; INFERRED = reasoning; UNKNOWN = not measured.
+DOCS READ: omega src/omega_gpu_session.h:192-195 "elapsed_ns (submit to second marker)"; DOCS SILENT on GB10 idle-clock ramp.
+- [OBSERVED clocks.csv] nvidia-smi SM clock idles at 208 MHz (P8) and climbs in ~0.5 s steps to 2496 MHz during the 300-rep run;
+  throttle reasons 0 throughout.
+- [OBSERVED sustained.log] device-entry reps at 2048 tokens stay 4.18-4.53 ms (30-rep means) while the reported clock goes
+  from ~700 to 2496 MHz: the kernel time does not follow the SM clock. Clock ramp is NOT the cause (hypothesis falsified).
+- [INFERRED, arithmetic] the ATTEND launch at pos0 0, m 2048, W 8 reads 8320 key blocks per KV head x 4 heads x 16 KB =
+  545 MB of K/V from the GPU-uncached cache (no L2 reuse), i.e. ~136 GB/s at 4.0 ms, about 2/3 of the ~200 GB/s uncached
+  read bandwidth measured by T3b (OWN30B-T3-TC-PEAK-BW). The kernel is bound by uncached memory reads, not by math.
+- [OBSERVED cut-3 receipts] the host entry drifts (30-rep means 3.96 -> 5.68 ms) while the device entry stays flat; the host
+  entry writes 37 MB of staging per 1024-token pass through uncached memory between launches.
+- [INFERRED, medium] the spread is memory-bandwidth contention on the shared CPU/GPU memory: host-side traffic (our own
+  staging, and other processes, not measured) slows a launch that is already memory bound. The cut-2 fused path read keys
+  64 tokens at a time with 8x4 CTAs and re-staged every chunk, so it was both slower and more exposed.
+- [UNKNOWN] what other processes did with memory during the cut-2 run (no system memory camera then).
+LIMITS: one machine, one evening; nvidia-smi clock is a 0.5 s-granular report, not the clock during a given launch.
+NEXT: K/V for ATTEND in GPU-cached memory (L2 reuse) is the lever: it needs the cached-buffer platform change of own30b/tc-prefill.
