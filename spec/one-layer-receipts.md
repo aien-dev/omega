@@ -77,7 +77,10 @@ characters of SHA-256 over the concatenation of the checker2 sources in the fixe
 `C2_ID_SRCS` in `mk/checker2.mk`). The sources include the IR decoder, the acceptance rules, the
 LRAT checker, the bit-blaster, the receipt code and the command line; the untrusted solver
 (`src/checker2/untrusted/`) is deliberately outside. `checker2 version` prints the version,
-`sources_sha256` and `checker_id`. A changed checker gives a new identity.
+`sources_sha256` and `checker_id`. A changed checker gives a new identity. The verifier holds a list of
+accepted checker identities in its policy (`C2ReceiptPolicy.checkers`); the list is required and an
+empty list refuses every receipt. `checker2 receipt verify` accepts its own identity plus any given
+with `--accept-checker`.
 
 ## 6. Verification order and named reasons
 
@@ -96,8 +99,14 @@ The verifier stops at the first failure and returns its reason. Codes are stable
 5. Freshness (epochs, no clock): policy epoch below the verifier's floor is a replay of a
    superseded receipt, `STALE_EPOCH` (13); current epoch above expiry `EXPIRED` (14); current
    epoch below the policy epoch `NOT_YET_VALID` (15). The window is inclusive at both ends.
-6. Binding to what is being admitted: `WRONG_TARGET` (16), `WRONG_FIRMWARE` (17),
-   `PROGRAM_MISMATCH` (18), `EXECUTABLE_MISMATCH` (19).
+6. Checker identity: the receipt's `checker` must be in the verifier's list of accepted checker
+   identities (section 5), else `UNTRUSTED_CHECKER` (22). The list is part of the policy and is
+   checked with or without expectations.
+7. Binding to what is being admitted: `WRONG_TARGET` (16), `WRONG_FIRMWARE` (17),
+   `PROGRAM_MISMATCH` (18), `EXECUTABLE_MISMATCH` (19), `WRONG_PRODUCER` (23, producer checker
+   identity), `DEPENDENCIES_MISMATCH` (24, dependency digest). The dependency digest binds the
+   dependency receipt ids only: v1 does not fetch, resolve or verify the dependency receipts
+   themselves (section 11).
 
 `ARGUMENT` (20) and `KEY_CLASS` (21, signing refused) are tool and signing errors.
 
@@ -120,7 +129,8 @@ never an overwrite.
                            [--input I] [--producer P] [--dep ID ...]
     checker2 receipt tbs <receipt> <out65>
     checker2 receipt attach <receipt> <sig64> --out-dir D
-    checker2 receipt verify <receipt> <unit.ir> <exe> --target T --epoch E [--allow-test-key | --production]
+    checker2 receipt verify <receipt> <unit.ir> <exe> --target T --epoch E [--allow-test-key 
+                           [--producer P] [--dep ID ...] [--accept-checker ID ...]| --production]
                            [--floor N] [--firmware F] [--revoked-id ID ...] [--revoked-key FP ...]
                            [--lrat FUNC=PROOF ...]
     checker2 prove-cnf <unit.ir> <func> <out.cnf>
@@ -130,7 +140,9 @@ Exit 0 accept or done, 1 reject or refused, 2 usage or I/O error. `issue` refuse
 checker2 rejects. `verify` applies the production policy by default (fail closed): a TEST-class
 receipt is refused as `TEST_SIGNER_IN_PRODUCTION` unless `--allow-test-key` is given, which only
 qualification and test runs may do; `--production` states the default, and giving both is a usage
-error. `--dep` ids must be strictly ascending (their digest is order-sensitive).
+error. `--dep` ids must be strictly ascending (their digest is order-sensitive). `verify` always
+compares the producer and dependency digests: no `--producer` means an all-zero producer and no
+`--dep` means an empty dependency list, exactly what `issue` writes without them.
 
 Owner signing, without Omega ever holding the private key: `issue --owner-draft PATH` writes an
 OWNER-class receipt with the owner root fingerprint and an all-zero signature; `tbs` writes the
@@ -189,6 +201,9 @@ class 1 receipt). Proofs are deterministic: the solver writes byte-identical pro
   case needs one receipt signed on Drake's YubiKey (owner presence, decision D3). UNVERIFIED
   until then.
 - The admission side (aienos#383) is separate work and must verify exactly these bytes.
+- Dependency receipts are not resolved in v1: the `dependencies` digest binds their ids, and a
+  verifier can require the expected ids (`DEPENDENCIES_MISMATCH`), but no verifier fetches the
+  dependency receipts or checks their validity, class or freshness. UNVERIFIED for any chain.
 - `src/omega_vc_bridge.h` still self-mints HOST_TEST receipts. That route admits OmegaProgram
   programs (`omega_program_ir.h`), not OSC IR, and records an aien-proof EvidenceReceiptV1
   (`src/omega_receipt.h`, contract owned by aien-protocols). Replacing it needs checker2 to judge
@@ -202,7 +217,8 @@ class 1 receipt). Proofs are deterministic: the solver writes byte-identical pro
 `make test-checker2` (CI job `checker2` in `.github/workflows/host-suites.yml`):
 
 - `test_c2_receipt` (plain and ASan/UBSan): signing, every named refusal, tampered bytes, wrong
-  key, TEST key in production mode, the real owner ceremony signature;
+  key, TEST key in production mode, checker identity not in the policy list (and an empty list),
+  wrong producer and dependency digests, the real owner ceremony signature;
 - `differential.sh`: every OSC unit in the repo plus 48 generated units, oscc run as a black box;
   both must accept the same 107 units with identical bytes, and the known-bad units must be
   refused (138 by the front end);
@@ -211,10 +227,12 @@ class 1 receipt). Proofs are deterministic: the solver writes byte-identical pro
 - `test_c2_lrat` (plain and ASan/UBSan): hand-written LRAT cases, each refusal by its exact rule
   (including a huge clause id refused as `LRAT-ID-RANGE` without a large allocation), 20000
   corrupted proofs never verify a satisfiable formula;
-- `lrat.sh`: 20 bounded programs proved and replayed, 9 trap programs found to trap, 51 corrupted,
-  substituted or misapplied proofs and receipts refused (including a TEST receipt under the default
-  production policy);
+- `lrat.sh`: 20 bounded programs proved and replayed, 9 trap programs found to trap, 56 receipt and
+  proof controls (corrupted, substituted or misapplied proofs and receipts refused, including a
+  TEST receipt under the default production policy, a receipt from another checker identity unless
+  accepted with `--accept-checker`, and a wrong producer or dependency digest);
 - `test_c2_blast`: non-scalar functions refused; every gate program evaluated input by input
   without a solver (exhaustive to 16 argument bits), agreeing with its expectation;
 - `mutants.sh`: each line tagged `GUARD:<name>` in the receipt code, decoder, acceptance rules,
-  LRAT checker and bit-blaster is removed in turn; a test must fail every time (100 of 100).
+  LRAT checker and bit-blaster is removed in turn; a test must fail every time (104 of 104); the script also refuses a tag count that differs
+  from the mutant count.

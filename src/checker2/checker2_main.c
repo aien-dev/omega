@@ -14,6 +14,9 @@
  *   checker2 receipt verify <receipt> <unit.ir> <exe> --target T --epoch E
  *                    [--allow-test-key | --production] [--floor N] [--firmware F.bin] [--revoked-id HEX]...
  *                    [--revoked-key HEX]... [--lrat FUNC=PROOF]...  (required for evidence class 2)
+ *                    [--producer P] [--dep ID]... [--accept-checker ID]...
+ *                    the receipt's checker must be this build or an --accept-checker identity;
+ *                    producer and dependency digests must equal the given ones (none = none)
  *                    production policy by default: a TEST receipt is refused unless
  *                    --allow-test-key is given (qualification and test runs only)
  *
@@ -345,12 +348,21 @@ static int receipt_verify(int argc, char **argv)
     if (argc < 3) return 2;
     const char *target = opt(argc, argv, "--target");
     if (!target) { fprintf(stderr, "checker2: --target is required\n"); return 2; }
-    uint8_t tgt[32], fw[32], prog[32], exe[32];
+    uint8_t tgt[32], fw[32], prog[32], exe[32], prod[32], depd[32];
     c2r_target_id(target, tgt);
     int rc = judge(argv[1], prog, 1);
     if (rc == 0 && file_sha(argv[2], exe)) rc = 2;
     if (rc == 0 && opt_sha_file(argc, argv, "--firmware", fw)) rc = 2;
-    C2ReceiptExpect ex = {.target = tgt, .firmware = fw, .program = prog, .executable = exe};
+    /* producer and dependencies are always compared, like firmware: absent options mean "none"
+     * (all-zero producer, empty dependency list), exactly what `issue` writes without them */
+    if (rc == 0 && opt_sha_file(argc, argv, "--producer", prod)) rc = 2;
+    static uint8_t deps[64][32];
+    unsigned nd = 0;
+    for (int i = 0; rc == 0 && i + 1 < argc; i++)
+        if (strcmp(argv[i], "--dep") == 0) rc = nd < 64 && !unhex32(argv[i + 1], deps[nd]) ? (nd++, 0) : 2;
+    if (rc == 0 && c2r_deps_digest((const uint8_t (*)[32])deps, nd, depd)) { fprintf(stderr, "checker2: --dep ids must be strictly ascending\n"); rc = 2; }
+    C2ReceiptExpect ex = {.target = tgt, .firmware = fw, .program = prog, .executable = exe,
+                          .producer_checker = prod, .dependencies = depd};
     C2ReceiptPolicy p;
     memset(&p, 0, sizeof p);
     /* production is the default (fail closed): TEST receipts are refused unless the caller asks
@@ -365,6 +377,14 @@ static int receipt_verify(int argc, char **argv)
     if (!p.production) { p.test_anchors = &c2r_test_pk; p.n_test = 1; }
     p.owner_anchors = &c2r_owner_root_pk;
     p.n_owner = 1;
+    /* checker identities: this build's own, plus any given with --accept-checker */
+    static uint8_t checkers[16][32];
+    unsigned nchk = 1;
+    checker_id(checkers[0]);
+    for (int i = 0; rc == 0 && i + 1 < argc; i++)
+        if (strcmp(argv[i], "--accept-checker") == 0) rc = nchk < 16 && !unhex32(argv[i + 1], checkers[nchk]) ? (nchk++, 0) : 2;
+    p.checkers = (const uint8_t (*)[32])checkers;
+    p.n_checkers = nchk;
     static uint8_t ids[16][32], keys[16][32];
     unsigned nid = 0, nkey = 0;
     for (int i = 0; rc == 0 && i + 1 < argc; i++) {

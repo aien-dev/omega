@@ -70,6 +70,7 @@ static C2Receipt base(void)
 }
 
 static uint8_t seed[32];
+static uint8_t checker_ok[32]; /* fill(.., "checker2"): the identity base() puts in a receipt */
 static const uint8_t (*test_anchor)[32] = &c2r_test_pk;
 static const uint8_t (*owner_anchor)[32] = &c2r_owner_root_pk;
 
@@ -80,6 +81,7 @@ static C2ReceiptPolicy qual(void)
     p.production = 0;
     p.test_anchors = test_anchor; p.n_test = 1;
     p.owner_anchors = owner_anchor; p.n_owner = 1;
+    p.checkers = (const uint8_t (*)[32])checker_ok; p.n_checkers = 1;
     p.epoch_floor = 5;
     p.current_epoch = 7;
     return p;
@@ -87,7 +89,7 @@ static C2ReceiptPolicy qual(void)
 
 static C2ReceiptExpect expect_of(const C2Receipt *r)
 {
-    C2ReceiptExpect e = {r->target, r->firmware, r->program, r->executable};
+    C2ReceiptExpect e = {r->target, r->firmware, r->program, r->executable, r->producer_checker, r->dependencies};
     return e;
 }
 
@@ -333,6 +335,43 @@ static void test_binding(void)
     EXPECT(c2r_verify(a, C2R_SIZE, &p, &e, NULL), C2R_E_EXECUTABLE_MISMATCH, "executable mismatch");
 }
 
+/* Checker identity is a policy anchor list: a receipt judged by any other checker build is refused,
+ * an empty list refuses everything (fail closed). Producer and dependency digests are bound like
+ * the other fields. */
+static void test_checker_identity(void)
+{
+    C2Receipt r = base(), o = base();
+    uint8_t a[C2R_SIZE], b[C2R_SIZE], x[32], two[2][32];
+    fill(o.checker, "checker2 built from other sources");
+    c2r_sign_test(&r, seed, a);
+    c2r_sign_test(&o, seed, b);
+    C2ReceiptPolicy p = qual();
+    C2ReceiptExpect e = expect_of(&r);
+    EXPECT(c2r_verify(a, C2R_SIZE, &p, &e, NULL), C2R_OK, "control: receipt from the anchored checker");
+    EXPECT(c2r_verify(b, C2R_SIZE, &p, &e, NULL), C2R_E_UNTRUSTED_CHECKER, "receipt from a different checker identity");
+    EXPECT(c2r_verify(b, C2R_SIZE, &p, NULL, NULL), C2R_E_UNTRUSTED_CHECKER, "checker identity checked without expectations");
+    memcpy(two[0], checker_ok, 32);
+    memcpy(two[1], o.checker, 32);
+    p.checkers = (const uint8_t (*)[32])two;
+    p.n_checkers = 2;
+    EXPECT(c2r_verify(b, C2R_SIZE, &p, &e, NULL), C2R_OK, "control: second identity anchored");
+    p.n_checkers = 0;
+    EXPECT(c2r_verify(a, C2R_SIZE, &p, &e, NULL), C2R_E_UNTRUSTED_CHECKER, "empty checker list refuses everything");
+    p.checkers = NULL;
+    p.n_checkers = 1;
+    EXPECT(c2r_verify(a, C2R_SIZE, &p, &e, NULL), C2R_E_UNTRUSTED_CHECKER, "NULL checker list refuses everything");
+
+    p = qual();
+    fill(x, "another oscc binary");
+    e = expect_of(&r); e.producer_checker = x;
+    EXPECT(c2r_verify(a, C2R_SIZE, &p, &e, NULL), C2R_E_WRONG_PRODUCER, "wrong producer checker");
+    uint8_t ids[1][32];
+    fill(ids[0], "some dependency receipt");
+    c2r_deps_digest((const uint8_t (*)[32])ids, 1, x);
+    e = expect_of(&r); e.dependencies = x;
+    EXPECT(c2r_verify(a, C2R_SIZE, &p, &e, NULL), C2R_E_DEPS_MISMATCH, "dependency digest mismatch");
+}
+
 static void test_deps(void)
 {
     uint8_t ids[3][32], d1[32], d2[32];
@@ -357,6 +396,7 @@ static void test_deps(void)
 int main(int argc, char **argv)
 {
     if (argc > 1) fixdir = argv[1];
+    fill(checker_ok, "checker2");
     test_keys();
     test_valid_and_deterministic();
     test_altered();
@@ -364,6 +404,7 @@ int main(int argc, char **argv)
     test_production();
     test_revoked_replayed_fresh();
     test_binding();
+    test_checker_identity();
     test_deps();
     printf("test_c2_receipt: %d checks, %d failed\n", checks, fails);
     return fails ? 1 : 0;

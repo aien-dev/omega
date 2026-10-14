@@ -53,6 +53,9 @@ const char *c2r_reason(int code)
     case C2R_E_EXECUTABLE_MISMATCH: return "EXECUTABLE_MISMATCH";
     case C2R_E_ARG: return "ARGUMENT";
     case C2R_E_KEY_CLASS: return "KEY_CLASS";
+    case C2R_E_UNTRUSTED_CHECKER: return "UNTRUSTED_CHECKER";
+    case C2R_E_WRONG_PRODUCER: return "WRONG_PRODUCER";
+    case C2R_E_DEPS_MISMATCH: return "DEPENDENCIES_MISMATCH";
     default: return "UNKNOWN";
     }
 }
@@ -271,12 +274,18 @@ int c2r_verify(const uint8_t *buf, size_t len, const C2ReceiptPolicy *pol, const
     if (r.policy_epoch < pol->epoch_floor) return C2R_E_STALE; /* GUARD:stale */
     if (pol->current_epoch < r.policy_epoch) return C2R_E_NOT_YET_VALID; /* GUARD:not-yet-valid */
     if (pol->current_epoch > r.expiry_epoch) return C2R_E_EXPIRED; /* GUARD:expired */
-    /* 6. binding to what is being admitted */
+    /* 6. checker identity: only verdicts of a checker2 build the verifier anchors count; an empty
+     * or missing list refuses everything */
+    if (!in_set(pol->checkers, pol->n_checkers, r.checker)) return C2R_E_UNTRUSTED_CHECKER; /* GUARD:checker-identity */
+    /* 7. binding to what is being admitted */
     if (ex) {
         if (ex->target && memcmp(ex->target, r.target, 32) != 0) return C2R_E_WRONG_TARGET; /* GUARD:target */
         if (ex->firmware && memcmp(ex->firmware, r.firmware, 32) != 0) return C2R_E_WRONG_FIRMWARE; /* GUARD:firmware */
         if (ex->program && memcmp(ex->program, r.program, 32) != 0) return C2R_E_PROGRAM_MISMATCH; /* GUARD:program */
         if (ex->executable && memcmp(ex->executable, r.executable, 32) != 0) return C2R_E_EXECUTABLE_MISMATCH; /* GUARD:executable */
+        if (ex->producer_checker && memcmp(ex->producer_checker, r.producer_checker, 32) != 0) return C2R_E_WRONG_PRODUCER; /* GUARD:producer */
+        /* the dependency ids are bound by digest only; v1 does not resolve dependency receipts */
+        if (ex->dependencies && memcmp(ex->dependencies, r.dependencies, 32) != 0) return C2R_E_DEPS_MISMATCH; /* GUARD:dependencies */
     }
     if (out) *out = r;
     return C2R_OK;

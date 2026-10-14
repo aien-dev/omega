@@ -75,7 +75,10 @@ enum {
     C2R_E_PROGRAM_MISMATCH = 18,
     C2R_E_EXECUTABLE_MISMATCH = 19,
     C2R_E_ARG = 20,
-    C2R_E_KEY_CLASS = 21        /* signing: key not allowed for the requested class */
+    C2R_E_KEY_CLASS = 21,       /* signing: key not allowed for the requested class */
+    C2R_E_UNTRUSTED_CHECKER = 22, /* checker identity not in the verifier's checker list */
+    C2R_E_WRONG_PRODUCER = 23,  /* producer checker identity differs from the expected one */
+    C2R_E_DEPS_MISMATCH = 24    /* dependency digest differs from the expected one */
 };
 const char *c2r_reason(int code);
 
@@ -88,6 +91,9 @@ typedef struct {
     const uint8_t (*owner_anchors)[32]; unsigned n_owner;
     const uint8_t (*revoked_ids)[32];   unsigned n_revoked_ids;   /* receipt ids */
     const uint8_t (*revoked_keys)[32];  unsigned n_revoked_keys;  /* key fingerprints */
+    /* checker2 identities (section 5) whose verdicts this verifier accepts. Required: an empty or
+     * NULL list refuses every receipt (C2R_E_UNTRUSTED_CHECKER), so a policy cannot forget it. */
+    const uint8_t (*checkers)[32];      unsigned n_checkers;
     uint64_t epoch_floor;     /* receipts issued under an older epoch are refused (C2R_E_STALE) */
     uint64_t current_epoch;
 } C2ReceiptPolicy;
@@ -98,6 +104,10 @@ typedef struct {
     const uint8_t *firmware;    /* 32 bytes */
     const uint8_t *program;     /* 32 bytes: SHA-256 of the program bytes being admitted */
     const uint8_t *executable;  /* 32 bytes: SHA-256 of the executable bytes being admitted */
+    const uint8_t *producer_checker; /* 32 bytes: identity of the producer's checker (oscc hash) */
+    const uint8_t *dependencies; /* 32 bytes: c2r_deps_digest of the expected dependency receipt ids.
+                                    Format v1 binds the ids only: the dependency receipts themselves
+                                    are NOT fetched, resolved or verified here. */
 } C2ReceiptExpect;
 
 /* Drake's owner root public key (aienos#380 ceremony, YubiKey PIV slot 9c). */

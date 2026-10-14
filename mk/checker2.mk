@@ -31,6 +31,12 @@ $(C2_DIR)/checker2: src/checker2/checker2_main.c $(C2_CORE) $(C2_RECEIPT) $(C2_H
 	@mkdir -p $(C2_DIR)
 	$(CC) $(C2_CFLAGS) -DC2_SOURCES_SHA256='"$(C2_SOURCES_SHA256)"' -o $@ src/checker2/checker2_main.c $(C2_CORE) $(C2_RECEIPT)
 
+# the same sources built under another checker identity: receipts it issues must be refused by
+# checker2 unless that identity is accepted explicitly (lrat.sh, spec section 6 step 6)
+$(C2_DIR)/checker2_other: src/checker2/checker2_main.c $(C2_CORE) $(C2_RECEIPT) $(C2_HDRS)
+	@mkdir -p $(C2_DIR)
+	$(CC) $(C2_CFLAGS) -DC2_SOURCES_SHA256='"other-checker-build-for-tests"' -o $@ src/checker2/checker2_main.c $(C2_CORE) $(C2_RECEIPT)
+
 $(C2_DIR)/test_c2_ir: tests/checker2/test_c2_ir.c $(C2_CORE) $(C2_HDRS)
 	@mkdir -p $(C2_DIR)
 	$(CC) $(C2_CFLAGS) -o $@ tests/checker2/test_c2_ir.c $(C2_CORE)
@@ -75,10 +81,10 @@ $(C2_DIR)/test_c2_blast: tests/checker2/test_c2_blast.c $(C2_CORE) $(C2_HDRS)
 	$(CC) $(C2_CFLAGS) -o $@ tests/checker2/test_c2_blast.c $(C2_CORE)
 
 # 20 bounded programs proved by bit-blasting + c2sat + checker2 LRAT replay, plus negative controls
-test-checker2-lrat: $(C2_DIR)/osc_emit_ir $(C2_DIR)/checker2 $(C2_DIR)/c2sat $(C2_DIR)/test_c2_lrat $(C2_DIR)/test_c2_lrat_asan $(C2_DIR)/test_c2_blast test-checker2-differential
+test-checker2-lrat: $(C2_DIR)/osc_emit_ir $(C2_DIR)/checker2 $(C2_DIR)/checker2_other $(C2_DIR)/c2sat $(C2_DIR)/test_c2_lrat $(C2_DIR)/test_c2_lrat_asan $(C2_DIR)/test_c2_blast test-checker2-differential
 	./$(C2_DIR)/test_c2_lrat
 	./$(C2_DIR)/test_c2_lrat_asan
-	sh tests/checker2/lrat.sh $(C2_DIR)/osc_emit_ir $(C2_DIR)/checker2 $(C2_DIR)/c2sat $(C2_DIR)/lrat
+	sh tests/checker2/lrat.sh $(C2_DIR)/osc_emit_ir $(C2_DIR)/checker2 $(C2_DIR)/c2sat $(C2_DIR)/lrat $(C2_DIR)/checker2_other
 	./$(C2_DIR)/test_c2_blast $(C2_IRDIR) $(C2_DIR)/lrat
 
 test-checker2-unit: $(C2_DIR)/test_c2_receipt $(C2_DIR)/test_c2_receipt_asan $(C2_DIR)/test_c2_ir $(C2_DIR)/test_c2_ir_asan test-checker2-differential test-checker2-lrat

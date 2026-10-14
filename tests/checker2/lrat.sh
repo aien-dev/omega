@@ -15,9 +15,12 @@
 #   corrupted, substituted or misapplied proofs, and proofs offered for a class 1 receipt.
 #   verify is production by default: a TEST receipt is refused unless --allow-test-key is given.
 # Replay: c2sat is run twice per program; the two proofs must be byte-identical.
-# Usage: lrat.sh <osc_emit_ir> <checker2> <c2sat> <work-dir> [timeout-seconds]
+# Checker identity: a receipt issued by <checker2-other> (same sources, another identity) is refused
+#   as UNTRUSTED_CHECKER unless verify names that identity with --accept-checker; producer and
+#   dependency digests that differ from the given ones are refused.
+# Usage: lrat.sh <osc_emit_ir> <checker2> <c2sat> <work-dir> <checker2-other> [timeout-seconds]
 set -u
-EMIT=$1 C2=$2 SAT=$3 W=$4 T=${5:-60}
+EMIT=$1 C2=$2 SAT=$3 W=$4 C2O=$5 T=${6:-60}
 D=$(dirname "$0")/lrat
 rm -rf "$W" && mkdir -p "$W" || exit 2
 fail=0 verified=0 traps=0 ctl=0
@@ -91,9 +94,28 @@ else
 fi
 iss "$W/n01_abs8_unguarded.ir" "$R/out" --lrat "abs8=$W/p01_abs8.lrat" && bad "receipt issued for a program its proof does not cover" || ctl=$((ctl + 1))
 if iss "$W/p02_avg_u8.ir" "$R/out1" --input "$R/exe"; then
+    rc1=$(ls "$R/out1"/*.rcpt)
+    V1="$rc1 $W/p02_avg_u8.ir $R/exe --target lrat-gate --epoch 6 --allow-test-key"
+    want VALID class1-control $V1
+    want WRONG_PRODUCER class1-other-producer $V1 --producer "$R/exe"
+    want DEPENDENCIES_MISMATCH class1-unexpected-dep $V1 --dep 0000000000000000000000000000000000000000000000000000000000000001
     want LRAT-NOT-CLAIMED class1-with-proof "$(ls "$R/out1"/*.rcpt)" "$W/p02_avg_u8.ir" "$R/exe" --target lrat-gate --epoch 6 --allow-test-key --lrat "avg=$W/p02_avg_u8.lrat"
 else
     bad "class 1 receipt issue failed"
+fi
+
+# checker identity: same sources under another identity; its receipts are not checker2's verdicts
+mkdir -p "$R/out2"
+if "$C2O" receipt issue "$W/p02_avg_u8.ir" "$R/exe" --target lrat-gate --epoch 5 --expiry 9 --out-dir "$R/out2" >/dev/null 2>&1; then
+    rco=$(ls "$R/out2"/*.rcpt)
+    oid=$("$C2O" version | sed -n 's/^checker_id=//p')
+    sid=$("$C2" version | sed -n 's/^checker_id=//p')
+    [ -n "$oid" ] && [ "$oid" != "$sid" ] || bad "checker2-other has no distinct identity"
+    VO="$rco $W/p02_avg_u8.ir $R/exe --target lrat-gate --epoch 6 --allow-test-key"
+    want UNTRUSTED_CHECKER other-checker-refused $VO
+    want VALID other-checker-accepted-explicitly $VO --accept-checker "$oid"
+else
+    bad "receipt issue by checker2-other failed"
 fi
 
 echo "lrat: verified=$verified expected-traps=$traps controls-refused=$ctl failures=$fail"
