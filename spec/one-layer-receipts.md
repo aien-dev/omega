@@ -120,14 +120,17 @@ never an overwrite.
                            [--input I] [--producer P] [--dep ID ...]
     checker2 receipt tbs <receipt> <out65>
     checker2 receipt attach <receipt> <sig64> --out-dir D
-    checker2 receipt verify <receipt> <unit.ir> <exe> --target T --epoch E [--production]
+    checker2 receipt verify <receipt> <unit.ir> <exe> --target T --epoch E [--allow-test-key | --production]
                            [--floor N] [--firmware F] [--revoked-id ID ...] [--revoked-key FP ...]
                            [--lrat FUNC=PROOF ...]
     checker2 prove-cnf <unit.ir> <func> <out.cnf>
     checker2 prove-check <unit.ir> <func> <proof.lrat>
 
 Exit 0 accept or done, 1 reject or refused, 2 usage or I/O error. `issue` refuses to sign bytes
-checker2 rejects. `--dep` ids must be strictly ascending (their digest is order-sensitive).
+checker2 rejects. `verify` applies the production policy by default (fail closed): a TEST-class
+receipt is refused as `TEST_SIGNER_IN_PRODUCTION` unless `--allow-test-key` is given, which only
+qualification and test runs may do; `--production` states the default, and giving both is a usage
+error. `--dep` ids must be strictly ascending (their digest is order-sensitive).
 
 Owner signing, without Omega ever holding the private key: `issue --owner-draft PATH` writes an
 OWNER-class receipt with the owner root fingerprint and an all-zero signature; `tbs` writes the
@@ -206,9 +209,11 @@ class 1 receipt). Proofs are deterministic: the solver writes byte-identical pro
 - `test_c2_ir` (plain and ASan/UBSan): 107 units re-encode identically, every truncation refused,
   bit flips never crash, 96 planted defects each refused by its exact rule;
 - `test_c2_lrat` (plain and ASan/UBSan): hand-written LRAT cases, each refusal by its exact rule
-  (including a huge clause id refused as `LRAT-ID-RANGE` without a large allocation), 20000 corrupted proofs never verify a satisfiable formula;
-- `lrat.sh`: 20 bounded programs proved and replayed, 9 trap programs found to trap, 48 corrupted,
-  substituted or misapplied proofs and receipts refused;
+  (including a huge clause id refused as `LRAT-ID-RANGE` without a large allocation), 20000
+  corrupted proofs never verify a satisfiable formula;
+- `lrat.sh`: 20 bounded programs proved and replayed, 9 trap programs found to trap, 51 corrupted,
+  substituted or misapplied proofs and receipts refused (including a TEST receipt under the default
+  production policy);
 - `test_c2_blast`: non-scalar functions refused; every gate program evaluated input by input
   without a solver (exhaustive to 16 argument bits), agreeing with its expectation;
 - `mutants.sh`: each line tagged `GUARD:<name>` in the receipt code, decoder, acceptance rules,

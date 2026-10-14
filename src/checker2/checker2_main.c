@@ -12,8 +12,10 @@
  *   checker2 receipt attach <receipt> <sig64> --out-dir D
  *                                              verify an OWNER signature, store by id
  *   checker2 receipt verify <receipt> <unit.ir> <exe> --target T --epoch E
- *                    [--production] [--floor N] [--firmware F.bin] [--revoked-id HEX]...
+ *                    [--allow-test-key | --production] [--floor N] [--firmware F.bin] [--revoked-id HEX]...
  *                    [--revoked-key HEX]... [--lrat FUNC=PROOF]...  (required for evidence class 2)
+ *                    production policy by default: a TEST receipt is refused unless
+ *                    --allow-test-key is given (qualification and test runs only)
  *
  * Exit: 0 accept / done, 1 reject / refused, 2 usage or I/O error. */
 #include <errno.h>
@@ -351,7 +353,15 @@ static int receipt_verify(int argc, char **argv)
     C2ReceiptExpect ex = {.target = tgt, .firmware = fw, .program = prog, .executable = exe};
     C2ReceiptPolicy p;
     memset(&p, 0, sizeof p);
-    p.production = flag(argc, argv, "--production");
+    /* production is the default (fail closed): TEST receipts are refused unless the caller asks
+     * for a qualification run with --allow-test-key. --production states the default explicitly;
+     * giving both is a usage error. */
+    int allow_test = flag(argc, argv, "--allow-test-key");
+    if (allow_test && flag(argc, argv, "--production")) {
+        fprintf(stderr, "checker2: --production and --allow-test-key are exclusive\n");
+        return 2;
+    }
+    p.production = !allow_test;
     if (!p.production) { p.test_anchors = &c2r_test_pk; p.n_test = 1; }
     p.owner_anchors = &c2r_owner_root_pk;
     p.n_owner = 1;
