@@ -1,5 +1,6 @@
 #!/bin/bash
-# run_gpu_decode_graph_chip.sh EVIDENCE_DIR [red] [PHYSICS_DIR]
+# run_gpu_decode_graph_chip.sh EVIDENCE_DIR [main|red|cached] [PHYSICS_DIR]
+#   cached: main with --cached-weights (FP8 tensors in GPU-cached memory); verdict "GPU_DECODE_GRAPH_CHIP_CACHED: PASS|FAIL"
 # OWN-30B W-L2a chip gate for omega_gpu_decode_graph (one Qwen3-30B-A3B decode token as one command list).
 # Caller holds the GB10 lock: flock /tmp/aien-gb10.lock tools/run_gpu_decode_graph_chip.sh EVID
 #   0. host proofs first (never hardware results): --host-only
@@ -23,6 +24,12 @@ T=./build/gpu_decode_graph_test
 sha256sum "$T" build/libomega_gpu.a > "$EVID/binaries.sha256"
 fail=0
 $T --host-only 2>&1 | tee "$EVID/host-only.log"; [ "${PIPESTATUS[0]}" = 0 ] || fail=1
+if [ "$MODE" = cached ]; then
+  $T --cached-weights --reps "${REPS:-20}" --out "$EVID/receipt-cached.json" 2>&1 | tee "$EVID/cached.log"; rc=${PIPESTATUS[0]}
+  echo "end $(date -u +%FT%TZ) cached_exit=$rc" >> "$EVID/device.txt"
+  (cd "$EVID" && sha256sum *.json *.log *.txt *.diff *.sha256 > SHA256SUMS)
+  if [ "$rc" = 0 ] && [ $fail = 0 ]; then echo "GPU_DECODE_GRAPH_CHIP_CACHED: PASS"; exit 0; else echo "GPU_DECODE_GRAPH_CHIP_CACHED: FAIL"; exit 1; fi
+fi
 if [ "$MODE" = red ]; then
   $T --red --reps "${REPS:-3}" --out "$EVID/receipt-red.json" 2>&1 | tee "$EVID/red.log"; rc=${PIPESTATUS[0]}
   echo "end $(date -u +%FT%TZ) red_exit=$rc" >> "$EVID/device.txt"

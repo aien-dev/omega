@@ -36,6 +36,7 @@ SRCS += src/omega_gpu_hostmath.c
 SRCS += src/omega_blackwell_codegen_router.c src/omega_gpu_router_api.c
 # OWN-30B W-L2 (2026-10-13): decode launch collapse, new files only: command list (N launches, one submit) + glue kernels
 SRCS += src/omega_gpu_cmdlist.c src/omega_blackwell_codegen_dec.c
+SRCS += src/omega_gpu_mem_cached.c
 SRCS += src/omega_gpu_decode_graph.c
 # OWN-30B (2026-10-13): bf16 streaming GEMV for the lm_head (omega_gpu_bf16_gemv_api.h), new files only
 SRCS += src/omega_blackwell_codegen_bf16.c src/omega_gpu_bf16_gemv_api.c
