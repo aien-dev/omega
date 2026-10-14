@@ -96,6 +96,31 @@ holding one changed file:
   `Trainsignal.mat` and `Testsignal.mat` (about 1.4 MB each), editor
   autosave files (`.asv`), a manuscript PDF and manifest files.
 
+The version 2 `src/.../HyperParameterOptimizationVariablesToPlot.mat` was
+then fetched on its own (one HTTP range of its 14,239,572 compressed bytes at
+the offset the central directory gives, spliced into a sparse copy of the
+zip and extracted with `unzip -p`, which checks its CRC-32 fdea4aa1). The
+extracted file is 14,525,399 bytes, sha256
+`317af7a76051e6c30aa0476a612c29e417b199c9ef226f4f00d7f7505512fc92`. Read with
+the in-house MAT reader (section 7.1 item 10), compared with the version 1
+copy:
+
+- Same variables. The four option vectors and all 576 non-empty target cells
+  (`yTrainCell`, `yTestCell`) are bit-identical.
+- All 576 non-empty prediction cells differ, and 504 of 640 `NRMSEtrain` and
+  495 of 640 `NRMSEtest` entries differ. In each file the stored NRMSE equals
+  the S6 formula applied to that file's own predictions and targets (worst
+  relative difference 2.6e-15).
+- At the G2-N1 cell (5 nodes, 0.1 nA, M = 2) version 2 is lower at every
+  order, for example NARMA-2 test 0.356722 against 0.421309, NARMA-10 test
+  0.598446 against 0.623601.
+
+This is consistent with version 2's results having been produced by version
+2's code (squared-state features) and version 1's results by a feature set
+without squares; which code produced each file stays UNVERIFIED without
+MATLAB (discrepancy 15). G2-N1 tests it numerically (section 7.1 items 1 and
+10).
+
 ## 2. What the paper claims
 
 - **[paper] S4 eq. 18**: one membrane, dV/dt = (h / (eps A)) (I_inj - V G_u N_a A).
@@ -429,6 +454,14 @@ contract above; none loosens a tolerance.
    declared, not corrected.
 9. Lorenz knot grid: 400001 knots, k * 1e-4 s for k = 0..400000 (archived t
    runs from 0 to 40 exactly).
+10. **Added before the first run, after the version 2 results file was read
+    (section 1.1): N1b-v2.** N1b's Omega predictions are also compared,
+    under the same criteria (a), (b) and (c), with the version 2 archived
+    results (the sha256-pinned 14,525,399-byte file). N1a and N1b against
+    version 1 stay as declared in item 1. This adds a case and loosens
+    nothing. The pinned reference remains version 1; N1b-v2 is reported as
+    a separate row, and a PASS there is agreement with version 2's code and
+    outputs, not with the version the paper cites.
 
 **BLOCKED or out of scope**
 - NARMA grid cells other than (5, 0.1 nA, 2): their masks come from
