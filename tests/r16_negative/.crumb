@@ -29,7 +29,7 @@
         },
         {
           "lane": "lane2",
-          "note": "PR aien-dev/omega#147 MERGED with merge commit 2d8cd68 (head abe923c, rebased on 520c895).",
+          "note": "PR aien-spark/omega#147 MERGED with merge commit 2d8cd68 (head abe923c, rebased on 520c895).",
           "pr": 146,
           "ref": "2026-10-01-push-lane2-report.md",
           "sha": "520c895",
@@ -37,7 +37,7 @@
         },
         {
           "lane": "lane28",
-          "note": "Verdict: PASS. PR aien-dev/omega#146, squash-merged 520c895 (520c8956e6614877b0795e2581c8ed2c0113121e).",
+          "note": "Verdict: PASS. PR aien-spark/omega#146, squash-merged 520c895 (520c8956e6614877b0795e2581c8ed2c0113121e).",
           "pr": 146,
           "ref": "2026-10-01-push-lane28-report.md",
           "sha": "520c895",

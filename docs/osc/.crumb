@@ -13,21 +13,21 @@
     "generated": {
       "children": [
         {
-          "digest": "ae58633db1f1b69f46c1e1b5bcf86878e8aae8ebd048dafa126eaf96b0054804",
-          "last_commit": "a927bd6c",
+          "digest": "dd88e66963c539dfc4d24530fb8b19002aa11eb05d52e5b509bc6de33f07b163",
+          "last_commit": "e0abd0b5",
           "name": "audit",
           "purpose": "Directory docs/osc/audit. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:33192ccd879c26130c2aba2fb02d7d8f03b093e64bb571d14403152ecbfeb3ae",
-      "compiled_at": "2026-10-13T04:58:02Z",
+      "children_root": "sha256:fe7b526366c92c41e77d831ed9fddc2c3c278df36af61c755bf788f12d38c5e7",
+      "compiled_at": "2026-10-14T01:16:48Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:39dc2cde3376d909cb4182944f31e87f2148e5bf2d83d6459c91140ce622b8a7",
+      "digest": "sha256:5f91761066f42aceaa64aa34ac2e168ed70553c8174747c9a4a02938124609fd",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 14,
-      "generated_at_commit": "8139dbd1d470652ac40a9e70edb37a5321b03dea",
-      "source_tree": "sha256:e99b84ebf7e139c5af2b3a43e66b88777220525cb72147e0a0a0e754ad188db4"
+      "generated_at_commit": "e0abd0b524f5bf8e3ba6960b53868980bdd41b4e",
+      "source_tree": "sha256:a78dbe34dd5fb95c2520006f5485ab0ece8e125632e72dbb3ebcc2da042941b5"
     },
     "owner_lane": "",
     "provenance": {
@@ -90,7 +90,7 @@
         },
         {
           "lane": "lane27",
-          "note": "PR aien-dev/omega#151, squash merge 7e713e301a6733a679f82f6892beda57b313908c",
+          "note": "PR aien-spark/omega#151, squash merge 7e713e301a6733a679f82f6892beda57b313908c",
           "pr": 151,
           "ref": "2026-10-01-push-lane27-report.md",
           "sha": "7e713e3",
@@ -122,7 +122,7 @@
         },
         {
           "lane": "lane27",
-          "note": "PR aien-dev/omega#150, squash merge c77362242b13d7df127eeabec9eda75119f934cc",
+          "note": "PR aien-spark/omega#150, squash merge c77362242b13d7df127eeabec9eda75119f934cc",
           "pr": 150,
           "ref": "2026-10-01-push-lane27-report.md",
           "sha": "c773622",
@@ -146,7 +146,7 @@
         },
         {
           "lane": "lane27",
-          "note": "PR aien-dev/omega#149, squash merge 845dce4d53f04bb929b83ebc5cf59c064f16d731",
+          "note": "PR aien-spark/omega#149, squash merge 845dce4d53f04bb929b83ebc5cf59c064f16d731",
           "pr": 149,
           "ref": "2026-10-01-push-lane27-report.md",
           "sha": "845dce4",
@@ -170,7 +170,7 @@
         },
         {
           "lane": "lane27",
-          "note": "PR aien-dev/omega#148, squash merge 0abdb08aec443cad3b66cf17afee6b713b7af271",
+          "note": "PR aien-spark/omega#148, squash merge 0abdb08aec443cad3b66cf17afee6b713b7af271",
           "pr": 148,
           "ref": "2026-10-01-push-lane27-report.md",
           "sha": "0abdb08",
@@ -194,7 +194,7 @@
         },
         {
           "lane": "lane22",
-          "note": "PR: aien-dev/omega#144, squash-merged, merge commit b81f8500a25ee543ce55750d17aa1fa517fe94a8",
+          "note": "PR: aien-spark/omega#144, squash-merged, merge commit b81f8500a25ee543ce55750d17aa1fa517fe94a8",
           "pr": 144,
           "ref": "2026-10-01-push-lane22-report.md",
           "sha": "b81f850",

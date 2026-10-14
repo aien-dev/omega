@@ -53,7 +53,7 @@
         },
         {
           "lane": "lane19",
-          "note": "Part B, omega Fabric 64-byte signature: PASS (host).** PR aien-dev/omega #137, merged 1299b19.",
+          "note": "Part B, omega Fabric 64-byte signature: PASS (host).** PR aien-spark/omega #137, merged 1299b19.",
           "pr": 137,
           "ref": "2026-10-01-push-lane19-report.md",
           "sha": "1299b19",

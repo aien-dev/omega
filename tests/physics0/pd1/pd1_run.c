@@ -1,4 +1,4 @@
-/* PD-1 run harness (Physics-0 Direction 7, aien-dev/physics docs/PD1_MACHINE_LAW_BENCHMARK.md).
+/* PD-1 run harness (Physics-0 Direction 7, aien-spark/physics docs/PD1_MACHINE_LAW_BENCHMARK.md).
  *
  * Harness side. Reads the label-free PD1REC1 stream (tools/physics0/pd1-convert), verifies its
  * SHA-256 chain, makes the spec section 3 splits, drives the UNCHANGED PD-0 learner on two views of

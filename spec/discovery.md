@@ -5,7 +5,7 @@ Document ID:     SPEC-OMEGA-M11
 Milestone:       Milestone 11 (OMEGA_LIBRARY_DISCOVERY)
 Classification:  Sovereign Machine Canonical Specification
 Target Substrate: Autonomous Abstraction Discovery from Program Corpus with Verified Reuse
-Status:          SPECIFIED / IN PROGRESS (aien-dev/omega#17, aien-dev/aien-architecture#23)
+Status:          SPECIFIED / IN PROGRESS (aien-spark/omega#17, aien-spark/aien-architecture#23)
 Lineage:         SILICON -> ATLAS (M1) -> PHYSICS (M2/M3) -> OMEGA (M4-M11) -> AIEN
 ```
 

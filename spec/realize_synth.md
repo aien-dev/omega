@@ -5,7 +5,7 @@ Document ID:     SPEC-OMEGA-M14
 Milestone:       Milestone 14 (OMEGA_REALIZATION_SYNTHESIS)
 Classification:  Sovereign Machine Canonical Specification
 Target Substrate: Automated $G_S \times G_M \to G_R$ Synthesis Targeting Declared Hardware Capabilities
-Status:          SPECIFIED / IN PROGRESS (aien-dev/omega#19, aien-dev/aien-architecture#25)
+Status:          SPECIFIED / IN PROGRESS (aien-spark/omega#19, aien-spark/aien-architecture#25)
 Lineage:         SILICON -> ATLAS (M1) -> PHYSICS (M2/M3) -> OMEGA (M4-M14) -> AIEN
 ```
 

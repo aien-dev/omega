@@ -3,7 +3,7 @@
 Crumbline is the AIEN training curriculum of unlabeled input/output
 observations. Its contracts, generators, sealed verifier, mixer, trace schema,
 promotion ladder and ledger live in the `crumbs` crate
-(aien-dev/aien-sovereign-core, `crates/crumbs`, see its `SPEC.md`). This
+(aien-spark/aien-sovereign-core, `crates/crumbs`, see its `SPEC.md`). This
 repository implements only the consumer adapter.
 
 ## What Omega receives

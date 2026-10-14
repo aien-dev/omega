@@ -29,7 +29,7 @@ MERGED. No open PR anywhere mentions TURING yield, Evolution Arena runtime, or T
   `e89ba94`). The bullets below are the audit as of 2026-09-29. The TY-0..TY-7 non-touch rule for `rx_costmodel` and
   `rx_argus` (section 9 item 1) stays as a scope rule.
 - **R16 is IN PROGRESS: yes, frozen.** arch `CURRENT_EXECUTION_PLAN.md:45` "R16 ... IN PROGRESS"; `:540` "No edits to
-  `omega/src/runtime/` (or other R16-mapped files) until R16 (`aien-dev/omega#68`) closes." arch `doctrine/ROADMAP.md:282`
+  `omega/src/runtime/` (or other R16-mapped files) until R16 (`aien-spark/omega#68`) closes." arch `doctrine/ROADMAP.md:282`
   (after #59) "IN PROGRESS ... only R16-G1/G2 loop-inventory gate PASS. Not yet evidenced: G3..G8 receipt".
   The earlier "PASS" (arch `8ec9b1d`, #57) is superseded by #59 and is no longer a conflict.
 - Evidence agrees: omega `evidence/R16/` holds only `inventory.json`; no `AIEN_RX_R16_ORCHESTRATOR_RETIRED_V1`

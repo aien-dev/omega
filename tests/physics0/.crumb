@@ -4,32 +4,32 @@
       "children": [
         {
           "digest": "62d7fb6a9ef393196990035afe943a384315bcd96a2e7646fe4bc2fc62706e1c",
-          "last_commit": "30c65a3",
+          "last_commit": "8a2e2687",
           "name": "learner",
           "purpose": "Learner gates: unit tests (determinism, PDLAW1 round trip, memoriser vs compact theory, null wor"
         },
         {
           "digest": "16ac4563cb6a991cc4029a8d0dbbb89ae1bb5c19de8774c0292763181a3893b3",
-          "last_commit": "7b4c582",
+          "last_commit": "e59633e5",
           "name": "learner_v2",
           "purpose": "Learner v2 tests and dev drivers: unit tests, byte-level dev world, C1 flag, C2 regime switch an"
         },
         {
           "digest": "267199e8d5f72e12649a8f608abb42ab82ef85c6e3b4531ce1812f7e5e491644",
-          "last_commit": "30c65a3",
+          "last_commit": "f9a17970",
           "name": "verify",
           "purpose": "PD-0 verify: see docs on physics main"
         }
       ],
       "children_root": "sha256:9e4a1426cf5e270f54e1f90abac3585c7bcf8dbf2a2d87af930900f401cbd342",
-      "compiled_at": "2026-10-11T15:21:12Z",
+      "compiled_at": "2026-10-14T01:16:48Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:d5153d318a11642a5e13824353222fc392ead92108540bc8ffd747fcfd40b813",
+      "digest": "sha256:024a746eff9cd1871d1e507c2f56ed6a1f7125cb457915904f9b1455140f8942",
       "evidence_files": 5,
       "evidence_root": "sha256:18312cebaaff58331eeb55a9d72d3df046afd3d71d0127276fc70473d460d558",
       "files": 38,
-      "generated_at_commit": "7b4c5827922e7d2632dd631f3d65be82ec4f8b74",
-      "source_tree": "sha256:35d017823a732fbb34160b5597e79e69616984b133f95e2367469c862aa56bd5"
+      "generated_at_commit": "e0abd0b524f5bf8e3ba6960b53868980bdd41b4e",
+      "source_tree": "sha256:cbc4f683b5d7b9cb883f0634798ee10ac8821c4223adffe6bcfaf7cb3ee466a4"
     }
   },
   "layer": "tests",

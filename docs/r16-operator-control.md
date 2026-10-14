@@ -232,7 +232,7 @@ the rights, not the entry's resource. So the operator's control capability
 (`RX_WORLD_RES_CONTROL` with `RX_RIGHT_EPOCH`) would also pass `aienos_cap_bump_epoch`
 (same file, line 555, through `auth_use(..., AIENOS_CAP_RIGHT_EPOCH, ...)` at line 369)
 if anything handed it there. omega does not change the locked authority; the request
-is aien-dev/aienos#266 (a resource check in `auth_use`, or a dedicated halt right).
+is aien-spark/aienos#266 (a resource check in `auth_use`, or a dedicated halt right).
 
 What keeps it closed today is omega's own code, shown here and tested:
 

@@ -5,7 +5,7 @@ Document ID:     SPEC-OMEGA-M10
 Milestone:       Milestone 10 (OMEGA_LIBRARY_V1)
 Classification:  Sovereign Machine Canonical Specification
 Target Substrate: Versioned Procedural Program Library, Provenance Tracking, and Component Catalog
-Status:          SPECIFIED / IN PROGRESS (aien-dev/omega#16)
+Status:          SPECIFIED / IN PROGRESS (aien-spark/omega#16)
 Lineage:         SILICON -> ATLAS (M1) -> PHYSICS (M2/M3) -> OMEGA (M4-M10) -> AIEN
 ```
 

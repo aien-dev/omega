@@ -5,7 +5,7 @@ Document ID:     SPEC-OMEGA-M7
 Milestone:       Milestone 7 (OMEGA_VERIFY)
 Classification:  Sovereign Machine Canonical Specification
 Target Substrate: Multi-Tier Trusted Verification Ladder (V0, V1, V2)
-Status:          SPECIFIED / IN PROGRESS (aien-dev/omega#13)
+Status:          SPECIFIED / IN PROGRESS (aien-spark/omega#13)
 Lineage:         SILICON -> ATLAS (M1) -> PHYSICS (M2/M3) -> OMEGA (M4/M5/M6/M7) -> AIEN
 ```
 

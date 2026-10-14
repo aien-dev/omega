@@ -147,8 +147,8 @@ Output: `spec/r16-orchestrator-retirement-map.md`, committed after this file
 and before any retirement code.
 
 Repositories, each at its `origin/main` SHA recorded in the map header:
-aien-dev/omega, aien-dev/aien-sovereign-core, aien-dev/aegis-runtime,
-aien-dev/aienos, aien-dev/physics.
+aien-spark/omega, aien-spark/aien-sovereign-core, aien-spark/aegis-runtime,
+aien-spark/aienos, aien-spark/physics.
 
 Search terms (from the brief; each must appear in the map with its hit count):
 `run_until_complete`; `for`/`while` semantic step loops; `max_steps`;

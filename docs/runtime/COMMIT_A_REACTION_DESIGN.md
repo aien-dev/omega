@@ -77,7 +77,7 @@ So there are two different things called FORGE here. In J-Space it is a memory-p
 
 ## 3. What the architecture records say
 
-Read with `gh` at `aien-dev/aien-architecture` main, commit 26daeedb23c5.
+Read with `gh` at `aien-spark/aien-architecture` main, commit 26daeedb23c5.
 
 ADR 0016, `docs/adr/0016-resident-reaction-architecture.md` (Accepted by operator, 2026-09-27):
 - It sets no fixed World, J-Space, AEGIS, commit, Cortex order. J-Space is not mentioned.

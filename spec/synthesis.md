@@ -5,7 +5,7 @@ Document ID:     SPEC-OMEGA-M9
 Milestone:       Milestone 9 (OMEGA_SYNTHESIS_V0)
 Classification:  Sovereign Machine Canonical Specification
 Target Substrate: Deterministic Typed Program Synthesis over Base Primitives
-Status:          SPECIFIED / IN PROGRESS (aien-dev/omega#15)
+Status:          SPECIFIED / IN PROGRESS (aien-spark/omega#15)
 Lineage:         SILICON -> ATLAS (M1) -> PHYSICS (M2/M3) -> OMEGA (M4-M9) -> AIEN
 ```
 

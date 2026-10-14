@@ -13,21 +13,21 @@
     "generated": {
       "children": [
         {
-          "digest": "e629b98843f5225f114577273e616609bb0b1c792d2f23ed44f00c0808e65f69",
-          "last_commit": "f3467db",
+          "digest": "05b93efc13a8672b7abc781258cdccc3866883c80efd9dab537012d02a2728ce",
+          "last_commit": "e0abd0b5",
           "name": "sig",
           "purpose": "Directory src/searchtrace/sig. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:59f1e5326fc1e40982ba203f1dd7b7df685e36cbb575a90da42ffadb32e2a3f6",
-      "compiled_at": "2026-10-04T13:47:05Z",
+      "children_root": "sha256:6879105a209f53564acb1d75deda549e5a6ab2de6b9f89238fbb383af91c538c",
+      "compiled_at": "2026-10-14T01:16:48Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:9f6d98a6d9b0020aa56df481a5ab3aa301533cb85173f96a851d1d779fca2d3a",
+      "digest": "sha256:d7bb5fb627dfe92066f94fa556e86be5d025c0ff5e81d823ba177a56ea099d31",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 12,
-      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
-      "source_tree": "sha256:4380f8c7c34bedd64766521bf5417462a05fe22aa257c3773d7b638c21472055"
+      "generated_at_commit": "e0abd0b524f5bf8e3ba6960b53868980bdd41b4e",
+      "source_tree": "sha256:302037ff4e97aa0edd3f919a991dc02d0082e065b913074a38c48e3a8ce45215"
     },
     "owner_lane": "",
     "provenance": {
@@ -74,7 +74,7 @@
         },
         {
           "lane": "lane2",
-          "note": "PR aien-dev/omega#124, merged as d3194f6 (merge commit, matching the repo's habit). Merged on top of #122 (ce7821d), which touched different files; the CPU numeric test was rerun on the merged main: ",
+          "note": "PR aien-spark/omega#124, merged as d3194f6 (merge commit, matching the repo's habit). Merged on top of #122 (ce7821d), which touched different files; the CPU numeric test was rerun on the merged main: ",
           "pr": 122,
           "ref": "2026-10-01-push-lane2-report.md",
           "sha": "ce7821d",

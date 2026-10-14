@@ -1,6 +1,6 @@
 # pd1-convert: retrospective GB10 campaign evidence -> label-free PD1REC1 stream
 
-Part of Physics-0 Direction 7 (PD-1). Spec: aien-dev/physics `docs/PD1_MACHINE_LAW_BENCHMARK.md`.
+Part of Physics-0 Direction 7 (PD-1). Spec: aien-spark/physics `docs/PD1_MACHINE_LAW_BENCHMARK.md`.
 Harness-side tool. It is NOT learner code and must never be built into the learner lane: `extract.sh`
 holds the join tables that turn structural labels (arm, directory prefix, variant) into knob values,
 which is the PD-1 answer key for knob `q0`.
