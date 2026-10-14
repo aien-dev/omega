@@ -1896,6 +1896,10 @@ test-ldst-nvdisasm:
 # src/omega_library.c with one tagged guard line (VC1:<tag>) deleted or weakened; the test
 # must exit 1 (KILLED) for every one. A mutant whose sed did not change the file fails the build.
 # Physics-free; CPU only.
+# Precompiled stacks (here and in test-resolve, test-genesis, test-vc-bridge): the unmutated
+# objects are compiled fresh into an emptied objs/ on every run and each background compile is
+# waited on by pid, so a failed compile fails the target. A bare `wait` returns 0 whatever the
+# jobs did, which let a leftover object from an earlier run be linked into the mutants.
 .PHONY: test-library
 LIBTEST_CORE = src/sha256.c src/omega_canonical.c src/omega_validate.c src/omega_core.c src/omega_codec.c \
 	src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c src/omega_realize_synth.c \
@@ -1906,11 +1910,11 @@ test-library: tests/test_omega_library.c src/omega_library.c src/omega_library.h
 	@mkdir -p $(LIBTEST_DIR)
 	$(CC) $(LIBTEST_FLAGS) -o $(LIBTEST_DIR)/test_omega_library tests/test_omega_library.c src/omega_library.c $(LIBTEST_CORE)
 	$(LIBTEST_DIR)/test_omega_library
-	@set -eu; mkdir -p $(LIBTEST_DIR)/objs; \
+	@set -eu; rm -rf $(LIBTEST_DIR)/objs $(LIBTEST_DIR)/stack.o; mkdir -p $(LIBTEST_DIR)/objs; pids=""; \
 	  for c in tests/test_omega_library.c $(LIBTEST_CORE); do \
 	    o=$(LIBTEST_DIR)/objs/$$(echo $$c | tr '/' '_').o; \
-	    $(CC) $(LIBTEST_FLAGS) -c -o $$o $$c & \
-	  done; wait; ld -r -o $(LIBTEST_DIR)/stack.o $(LIBTEST_DIR)/objs/*.o; \
+	    $(CC) $(LIBTEST_FLAGS) -c -o $$o $$c & pids="$$pids $$!"; \
+	  done; for p in $$pids; do wait $$p; done; ld -r -o $(LIBTEST_DIR)/stack.o $(LIBTEST_DIR)/objs/*.o; \
 	  build_mutant() { name=$$1; tag=$$2; repl=$$3; \
 	  sed "/VC1:$$tag/c\\$$repl" src/omega_library.c > $(LIBTEST_DIR)/mut_$$name.c; \
 	  if cmp -s src/omega_library.c $(LIBTEST_DIR)/mut_$$name.c; then echo "mutant $$name: sed changed nothing"; exit 1; fi; \
@@ -2056,16 +2060,16 @@ test-resolve: tests/test_omega_resolve.c $(OUT_DIR)/compiler/oscv $(RESOLVE_SRC)
 	$(RESOLVE_DIR)/test_omega_resolve
 	$(CC) $(RESOLVE_FLAGS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -DOSCV_PATH='"$(OUT_DIR)/compiler/oscv"' -o $(RESOLVE_DIR)/test_omega_resolve_asan tests/test_omega_resolve.c $(RESOLVE_SRC) $(RESOLVE_REST)
 	$(RESOLVE_DIR)/test_omega_resolve_asan
-	@set -eu; mkdir -p $(RESOLVE_DIR)/objs $(RESOLVE_DIR)/src_objs; \
-	  $(CC) $(RESOLVE_FLAGS) -DOSCV_PATH='"$(OUT_DIR)/compiler/oscv"' -c -o $(RESOLVE_DIR)/objs/test_omega_resolve.o tests/test_omega_resolve.c & \
+	@set -eu; rm -rf $(RESOLVE_DIR)/objs $(RESOLVE_DIR)/src_objs $(RESOLVE_DIR)/rest_stack.o; mkdir -p $(RESOLVE_DIR)/objs $(RESOLVE_DIR)/src_objs; \
+	  $(CC) $(RESOLVE_FLAGS) -DOSCV_PATH='"$(OUT_DIR)/compiler/oscv"' -c -o $(RESOLVE_DIR)/objs/test_omega_resolve.o tests/test_omega_resolve.c & pids="$$!"; \
 	  for c in $(RESOLVE_REST); do \
 	    o=$(RESOLVE_DIR)/objs/$$(echo $$c | tr '/' '_').o; \
-	    $(CC) $(RESOLVE_FLAGS) -c -o $$o $$c & \
+	    $(CC) $(RESOLVE_FLAGS) -c -o $$o $$c & pids="$$pids $$!"; \
 	  done; \
 	  for c in $(RESOLVE_SRC); do \
 	    o=$(RESOLVE_DIR)/src_objs/$$(basename $$c .c).o; \
-	    $(CC) $(RESOLVE_FLAGS) -c -o $$o $$c & \
-	  done; wait; ld -r -o $(RESOLVE_DIR)/rest_stack.o $(RESOLVE_DIR)/objs/*.o; \
+	    $(CC) $(RESOLVE_FLAGS) -c -o $$o $$c & pids="$$pids $$!"; \
+	  done; for p in $$pids; do wait $$p; done; ld -r -o $(RESOLVE_DIR)/rest_stack.o $(RESOLVE_DIR)/objs/*.o; \
 	  build_mutant() { name=$$1; tag=$$2; which=$$3; chk=$$4; repl=$$5; \
 	  case $$which in blake3) f=src/omega_blake3.c; pfx=B3M;; resolve) f=src/omega_resolve.c; pfx=VC1R;; receipt) f=src/omega_receipt.c; pfx=VC1R;; *) echo "bad mutant file $$which"; exit 1;; esac; \
 	  sed "/$$pfx:$$tag/c\\$$repl" $$f > $(RESOLVE_DIR)/mut_$$name.c; \
@@ -2176,14 +2180,14 @@ test-genesis: tests/test_omega_genesis_set.c tests/genesis_variant/member.inc sr
 	$(GENESIS_DIR)/test_omega_genesis_set
 	$(CC) $(GENESIS_CFLAGS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -o $(GENESIS_DIR)/test_omega_genesis_set_asan tests/test_omega_genesis_set.c $(GENESIS_DIR)/omega_vcstore.c $(GENESIS_DIR)/omega_resolve.c $(GENESIS_STACK)
 	$(GENESIS_DIR)/test_omega_genesis_set_asan
-	@set -eu; mkdir -p $(GENESIS_DIR)/objs; \
+	@set -eu; rm -rf $(GENESIS_DIR)/objs $(GENESIS_DIR)/stack.o $(GENESIS_DIR)/omega_vcstore.o $(GENESIS_DIR)/omega_resolve.o; mkdir -p $(GENESIS_DIR)/objs; pids=""; \
 	  for c in tests/test_omega_genesis_set.c $(GENESIS_STACK); do \
 	    o=$(GENESIS_DIR)/objs/$$(echo $$c | tr '/' '_').o; \
-	    $(CC) $(GENESIS_CFLAGS) -c -o $$o $$c & \
+	    $(CC) $(GENESIS_CFLAGS) -c -o $$o $$c & pids="$$pids $$!"; \
 	  done; \
-	  $(CC) $(GENESIS_CFLAGS) -c -o $(GENESIS_DIR)/omega_vcstore.o $(GENESIS_DIR)/omega_vcstore.c & \
-	  $(CC) $(GENESIS_CFLAGS) -c -o $(GENESIS_DIR)/omega_resolve.o $(GENESIS_DIR)/omega_resolve.c & \
-	  wait; ld -r -o $(GENESIS_DIR)/stack.o $(GENESIS_DIR)/objs/*.o; \
+	  $(CC) $(GENESIS_CFLAGS) -c -o $(GENESIS_DIR)/omega_vcstore.o $(GENESIS_DIR)/omega_vcstore.c & pids="$$pids $$!"; \
+	  $(CC) $(GENESIS_CFLAGS) -c -o $(GENESIS_DIR)/omega_resolve.o $(GENESIS_DIR)/omega_resolve.c & pids="$$pids $$!"; \
+	  for p in $$pids; do wait $$p; done; ld -r -o $(GENESIS_DIR)/stack.o $(GENESIS_DIR)/objs/*.o; \
 	  gmut() { name=$$1; which=$$2; tag=$$3; chk=$$4; repl=$$5; \
 	  f=$(GENESIS_DIR)/$$which.c; sed "/$$tag/c\\$$repl" $$f > $(GENESIS_DIR)/mut_$$name.c; \
 	  if cmp -s $$f $(GENESIS_DIR)/mut_$$name.c; then echo "mutant $$name: sed changed nothing"; exit 1; fi; \
@@ -2316,14 +2320,14 @@ test-vc-bridge: tests/test_omega_vc_bridge.c src/omega_vc_bridge.c src/omega_vc_
 	$(VCB_DIR)/test_omega_vc_bridge
 	$(CC) $(RESOLVE_FLAGS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -o $(VCB_DIR)/test_omega_vc_bridge_asan tests/test_omega_vc_bridge.c src/omega_vc_bridge.c src/omega_resolve.c $(VCB_STACK)
 	$(VCB_DIR)/test_omega_vc_bridge_asan
-	@set -eu; mkdir -p $(VCB_DIR)/objs; \
+	@set -eu; rm -rf $(VCB_DIR)/objs $(VCB_DIR)/stack.o $(VCB_DIR)/omega_vc_bridge.o $(VCB_DIR)/omega_resolve.o; mkdir -p $(VCB_DIR)/objs; pids=""; \
 	  for c in tests/test_omega_vc_bridge.c $(VCB_STACK); do \
 	    o=$(VCB_DIR)/objs/$$(echo $$c | tr '/' '_').o; \
-	    $(CC) $(RESOLVE_FLAGS) -c -o $$o $$c & \
+	    $(CC) $(RESOLVE_FLAGS) -c -o $$o $$c & pids="$$pids $$!"; \
 	  done; \
-	  $(CC) $(RESOLVE_FLAGS) -c -o $(VCB_DIR)/omega_vc_bridge.o src/omega_vc_bridge.c & \
-	  $(CC) $(RESOLVE_FLAGS) -c -o $(VCB_DIR)/omega_resolve.o src/omega_resolve.c & \
-	  wait; ld -r -o $(VCB_DIR)/stack.o $(VCB_DIR)/objs/*.o; \
+	  $(CC) $(RESOLVE_FLAGS) -c -o $(VCB_DIR)/omega_vc_bridge.o src/omega_vc_bridge.c & pids="$$pids $$!"; \
+	  $(CC) $(RESOLVE_FLAGS) -c -o $(VCB_DIR)/omega_resolve.o src/omega_resolve.c & pids="$$pids $$!"; \
+	  for p in $$pids; do wait $$p; done; ld -r -o $(VCB_DIR)/stack.o $(VCB_DIR)/objs/*.o; \
 	  vmut() { name=$$1; which=$$2; chk=$$3; repl=$$4; \
 	  sed "/VC1B:$$name/c\\$$repl" src/$$which.c > $(VCB_DIR)/mut_$$name.c; \
 	  if cmp -s src/$$which.c $(VCB_DIR)/mut_$$name.c; then echo "mutant $$name: sed changed nothing"; exit 1; fi; \
