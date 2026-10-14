@@ -906,7 +906,7 @@ int osc_ir_decode(const uint8_t *buf, size_t len, OscUnit *out) {
     memset(out, 0, sizeof *out);
     if (!buf) return OSC_IR_REFUSE_ARG;
     int rc = decode_unit(buf, len, out);
-    if (rc != OSC_IR_OK && !MUTANT(9)) memset(out, 0, sizeof *out);  /* mutant 9: leave partial output */
+    if (rc != OSC_IR_OK && !MUTANT(3)) memset(out, 0, sizeof *out);  /* mutant 3: leave partial output */
     return rc;
 }
 

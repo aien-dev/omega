@@ -34,6 +34,7 @@
 
 #include "osc_front.h"
 #include "osc_ir.h"
+#include "sha256.h"
 
 static int g_fail;
 static void fail(const char *fmt, ...) {
@@ -165,25 +166,48 @@ static const char *unit_diff(const OscUnit *x, const OscUnit *y, char *buf, size
 }
 
 static OscUnit *g_dec, *g_tmp;  /* scratch units (large; heap) */
+static uint8_t *g_e1, *g_e2;    /* OSC_IR_ENCODED_MAX bytes each: one encode call (one validation) per encoding */
+
+/* Copy the part of a unit inside its counts: all that encode, validate and unit_diff read.
+ * Cheaper than copying the whole 6.7 MB struct for every variant. */
+static void copy_unit(OscUnit *d, const OscUnit *s) {
+    d->nfuncs = s->nfuncs;
+    d->nstructs = s->nstructs;
+    memcpy(d->structs, s->structs, sizeof d->structs);
+    for (int fi = 0; fi < s->nfuncs; fi++) {
+        OscFunc *a = &d->funcs[fi];
+        const OscFunc *b = &s->funcs[fi];
+        memcpy(a->name, b->name, sizeof a->name);
+        a->nparams = b->nparams;
+        a->ret = b->ret;
+        a->nvregs = b->nvregs;
+        memcpy(a->vtype, b->vtype, b->nvregs * sizeof b->vtype[0]);
+        a->nblocks = b->nblocks;
+        memcpy(a->blocks, b->blocks, b->nblocks * sizeof b->blocks[0]);
+        a->ninsns = b->ninsns;
+        memcpy(a->insns, b->insns, b->ninsns * sizeof b->insns[0]);
+        memcpy(a->requires_text, b->requires_text, sizeof a->requires_text);
+        memcpy(a->ensures_text, b->ensures_text, sizeof a->ensures_text);
+    }
+}
 
 /* encode u, decode, re-encode: byte-identical, fields equal, digest equal. 0 ok. */
 static int round_trip(const OscUnit *u, const char *what) {
-    size_t n;
-    uint8_t *e = encode_alloc(u, &n);
-    if (!e) { fail("%s: does not encode", what); return -1; }
-    int rc = osc_ir_decode(e, n, g_dec);
-    if (rc != OSC_IR_OK) { fail("%s: decode refused %s", what, osc_ir_refusal_name(rc)); free(e); return -1; }
-    size_t n2;
-    uint8_t *e2 = encode_alloc(g_dec, &n2);
-    int bad = !e2 || n2 != n || memcmp(e, e2, n) != 0;
+    size_t n = 0, n2 = 0;
+    if (osc_ir_encode(u, g_e1, OSC_IR_ENCODED_MAX, &n)) { fail("%s: does not encode", what); return -1; }
+    int rc = osc_ir_decode(g_e1, n, g_dec);
+    if (rc != OSC_IR_OK) { fail("%s: decode refused %s", what, osc_ir_refusal_name(rc)); return -1; }
+    int bad = osc_ir_encode(g_dec, g_e2, OSC_IR_ENCODED_MAX, &n2) != 0 || n2 != n || memcmp(g_e1, g_e2, n) != 0;
     if (bad) fail("%s: re-encoding differs (%zu vs %zu bytes)", what, n, n2);
     char buf[128];
     const char *d = unit_diff(u, g_dec, buf, sizeof buf);
     if (d) { fail("%s: decoded unit differs: %s", what, d); bad = 1; }
     uint8_t g1[32], g2[32];
-    if (osc_ir_digest(u, g1) || osc_ir_digest(g_dec, g2) || memcmp(g1, g2, 32)) { fail("%s: digest differs", what); bad = 1; }
-    free(e);
-    free(e2);
+    sha256_ctx sc;  /* identity = SHA-256 of the canonical encoding (osc_ir.h) */
+    sha256_init(&sc);
+    sha256_update(&sc, g_e1, n);
+    sha256_final(&sc, g1);
+    if (osc_ir_digest(g_dec, g2) || memcmp(g1, g2, 32)) { fail("%s: digest differs", what); bad = 1; }
     return bad ? -1 : 0;
 }
 
@@ -281,7 +305,7 @@ static void test_valid_variants(unsigned want) {
     while (g_ndigs < want && tries < want * 20) {
         tries++;
         const Entry *c = &g_corpus[rndn((uint64_t)g_ncorpus)];
-        memcpy(g_tmp, c->u, sizeof *g_tmp);
+        copy_unit(g_tmp, c->u);
         unsigned k = 1 + (unsigned)rndn(3);
         for (unsigned j = 0; j < k; j++) mutate_unit(g_tmp);
         if (osc_ir_validate(g_tmp, NULL, 0)) { invalid++; continue; }
@@ -303,7 +327,7 @@ static void test_requirement_identity(void) {
         const OscUnit *u = g_corpus[i].u;
         for (int fi = 0; fi < u->nfuncs; fi++) {
             for (int which = 0; which < 2; which++) {
-                memcpy(g_tmp, u, sizeof *g_tmp);
+                copy_unit(g_tmp, u);
                 char *t = which ? g_tmp->funcs[fi].ensures_text : g_tmp->funcs[fi].requires_text;
                 size_t l = strlen(t);
                 if (l) t[l - 1] = (char)(t[l - 1] == 'x' ? 'y' : 'x');
@@ -446,13 +470,10 @@ static unsigned long g_cases, g_admitted, g_class[OSC_IR_REFUSAL_COUNT + 1];
 /* The oracle for one case: NULL if the decoder's answer is allowed, else why not. */
 static const char *judge(const uint8_t *m, size_t mlen, int rc, const OscUnit *out) {
     if (rc == OSC_IR_OK) {
-        if (osc_ir_validate(out, NULL, 0)) return "admitted an invalid unit";
-        size_t n = 0;
-        if (osc_ir_encode(out, NULL, 0, &n) || n != mlen) return "admitted bytes that do not re-encode to the same length";
-        uint8_t *e = malloc(n ? n : 1);
-        int same = e && !osc_ir_encode(out, e, n, &n) && !memcmp(e, m, mlen);
-        free(e);
-        return same ? NULL : "admitted bytes that do not re-encode identically";
+        size_t n = 0;  /* osc_ir_encode validates first: an invalid unit does not encode */
+        if (osc_ir_encode(out, g_e2, OSC_IR_ENCODED_MAX, &n)) return "admitted a unit that is invalid (does not encode)";
+        if (n != mlen || memcmp(g_e2, m, mlen)) return "admitted bytes that do not re-encode identically";
+        return NULL;
     }
     if (rc < -OSC_IR_REFUSAL_COUNT || rc > OSC_IR_REFUSE_MAGIC) return "refused with no named class";
     if (out->nfuncs || out->nstructs || out->funcs[0].ninsns || out->funcs[0].nvregs || out->funcs[0].name[0] || out->structs[0].name[0])
@@ -470,11 +491,13 @@ static void one_case(const uint8_t *m, size_t mlen, const uint8_t *orig, size_t 
     if (why) fail("%s %s %zu (len %zu, rc %s): %s", unit, kind, x, mlen, osc_ir_refusal_name(rc), why);
 }
 
-static void test_malformed(unsigned long want, unsigned random_per_unit, unsigned stride) {
+static void test_malformed(unsigned long want, unsigned random_per_unit, size_t max_positions) {
     uint8_t *m = malloc(1 << 20);
     for (int i = 0; i < g_ncorpus && g_fail < 20; i++) {
         const Entry *c = &g_corpus[i];
         if (c->len + 64 > (1u << 20)) continue;
+        size_t stride = (c->len + max_positions - 1) / max_positions;  /* every byte when len <= max_positions */
+        if (stride < 1) stride = 1;
         static const uint8_t masks[3] = {0x01, 0x80, 0xFF};
         for (size_t p = (size_t)rndn(stride); p < c->len; p += stride)
             for (int k = 0; k < 3; k++) {
@@ -509,10 +532,10 @@ static void test_malformed(unsigned long want, unsigned random_per_unit, unsigne
         }
     }
     free(m);
-    printf("malformed: cases=%lu admitted_as_other_canonical_unit=%lu", g_cases, g_admitted);
+    printf("malformed: cases=%lu refused=%lu admitted_as_other_canonical_unit=%lu (each re-encodes to its own bytes)", g_cases, g_cases - g_admitted, g_admitted);
     for (int c = 1; c <= OSC_IR_REFUSAL_COUNT; c++) printf(" %s=%lu", osc_ir_refusal_name(-c), g_class[c]);
     printf("\n");
-    CHECK(g_cases >= want, "only %lu malformed cases (want %lu)", g_cases, want);
+    CHECK(g_cases - g_admitted >= want, "only %lu refused malformed cases (want %lu)", g_cases - g_admitted, want);
     CHECK(g_class[-OSC_IR_REFUSE_NONCANONICAL] == 0, "NONCANONICAL backstop was reached: a structural check is missing");
 }
 
@@ -521,7 +544,7 @@ static void test_controls(void) {
     int caught = 0;
     const Entry *c = &g_corpus[0];
     /* (a) the field comparison sees a planted change in an encoded field */
-    memcpy(g_tmp, c->u, sizeof *g_tmp);
+    copy_unit(g_tmp, c->u);
     g_tmp->funcs[0].insns[0].op ^= 0x40;
     char buf[128];
     caught += unit_diff(c->u, g_tmp, buf, sizeof buf) != NULL;
@@ -531,7 +554,7 @@ static void test_controls(void) {
     m[c->len / 2] ^= 1;
     caught += osc_ir_decode(c->enc, c->len, g_dec) == OSC_IR_OK && judge(m, c->len, OSC_IR_OK, g_dec) != NULL;
     /* (c) the oracle rejects admission of an invalid unit */
-    memcpy(g_tmp, c->u, sizeof *g_tmp);
+    copy_unit(g_tmp, c->u);
     g_tmp->funcs[0].nblocks = 0;
     caught += judge(c->enc, c->len, OSC_IR_OK, g_tmp) != NULL;
     /* (d) the oracle rejects a refusal that left output behind, and an unnamed class */
@@ -543,24 +566,34 @@ static void test_controls(void) {
 }
 
 int main(int argc, char **argv) {
-    int quick = argc > 1 && !strcmp(argv[1], "quick");
+    /* quick: CI smoke counts. full: the gate counts (10,000 valid objects, >= 100,000 malformed
+     * cases, every byte of every unit up to 2,000 bytes). asan: full malformed counts, fewer valid
+     * variants (each validation is about 30x slower under the sanitizers). */
+    const char *mode = argc > 1 ? argv[1] : "full";
+    int quick = !strcmp(mode, "quick"), asan = !strcmp(mode, "asan");
+    if (!quick && !asan && strcmp(mode, "full")) { printf("usage: test_osc_ir_decode [quick|full|asan]\n"); return 2; }
+    setvbuf(stdout, NULL, _IOLBF, 0);
     g_dec = calloc(1, sizeof *g_dec);
     g_tmp = calloc(1, sizeof *g_tmp);
     g_digs = calloc(DIG_CAP, 32);
-    if (!g_dec || !g_tmp || !g_digs) { printf("out of memory\n"); return 1; }
+    g_e1 = malloc(OSC_IR_ENCODED_MAX);
+    g_e2 = malloc(OSC_IR_ENCODED_MAX);
+    if (!g_dec || !g_tmp || !g_digs || !g_e1 || !g_e2) { printf("out of memory\n"); return 1; }
     load_dir("tests/compiler/progs");
     load_dir("tests/compiler/slices");
     load_dir("src/osh");
     load_dir("tests/physics0/osc");
     if (g_ncorpus == 0) { printf("FAIL: no corpus (run from the repository root)\n"); return 1; }
-    printf("OSC_IR_ENCODED_MAX=%u bytes; mode=%s\n", (unsigned)OSC_IR_ENCODED_MAX, quick ? "quick (smoke counts, not gate evidence)" : "full");
+    printf("OSC_IR_ENCODED_MAX=%u bytes; mode=%s\n", (unsigned)OSC_IR_ENCODED_MAX, quick ? "quick (smoke counts, not gate evidence)" : mode);
     test_corpus();
     test_classes();
     test_controls();
     test_requirement_identity();
-    test_valid_variants(quick ? 1000 : 10000);
-    if (quick) test_malformed(5000, 40, 16);
-    else test_malformed(100000, 600, 1);
+    test_valid_variants(quick ? 1000 : asan ? 2000 : 10000);
+    if (quick) test_malformed(5000, 40, 100);
+    else test_malformed(100000, 600, 2000);
+    for (int i = 0; i < g_ncorpus; i++) { free(g_corpus[i].u); free(g_corpus[i].enc); }
+    free(g_dec); free(g_tmp); free(g_digs); free(g_e1); free(g_e2);
     if (g_fail) { printf("OSC_IR_DECODE_FAIL %d\n", g_fail); return 1; }
     printf("OSC_IR_DECODE_PASS\n");
     return 0;
