@@ -689,6 +689,14 @@ static void test_membrane_guard(void)
     g_s.v[10] -= 1.05f;
     g_s.v[28] = 1.2f; /* the membrane to the ground */
     CHECK_ST(omega_res_step(&g_cfg, &in, &g_ws, &g_s, &nx), OMEGA_RES_ERR_RANGE);
+    /* The bound is on |V_a - V_b|: a negative membrane voltage is refused too
+     * (catches a one-sided guard dv > limit). */
+    g_s = rest;
+    g_s.v[0] = -1.5f; /* membrane 0-1 at -1.5 V */
+    CHECK_ST(omega_res_step(&g_cfg, &in, &g_ws, &g_s, &nx), OMEGA_RES_ERR_RANGE);
+    g_s = rest;
+    g_s.v[28] = -1.2f; /* the membrane to the ground, negative */
+    CHECK_ST(omega_res_step(&g_cfg, &in, &g_ws, &g_s, &nx), OMEGA_RES_ERR_RANGE);
 
     /* Observer refusals. */
     CHECK_ST(omega_res_membrane_observe(&g_cfg, &rest, NULL), OMEGA_RES_ERR_NULL);

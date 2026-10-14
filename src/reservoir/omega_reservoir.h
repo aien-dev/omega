@@ -325,7 +325,9 @@ typedef struct {
 /* Zeroes *st. */
 void omega_res_membrane_stats_init(OmegaResMembraneStats *st);
 
-/* Adds state s to *st. Refuses NULL and a state of another configuration. */
+/* Adds state s to *st. Refuses NULL and a state of another configuration.
+ * Does not check finiteness: pass only states the simulator accepted (as
+ * omega_res_advance_observed does); a NaN voltage would go uncounted. */
 OmegaResStatus omega_res_membrane_observe(const OmegaResConfig *cfg, const OmegaResState *s,
                                           OmegaResMembraneStats *st);
 
