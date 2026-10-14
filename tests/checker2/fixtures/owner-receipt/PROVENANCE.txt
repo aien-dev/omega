@@ -1,0 +1,22 @@
+Owner-signed realization receipt (receipt v1, spec/one-layer-receipts.md): the positive production case of
+section 11. PUBLIC data only.
+
+Program:   a01.ir and a01.code are section 1 (OSC IR, 109 bytes) and section 2 (code, 164 bytes) of aienos
+           native/kernel/tests/fixtures/osc_unit/vectors/a01_valid_min.unit at aien-spark/aienos 69abd96c45d2
+           (unit sha256 5711ca0a71062f7df709bde41ed80c8e724f4826b886ecc9b0ceb55f80682da4). Each section was extracted
+           the way aienos tests/fixtures/osc_receipt/make-receipts.sh does it and hashes to its section-table entry:
+           ir_sha256   084803c232dc44effcc44704c9ed0600dec1231451e0b76693633e98a48d1a1d
+           code_sha256 6163612fd91c0ce8eb8126d4b38534867428704d346795a5e369055eef10fcdb
+Draft:     a01.owner-draft.rcpt = checker2 (omega 265ce82a, checker_id d7aae601...cf3ba, the identity pinned in aienos
+           artifact/osc_receipt_anchor.h) `receipt issue a01.ir a01.code --target aienos-ck-aarch64-el0 --epoch 20
+           --expiry 100 --owner-draft`: OWNER class, owner root fingerprint, all-zero signature. Target and epoch 20
+           are the aienos kernel's (OSC_RCPT_TARGET_NAME; core/osc_admit.c epoch floor 10, current epoch 20).
+Message:   a01.owner-draft.tbs = `receipt tbs` of the draft: the 65 bytes the YubiKey signs (section 3).
+Signature: a01.owner.sig (64 bytes) is made once on Drake's YubiKey, serial 39017074, PIV slot 9c, owner root
+           578ada3cb0c2d154623ac089191023c8ad4bc5e63b8ccd1a38db2d679b8c9e76 (aienos#380 ceremony), by
+           ~/bin/owner-sign-receipt-test.sh on the Spark: yubico-piv-tool -a verify-pin --sign -s 9c -A ED25519.
+           a01.owner.rcpt is `receipt attach` of the draft and that signature. a01.owner.check.txt records the
+           script's verdicts (openssl, omega production verify, the aienos kernel verifier built for the host).
+           Until those files are committed tests/checker2/owner_receipt.sh fails with OWNER-RECEIPT PENDING.
+Rebuild:   the draft and message are deterministic; owner_receipt.sh rebuilds both and requires byte identity. A
+           changed checker2 identity changes them, and the receipt must then be signed again.

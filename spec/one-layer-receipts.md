@@ -245,6 +245,11 @@ class 1 receipt). Proofs are deterministic: the solver writes byte-identical pro
   bits, else edge values and 3000 samples) checker2's CNF must agree with the compiled code on the
   trap and, through an `ensures result != c` probe, on the exact result value; 8 negative controls
   (the CNF of one operation against the code of another) must disagree;
+- `owner_receipt.sh`: the positive production case of section 11. The committed OWNER draft and its
+  65-byte message (`tests/checker2/fixtures/owner-receipt`, PROVENANCE.txt) are rebuilt and must be
+  byte-identical; the receipt signed once on Drake's YubiKey must verify `--production`, and a changed
+  signature byte, a changed program hash, a wrong target, an expired epoch, a revoked owner key and a
+  wrong executable must each be refused. It fails `OWNER-RECEIPT PENDING` until that signature is committed;
 - `mutants.sh`: each line tagged `GUARD:<name>` in the receipt code, decoder, acceptance rules,
   LRAT checker and bit-blaster is removed in turn; a test must fail every time (104 of 104); the script also refuses a tag count that differs
   from the mutant count.
