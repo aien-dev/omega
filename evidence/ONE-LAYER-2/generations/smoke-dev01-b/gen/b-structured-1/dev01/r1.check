@@ -1,0 +1,1 @@
+REFUSED step: function clamp_add block 1 op 0 (const): "dst" is register 3 but this function has registers 0..2

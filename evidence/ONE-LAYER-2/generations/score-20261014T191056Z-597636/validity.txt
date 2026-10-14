@@ -1,0 +1,4 @@
+INVALID: /home/drakestapleton/omega/.claude/worktrees/one-layer-exp445-tools/evidence/ONE-LAYER-2/generations/smoke-dev01-b: settings overridden on the command line (OVERRIDDEN: only attempts)
+INVALID: /home/drakestapleton/omega/.claude/worktrees/one-layer-exp445-tools/evidence/ONE-LAYER-2/generations/smoke-dev01-b: arms/attempts differ from PARAMS
+INVALID: 87 of 90 generations missing (first: b-bytes-1 dev02)
+RUN INVALID: 3 provenance problems, nothing scored (see /home/drakestapleton/omega/.claude/worktrees/one-layer-exp445-tools/evidence/ONE-LAYER-2/generations/score-20261014T191056Z-597636/validity.txt)
