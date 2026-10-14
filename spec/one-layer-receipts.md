@@ -1,7 +1,8 @@
 # One-layer receipts v1: signed Omega realization receipts (normative)
 
-Stage 3 of the one-layer plan (omega#446). Code: `src/checker2/c2_receipt.{h,c}`. Tests:
-`tests/checker2/test_c2_receipt.c`, negative controls `tests/checker2/mutants.sh`.
+Stage 3 of the one-layer plan (omega#446). Code: `src/checker2/` (receipts `c2_receipt.{h,c}`,
+IR decoder `c2_ir.{h,c}`, acceptance rules `c2_check.c`, LRAT checker `c2_lrat.{h,c}`, bit-blaster
+`c2_blast.{h,c}`, command line `checker2_main.c`). Tests: `make test-checker2` (section 12).
 Pairs with aienos#383 (OSC unit admission), which must verify exactly these bytes.
 
 ## 1. What a receipt says, and what it does not
@@ -71,9 +72,12 @@ Any other value is refused.
 
 ## 5. Checker identity
 
-`checker` = SHA-256 of the checker2 version string (`C2_CHECKER_VERSION`) followed by the
-SHA-256 of each checker2 source file in a fixed order, computed at build time by
-`mk/checker2.mk` and printed by `checker2 version`. A changed checker gives a new identity.
+`checker` = SHA-256(`C2_CHECKER_VERSION` including its terminating NUL ‖ the 64 lowercase hex
+characters of SHA-256 over the concatenation of the checker2 sources in the fixed order of
+`C2_ID_SRCS` in `mk/checker2.mk`). The sources include the IR decoder, the acceptance rules, the
+LRAT checker, the bit-blaster, the receipt code and the command line; the untrusted solver
+(`src/checker2/untrusted/`) is deliberately outside. `checker2 version` prints the version,
+`sources_sha256` and `checker_id`. A changed checker gives a new identity.
 
 ## 6. Verification order and named reasons
 
@@ -106,13 +110,105 @@ policy (for aienos: its own authority), never from the receipt.
 already exists with identical bytes the write is a no-op; any other existing content is an error,
 never an overwrite.
 
-## 8. Not covered (open)
+## 8. Command line
+
+    checker2 check <unit.ir>
+    checker2 version
+    checker2 receipt issue <unit.ir> <exe> --target T --epoch E --expiry X
+                           (--out-dir D | --owner-draft PATH)
+                           [--firmware F] [--requirements R | --lrat FUNC=PROOF ...]
+                           [--input I] [--producer P] [--dep ID ...]
+    checker2 receipt tbs <receipt> <out65>
+    checker2 receipt attach <receipt> <sig64> --out-dir D
+    checker2 receipt verify <receipt> <unit.ir> <exe> --target T --epoch E [--production]
+                           [--floor N] [--firmware F] [--revoked-id ID ...] [--revoked-key FP ...]
+                           [--lrat FUNC=PROOF ...]
+    checker2 prove-cnf <unit.ir> <func> <out.cnf>
+    checker2 prove-check <unit.ir> <func> <proof.lrat>
+
+Exit 0 accept or done, 1 reject or refused, 2 usage or I/O error. `issue` refuses to sign bytes
+checker2 rejects. `--dep` ids must be strictly ascending (their digest is order-sensitive).
+
+Owner signing, without Omega ever holding the private key: `issue --owner-draft PATH` writes an
+OWNER-class receipt with the owner root fingerprint and an all-zero signature; `tbs` writes the
+65-byte message of section 3; Drake signs it on the YubiKey (PIV slot 9c); `attach` verifies the
+signature against the compiled-in owner root and stores the signed receipt by id (section 7).
+
+## 9. What checker2 accepts, and what it was written from
+
+checker2 decodes the canonical OSC IR bytes itself and applies its own acceptance rules. It links
+no file of `src/compiler/` and shares no parser, evaluator or instruction table with the producer
+(oscc). Its sources were written from these inputs only; no existing checker implementation
+(`src/compiler/osc_check.*` or any other) was read:
+
+- `src/compiler/osc_ir.h`: the IR data structures, opcodes, scalar kinds and trap codes
+  (lines 152 to 176); the encoder part of `src/compiler/osc_ir.c` (lines 537 to 729), read for the
+  exact byte layout only, as the IR format has no separate written specification;
+- `src/compiler/osc_front.h` (front-end interface, used by the test producer only);
+- `docs/osc/` (OSC-1 design, including the semantics in section 5 of `OSC-1-DESIGN.md`);
+- `src/omega_receipt.h`, `src/omega_vc_bridge.h`, `src/searchtrace/sig/*.h`, `src/sha256.h`;
+- aienos `osc_unit.c` (the admission side's receipt rules, step 13);
+- the build files under `mk/`.
+
+Every rejection names a stable rule (`C2-*`, listed in `c2_check.c`). Acceptance requires, per
+function: valid types and operands; well-formed control flow; every use defined on every path;
+ownership, arena, pool and handle discipline (a may-set analysis that rejects definite errors);
+every loop reducible and bounded by a guarded counter with a constant limit of at most 10^6.
+
+## 10. Evidence class 2: LRAT proofs
+
+Property `no-trap-except-requires` of a function F: for every argument value, a run of F that
+passes its `requires` clauses ends without any trap (overflow, division, shift, cast, loop bound,
+`ensures`, or an explicit trap). checker2 builds the CNF of "some argument reaches a trap" itself,
+from the IR bytes (`c2_blast.h`: scalar functions only; calls, memory, division and signed right
+shift are refused, never approximated). The solver (`src/checker2/untrusted/c2sat.c`) is
+untrusted and outside the checker identity. An UNSAT answer counts only when checker2's own LRAT
+checker (`c2_lrat.h`: RUP steps only, RAT hints refused, the empty clause required) accepts the
+proof against the CNF checker2 rebuilt.
+
+With `--lrat FUNC=PROOF` (functions strictly ascending), `issue` checks every proof and sets
+evidence class 2 with `requirements` = SHA-256 of the requirements object:
+
+    OMEGA-REQUIREMENTS-V1\n
+    no-trap-except-requires <FUNC> proof_sha256=<64 hex>\n      (one line per proof)
+
+`verify` replays: a class 2 receipt is valid only when the same proofs are given, each checks
+against the IR bytes, and the rebuilt object hashes to `requirements`. Reasons: `LRAT-PROOFS-REQUIRED`,
+`LRAT-REPLAY-FAILED`, `LRAT-REQUIREMENTS-MISMATCH`, and `LRAT-NOT-CLAIMED` (proofs offered for a
+class 1 receipt). Proofs are deterministic: the solver writes byte-identical proofs on every run.
+
+## 11. Not covered (open)
 
 - Translation validation of the executable against the program (plan section 3) is not done;
-  evidence class 1 says so in its definition.
+  evidence classes 1 and 2 say so in their definitions.
 - Production acceptance of an OWNER receipt is tested only in its refusals; a positive production
   case needs one receipt signed on Drake's YubiKey (owner presence, decision D3). UNVERIFIED
   until then.
-- The admission side (aienos#383) is separate work.
-- `src/omega_vc_bridge.h` still self-mints HOST_TEST receipts for OmegaProgram programs; replacing
-  that route is not done in this change.
+- The admission side (aienos#383) is separate work and must verify exactly these bytes.
+- `src/omega_vc_bridge.h` still self-mints HOST_TEST receipts. That route admits OmegaProgram
+  programs (`omega_program_ir.h`), not OSC IR, and records an aien-proof EvidenceReceiptV1
+  (`src/omega_receipt.h`, contract owned by aien-protocols). Replacing it needs checker2 to judge
+  that IR (or those programs to arrive as OSC) and a change to that shared contract; neither is
+  in this change.
+- A differential of the planted IR defects against the producer's checker needs an IR-bytes entry
+  point on the producer side (omega#444); until then those 96 defects are judged by checker2 only.
+
+## 12. Tests
+
+`make test-checker2` (CI job `checker2` in `.github/workflows/host-suites.yml`):
+
+- `test_c2_receipt` (plain and ASan/UBSan): signing, every named refusal, tampered bytes, wrong
+  key, TEST key in production mode, the real owner ceremony signature;
+- `differential.sh`: every OSC unit in the repo plus 48 generated units, oscc run as a black box;
+  both must accept the same 107 units with identical bytes, and the known-bad units must be
+  refused (138 by the front end);
+- `test_c2_ir` (plain and ASan/UBSan): 107 units re-encode identically, every truncation refused,
+  bit flips never crash, 96 planted defects each refused by its exact rule;
+- `test_c2_lrat` (plain and ASan/UBSan): hand-written LRAT cases, each refusal by its exact rule,
+  20000 corrupted proofs never verify a satisfiable formula;
+- `lrat.sh`: 20 bounded programs proved and replayed, 9 trap programs found to trap, 48 corrupted,
+  substituted or misapplied proofs and receipts refused;
+- `test_c2_blast`: non-scalar functions refused; every gate program evaluated input by input
+  without a solver (exhaustive to 16 argument bits), agreeing with its expectation;
+- `mutants.sh`: each line tagged `GUARD:<name>` in the receipt code, decoder, acceptance rules,
+  LRAT checker and bit-blaster is removed in turn; a test must fail every time (100 of 100).
