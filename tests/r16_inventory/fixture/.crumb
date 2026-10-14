@@ -29,20 +29,50 @@
     "generated": {
       "children": [
         {
+          "digest": "17abb748e3744726d474d8cf58493ab1ff69c8666fbc206602bb3de696c3b2a5",
+          "last_commit": "6fdc4c33",
+          "name": "aegis-runtime/src",
+          "purpose": "Directory tests/r16_inventory/fixture/aegis-runtime/src. Purpose not yet described by a human."
+        },
+        {
+          "digest": "dd502fb6702ceeee2e94f977b468c6aad84ed3be8c84270e99bd2c0d8d0e458a",
+          "last_commit": "6fdc4c33",
+          "name": "aien-sovereign-core/src",
+          "purpose": "Directory tests/r16_inventory/fixture/aien-sovereign-core/src. Purpose not yet described by a hu"
+        },
+        {
+          "digest": "5d9ff20385cf5f9815af835ed9b8570c8420ea361881055cf7f5551de9ff0226",
+          "last_commit": "6fdc4c33",
+          "name": "aienos/src",
+          "purpose": "Directory tests/r16_inventory/fixture/aienos/src. Purpose not yet described by a human."
+        },
+        {
+          "digest": "a2e33609182947dc2854c5c9f6f1cbf42b6c72173e1e9030c4d7775de98a348b",
+          "last_commit": "6fdc4c33",
+          "name": "omega/src",
+          "purpose": "Directory tests/r16_inventory/fixture/omega/src. Purpose not yet described by a human."
+        },
+        {
+          "digest": "9fa71756e80a0d5dbe92789ba2cc0221f643fb0a900b4725d72da75e8080787a",
+          "last_commit": "6fdc4c33",
+          "name": "omega/tools",
+          "purpose": "Directory tests/r16_inventory/fixture/omega/tools. Purpose not yet described by a human."
+        },
+        {
           "digest": "9bfb0d9ca42bc56414db9d1842488e657e7163a3804e9c82c4c5a6629cf94399",
           "last_commit": "6fdc4c33",
           "name": "physics",
           "purpose": "Directory tests/r16_inventory/fixture/physics. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:a7d5f146d5c99c75701c8f384732dbdf7158a8fcd7295d0c0761c1e84d2c4e9d",
-      "compiled_at": "2026-10-12T05:17:54Z",
+      "children_root": "sha256:1af8057189e2525c3642ad11f0cb41ba41a943874bb3182c25fbeeafe8bd0318",
+      "compiled_at": "2026-10-14T04:13:25Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:3b8ee545f13c1a168892b617671eebf2ee65413994332269f5d2f2dcf492aba7",
+      "digest": "sha256:6af59a55e74de68003eb6fdb730872d26605f8f6d0f937f509a48902d656d640",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 8,
-      "generated_at_commit": "6e6f1c8e27b4f3a511bb284e7f51f2a957863ded",
+      "generated_at_commit": "d0889a944b02066f84fec71af7b9bbb92f5c986f",
       "source_tree": "sha256:be8537e95e5ed29a32f2e6267c290f8b999a1537c3dd5c7e4f691791eabb74b6"
     },
     "owner_lane": "",
