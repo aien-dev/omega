@@ -1,0 +1,20 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-14T17:30:45Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:4785d8df268c31047589c5dff4ebc1f9a12a0fa4d5c94ce6dee156a841cf9502",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 4,
+      "generated_at_commit": "2ec9e45fbc14d6838cceffe5c164f2af43b61a31",
+      "source_tree": "sha256:f8483e2c88bc40d51bada535d3c3b6bc9cb19823e0100723b6ed03e59b36fe75"
+    }
+  },
+  "layer": "src/reservoir",
+  "name": "src/reservoir",
+  "purpose": "Ionic-droplet reservoir simulator (omega#440): binary32 fixed-step RK4 of the authors' droplet model, refusals instead of silent repair, run receipts, binary64 ridge readout. CPU only; the reference and contract are docs/reservoir/RESERVOIR_REFERENCE.md.",
+  "schema_version": "1.0.0"
+}
