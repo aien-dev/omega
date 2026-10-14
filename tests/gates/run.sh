@@ -28,11 +28,15 @@ pin() {
     echo "run.sh: ../$repo is missing; the hosted job checks out aien-dev/$repo at $sha" >&2
     exit 3
   fi
-  if [ ! -d "$dir" ] || [ "$(git -C "$dir" rev-parse HEAD 2>/dev/null)" != "$sha" ]; then
-    rm -rf "$dir"; mkdir -p "$PINS"
-    git clone --quiet --shared --no-checkout "../$repo" "$dir"
-    git -C "$dir" checkout --quiet --detach "$sha"
-  fi
+  mkdir -p "$PINS"
+  (
+    flock -x 9
+    if [ ! -d "$dir" ] || [ "$(git -C "$dir" rev-parse HEAD 2>/dev/null)" != "$sha" ]; then
+      rm -rf "$dir"
+      git clone --quiet --shared --no-checkout "../$repo" "$dir"
+      git -C "$dir" checkout --quiet --detach "$sha"
+    fi
+  ) 9>"$PINS/.$name.lock"
   obs "pin_${name//-/_}" "\"$sha\""
 }
 physics_pin() { pin physics-src physics "$(lock physics.lock)"; export PHYSICS_DIR="$PINS/physics-src"; }
