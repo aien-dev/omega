@@ -1,0 +1,27 @@
+codegen warps 4 mode 0: 917 instructions, 120 registers (declared 128, 128 threads -> 16384 of 65536), 16 placeholders patched
+codegen warps 4 mode 1: 174 instructions, 56 registers (declared 64, 128 threads -> 8192 of 65536), 0 placeholders patched
+codegen warps 4 mode 2: 782 instructions, 124 registers (declared 128, 128 threads -> 16384 of 65536), 16 placeholders patched
+codegen warps 8 mode 0: 866 instructions, 120 registers (declared 128, 256 threads -> 32768 of 65536), 16 placeholders patched
+codegen warps 8 mode 1: 174 instructions, 56 registers (declared 64, 256 threads -> 16384 of 65536), 0 placeholders patched
+codegen warps 8 mode 2: 731 instructions, 124 registers (declared 128, 256 threads -> 32768 of 65536), 16 placeholders patched
+codegen warps 8 APPEND + mirror: 187 instructions, 56 registers
+path: split APPEND + ATTEND, ATTEND reads the GPU-cached K/V mirror, warps 8, warm 0, dev buffers GPU-cached (pf_alloc_dev)
+chip pos0     0 m  2048: parity bad=0 worst=0.247; rows vs emulation k 8 (max 1 ulp) v 0; chunks 4 grid 128x4 x256 thr; chip 3.047 ms call 53.984 ms
+  reps chip ms (in order, 0 untimed warm calls first): 2.183 2.298 2.336 2.435 2.374 2.107 2.363 4.834 2.311 2.204 4.208 2.271 3.046 2.295 2.256
+  slowest rep, per launch ms (8 launches): 0.107 0.740 0.080 0.053 0.055 0.052 0.215 3.532
+  timing prefill pos0 0 m 2048: chip median 2.311 ms (min 2.107) call median 12.849 ms; 14.87 useful TFLOPS on chip time
+chip dev (cached buffers) pos0     0 m  2048: outputs vs host entry: 0 unwritten, 0 differ; rows k 0 v 0 differ; launches 2 grid 256x4; chip 1.292 ms call 3.792 ms
+  dev reps chip ms: 1.353 1.333 1.336 1.332 1.335 1.334 1.331 1.332 1.333 1.330 1.327 1.326 1.431 1.435 1.326
+  timing dev pos0 0 m 2048: chip median 1.333 ms (min 1.326) call median 1.334 ms; 25.79 useful TFLOPS on chip time
+chip dev (cached buffers) pos0  4096 m  1500: outputs vs host entry: 0 unwritten, 0 differ; rows k 0 v 0 differ; launches 2 grid 188x4; chip 3.429 ms call 7.203 ms
+  dev reps chip ms: 3.425 3.508 3.509 3.506 3.400 3.390 3.347 3.597 3.529 3.396 3.296 3.399 3.390 3.761 3.508
+  timing dev pos0 4096 m 1500: chip median 3.425 ms (min 3.296) call median 3.432 ms; 34.78 useful TFLOPS on chip time
+chip pos0  4032 m    64: parity bad=0 worst=0.011; rows vs emulation k 0 (max 0 ulp) v 0; chunks 2 grid 8x4 x256 thr; chip 0.815 ms call 7.559 ms
+  reps chip ms (in order, 0 untimed warm calls first): 0.544 0.541 0.539 0.545 0.541 0.550 0.542 0.541 0.539 0.539 0.537 0.536 0.542 0.542 0.543
+  slowest rep, per launch ms (6 launches): 0.032 0.032 0.041 0.032 0.104 0.308
+  timing prefill pos0 4032 m 64: chip median 0.541 ms (min 0.536) call median 0.784 ms; 7.87 useful TFLOPS on chip time
+chip dev (cached buffers) pos0  4096 m    64: outputs vs host entry: 0 unwritten, 0 differ; rows k 0 v 0 differ; launches 2 grid 8x4; chip 0.564 ms call 4.508 ms
+  dev reps chip ms: 0.570 0.540 0.548 0.544 0.547 0.539 0.536 0.542 0.545 0.543 0.546 0.543 0.538 0.540 0.545
+  timing dev pos0 4096 m 64: chip median 0.543 ms (min 0.536) call median 0.549 ms; 7.97 useful TFLOPS on chip time
+gpu_prefill_attn_test: 109 checks, 0 failed: PASS
+exit 0

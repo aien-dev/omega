@@ -1,0 +1,7 @@
+start 2026-10-14T01:32:41Z omega=1d3ab14a551f042b0f990f8514ea8591b5ae6db4 branch=own30b/decode-mega dirty=1 physics=/home/drakestapleton/workspace/physics-own30b-k physics_commit=6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf
+Linux spark-b87b 7.0.0-1019-nvidia #19~24.04.2-Ubuntu SMP PREEMPT_DYNAMIC Sun Sep  6 18:35:11 UTC 2 aarch64 aarch64 aarch64 GNU/Linux
+NVIDIA GB10, 580.173.02
+               total        used        free      shared  buff/cache   available
+Mem:             121          19          36           2          68         102
+ 20:32:41 up 7 days, 14:01, 15 users,  load average: 4.92, 5.80, 5.53
+end 2026-10-14T01:32:52Z

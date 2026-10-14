@@ -1,0 +1,17 @@
+OWN30B L1A cut 5: persistent GPU-cached K/V mirror per (cache, layer). Code bba7688a, own30b/integration, GB10 580.173.02.
+
+VERIFIED (hardware):
+- Main gate --cached: 170 checks, 0 failed (parity, rows vs decode, dev vs host entry, mutants caught, continuation).
+- Token identity across calls: prefill 300, 5 decode steps, prefill 64: 0 of all outputs differ bitwise vs the no-mirror
+  path; mirror view valid = 369, stride = cache stride (same layout as the decode cache).
+- Negative control: rewriting cache rows 0..99 behind the mirror's back WITHOUT invalidate -> 32768 outputs differ
+  (stale mirror is real and visible); after kv_mirror_invalidate -> 0 differ. The contract is load-bearing.
+- A/B (device entry, chip medians of 15, A = --mirror-per-call (cut 4 behaviour), B = persistent), two rounds:
+    64 after 4096:    A 0.543 / 0.566 ms   B 0.414 / 0.438 ms   (~1.3x; history copies gone)
+    64 after 4032 (host entry): A 0.541 / 0.574  B 0.421 / 0.450
+    2048 from 0:      A 1.333 / 1.365      B 1.376 / 1.438      (no history; equal within noise)
+    1500 after 4096:  A 3.425 / 3.568      B 3.415 / 3.482      (equal: each point uses a fresh cache, first call copies)
+INFERRED: the remaining 0.41 ms at 64 tokens is the ATTEND launch with only 8x4 = 32 CTAs over 4160 keys (chip underfilled);
+  the lever is a key split for short continuations.
+UNKNOWN: decode kernel reading the mirror (not wired; layout matches, NOT_RUN). Multi-threaded callers (mirror registry
+  allocation is outside the session lock; single caller assumed).

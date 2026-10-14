@@ -1,0 +1,5 @@
+start 2026-10-14T01:22:35Z
+omega commit 6536fd96639b2bbca7f0e8b2a36e2a5f744fce17 (own30b/tc-prefill)
+binary /tmp/wl1gd/gpu_pfhost_test-6536fd96 sha256 ff00bfa1f698b993090a42b99d13590119e3efc7243575b13214eb5fc37d4a7c
+build make PHYSICS_DIR=~/workspace/physics-own30b-k OUT_DIR=/tmp/wl1gd/omega-tc /tmp/wl1gd/omega-tc/gpu_pfhost_test
+cmd flock /tmp/aien-gb10.lock /tmp/wl1gd/gpu_pfhost_test-6536fd96 --chip --tokens 2048 --reps 7

@@ -1,0 +1,38 @@
+ok: cached=0 evict=1 n=1024: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=0 evict=1 n=1024  MB=2.1 cold_us=43.8 warm_us=40.8 ratio=0.931 cold_GB/s=47.8 warm_GB/s=51.4
+ok: cached=0 evict=1 n=2048: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=0 evict=1 n=2048  MB=4.2 cold_us=75.7 warm_us=75.8 ratio=1.001 cold_GB/s=55.4 warm_GB/s=55.4
+ok: cached=0 evict=1 n=4096: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=0 evict=1 n=4096  MB=8.4 cold_us=91.4 warm_us=90.7 ratio=0.992 cold_GB/s=91.8 warm_GB/s=92.6
+ok: cached=0 evict=1 n=8192: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=0 evict=1 n=8192  MB=16.8 cold_us=82.1 warm_us=83.5 ratio=1.017 cold_GB/s=204.3 warm_GB/s=200.9
+ok: cached=0 evict=1 n=12288: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=0 evict=1 n=12288 MB=25.2 cold_us=125.9 warm_us=127.6 ratio=1.013 cold_GB/s=199.9 warm_GB/s=197.2
+ok: cached=0 evict=1 n=16384: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=0 evict=1 n=16384 MB=33.6 cold_us=157.1 warm_us=160.0 ratio=1.019 cold_GB/s=213.7 warm_GB/s=209.8
+ok: cached=1 evict=0 n=1024: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=1 evict=0 n=1024  MB=2.1 cold_us=35.1 warm_us=36.5 ratio=1.039 cold_GB/s=59.8 warm_GB/s=57.5
+ok: cached=1 evict=0 n=2048: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=1 evict=0 n=2048  MB=4.2 cold_us=41.4 warm_us=38.6 ratio=0.933 cold_GB/s=101.3 warm_GB/s=108.6
+ok: cached=1 evict=0 n=4096: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=1 evict=0 n=4096  MB=8.4 cold_us=39.1 warm_us=38.6 ratio=0.988 cold_GB/s=214.6 warm_GB/s=217.2
+ok: cached=1 evict=0 n=8192: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=1 evict=0 n=8192  MB=16.8 cold_us=52.7 warm_us=51.9 ratio=0.985 cold_GB/s=318.2 warm_GB/s=323.1
+ok: cached=1 evict=0 n=12288: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=1 evict=0 n=12288 MB=25.2 cold_us=80.8 warm_us=80.2 ratio=0.992 cold_GB/s=311.5 warm_GB/s=313.9
+ok: cached=1 evict=0 n=16384: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=1 evict=0 n=16384 MB=33.6 cold_us=146.0 warm_us=145.7 ratio=0.998 cold_GB/s=230.0 warm_GB/s=230.4
+ok: cached=1 evict=1 n=1024: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=1 evict=1 n=1024  MB=2.1 cold_us=39.2 warm_us=35.6 ratio=0.909 cold_GB/s=53.6 warm_GB/s=58.9
+ok: cached=1 evict=1 n=2048: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=1 evict=1 n=2048  MB=4.2 cold_us=43.2 warm_us=36.9 ratio=0.853 cold_GB/s=97.0 warm_GB/s=113.7
+ok: cached=1 evict=1 n=4096: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=1 evict=1 n=4096  MB=8.4 cold_us=50.7 warm_us=37.9 ratio=0.747 cold_GB/s=165.5 warm_GB/s=221.6
+ok: cached=1 evict=1 n=8192: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=1 evict=1 n=8192  MB=16.8 cold_us=81.2 warm_us=54.1 ratio=0.667 cold_GB/s=206.7 warm_GB/s=309.9
+ok: cached=1 evict=1 n=12288: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=1 evict=1 n=12288 MB=25.2 cold_us=126.6 warm_us=80.7 ratio=0.637 cold_GB/s=198.8 warm_GB/s=312.0
+ok: cached=1 evict=1 n=16384: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=1 evict=1 n=16384 MB=33.6 cold_us=159.8 warm_us=151.9 ratio=0.950 cold_GB/s=210.0 warm_GB/s=220.9
+SUMMARY uncached max warm/cold 1.019, cached min warm/cold 0.637
+gpu_l2_reuse_test: 18 checks, 0 failed: PASS

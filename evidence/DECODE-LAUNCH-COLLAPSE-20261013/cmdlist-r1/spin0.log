@@ -1,0 +1,5 @@
+PCAS L=64 rep 0: submit rc -1 (cmdlist: marker poll refused (latched)) sems_done 0 first_missing -1
+FAIL: L=64 PCAS list: every rep bit-identical to the baseline, all semaphores DONE
+cmdlist latched; stopping
+chip: 2 checks, 1 failed: FAIL
+spin-us 0 exit 1 (informational)

@@ -1,0 +1,26 @@
+ok: cached=0 n=1024: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=0 n=1024  MB=2.1 cold_us=50.2 warm_us=50.6 ratio=1.008 cold_GB/s=41.8 warm_GB/s=41.5
+ok: cached=0 n=2048: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=0 n=2048  MB=4.2 cold_us=62.1 warm_us=59.8 ratio=0.962 cold_GB/s=67.5 warm_GB/s=70.2
+ok: cached=0 n=4096: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=0 n=4096  MB=8.4 cold_us=68.7 warm_us=66.2 ratio=0.963 cold_GB/s=122.1 warm_GB/s=126.8
+ok: cached=0 n=8192: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=0 n=8192  MB=16.8 cold_us=97.6 warm_us=96.5 ratio=0.988 cold_GB/s=171.9 warm_GB/s=173.9
+ok: cached=0 n=12288: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=0 n=12288 MB=25.2 cold_us=124.8 warm_us=123.0 ratio=0.985 cold_GB/s=201.6 warm_GB/s=204.6
+ok: cached=0 n=16384: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=0 n=16384 MB=33.6 cold_us=163.7 warm_us=166.9 ratio=1.020 cold_GB/s=205.1 warm_GB/s=201.0
+ok: cached=1 n=1024: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=1 n=1024  MB=2.1 cold_us=45.6 warm_us=42.6 ratio=0.934 cold_GB/s=46.0 warm_GB/s=49.3
+ok: cached=1 n=2048: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=1 n=2048  MB=4.2 cold_us=52.1 warm_us=53.1 ratio=1.018 cold_GB/s=80.5 warm_GB/s=79.1
+ok: cached=1 n=4096: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=1 n=4096  MB=8.4 cold_us=50.3 warm_us=50.3 ratio=1.001 cold_GB/s=166.9 warm_GB/s=166.7
+ok: cached=1 n=8192: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=1 n=8192  MB=16.8 cold_us=65.0 warm_us=62.5 ratio=0.961 cold_GB/s=258.1 warm_GB/s=268.5
+ok: cached=1 n=12288: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=1 n=12288 MB=25.2 cold_us=95.0 warm_us=93.9 ratio=0.989 cold_GB/s=265.0 warm_GB/s=268.1
+ok: cached=1 n=16384: 10 reps ran, y bit-identical to the reference on every rep
+L2 cached=1 n=16384 MB=33.6 cold_us=142.0 warm_us=141.9 ratio=0.999 cold_GB/s=236.3 warm_GB/s=236.5
+SUMMARY uncached max warm/cold 1.020, cached min warm/cold 0.934
+gpu_l2_reuse_test: 12 checks, 0 failed: PASS

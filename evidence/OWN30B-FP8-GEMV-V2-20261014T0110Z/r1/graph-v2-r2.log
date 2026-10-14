@@ -1,0 +1,5 @@
+fp8 knobs: variant 2 cta_budget 0 shape 0/0/0 cached 0
+model built in 1.4 s (layers 2, vocab 151936, pos 300)
+A o: qmd build (shared_bytes)
+FAIL: A (baseline, host glue) 5 reps ran
+chip: 1 checks, 1 failed: FAIL

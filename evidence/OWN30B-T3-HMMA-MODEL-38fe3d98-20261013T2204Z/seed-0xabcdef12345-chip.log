@@ -1,0 +1,13 @@
+host-only model self-checks: PASS (0 failures)
+chip launch mutant 0: peak 20 declared 64, 221409 ns
+chip launch mutant 1: peak 16 declared 64, 109184 ns
+plausibility: 0 poison, 0 of 262144 outputs farther than 1e-5 of the term magnitude from the exact sum
+negative control (C dropped): 163800 of 163800 outputs with significant C differ (caught)
+model group 16 extra 2 RZ nominal 0 csep 0: 245829 of 262144 match  (misses by class: narrow 0, wide 4684, mixed+cancel 5262, bigC 0, subnormal 0, medium 6369)
+model group 16 extra 2 RZ nominal 2 csep 0: 262144 of 262144 match  (misses by class: narrow 0, wide 0, mixed+cancel 0, bigC 0, subnormal 0, medium 0)
+model group 16 extra 2 RZ nominal 2 csep 1: 236397 of 262144 match  (misses by class: narrow 0, wide 3500, mixed+cancel 10266, bigC 11961, subnormal 0, medium 20)
+model group 16 extra 3 RZ nominal 0 csep 0: 237182 of 262144 match  (misses by class: narrow 0, wide 2693, mixed+cancel 11521, bigC 8033, subnormal 0, medium 2715)
+model group 16 extra 3 RZ nominal 1 csep 0: 245308 of 262144 match  (misses by class: narrow 0, wide 0, mixed+cancel 8782, bigC 8033, subnormal 0, medium 21)
+model group 16 extra 3 RZ nominal 1 csep 1: 236397 of 262144 match  (misses by class: narrow 0, wide 3500, mixed+cancel 10266, bigC 11961, subnormal 0, medium 20)
+best model: group 16 extra 2 RZ: 262144 of 262144
+TC_PROBE: model=group 16 extra 2 RZ nominal 2 csep 0 exact 262144/262144

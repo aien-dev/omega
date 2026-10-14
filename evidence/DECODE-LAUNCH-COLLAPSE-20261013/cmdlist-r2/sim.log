@@ -1,0 +1,15 @@
+sim res mode 5 scale 1 mutant 0: x identical, y 0/2048 outside tolerance
+sim res mode 5 scale 1 mutant 1: x identical, y 2047/2048 outside tolerance
+sim res mode 6 scale 1 mutant 0: x identical, y 0/2048 outside tolerance
+sim res mode 6 scale 1 mutant 1: x DIFFERS, y 2047/2048 outside tolerance
+sim res mode 5 scale 2^64 mutant 0: x identical, y 0/2048 outside tolerance
+sim res mode 5 scale 2^64 mutant 1: x identical, y 2047/2048 outside tolerance
+sim res mode 6 scale 2^64 mutant 0: x identical, y 0/2048 outside tolerance
+sim res mode 6 scale 2^64 mutant 1: x DIFFERS, y 2048/2048 outside tolerance
+sim swiglu mutant 0: 0/6144 outside tolerance
+sim swiglu mutant 1: 6144/6144 outside tolerance
+sim argmax tie 0 mutant 0: index 151625 value 49.9996 (ref 151625)
+sim argmax tie 0 mutant 1: index 151625 value 49.9996 (ref 151625)
+sim argmax tie 1 mutant 0: index 1007 value 60 (ref 1007)
+sim argmax tie 1 mutant 1: index 28784 value 49.9999 (ref 1007)
+sim: 39 checks, 0 failed: PASS

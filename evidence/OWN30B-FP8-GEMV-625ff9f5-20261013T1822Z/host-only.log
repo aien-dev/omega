@@ -1,0 +1,6 @@
+conversion: 254/256 exact, 2 NaN codes refused, 14 codes travel as f32 subnormals (2^-129 .. 7 * 2^-129): the chip must not flush them
+codegen: 180 kernels built, largest 884 IR instructions, peak 88 GPRs
+nvdisasm k2048_lb16_r8: rc=0 insns=832 undecodable=0 missing=0 (/tmp/omega_fp8_k2048_lb16_r8_2569230.sass)
+nvdisasm k2048_lb16_r1_deep4: rc=0 insns=456 undecodable=0 missing=0 (/tmp/omega_fp8_k2048_lb16_r1_deep4_2569230.sass)
+nvdisasm k768_lb8_r2: rc=0 insns=168 undecodable=0 missing=0 (/tmp/omega_fp8_k768_lb8_r2_2569230.sass)
+gpu_fp8_api_test: 1439 checks, 0 failed: PASS
