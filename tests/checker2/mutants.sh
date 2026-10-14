@@ -3,10 +3,11 @@
 # is removed, one at a time, in a scratch copy; the matching test is rebuilt against that copy and
 # MUST fail. A mutant that survives means the test cannot see that check, and this script fails.
 # Also requires the unmutated build to pass first (otherwise "fails" proves nothing).
-# Usage: sh tests/checker2/mutants.sh <cc> <scratch-dir>
+# Usage: sh tests/checker2/mutants.sh <cc> <scratch-dir> <ir-dir from differential.sh>
 set -u
 CC=${1:-cc}
 OUT=${2:-build/checker2/mutants}
+IRDIR=${3:-build/checker2/differential/ir}
 CFLAGS="-std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -O1 -Isrc -Isrc/checker2"
 SIG="src/searchtrace/sig/ed25519.c src/searchtrace/sig/sha512.c src/searchtrace/sig/ct.c"
 mkdir -p "$OUT"
@@ -51,6 +52,8 @@ run_family() {
 }
 
 run_family src/checker2/c2_receipt.c tests/checker2/test_c2_receipt.c "src/sha256.c $SIG" tests/checker2/fixtures
+run_family src/checker2/c2_ir.c tests/checker2/test_c2_ir.c src/checker2/c2_check.c "$IRDIR"
+run_family src/checker2/c2_check.c tests/checker2/test_c2_ir.c src/checker2/c2_ir.c "$IRDIR"
 
 echo "checker2 mutants: $killed of $total killed"
 if [ -n "$survived" ]; then

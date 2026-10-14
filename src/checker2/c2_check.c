@@ -195,8 +195,9 @@ static int check_insn(Fx *x, uint32_t ii)
     int nv = f->nvregs;
     int16_t us[8];
     int nu = uses(in, us);
-    for (int k = 0; k < nu; k++)
+    for (int k = 0; k < nu; k++) {
         if (us[k] < 0 || us[k] >= nv) F("C2-OPERAND-RANGE", "operand v%d out of range", us[k]); /* GUARD:operand-range */
+    }
     int d = defines(in);
     int need_dst = !(in->op == C2_CALL && f->in[ii].dst == -1) && d != -1 ? 1 : 0;
     if (in->op != C2_CALL && (in->op == C2_CONST || in->op == C2_MOV || in->op == C2_BIN || in->op == C2_UN ||
@@ -224,7 +225,9 @@ static int check_insn(Fx *x, uint32_t ii)
         if (is_slice(ta) || is_slice(td)) F("C2-SLICE-ESCAPE", "slice copied");
         if (is_ref(td) || is_ref(ta)) {
             if (!same_shape(td, ta) || !bindable(td->kind, ta->kind)) F("C2-TYPE-MOV", "reference kinds or shapes do not bind"); /* GUARD:mov-ref */
-        } else if (!same_type(td, ta) || !is_scalar_t(td)) F("C2-TYPE-MOV", "MOV between different types"); /* GUARD:mov-type */
+        } else {
+            if (!same_type(td, ta) || !is_scalar_t(td)) F("C2-TYPE-MOV", "MOV between different types"); /* GUARD:mov-type */
+        }
         break;
     case C2_BIN:
         if (in->sub < B_ADD || in->sub >= B_LIMIT) F("C2-DECODE-SUBOP", "binary op %u", in->sub);
@@ -232,7 +235,9 @@ static int check_insn(Fx *x, uint32_t ii)
             if (!is_int(td->s) || !same_type(td, ta) || !is_int(tb->s)) F("C2-TYPE-BIN", "shift operand types"); /* GUARD:bin-shift */
         } else if (in->sub == B_AND || in->sub == B_OR || in->sub == B_XOR) {
             if (!is_scalar_t(td) || !same_type(td, ta) || !same_type(td, tb)) F("C2-TYPE-BIN", "bitwise operand types");
-        } else if (!is_int(td->s) || !same_type(td, ta) || !same_type(td, tb)) F("C2-TYPE-BIN", "arithmetic operand types"); /* GUARD:bin-type */
+        } else {
+            if (!is_int(td->s) || !same_type(td, ta) || !same_type(td, tb)) F("C2-TYPE-BIN", "arithmetic operand types"); /* GUARD:bin-type */
+        }
         break;
     case C2_UN:
         if (in->sub < U_NEG || in->sub >= U_LIMIT) F("C2-DECODE-SUBOP", "unary op %u", in->sub);
@@ -323,12 +328,15 @@ static int check_insn(Fx *x, uint32_t ii)
                 if (pa->s != pp->s) F("C2-TYPE-CALL", "slice argument %d type", k);
                 if (k + 1 >= in->nargs || in->args[k + 1] != in->args[k] + 1)
                     F("C2-TYPE-CALL", "slice argument %d is not passed with its own length", k);
-            } else if (!same_type(pa, pp)) F("C2-TYPE-CALL", "argument %d type", k); /* GUARD:call-scalar */
+            } else {
+                if (!same_type(pa, pp)) F("C2-TYPE-CALL", "argument %d type", k); /* GUARD:call-scalar */
+            }
             /* aliasing: the same register twice where either parameter may write or take it */
-            for (int j = 0; j < k; j++)
-                if (in->args[j] == in->args[k] && (is_ref(pp) || pp->s == S_CELLS) &&
-                    (pp->kind != K_SHARED || g->vt[j].kind != K_SHARED))
-                    F("C2-CALL-ALIAS", "register v%d passed twice and written", in->args[k]); /* GUARD:call-alias */
+            for (int j = 0; j < k; j++) {
+                int alias = in->args[j] == in->args[k] && (is_ref(pp) || pp->s == S_CELLS) &&
+                            (pp->kind != K_SHARED || g->vt[j].kind != K_SHARED);
+                if (alias) F("C2-CALL-ALIAS", "register v%d passed twice and written", in->args[k]); /* GUARD:call-alias */
+            }
         }
         break;
     }
@@ -428,7 +436,7 @@ static int check_handles(Fx *x)
         const C2Insn *in = &f->in[i];
         if (in->op != C2_AOPEN && in->op != C2_POPEN) continue;
         int h = in->dst;
-        if (h < f->nparams || x->ndefs[h] != 1) /* GUARD:handle-single-def */
+        if (h < f->nparams || x->ndefs[h] != 1) /* also implied by handle-origin and the leak rule (untagged) */
             return fail(x->v, "C2-HANDLE-DISCIPLINE", x->fi, (int)i, "handle v%d defined more than once or a parameter", h);
         for (uint32_t j = 0; j < f->ninsns; j++) {
             const C2Insn *o = &f->in[j];
@@ -519,9 +527,10 @@ static int check_defined(Fx *x)
             if (f->in[i].op == C2_TRAP) break;
             int16_t us[8];
             int nu = uses(&f->in[i], us);
-            for (int k = 0; k < nu; k++)
+            for (int k = 0; k < nu; k++) {
                 if (!btest(&cur, (unsigned)us[k])) /* GUARD:definite-assignment */
                     return fail(x->v, "C2-UNDEFINED-USE", x->fi, (int)i, "v%d may be read before it is written", us[k]);
+            }
             int d = defines(&f->in[i]);
             if (d >= 0) bset(&cur, (unsigned)d);
         }
