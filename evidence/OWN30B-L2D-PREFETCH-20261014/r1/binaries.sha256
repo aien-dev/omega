@@ -1,0 +1,3 @@
+82ac80550dcb40c8cf27ccb4a2e8962b53ff8e1bde5d7bbdc4540a36b19ca7d2  ./build/gpu_decode_graph_test
+76c398d4d26800d7d059795bdfe2f4d2f425a20bf9d8eec0c93b1817c5986558  build/gpu_cmdlist_test
+843661eae857b5ef4655e71ac5365e73be89eeb16723c4ea83ae117219721a9e  build/libomega_gpu.a
