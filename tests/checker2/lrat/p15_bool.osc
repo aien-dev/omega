@@ -1,0 +1,6 @@
+// prove: band
+// expect: holds
+// a conjunction implies its first operand.
+fn band(a: bool, b: bool) -> bool ensures result == false || a == true {
+    return a && b;
+}

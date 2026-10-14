@@ -1,0 +1,8 @@
+// prove: sum10
+// expect: holds
+// ten additions of an i8 never overflow an i16 accumulator.
+fn sum10(x: i8) -> i16 ensures result <= 1270 {
+    let mut s: i16 = 0;
+    for i in 0 .. 10 { s = s + (x as i16); }
+    return s;
+}

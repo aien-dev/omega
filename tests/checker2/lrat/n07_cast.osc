@@ -1,0 +1,6 @@
+// prove: narrow
+// expect: trap
+// negative control: narrowing i16 to i8 without a range check traps CAST.
+fn narrow(x: i16) -> i8 {
+    return x as i8;
+}

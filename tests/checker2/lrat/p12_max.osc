@@ -1,0 +1,7 @@
+// prove: max8
+// expect: holds
+// the maximum is at least both arguments.
+fn max8(a: i8, b: i8) -> i8 ensures result >= a && result >= b {
+    if a > b { return a; }
+    return b;
+}

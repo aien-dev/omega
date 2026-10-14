@@ -1,0 +1,6 @@
+// prove: sub8
+// expect: holds
+// checked i8 subtraction stays in range under its precondition.
+fn sub8(a: i8, b: i8) -> i8 requires b >= 0 && b <= 50 && a >= -70 ensures result <= a {
+    return a - b;
+}

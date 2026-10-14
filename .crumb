@@ -45,19 +45,13 @@
     "generated": {
       "children": [
         {
-          "digest": "9dd7474de3f8342f85466d4629e58ebe6a7e9be694f6f282803892d32f9c272f",
-          "last_commit": "5901baa5",
-          "name": "bench/prime_race",
-          "purpose": "AIEN Prime Drag Race implementation side: the shared protocol helper (command line, timed loop, "
-        },
-        {
-          "digest": "3f2f29e905246ceb0b8778e1392f090ac93c949f89a139da0bd77b520946f30c",
+          "digest": "fb7cc6e608fdbe68a9735a1313285782b9717ff12bde17343f8ce635de3644f6",
           "last_commit": "190ff891",
           "name": "calibration",
           "purpose": "Directory calibration. Purpose not yet described by a human."
         },
         {
-          "digest": "82f476fb3c9210cc4fa9b47a9252adbdab22b5f696494f9b7d3b629b592b6a45",
+          "digest": "e07efe9c0e342a3a4509d6ad683c053dc9263ce093b6341cfd425a9fe9932094",
           "last_commit": "307bcc34",
           "name": "docs",
           "purpose": "Directory docs. Purpose not yet described by a human."
@@ -69,7 +63,7 @@
           "purpose": "Directory doctrine. Purpose not yet described by a human."
         },
         {
-          "digest": "42e8aa8cd37366eb03a5ec12056335de6127fbf48cd493f7c9953920e44e1495",
+          "digest": "0c17cb6fd0f3d45420e7171ac3f63ddcbf39b7f7db6379134c4be0a733498c03",
           "last_commit": "40d8db4f",
           "name": "mk",
           "purpose": "Directory mk. Purpose not yet described by a human."
@@ -81,25 +75,25 @@
           "purpose": "Directory polyglot. Purpose not yet described by a human."
         },
         {
-          "digest": "e1b329e45619370357f74f738cc24e6091c9139e9db8e95e324d12955acf3ffa",
+          "digest": "eccc4aec1037ae222d6370836953732b031b8ed70de28967b7af7ca62c2abe0b",
           "last_commit": "5901baa5",
           "name": "research",
           "purpose": "Directory research. Purpose not yet described by a human."
         },
         {
-          "digest": "6f273bd316d4a2a8b932ef7d92ea3596b93be2fc0736a055acb111d94e44a8f2",
+          "digest": "3d892a08078369eebc9a5e2a7ee2b6a24c278f2dbd91db5e7026decb8d8399f8",
           "last_commit": "1edf41a5",
           "name": "spec",
           "purpose": "Directory spec. Purpose not yet described by a human."
         },
         {
-          "digest": "56899f232feaddd4ada1458f06aa49f3034d5fa6d52a1fa77f7ecde3cb3c23a2",
+          "digest": "3b6e68a896d400c0805cc613b9af28ef6709f372a993ba22d48664d550c2557d",
           "last_commit": "1edf41a5",
           "name": "src",
           "purpose": "Directory src. Purpose not yet described by a human."
         },
         {
-          "digest": "ddb2ce6f002ba4feb672364ea9d2f0aac53783b7c25b0e2c8dd5be195c7a1624",
+          "digest": "63941758d2c5ea9e5ef5200969035e837b26919477a0dc887272312b3284d153",
           "last_commit": "a6a5d855",
           "name": "tests",
           "purpose": "Directory tests. Purpose not yet described by a human."
@@ -111,15 +105,15 @@
           "purpose": "Directory tools. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:e654f1006187a9f3dcd88f3cd432845bac8a3ffdf2c4ff0f7d2c44c7616cdbaf",
-      "compiled_at": "2026-10-14T19:52:25Z",
+      "children_root": "sha256:aeae2855278d8cc271bd2b27e22decd75323ece1af794eed7eba5f30fb2ad886",
+      "compiled_at": "2026-10-14T21:44:23Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:0772637d7c6564decffecb38c2948b30fd69b6c0458ed6a883d1a0c8339b1a3a",
+      "digest": "sha256:65d84cc3240724f9a25b38f671b6482563af198e03eaed4d926c4266cfd45afa",
       "evidence_files": 7598,
       "evidence_root": "sha256:27fe59ee33604ab9e429b3c7b583dcd3761b2a40aa0b152467d0ab2865c2007c",
-      "files": 10283,
-      "generated_at_commit": "8f1975ba08dcab5b4b493851d4eb468625428577",
-      "source_tree": "sha256:91d2dbe09e2dd6fc5c9d63fe00e98f303434915f9f4148f2f0d9eaeaf22cdaed"
+      "files": 10340,
+      "generated_at_commit": "38fc4d44bd41a39e65366c15e5612ea58f268bf9",
+      "source_tree": "sha256:cf94f86076c6663fc2d47d87c049668a77e3a0baf7000d4d042799e07af0f598"
     },
     "owner_lane": "",
     "provenance": {
