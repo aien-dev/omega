@@ -10,7 +10,8 @@
  * "\nentry <name>" (JSON-escaped newline). Missing file: "I cannot do this." A file starting with
  * "@@500" gives HTTP 500. Usage: prompt_tokens = request bytes / 4, completion_tokens = answer bytes
  * / 4 + 1; an answer longer than max_tokens * 4 bytes is cut there with finish_reason "length".
- * Every request body is appended to <answers_dir>/requests.log (one line each).
+ * Every request body is appended to <answers_dir>/requests.log (one line each). GET .../models answers
+ * <answers_dir>/models.json (an empty model list when missing) and is not logged.
  */
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -92,6 +93,21 @@ int main(int argc, char **argv)
         }
         if (!body || clen < 0 || (size_t)(body - buf) + (size_t)clen > len) { close(c); free(buf); continue; }
         body[clen] = 0;
+        if (!strncmp(buf, "GET ", 4)) { /* GET .../models: <answers_dir>/models.json, not logged */
+            char mp[4096];
+            snprintf(mp, sizeof mp, "%s/models.json", argv[2]);
+            size_t mn = 0;
+            char *mj = slurp(mp, &mn);
+            if (!mj) { mj = strdup("{\"object\":\"list\",\"data\":[]}"); mn = strlen(mj); }
+            char hd[256];
+            int hn = snprintf(hd, sizeof hd, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n", mn);
+            send_all(c, hd, (size_t)hn);
+            send_all(c, mj, mn);
+            free(mj);
+            free(buf);
+            close(c);
+            continue;
+        }
         char logp[4096];
         snprintf(logp, sizeof logp, "%s/requests.log", argv[2]);
         FILE *lf = fopen(logp, "a");

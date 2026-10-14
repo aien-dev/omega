@@ -18,8 +18,12 @@
 #   4 if refused: exactly one repair round with the same message format in every arm; the last
 #     round's answer is final
 #   5 candidate copied to cands/<set_id>/<task>/candidate.osc|oscir, set_id = <config>-<arm>-<attempt>
-# Writes <out>/meta.txt, prompts/, gen/<set_id>/<task>/, cands/, log.tsv and SHA256SUMS (sha256 of
-# every raw request/response). Re-running with the same --out resumes (finished generations kept).
+# Before generating, <out> must hold weights.check and server.json from check_weights.sh (all OK).
+# Each round is committed as soon as it is received (rN.req.json, rN.transport with HTTP status, curl
+# exit and time per try, rN.resp.json or rN.err.K.json); log.tsv rows are derived from those raw
+# files (reader.sh gen_row). Writes <out>/meta.txt, prompts/, gen/<set_id>/<task>/, cands/, log.tsv and
+# SHA256SUMS. Re-running with the same --out resumes: finished generations are kept, a committed round
+# is never requested again, and a row already in log.tsv is not appended twice.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
@@ -63,6 +67,7 @@ jq -e 'type == "object" and ([keys[] | select(IN("model", "messages", "max_token
 EXTRA="$(jq -c . <<< "$EXTRA")"
 if [ -z "$BASE" ]; then BASE="$FBASE"; elif [ "$BASE" != "$FBASE" ]; then over="$over base_url"; fi
 if [ -z "$MODEL" ]; then MODEL="$FMODEL"; elif [ "$MODEL" != "$FMODEL" ]; then over="$over model"; fi
+WLIST="$(kv "config.$CONFIG.weights")"; case "$WLIST" in /*|"") ;; *) WLIST="$ROOT/$WLIST" ;; esac
 [[ "$MAXT" =~ ^[0-9]+$ ]] && [ "$MAXT" -gt 0 ] || die "max_tokens must be a positive integer (PARAMS or --max-tokens)"
 [[ "$ATTEMPTS" =~ ^[1-9]$ ]] || die "attempts 1..9"
 cfg="$(echo "$CONFIG" | tr 'A-Z' 'a-z')"
@@ -72,6 +77,8 @@ B="$ROOT/build/omega_emit"
 make -s -C "$ROOT" PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 omega-emit >&2
 X="$B/x445" EMIT="$B/omega_emit"
 . "$HERE/reader.sh"
+weights_ok "$OUT" "$WLIST" "$FMODEL" ||
+  die "$OUT/weights.check + server.json missing or not all OK: run tools/exp445/check_weights.sh $CONFIG $OUT first (protocol section 9)"
 mkdir -p "$OUT/prompts" "$OUT/gen" "$OUT/cands"
 OUT="$(realpath -e "$OUT")"
 
@@ -106,77 +113,86 @@ meta="$OUT/meta.txt"
 if [ -f "$meta" ]; then cmp -s "$meta" "$meta.new" || { diff "$meta" "$meta.new" >&2 || true; die "resuming with different settings"; }; rm "$meta.new"
 else mv "$meta.new" "$meta"; fi
 [ -f "$OUT/log.tsv" ] || printf 'set\ttask\trounds\tprompt_tokens\tcompletion_tokens_r1\tcompletion_tokens_r2\tfinish_r1\tfinish_r2\twall_s\tcheck_r1\tcheck_r2\tcandidate_sha256\n' > "$OUT/log.tsv"
+dupk="$(tail -n +2 "$OUT/log.tsv" | cut -f1,2 | LC_ALL=C sort | uniq -d | head -n 1 | tr '\t' ' ')"
+[ -z "$dupk" ] || die "log.tsv holds generation $dupk more than once: refused (gen/ is the record; remove the extra row by hand)"
 
-# ask <dir> <round> <messages json>: one request with retries on transport or 5xx errors.
-# Sets: content, ptok, ctok, finish, wall. Writes rN.req.json, rN.resp.json (+ rN.err.K on failures).
+# ask <gen dir> <round> <request json>: one round, committed to disk as soon as it is received.
+# Writes rN.req.json, then per try a transport line (rN.transport.tmp) and the body (rN.resp.json on
+# success, rN.err.K.json otherwise); renaming rN.transport.tmp to rN.transport commits the round. A
+# committed round is never requested again; an interrupted one continues with its next try.
 ask() {
-  local d="$1" r="$2" msgs="$3" seed="$4" k code t
-  jq -n -c --arg m "$MODEL" --argjson msgs "$msgs" --argjson mt "$MAXT" --argjson t "$TEMP" --argjson p "$TOPP" --argjson s "$seed" --argjson x "$EXTRA" \
-    '{model: $m, messages: $msgs, max_tokens: $mt, temperature: $t, top_p: $p, seed: $s, stream: false} + $x' > "$d/r$r.req.json"
-  wall=0; content=""; ptok=0; ctok=0; finish=error
-  for k in $(seq 0 "$RETRIES"); do
-    if out="$(curl -sS -m "$TIMEOUT" -o "$d/r$r.resp.json" -w '%{http_code} %{time_total}' -H 'Content-Type: application/json' \
-               --data-binary @"$d/r$r.req.json" "$BASE/chat/completions" 2> "$d/r$r.curl.err")"; then :; else out="000 0"; fi
-    code="${out% *}"; t="${out#* }"; wall="$(awk -v a="$wall" -v b="$t" 'BEGIN { printf "%.3f", a + b }')"
-    if [ "$code" = 200 ] && jq -e '.choices[0].message.content | type == "string"' "$d/r$r.resp.json" > /dev/null 2>&1; then
-      content="$(jq -r '.choices[0].message.content' "$d/r$r.resp.json")"
-      ptok="$(jq -r '.usage.prompt_tokens // 0' "$d/r$r.resp.json")"; ctok="$(jq -r '.usage.completion_tokens // 0' "$d/r$r.resp.json")"
-      finish="$(jq -r '.choices[0].finish_reason // "-"' "$d/r$r.resp.json")"
-      rm -f "$d/r$r.curl.err"
-      return 0
+  local d="$1" r="$2" q="$3" p="$1/r$2" k e out code t t0 body lb msg
+  if [ -f "$p.req.json" ]; then [ "$(cat "$p.req.json")" = "$q" ] || die "$p.req.json differs from the request this run sends: resume refused"
+  else printf '%s\n' "$q" > "$p.req.json.tmp"; mv "$p.req.json.tmp" "$p.req.json"; fi
+  if [ ! -f "$p.transport" ]; then
+    touch "$p.transport.tmp"
+    lb="$(tail -n 1 "$p.transport.tmp" | sed -n 's/.* body=\([^ ]*\).*/\1/p')"
+    if [ -n "$lb" ] && [ "$lb" != none ] && [ ! -f "$d/$lb" ] && [ -f "$p.try" ]; then mv "$p.try" "$d/$lb"; fi
+    rm -f "$p.try"
+    if [ "$lb" != "r$r.resp.json" ]; then
+      k="$(wc -l < "$p.transport.tmp")"
+      while [ "$k" -le "$RETRIES" ]; do
+        t0="$EPOCHREALTIME"
+        if out="$(curl -sS -m "$TIMEOUT" -o "$p.try" -w '%{http_code} %{time_total}' -H 'Content-Type: application/json' \
+                   --data-binary @"$p.req.json" "$BASE/chat/completions" 2> "$p.curl.err")"; then e=0; else e=$?; fi
+        code="${out%% *}" t="${out#* }"
+        [[ "$code" =~ ^[0-9]{3}$ ]] || code=000
+        [[ "$t" =~ ^[0-9]+(\.[0-9]+)?$ ]] || t="$(awk -v a="$t0" -v b="$EPOCHREALTIME" 'BEGIN { printf "%.6f", b - a }')"
+        if [ "$e" = 0 ] && [ "$code" = 200 ] && resp_ok "$p.try"; then body="r$r.resp.json"
+        elif [ -s "$p.try" ]; then body="r$r.err.$k.json"; else body=none; rm -f "$p.try"; fi
+        msg="$(tr '\n\t' '  ' < "$p.curl.err")"; rm -f "$p.curl.err"
+        echo "try=$k http=$code curl_exit=$e time_s=$t body=$body msg=$msg" >> "$p.transport.tmp"
+        [ "$body" = none ] || mv "$p.try" "$d/$body"
+        [ "$body" = "r$r.resp.json" ] && break
+        k=$((k + 1))
+      done
     fi
-    [ -f "$d/r$r.resp.json" ] && mv "$d/r$r.resp.json" "$d/r$r.err.$k.json"
-    echo "http=$code attempt=$k" >> "$d/r$r.errors"
-  done
-  return 1
+    mv "$p.transport.tmp" "$p.transport"
+  fi
+  round_ok "$p"
 }
-
-# candidate <arm> <dir> <round> <requirement>: payload -> candidate file + one check line in rN.check
-candidate() { reader "$X" "$EMIT" "$1" "$2/r$3.content" "$2/r$3" "$4"; }
+# hook <point>: tests only (EXP445_TEST_KILL=<point>:<set>:<task>): die like a power cut at that point
+hook() { if [ "${EXP445_TEST_KILL:-}" = "$1:$set_id:$task" ]; then kill -KILL $$; fi; }
 
 ti=0
 for task in "${ids[@]}"; do
   ti=$((ti + 1))
   req="$TASKS/tasks/cases/$task/requirement"
-  sig="$(grep -E '^(entry|params|ret)( |$)' "$req")"
-  user="$(printf 'Write the function described below.\n\n%s\n\n%s\n' "$sig" "$(cat "$TASKS/tasks/cases/$task/prompt")")"
+  user="$(user_msg "$req" "$TASKS/tasks/cases/$task/prompt")"
   for arm in ${ARMS//,/ }; do
+    msgs="$(first_msgs "$(cat "$OUT/prompts/$arm.system.txt")" "$user")"
     for at in $(seq 1 "$ATTEMPTS"); do
       set_id="$cfg-$arm-$at"; d="$OUT/gen/$set_id/$task"
       [ -f "$d/done" ] && continue
-      rm -rf "$d"; mkdir -p "$d" "$OUT/cands/$set_id"
-      seed=$((SEED + 1000 * at + ti))
-      sys="$(cat "$OUT/prompts/$arm.system.txt")"
-      msgs="$(jq -n -c --arg s "$sys" --arg u "$user" '[{role: "system", content: $s}, {role: "user", content: $u}]')"
-      rounds=0 ptot=0 c1=0 c2=- f1=- f2=- w=0 k1=- k2=- final=""
-      if ask "$d" 1 "$msgs" "$seed"; then
-        rounds=1; printf '%s' "$content" > "$d/r1.content"; ptot=$ptok; c1=$ctok; f1=$finish; w=$wall
-        candidate "$arm" "$d" 1 "$req"; k1="$(cat "$d/r1.check")"; final=1
-        if [ "$k1" != OK ]; then
-          fix="Your program was refused: ${k1#REFUSED }"$'\n'"Reply with the corrected complete program in one fenced code block."
-          msgs2="$(jq -c --arg a "$content" --arg f "$fix" '. + [{role: "assistant", content: $a}, {role: "user", content: $f}]' <<< "$msgs")"
-          if ask "$d" 2 "$msgs2" "$seed"; then
-            rounds=2; printf '%s' "$content" > "$d/r2.content"; ptot=$((ptot + ptok)); c2=$ctok; f2=$finish
-            w="$(awk -v a="$w" -v b="$wall" 'BEGIN { printf "%.3f", a + b }')"
-            candidate "$arm" "$d" 2 "$req"; k2="$(cat "$d/r2.check")"; final=2
-          else w="$(awk -v a="$w" -v b="$wall" 'BEGIN { printf "%.3f", a + b }')"; k2="REQUEST FAILED"; final=""; fi
+      mkdir -p "$d" "$OUT/cands/$set_id"
+      seed="$(seed_of "$SEED" "$at" "$ti")"
+      if ask "$d" 1 "$(request_json "$MODEL" "$msgs" "$MAXT" "$TEMP" "$TOPP" "$seed" "$EXTRA")"; then
+        a1="$(content_of "$d/r1.resp.json")"; printf '%s' "$a1" > "$d/r1.content"
+        reader "$X" "$EMIT" "$arm" "$d/r1.content" "$d/r1" "$req"
+        hook after-r1
+        k1="$(cat "$d/r1.check")"
+        if [ "$k1" != OK ] && ask "$d" 2 "$(request_json "$MODEL" "$(repair_msgs "$msgs" "$a1" "$k1")" "$MAXT" "$TEMP" "$TOPP" "$seed" "$EXTRA")"; then
+          printf '%s' "$(content_of "$d/r2.resp.json")" > "$d/r2.content"
+          reader "$X" "$EMIT" "$arm" "$d/r2.content" "$d/r2" "$req"
         fi
-      else w=$wall; k1="REQUEST FAILED"; fi
-      csha=-
+      fi
+      # finalize, idempotent: candidate, then the row once, then the done marker
+      gen_row "$set_id" "$task" "$d" "$d"
       rm -rf "$OUT/cands/$set_id/$task"
       for ext in osc oscir; do
-        if [ -n "$final" ] && [ -f "$d/r$final.candidate.$ext" ]; then
-          mkdir -p "$OUT/cands/$set_id/$task"; cp "$d/r$final.candidate.$ext" "$OUT/cands/$set_id/$task/candidate.$ext"
-          csha="$(sha256sum "$d/r$final.candidate.$ext" | cut -d' ' -f1)"
+        if [ -n "$FINAL" ] && [ -f "$d/r$FINAL.candidate.$ext" ]; then
+          mkdir -p "$OUT/cands/$set_id/$task"; cp "$d/r$FINAL.candidate.$ext" "$OUT/cands/$set_id/$task/candidate.$ext"
         fi
       done
-      printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$set_id" "$task" "$rounds" "$ptot" "$c1" "$c2" "$f1" "$f2" "$w" \
-        "$(tr '\t' ' ' <<< "$k1")" "$(tr '\t' ' ' <<< "$k2")" "$csha" >> "$OUT/log.tsv"
-      (cd "$d" && sha256sum r*.req.json r*.resp.json 2>/dev/null) > "$d/SHA256SUMS" || true
+      have="$(awk -F'\t' -v s="$set_id" -v t="$task" '$1 == s && $2 == t' "$OUT/log.tsv")"
+      if [ -z "$have" ]; then printf '%s\n' "$ROW" >> "$OUT/log.tsv"
+      elif [ "$have" != "$ROW" ]; then die "log.tsv already holds a different row for $set_id $task: refused (gen/ is the record; remove that row by hand)"; fi
+      hook after-log
+      gen_sums "$d"
       touch "$d/done"
-      echo "run.sh: $set_id $task rounds=$rounds tokens=$c1/$c2 check1=$k1 check2=$k2" >&2
+      echo "run.sh: $(cut -f1-3,5,6,10,11 <<< "$ROW" | tr '\t' ' ')" >&2
     done
   done
 done
-(cd "$OUT" && find gen prompts -type f \( -name '*.json' -o -name '*.system.txt' \) -print0 | LC_ALL=C sort -z | xargs -0 sha256sum) > "$OUT/SHA256SUMS"
+run_sums "$OUT"
 echo "run.sh: done, $(($(wc -l < "$OUT/log.tsv") - 1)) generations in $OUT"

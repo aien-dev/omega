@@ -3,19 +3,26 @@
 # generated candidates of driver runs (run.sh) and write the results table (omega#445,
 # docs/one_layer/EXP445_PROTOCOL.md sections 4, 7, 8).
 #   1 provenance check, before anything is scored (any failure: RUN INVALID, no tables, exit 1):
-#     - every run: meta.txt protocol=PARAMS (no override flag), params_sha256 = the PARAMS in force,
-#       the configuration named in PARAMS with its frozen model, endpoint and request extra, the arm
-#       prompts equal to the ones the current arm documents give, the public view of these tasks,
-#       a clean generation commit whose tools equal the scoring commit's
-#     - every run: SHA256SUMS verifies and lists exactly the saved requests, responses and prompts
-#     - every generation: its candidate is re-derived from the hashed response with the same reader
-#       (reader.sh) and must match log.tsv's candidate_sha256 and the file in cands/
+#     - every run: meta.txt protocol=PARAMS (no override flag), params_sha256 = the PARAMS in force, its
+#       sampling settings equal to PARAMS, the configuration named in PARAMS with its frozen model,
+#       endpoint and request extra, the arm prompts equal to the ones the current arm documents give, the
+#       public view of these tasks, a clean generation commit whose tools equal the scoring commit's,
+#       weights.check all OK for the config's frozen hash list and server.json listing its model id
+#     - every run: SHA256SUMS verifies and lists exactly the raw files, prompts, meta.txt, log.tsv,
+#       weights.check and server.json
+#     - every generation, from its raw files only: each hashed request equals the one PARAMS, the config,
+#       the frozen arm prompt, the public task and the seed rule give; a round 2 exists exactly when the
+#       arm's reader refused round 1, and its request is the frozen repair of round 1; every round has a
+#       transport record (HTTP status, curl exit, time per try; a failed round shows all its tries); the
+#       log row (tokens, finish reasons, wall time, checks, candidate hash) is re-derived from the raw
+#       responses (reader.sh gen_row) and log.tsv must equal the re-derived rows; the file in cands/ must
+#       be the re-derived candidate
 #     - the matrix is complete: every task of the tarball x every arm x attempts 1..N x every config
 #       in --configs (default: every config named in PARAMS), exactly once; held-out = heldout_tasks
 #   2 merge the candidates; tests/one_layer/acceptance/ola.sh experiment (seal, references, replay,
 #     probes, clean tree): its RUN INVALID also stops here
-#   3 results.txt / results.tsv: per config x arm, success on attempt 1 and on any attempt with Wilson
-#     95% intervals, tokens, wall seconds, hex penalty, and the gate of protocol section 8
+#   3 results.txt / results.tsv from the re-derived rows: per config x arm, success on attempt 1 and on
+#     any attempt with Wilson 95% intervals, tokens, wall seconds, and the gate of protocol section 8
 # EXP445_TEST=1 (dry-run tests only): accepts EXP445_PARAMS, a dirty tree (OLA_ALLOW_DIRTY), and a
 # harness RUN INVALID caused by the dirty tree alone; the output then says TEST MODE, NOT EVIDENCE.
 set -euo pipefail
@@ -47,28 +54,106 @@ inval() { echo "INVALID: $*" >> "$OUT/validity.txt"; bad=$((bad + 1)); }
 "$ROOT/tests/one_layer/acceptance/ola.sh" tasks-public "$TAR" "$SEALED" "$W/pub" > /dev/null 2> "$W/pub.err" || { cat "$W/pub.err" >&2; die "tasks-public refused the tasks"; }
 pub_sha="$(cd "$W/pub" && find tasks -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)"
 mapfile -t TASKS < <(ls "$W/pub/tasks/cases" | LC_ALL=C sort)
+declare -A TI; i=0; for t in "${TASKS[@]}"; do i=$((i + 1)); TI[$t]=$i; done
 ARMS="$(kv arms)" ATT="$(kv attempts)" params_sha="$(sha256sum "$PARAMS" | cut -d' ' -f1)"
+MT="$(kv max_tokens)" TT="$(kv temperature)" TP="$(kv top_p)" SB="$(kv seed_base)" RT="$(kv retries)"
 heldout=0; for t in "${TASKS[@]}"; do case "$t" in dev*) ;; *) heldout=1 ;; esac; done
 [ "$heldout" = 0 ] || [ "${#TASKS[@]}" = "$(kv heldout_tasks)" ] || inval "held-out tarball has ${#TASKS[@]} tasks, the protocol fixes $(kv heldout_tasks)"
 head_commit="$(git -C "$ROOT" rev-parse HEAD)"
 for arm in ${ARMS//,/ }; do
   { cat "$HERE/arms/common.md"; echo; cat "$HERE/arms/$arm.md"; [ "$arm" = structured ] && cat "$ROOT/tools/omega_emit/SCHEMA.md"; true; } > "$W/prompt.$arm"
 done
-: > "$W/rows"
+# req_same <saved request> <expected json>: equal as JSON; otherwise prints the top-level fields that differ
+req_same() {
+  [ -f "$1" ] || { echo "(missing)"; return 1; }
+  if jq -e --argjson b "$2" '. == $b' "$1" > /dev/null 2>&1; then return 0; fi
+  jq -r -n --slurpfile a "$1" --argjson b "$2" '[($a[0] | keys[]), ($b | keys[])] | unique | map(select($a[0][.] != $b[.])) | join(",")' 2> /dev/null || echo "(not JSON)"
+  return 1
+}
+# tcheck <round prefix>: the transport record of a committed round (protocol section 10)
+tcheck() {
+  local p="$1" b="${1##*/}" n=0 line h e body succ=0 f
+  [ -f "$p.transport" ] || { inval "$G $b has no transport record (never committed)"; return; }
+  while IFS= read -r line; do
+    [[ "$line" =~ ^try=([0-9]+)\ http=([0-9]{3})\ curl_exit=([0-9]+)\ time_s=[0-9]+(\.[0-9]+)?\ body=([^ ]+)\ msg= ]] ||
+      { inval "$G $b transport line $((n + 1)) malformed"; return; }
+    [ "${BASH_REMATCH[1]}" = "$n" ] || { inval "$G $b transport tries out of order"; return; }
+    h="${BASH_REMATCH[2]}" e="${BASH_REMATCH[3]}" body="${BASH_REMATCH[5]}"
+    [ "$succ" = 0 ] || { inval "$G $b has a try after its successful one"; return; }
+    case "$body" in
+      "$b.resp.json") succ=1
+        [ "$h" = 200 ] && [ "$e" = 0 ] && resp_ok "$p.resp.json" || inval "$G $b response is not an HTTP 200 answer with content" ;;
+      "$b.err.$n.json") [ -f "${p%/*}/$body" ] || inval "$G $b failed body $body missing"
+        if [ "$h" = 200 ] && [ "$e" = 0 ] && resp_ok "${p%/*}/$body"; then inval "$G $b try $n is a valid answer filed as a failure"; fi ;;
+      none) if [ "$h" = 200 ] && [ "$e" = 0 ]; then inval "$G $b try $n: HTTP 200 without a body"; fi ;;
+      *) inval "$G $b try $n names body $body" ;;
+    esac
+    n=$((n + 1))
+  done < "$p.transport"
+  [ "$n" -ge 1 ] && [ "$n" -le $((RT + 1)) ] || inval "$G $b has $n tries, the protocol allows 1..$((RT + 1))"
+  [ "$succ" = 1 ] || [ "$n" = $((RT + 1)) ] || inval "$G failed round $b has $n tries, the protocol makes $((RT + 1)) with transport evidence"
+  [ "$succ" = 1 ] || [ ! -e "$p.resp.json" ] || inval "$G $b has a response file but no successful try"
+  for f in "$p".err.*.json; do [ -f "$f" ] || continue; grep -q " body=${f##*/} " "$p.transport" || inval "$G ${f##*/} is not in the transport record"; done
+}
+# gcheck <run> <set> <task> <gen dir> <config>: every request against PARAMS and the config, the repair
+# chain, the transport records, then the row and the candidate re-derived from the raw responses
+gcheck() {
+  local r="$1" sid="$2" task="$3" d="$4" cl="$5" v="$W/g" arm at req msgs q a1 k1 r2=no why f
+  G="$r: $sid $task"
+  [[ "$sid" =~ ^([a-z0-9]+)-([a-z]+)-([1-9])$ ]] && [ "${BASH_REMATCH[1]}" = "$cl" ] || { inval "$G: set is not one of config $cl"; return; }
+  arm="${BASH_REMATCH[2]}" at="${BASH_REMATCH[3]}"
+  [[ ",$ARMS," == *",$arm,"* ]] && [ "$at" -le "$ATT" ] || { inval "$G: arm or attempt outside PARAMS"; return; }
+  req="$W/pub/tasks/cases/$task/requirement"
+  [ -f "$req" ] || { inval "$G is not a task of this tarball"; return; }
+  [ -f "$d/done" ] || { inval "$G never finished"; return; }
+  echo "$sid $task" >> "$W/rows"
+  rm -rf "$v"; mkdir -p "$v"
+  msgs="$(first_msgs "$(cat "$W/prompt.$arm")" "$(user_msg "$req" "$W/pub/tasks/cases/$task/prompt")")"
+  q="$(request_json "$FM" "$msgs" "$MT" "$TT" "$TP" "$(seed_of "$SB" "$at" "${TI[$task]}")" "$FX")"
+  why="$(req_same "$d/r1.req.json" "$q")" || inval "$G r1 request differs from the frozen request in: $why"
+  tcheck "$d/r1"
+  if round_ok "$d/r1"; then
+    a1="$(content_of "$d/r1.resp.json")"; printf '%s' "$a1" > "$v/r1.content"
+    reader "$X" "$EMIT" "$arm" "$v/r1.content" "$v/r1" "$req"; k1="$(cat "$v/r1.check")"
+    if [ "$k1" != OK ]; then
+      r2=yes
+      q="$(request_json "$FM" "$(repair_msgs "$msgs" "$a1" "$k1")" "$MT" "$TT" "$TP" "$(seed_of "$SB" "$at" "${TI[$task]}")" "$FX")"
+      why="$(req_same "$d/r2.req.json" "$q")" || inval "$G round 1 was refused ($k1); r2 request is not its frozen repair, differs in: $why"
+      tcheck "$d/r2"
+      if round_ok "$d/r2"; then printf '%s' "$(content_of "$d/r2.resp.json")" > "$v/r2.content"; reader "$X" "$EMIT" "$arm" "$v/r2.content" "$v/r2" "$req"; fi
+    fi
+  fi
+  if [ "$r2" = no ]; then for f in "$d"/r2.req.json "$d"/r2.transport "$d"/r2.resp.json "$d"/r2.err.*.json; do
+    if [ -e "$f" ]; then inval "$G has a round 2 without a round-1 refusal"; break; fi; done; fi
+  for f in "$d"/r[03-9]*.req.json "$d"/r[03-9]*.transport "$d"/r[03-9]*.resp.json; do if [ -e "$f" ]; then inval "$G has a round other than 1 and 2"; break; fi; done
+  gen_row "$sid" "$task" "$d" "$v"
+  printf '%s\n' "$ROW" >> "$W/derived"
+  local want got n=0; want="$(cut -f12 <<< "$ROW")" got=-
+  for f in "$r/cands/$sid/$task"/*; do [ -f "$f" ] || continue; n=$((n + 1)); got="$(sha256sum < "$f" | cut -d' ' -f1)"; done
+  [ "$n" -le 1 ] && [ "$got" = "$want" ] || inval "$G candidate in cands/ does not match the candidate re-derived from the response"
+}
+: > "$W/rows"; : > "$W/all_derived"
+HDR="$(printf 'set\ttask\trounds\tprompt_tokens\tcompletion_tokens_r1\tcompletion_tokens_r2\tfinish_r1\tfinish_r2\twall_s\tcheck_r1\tcheck_r2\tcandidate_sha256')"
 for r in "${runs[@]}"; do
   m="$r/meta.txt"
   mv_() { awk -F= -v k="$1" '$1 == k { print substr($0, length(k) + 2); exit }' "$m"; }
-  [ -f "$m" ] && [ -f "$r/log.tsv" ] && [ -f "$r/SHA256SUMS" ] && [ -d "$r/cands" ] || { inval "$r: not a complete run dir (meta.txt, log.tsv, SHA256SUMS, cands/)"; continue; }
-  c="$(mv_ config)"
+  [ -f "$m" ] && [ -f "$r/log.tsv" ] && [ -f "$r/SHA256SUMS" ] && [ -d "$r/cands" ] && [ -d "$r/gen" ] || { inval "$r: not a complete run dir (meta.txt, log.tsv, SHA256SUMS, gen/, cands/)"; continue; }
+  c="$(mv_ config)"; cl="$(echo "$c" | tr 'A-Z' 'a-z')"
   [[ ",$CONFIGS," == *",$c,"* ]] || inval "$r: config '$c' is not one of the configs scored ($CONFIGS)"
   [ -n "$(kv "config.$c.model")" ] || inval "$r: config '$c' is not named in PARAMS"
-  [ "$(mv_ model)" = "$(kv "config.$c.model")" ] || inval "$r: model $(mv_ model) is not config $c's frozen model"
+  FM="$(kv "config.$c.model")" FX="$(kv "config.$c.extra" | jq -c . 2>/dev/null || echo '{}')"
+  [ "$(mv_ model)" = "$FM" ] || inval "$r: model $(mv_ model) is not config $c's frozen model"
   [ "$(mv_ base_url)" = "$(kv "config.$c.base_url")" ] || inval "$r: endpoint $(mv_ base_url) is not config $c's frozen endpoint"
-  [ "$(mv_ request_extra)" = "$(kv "config.$c.extra" | jq -c . 2>/dev/null)" ] || inval "$r: request extra differs from config $c's frozen extra"
+  [ "$(mv_ request_extra)" = "$FX" ] || inval "$r: request extra differs from config $c's frozen extra"
   [ "$(mv_ protocol)" = PARAMS ] || inval "$r: settings overridden on the command line ($(mv_ protocol))"
   [ "$(mv_ params_sha256)" = "$params_sha" ] || inval "$r: PARAMS changed since generation (params_sha256 differs)"
   [ "$(mv_ arms)" = "$ARMS" ] && [ "$(mv_ attempts)" = "$ATT" ] || inval "$r: arms/attempts differ from PARAMS"
+  for kp in max_tokens_per_round:max_tokens temperature:temperature top_p:top_p seed_base:seed_base timeout_s:timeout_s retries:retries; do
+    [ "$(mv_ "${kp%%:*}")" = "$(kv "${kp#*:}")" ] || inval "$r: meta.txt ${kp%%:*} differs from PARAMS"; done
+  [ "$(mv_ repair_rounds)" = 1 ] || inval "$r: meta.txt repair_rounds is not 1"
   [ "$(mv_ tasks_public_sha256)" = "$pub_sha" ] || inval "$r: generated from a different public task view"
+  wl="$(kv "config.$c.weights")"; case "$wl" in /*|"") ;; *) wl="$ROOT/$wl" ;; esac
+  weights_ok "$r" "$wl" "$FM" || inval "$r: weights.check / server.json missing or not all OK for config $c (tools/exp445/check_weights.sh)"
   for arm in ${ARMS//,/ }; do
     [ "$(mv_ "prompt_${arm}_sha256")" = "$(sha256sum < "$W/prompt.$arm" | cut -d' ' -f1)" ] &&
       cmp -s "$r/prompts/$arm.system.txt" "$W/prompt.$arm" || inval "$r: arm $arm prompt differs from the current arm documents"
@@ -79,36 +164,21 @@ for r in "${runs[@]}"; do
     git -C "$ROOT" diff --quiet "${gc%-dirty}" "$head_commit" -- tools tests/one_layer docs/one_layer 2> /dev/null ||
       inval "$r: tools at generation commit ${gc%-dirty} differ from the scoring commit"
   fi
-  (cd "$r" && sha256sum -c --quiet --strict SHA256SUMS > /dev/null 2>&1) || inval "$r: SHA256SUMS does not verify (a request, response or prompt changed)"
-  (cd "$r" && find gen prompts -type f \( -name '*.json' -o -name '*.system.txt' \) | LC_ALL=C sort) > "$W/have"
+  (cd "$r" && sha256sum -c --quiet --strict SHA256SUMS > /dev/null 2>&1) || inval "$r: SHA256SUMS does not verify (a raw file, prompt, meta.txt or log.tsv changed)"
+  run_files "$r" > "$W/have"
   awk '{ print substr($0, 67) }' "$r/SHA256SUMS" | LC_ALL=C sort > "$W/listed"
-  cmp -s "$W/have" "$W/listed" || inval "$r: SHA256SUMS does not list exactly the saved requests, responses and prompts"
-  [ "$(head -1 "$r/log.tsv")" = "$(printf 'set\ttask\trounds\tprompt_tokens\tcompletion_tokens_r1\tcompletion_tokens_r2\tfinish_r1\tfinish_r2\twall_s\tcheck_r1\tcheck_r2\tcandidate_sha256')" ] ||
-    inval "$r: log.tsv header"
-  # every generation: re-derive the candidate from the hashed response
-  while IFS=$'\t' read -r sid task rounds _ _ _ _ _ _ k1 k2 csha; do
-    echo "$sid $task" >> "$W/rows"
-    arm="$(echo "$sid" | cut -d- -f2)"; d="$r/gen/$sid/$task"; req="$W/pub/tasks/cases/$task/requirement"
-    [ -f "$req" ] || { inval "$r: $sid $task is not a task of this tarball"; continue; }
-    [ -f "$d/done" ] || inval "$r: $sid $task never finished"
-    final=""
-    if [ "$rounds" = 1 ] && [ "$k2" = - ]; then final=1; elif [ "$rounds" = 2 ]; then final=2; fi
-    want=-
-    if [ -n "$final" ]; then
-      if [ -f "$d/r$final.resp.json" ]; then
-        content="$(jq -r '.choices[0].message.content' "$d/r$final.resp.json")"; printf '%s' "$content" > "$W/content"
-        reader "$X" "$EMIT" "$arm" "$W/content" "$W/re" "$req"
-        for ext in osc oscir; do [ -f "$W/re.candidate.$ext" ] && want="$(sha256sum < "$W/re.candidate.$ext" | cut -d' ' -f1)"; done
-        [ "$(cat "$W/re.check")" = "$([ "$final" = 1 ] && echo "$k1" || echo "$k2")" ] || inval "$r: $sid $task check line does not follow from the response"
-      else inval "$r: $sid $task final response missing"; fi
-    fi
-    [ "$csha" = "$want" ] || inval "$r: $sid $task log candidate_sha256 does not match the candidate re-derived from the response"
-    got=-; n=0
-    for f in "$r/cands/$sid/$task"/*; do [ -f "$f" ] || continue; n=$((n + 1)); got="$(sha256sum < "$f" | cut -d' ' -f1)"; done
-    [ "$n" -le 1 ] && [ "$got" = "$want" ] || inval "$r: $sid $task candidate in cands/ does not match the re-derived candidate"
-  done < <(tail -n +2 "$r/log.tsv")
+  cmp -s "$W/have" "$W/listed" || inval "$r: SHA256SUMS does not list exactly the raw files, prompts, meta.txt, log.tsv, weights.check and server.json"
+  [ "$(head -n 1 "$r/log.tsv")" = "$HDR" ] || inval "$r: log.tsv header"
+  # every generation, from its raw files; log.tsv must equal the re-derived rows
+  : > "$W/derived"
+  for d in "$r"/gen/*/*/; do [ -d "$d" ] || continue; d="${d%/}"; gcheck "$r" "$(basename "$(dirname "$d")")" "$(basename "$d")" "$d" "$cl"; done
+  LC_ALL=C sort "$W/derived" > "$W/derived_s"; tail -n +2 "$r/log.tsv" | LC_ALL=C sort > "$W/log_s"
+  if ! cmp -s "$W/derived_s" "$W/log_s"; then
+    inval "$r: log.tsv differs from the rows re-derived from the raw files (first: $(diff "$W/derived_s" "$W/log_s" | sed -n 's/^[<>] //p' | head -n 1 | cut -f1,2 | tr '\t' ' '))"
+  fi
+  cat "$W/derived" >> "$W/all_derived"
   for s in "$r"/cands/*/*/; do [ -d "$s" ] || continue; sid="$(basename "$(dirname "$s")")"; t="$(basename "$s")"
-    awk -F'\t' -v s="$sid" -v t="$t" '$1 == s && $2 == t { f = 1 } END { exit !f }' "$r/log.tsv" || inval "$r: cands/$sid/$t has no log row"; done
+    [ -f "$r/gen/$sid/$t/done" ] || inval "$r: cands/$sid/$t has no finished generation"; done
 done
 # matrix
 : > "$W/want"
@@ -128,10 +198,9 @@ fi
 echo "provenance OK: ${#runs[@]} runs, $(wc -l < "$W/want_s") generations, configs $CONFIGS" >> "$OUT/validity.txt"
 
 # ---- 2. harness ------------------------------------------------------------------------------------
-M="$W/cands"; mkdir "$M"; : > "$OUT/log.tsv"
+M="$W/cands"; mkdir "$M"; cp "$W/all_derived" "$OUT/log.tsv"   # the rows re-derived from the raw files
 for r in "${runs[@]}"; do
   for s in "$r"/cands/*/; do [ -d "$s" ] || continue; cp -R "$s" "$M/$(basename "$s")"; done
-  tail -n +2 "$r/log.tsv" >> "$OUT/log.tsv"
   echo "$r $(sha256sum "$r/SHA256SUMS" | cut -d' ' -f1)" >> "$OUT/runs.txt"
 done
 while IFS=$'\t' read -r sid _; do mkdir -p "$M/$sid"; done < "$OUT/log.tsv"

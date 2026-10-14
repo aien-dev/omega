@@ -17,3 +17,8 @@ config.A.extra={}
 config.B.model=qwen3-8b
 config.B.base_url=http://127.0.0.1:18097/v1
 config.B.extra={"chat_template_kwargs":{"enable_thinking":false}}
+# weights: the frozen sha256 list of each configuration's model files (protocol section 9), checked in
+# models_root by check_weights.sh into every run dir before generation
+models_root=/home/drakestapleton/models
+config.A.weights=tools/exp445/weights.A.sha256
+config.B.weights=tools/exp445/weights.B.sha256
