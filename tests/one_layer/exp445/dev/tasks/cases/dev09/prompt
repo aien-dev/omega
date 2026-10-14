@@ -1,0 +1,2 @@
+Write a function bitrev8 that takes an unsigned 8-bit number x and returns the number whose 8 bits
+are the bits of x in reverse order (bit 0 swaps with bit 7, bit 1 with bit 6, and so on). It never traps.

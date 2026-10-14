@@ -1,0 +1,2 @@
+Write a function popcount that takes an unsigned 64-bit number x and returns how many of its 64
+bits are 1, as an unsigned 8-bit number. It never traps.

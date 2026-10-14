@@ -1,0 +1,2 @@
+Write a function gcd that takes two unsigned 32-bit numbers a and b and returns their greatest
+common divisor. gcd(a, 0) = a, gcd(0, b) = b, and gcd(0, 0) = 0. It never traps.

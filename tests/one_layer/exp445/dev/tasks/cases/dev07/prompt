@@ -1,0 +1,2 @@
+Write a function isqrt that takes an unsigned 32-bit number x and returns the largest unsigned
+32-bit number r with r * r <= x (the integer square root, rounded down). isqrt(0) = 0. It never traps.

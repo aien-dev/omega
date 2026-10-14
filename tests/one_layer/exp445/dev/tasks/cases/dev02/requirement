@@ -1,0 +1,5 @@
+# public dev task (omega#445), not held out
+kind task
+entry absdiff
+params i32 i32
+ret i64

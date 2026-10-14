@@ -1,0 +1,2 @@
+Write a function to_i8 that takes a signed 32-bit number x and returns the same value as a signed
+8-bit number. If x is outside -128..127 it must stop with trap kind 5 (conversion out of range).

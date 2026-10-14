@@ -1,0 +1,11 @@
+fn isqrt(x: u32) -> u32 {
+    let v: u64 = x as u64;
+    let one: u64 = 1;
+    let mut r: u64 = 0;
+    for i in 0 .. 16 {
+        let sh: u64 = 15 - (i as u64);
+        let c: u64 = r | (one << sh);
+        if c * c <= v { r = c; }
+    }
+    return r as u32;
+}

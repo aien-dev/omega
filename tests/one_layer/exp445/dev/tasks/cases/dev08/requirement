@@ -1,0 +1,5 @@
+# public dev task (omega#445), not held out
+kind task
+entry collatz_steps
+params u32
+ret u32
