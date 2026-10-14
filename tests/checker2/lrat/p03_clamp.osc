@@ -1,0 +1,8 @@
+// prove: clamp
+// expect: holds
+// narrowing cast is in range on every path.
+fn clamp(x: i16) -> i8 ensures result <= 100 {
+    if x > 100 { return 100; }
+    if x < -100 { return -100; }
+    return x as i8;
+}

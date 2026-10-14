@@ -1,0 +1,6 @@
+// prove: sshl
+// expect: holds
+// signed shift left that stays representable.
+fn sshl(x: i8) -> i8 requires x >= -16 && x < 16 ensures result >= -64 {
+    return x << 2;
+}

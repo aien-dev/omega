@@ -1,0 +1,6 @@
+// prove: sq
+// expect: holds
+// i8 square in range for |x| <= 11, and non-negative.
+fn sq(x: i8) -> i8 requires x >= -11 && x <= 11 ensures result >= 0 {
+    return x * x;
+}

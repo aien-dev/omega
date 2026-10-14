@@ -1,0 +1,6 @@
+// prove: avg
+// expect: holds
+// overflow-free average of two bytes; never below their common bits.
+fn avg(a: u8, b: u8) -> u8 ensures result >= (a & b) {
+    return (a & b) + ((a ^ b) >> 1);
+}

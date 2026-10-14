@@ -1,0 +1,11 @@
+// prove: gray
+// expect: holds
+// Gray encode then decode is the identity.
+fn gray(x: u8) -> u8 ensures result == x {
+    let g: u8 = x ^ (x >> 1);
+    let mut y: u8 = g;
+    y = y ^ (y >> 4);
+    y = y ^ (y >> 2);
+    y = y ^ (y >> 1);
+    return y;
+}

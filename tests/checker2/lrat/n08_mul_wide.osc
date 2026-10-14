@@ -1,0 +1,6 @@
+// prove: m
+// expect: trap
+// negative control: a u16 product of two full bytes exceeds the ensures bound 225.
+fn m(a: u8, b: u8) -> u16 ensures result <= 225 {
+    return (a as u16) * (b as u16);
+}

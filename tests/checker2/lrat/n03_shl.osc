@@ -1,0 +1,6 @@
+// prove: shl
+// expect: trap
+// negative control: a shift amount of 8 or more traps SHIFT.
+fn shl(x: u8, s: u8) -> u8 {
+    return x << s;
+}

@@ -1,0 +1,3 @@
+# AIENOS owner public key. PUBLIC material only (the private key never leaves the YubiKey).
+# Ed25519 key generated on YubiKey serial 39017074, PIV slot 9c
+owner_root_ed25519 578ada3cb0c2d154623ac089191023c8ad4bc5e63b8ccd1a38db2d679b8c9e76

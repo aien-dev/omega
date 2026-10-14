@@ -1,0 +1,7 @@
+// prove: abs8
+// expect: holds
+// |x| never overflows once x = -128 is excluded, and the result is non-negative.
+fn abs8(x: i8) -> i8 requires x != -128 ensures result >= 0 {
+    if x < 0 { return -x; }
+    return x;
+}
