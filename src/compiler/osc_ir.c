@@ -540,10 +540,15 @@ typedef struct {
     uint8_t *buf;
     size_t cap, len;
     sha256_ctx *sha;
+    const uint8_t *expect; /* osc_ir_decode: compare against these bytes instead of writing */
+    size_t expect_len;
+    bool differs;          /* set once any written byte differs from expect (or overruns it) */
 } W;
 
 static void wbytes(W *w, const void *p, size_t k) {
     if (w->sha) sha256_update(w->sha, (const uint8_t *)p, k);
+    if (w->expect && !w->differs && (w->len + k > w->expect_len || memcmp(w->expect + w->len, p, k) != 0))
+        w->differs = true;
     if (w->buf && w->len + k <= w->cap) memcpy(w->buf + w->len, p, k);
     w->len += k;
 }
@@ -601,22 +606,26 @@ static bool unit_has_slice(const OscUnit *u) {
     return false;
 }
 
+/* The format version a unit encodes as: the highest feature it uses decides.
+ * 5 = external byte slices, 4 = pools (OSC-3 item 2), 3 = arenas, 2 = structs,
+ * 1 = none of these. Versions 2..5 share one layout (struct table after the magic). */
+static uint8_t unit_version(const OscUnit *u) {
+    if (unit_has_slice(u)) return 5;
+    if (unit_has_pool(u)) return 4;
+    if (unit_has_arena(u)) return 3;
+    if (u->nstructs) return 2;
+    return 1;
+}
+
 static void encode_unit(const OscUnit *u, W *w) {
     /* format version 1 (OSC-1, no structs) / 2 (OSC-2 structs: struct table
      * after the magic) / 3 (OSC-2 arenas: AOPEN/AALLOC/ADESTROY present; the
      * struct count byte and table always follow the magic, even when 0).
      * A unit without structs or arenas encodes exactly as version 1; one with
      * structs but no arenas exactly as version 2. */
-    uint8_t magic[8] = {'O', 'S', 'C', '1', 'I', 'R', 0, 1};
-    bool arena = unit_has_arena(u);
-    if (u->nstructs) magic[7] = 2;
-    if (arena) magic[7] = 3;
-    bool pool = unit_has_pool(u); /* OSC-3 item 2: version 4, same layout as 3 */
-    if (pool) magic[7] = 4;
-    bool slice = unit_has_slice(u); /* external byte slices: version 5, same layout as 3/4 */
-    if (slice) magic[7] = 5;
+    uint8_t magic[8] = {'O', 'S', 'C', '1', 'I', 'R', 0, unit_version(u)};
     wbytes(w, magic, sizeof magic);
-    if (u->nstructs || arena || pool || slice) {
+    if (magic[7] >= 2) { /* struct table present (possibly empty) */
         w8(w, u->nstructs);
         for (int k = 0; k < u->nstructs; k++) {
             const OscStruct *s = &u->structs[k];
@@ -711,7 +720,7 @@ int osc_ir_slice_args_ok(const OscFunc *f, const uint64_t *args, unsigned nargs)
 
 int osc_ir_encode(const OscUnit *u, uint8_t *buf, size_t cap, size_t *len) {
     if (osc_ir_validate(u, NULL, 0)) return -1;
-    W w = {buf, buf ? cap : 0, 0, NULL};
+    W w = {buf, buf ? cap : 0, 0, NULL, NULL, 0, false};
     encode_unit(u, &w);
     if (len) *len = w.len;
     if (buf && w.len > cap) return -1;
@@ -722,8 +731,199 @@ int osc_ir_digest(const OscUnit *u, uint8_t out[32]) {
     if (osc_ir_validate(u, NULL, 0)) return -1;
     sha256_ctx c;
     sha256_init(&c);
-    W w = {NULL, 0, 0, &c};
+    W w = {NULL, 0, 0, &c, NULL, 0, false};
     encode_unit(u, &w);
     sha256_final(&c, out);
     return 0;
+}
+
+/* ---- strict decoder (omega#444, spec/one-layer-format.md) -------------- */
+/* Negative controls: tests/compiler builds this file with OSC_IR_DECODE_MUTANT = k
+ * (k >= 1) to switch off exactly one refusal; the decoder tests must then fail.
+ * The default build has no mutant and every check is live. */
+#ifndef OSC_IR_DECODE_MUTANT
+#define OSC_IR_DECODE_MUTANT 0
+#endif
+#define MUTANT(k) (OSC_IR_DECODE_MUTANT == (k))
+
+typedef struct {
+    const uint8_t *p;
+    size_t n, pos;
+    int rc;          /* first refusal met (0 = none yet); later reads are no-ops */
+} R;
+
+static bool rneed(R *r, size_t k) {
+    if (r->rc) return false;
+    if (k > r->n - r->pos) {
+        if (MUTANT(8)) { r->pos = r->n; return false; }  /* mutant: read past the end as zeros, no refusal */
+        r->rc = OSC_IR_REFUSE_TRUNCATED;
+        return false;
+    }
+    return true;
+}
+static uint64_t rle(R *r, unsigned k) {
+    if (!rneed(r, k)) return 0;
+    uint64_t v = 0;
+    for (unsigned i = 0; i < k; i++) v |= (uint64_t)r->p[r->pos + i] << (8 * i);
+    r->pos += k;
+    return v;
+}
+static void rfail(R *r, int rc) { if (!r->rc) r->rc = rc; }
+/* a count or length field: refuse OVERSIZED above max (checked before anything is read under it) */
+static uint64_t rcount(R *r, unsigned k, uint64_t max) {
+    uint64_t v = rle(r, k);
+    if (!r->rc && v > max) rfail(r, OSC_IR_REFUSE_OVERSIZED);
+    return r->rc ? 0 : v;
+}
+/* a register / block / callee field: u16 two's complement; 0..0x7FFF or 0xFFFF (= -1) */
+static int16_t rvr(R *r) {
+    uint64_t v = rle(r, 2);
+    if (r->rc) return -1;
+    if (v == 0xFFFF) return -1;
+    if (v > 0x7FFF && !MUTANT(6)) { rfail(r, OSC_IR_REFUSE_RANGE); return -1; }
+    return (int16_t)(uint16_t)v;
+}
+static OscScalar rscalar(R *r) {
+    uint64_t v = rle(r, 1);
+    if (!r->rc && v > OSC_T_CELLS) rfail(r, OSC_IR_REFUSE_RANGE);
+    return r->rc ? OSC_T_VOID : (OscScalar)v;
+}
+/* text of at most max bytes into dst (dst has room for max + 1); a NUL inside is ambiguous */
+static void rtext(R *r, unsigned lenbytes, size_t max, char *dst) {
+    size_t k = (size_t)rcount(r, lenbytes, max);
+    if (!rneed(r, k)) return;
+    if (memchr(r->p + r->pos, 0, k) && !MUTANT(5)) { rfail(r, OSC_IR_REFUSE_TEXT); return; }
+    memcpy(dst, r->p + r->pos, k);
+    dst[k] = 0;
+    r->pos += k;
+}
+static void rtype(R *r, OscType *t) {
+    t->s = rscalar(r);
+    if (r->rc || t->s != OSC_T_REF) return;
+    uint64_t ref = rle(r, 1);
+    if (!r->rc && ref > OSC_REF_MUT) { rfail(r, OSC_IR_REFUSE_RANGE); return; }
+    t->ref = (OscRefKind)ref;
+    t->elem = rscalar(r);
+    t->len = (uint16_t)rle(r, 2);
+    if (!r->rc && t->elem == OSC_T_VOID) t->sid = (uint8_t)rle(r, 1);  /* struct ref: sid follows */
+}
+
+static void decode_insn(R *r, OscInsn *in) {
+    memset(in, 0, sizeof *in);
+    in->dst = in->a = in->b = in->c = in->blk_t = in->blk_f = in->callee = -1;  /* as osc_lower.c emit() */
+    in->op = (uint8_t)rle(r, 1);
+    if (r->rc) return;
+    switch (in->op) {
+    case OSC_I_CONST: in->dst = rvr(r); in->imm = rle(r, 8); break;
+    case OSC_I_MOV: case OSC_I_CAST: case OSC_I_ALLOC: in->dst = rvr(r); in->a = rvr(r); break;
+    case OSC_I_BIN: case OSC_I_CMP: in->sub = (uint8_t)rle(r, 1); in->dst = rvr(r); in->a = rvr(r); in->b = rvr(r); break;
+    case OSC_I_UN: in->sub = (uint8_t)rle(r, 1); in->dst = rvr(r); in->a = rvr(r); break;
+    case OSC_I_RELEASE: in->a = rvr(r); break;
+    case OSC_I_AOPEN: in->dst = rvr(r); in->imm = rle(r, 1); break;
+    case OSC_I_AALLOC: in->dst = rvr(r); in->a = rvr(r); in->b = rvr(r); break;
+    case OSC_I_ADESTROY: in->a = rvr(r); break;
+    case OSC_I_POPEN: in->dst = rvr(r); in->sub = (uint8_t)rle(r, 1); in->nargs = (uint8_t)rle(r, 1); in->imm = rle(r, 8); break;
+    case OSC_I_PCLOSE: in->a = rvr(r); break;
+    case OSC_I_HALLOC: case OSC_I_HGEN: in->dst = rvr(r); in->a = rvr(r); in->b = rvr(r); break;
+    case OSC_I_HFREE: in->a = rvr(r); in->b = rvr(r); in->c = rvr(r); break;
+    case OSC_I_HLOAD: in->dst = rvr(r); in->a = rvr(r); in->b = rvr(r); in->c = rvr(r); break;
+    case OSC_I_HSTORE: in->a = rvr(r); in->b = rvr(r); in->c = rvr(r); in->args[0] = rvr(r); in->nargs = 1; break;
+    case OSC_I_LOAD: case OSC_I_SLOAD: in->dst = rvr(r); in->a = rvr(r); in->b = rvr(r); break;
+    case OSC_I_STORE: case OSC_I_SSTORE: in->a = rvr(r); in->b = rvr(r); in->c = rvr(r); break;
+    case OSC_I_FLOAD: in->dst = rvr(r); in->a = rvr(r); in->b = rvr(r); in->imm = rle(r, 1); break;
+    case OSC_I_FSTORE: in->a = rvr(r); in->b = rvr(r); in->c = rvr(r); in->imm = rle(r, 1); break;
+    case OSC_I_CALL:
+        in->dst = rvr(r); in->callee = rvr(r);
+        in->nargs = (uint8_t)rcount(r, 1, OSC_MAX_PARAMS);
+        for (int k = 0; k < in->nargs && !r->rc; k++) in->args[k] = rvr(r);
+        break;
+    case OSC_I_TRAP: in->imm = rle(r, 1); break;
+    case OSC_I_BR: in->blk_t = rvr(r); break;
+    case OSC_I_CBR: in->a = rvr(r); in->blk_t = rvr(r); in->blk_f = rvr(r); break;
+    case OSC_I_RET: in->a = rvr(r); break;
+    default: rfail(r, OSC_IR_REFUSE_RANGE); break;  /* unknown opcode: its size is unknown */
+    }
+}
+
+static void decode_func(R *r, OscFunc *f) {
+    rtext(r, 1, OSC_NAME_MAX - 1, f->name);
+    f->nparams = (uint8_t)rle(r, 1);
+    rtype(r, &f->ret);
+    f->nvregs = (uint16_t)rcount(r, 2, OSC_MAX_VREGS);
+    for (int v = 0; v < f->nvregs && !r->rc; v++) rtype(r, &f->vtype[v]);
+    f->nblocks = (uint16_t)rcount(r, 2, OSC_MAX_BLOCKS);
+    for (int b = 0; b < f->nblocks && !r->rc; b++) {
+        f->blocks[b].first = (uint32_t)rle(r, 4);
+        f->blocks[b].count = (uint32_t)rle(r, 4);
+    }
+    f->ninsns = (uint32_t)rcount(r, 4, OSC_MAX_INSNS);
+    for (uint32_t i = 0; i < f->ninsns && !r->rc; i++) decode_insn(r, &f->insns[i]);
+    rtext(r, 2, OSC_CLAUSE_MAX - 1, f->requires_text);
+    rtext(r, 2, OSC_CLAUSE_MAX - 1, f->ensures_text);
+}
+
+static int decode_unit(const uint8_t *buf, size_t len, OscUnit *u) {
+    static const uint8_t magic[7] = {'O', 'S', 'C', '1', 'I', 'R', 0};
+    if (len > OSC_IR_ENCODED_MAX && !MUTANT(7)) return OSC_IR_REFUSE_OVERSIZED;
+    R r = {buf, len, 0, 0};
+    if (len < sizeof magic) return memcmp(buf, magic, len) ? OSC_IR_REFUSE_MAGIC : OSC_IR_REFUSE_TRUNCATED;
+    if (memcmp(buf, magic, sizeof magic)) return OSC_IR_REFUSE_MAGIC;
+    r.pos = sizeof magic;
+    uint64_t version = rle(&r, 1);
+    if (r.rc) return r.rc;
+    if (version < 1 || version > OSC_IR_VERSION_MAX) return OSC_IR_REFUSE_UNKNOWN_VERSION;
+    if (version >= 2) {
+        u->nstructs = (uint8_t)rcount(&r, 1, OSC_MAX_STRUCTS);
+        for (int k = 0; k < u->nstructs && !r.rc; k++) {
+            OscStruct *s = &u->structs[k];
+            rtext(&r, 1, OSC_NAME_MAX - 1, s->name);
+            s->nfields = (uint8_t)rcount(&r, 1, OSC_MAX_FIELDS);
+            s->ncells = (uint16_t)rle(&r, 2);
+            for (int f = 0; f < s->nfields && !r.rc; f++) {
+                OscField *fd = &s->fields[f];
+                rtext(&r, 1, OSC_NAME_MAX - 1, fd->name);
+                fd->s = rscalar(&r);
+                fd->alen = (uint16_t)rle(&r, 2);
+                fd->off = (uint16_t)rle(&r, 2);
+            }
+        }
+    }
+    u->nfuncs = (uint16_t)rcount(&r, 2, OSC_MAX_FUNCS);
+    for (int fi = 0; fi < u->nfuncs && !r.rc; fi++) decode_func(&r, &u->funcs[fi]);
+    if (r.rc) return r.rc;
+    if (r.pos != len && !MUTANT(1)) return OSC_IR_REFUSE_TRAILING;
+    if (!MUTANT(4) && osc_ir_validate(u, NULL, 0) != 0) return OSC_IR_REFUSE_INVALID;
+    if (!MUTANT(2) && unit_version(u) != version) return OSC_IR_REFUSE_VERSION_MISMATCH;
+    /* backstop: the bytes must be exactly what the encoder writes for this unit */
+    W w = {NULL, 0, 0, NULL, buf, len, false};
+    encode_unit(u, &w);
+    if (w.differs || w.len != len) return OSC_IR_REFUSE_NONCANONICAL;
+    return OSC_IR_OK;
+}
+
+int osc_ir_decode(const uint8_t *buf, size_t len, OscUnit *out) {
+    if (!out) return OSC_IR_REFUSE_ARG;
+    memset(out, 0, sizeof *out);
+    if (!buf) return OSC_IR_REFUSE_ARG;
+    int rc = decode_unit(buf, len, out);
+    if (rc != OSC_IR_OK && !MUTANT(9)) memset(out, 0, sizeof *out);  /* mutant 9: leave partial output */
+    return rc;
+}
+
+const char *osc_ir_refusal_name(int rc) {
+    switch (rc) {
+    case OSC_IR_OK: return "OK";
+    case OSC_IR_REFUSE_ARG: return "ARG";
+    case OSC_IR_REFUSE_MAGIC: return "MAGIC";
+    case OSC_IR_REFUSE_UNKNOWN_VERSION: return "UNKNOWN_VERSION";
+    case OSC_IR_REFUSE_TRUNCATED: return "TRUNCATED";
+    case OSC_IR_REFUSE_OVERSIZED: return "OVERSIZED";
+    case OSC_IR_REFUSE_TRAILING: return "TRAILING";
+    case OSC_IR_REFUSE_RANGE: return "RANGE";
+    case OSC_IR_REFUSE_TEXT: return "TEXT";
+    case OSC_IR_REFUSE_INVALID: return "INVALID";
+    case OSC_IR_REFUSE_VERSION_MISMATCH: return "VERSION_MISMATCH";
+    case OSC_IR_REFUSE_NONCANONICAL: return "NONCANONICAL";
+    default: return "?";
+    }
 }
