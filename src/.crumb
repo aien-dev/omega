@@ -79,8 +79,8 @@
           "purpose": "M21 OMEGA_AUTODIFF: reverse-mode tape over M20 tensor CPU ops, caller-owned nodes and scratch, p"
         },
         {
-          "digest": "436bd3a2666c7573fe572fc3078a75748d06255b4e64168877dad1adb6de3420",
-          "last_commit": "18531691",
+          "digest": "bdc017bf3baddb9034478651fb3f170f045ce8aa27187481d15ac5da7fbfd18c",
+          "last_commit": "f77bfef7",
           "name": "compiler",
           "purpose": "Directory src/compiler. Purpose not yet described by a human."
         },
@@ -140,7 +140,7 @@
         },
         {
           "digest": "4785d8df268c31047589c5dff4ebc1f9a12a0fa4d5c94ce6dee156a841cf9502",
-          "last_commit": "2ec9e45f",
+          "last_commit": "dd67f6bd",
           "name": "reservoir",
           "purpose": "Ionic-droplet reservoir simulator (omega#440): binary32 fixed-step RK4 of the authors' droplet m"
         },
@@ -181,15 +181,15 @@
           "purpose": "Directory src/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:87462381f6c71959138a51d0a795c5b5510ec9cc3753d73caa8662497290c996",
-      "compiled_at": "2026-10-14T17:30:45Z",
+      "children_root": "sha256:93f32e91c5b498226d6ef4a040e3fbd2873dfb1f8b2405c26ea63b3a63df5f22",
+      "compiled_at": "2026-10-14T17:50:29Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:dbcd8678fc48b25073ce3a9c773de759d0782a3f9ee1aa051a09acddbf8da4a0",
+      "digest": "sha256:56899f232feaddd4ada1458f06aa49f3034d5fa6d52a1fa77f7ecde3cb3c23a2",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 463,
-      "generated_at_commit": "2ec9e45fbc14d6838cceffe5c164f2af43b61a31",
-      "source_tree": "sha256:a5af764ff217fc67d32ab9189c4f0b5af07735b840490b865c51b8a10f50e376"
+      "generated_at_commit": "d8273d6f8f933b462b1d0b80a575f71f4f73ee84",
+      "source_tree": "sha256:0d9c3cd9dd847013894fb41a508baf5827bd9e3b8019390b6ec5bf51110ee702"
     },
     "owner_lane": "",
     "provenance": {

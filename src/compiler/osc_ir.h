@@ -257,6 +257,42 @@ int osc_ir_digest(const OscUnit *u, uint8_t out[32]);
 #define OSC_IR_VERSION_MAX 5
 int osc_ir_encoding_version(const uint8_t *buf, size_t len);
 
+/* Strict decoder (omega#444; format and refusal classes: spec/one-layer-format.md).
+ * Admits a byte string exactly when it is osc_ir_encode of a unit that passes
+ * osc_ir_validate, and then fills *out with that unit: every field the encoding
+ * does not carry gets the value the front end's emitter gives it (line 0; unused
+ * vreg/block/callee fields -1; everything else 0). Every other input is refused
+ * with one named class and *out zeroed; nothing is repaired or skipped. Reads
+ * every historical version 1..OSC_IR_VERSION_MAX. Single-threaded, as
+ * osc_ir_validate is. Returns OSC_IR_OK (0) or a negative OscIrRefusal. */
+typedef enum {
+    OSC_IR_OK = 0,
+    OSC_IR_REFUSE_ARG = -1,             /* NULL input or output pointer                      */
+    OSC_IR_REFUSE_MAGIC = -2,           /* first 7 bytes are not "OSC1IR\0"                  */
+    OSC_IR_REFUSE_UNKNOWN_VERSION = -3, /* version byte outside 1..OSC_IR_VERSION_MAX        */
+    OSC_IR_REFUSE_TRUNCATED = -4,       /* input ends inside a field                         */
+    OSC_IR_REFUSE_OVERSIZED = -5,       /* input or a count/length over the format's limits  */
+    OSC_IR_REFUSE_TRAILING = -6,        /* bytes after the last function                     */
+    OSC_IR_REFUSE_RANGE = -7,           /* unknown opcode/type/ref tag, or a register, block */
+                                        /*   or callee field that is negative but not -1     */
+    OSC_IR_REFUSE_TEXT = -8,            /* a NUL byte inside a name or contract text         */
+    OSC_IR_REFUSE_INVALID = -9,         /* well-formed, but the unit fails osc_ir_validate   */
+    OSC_IR_REFUSE_VERSION_MISMATCH = -10, /* version byte is not the one the content requires */
+    OSC_IR_REFUSE_NONCANONICAL = -11    /* valid unit whose encoding differs from the input  */
+} OscIrRefusal;
+#define OSC_IR_REFUSAL_COUNT 11
+
+/* Upper bound on any canonical encoding (every count at its maximum, every
+ * instruction at its widest, CALL with 6 args = 18 bytes). Longer input is OVERSIZED. */
+#define OSC_IR_ENCODED_MAX                                                                   \
+    (8u + 1u + OSC_MAX_STRUCTS * (1u + 63u + 1u + 2u + OSC_MAX_FIELDS * (1u + 63u + 1u + 2u + 2u)) + 2u + \
+     OSC_MAX_FUNCS * (1u + 63u + 1u + 6u + 2u + OSC_MAX_VREGS * 6u + 2u + OSC_MAX_BLOCKS * 8u + 4u +  \
+                      OSC_MAX_INSNS * 18u + 2u * (2u + (OSC_CLAUSE_MAX - 1u))))
+
+int osc_ir_decode(const uint8_t *buf, size_t len, OscUnit *out);
+/* Stable upper-case name of a refusal class ("TRUNCATED", ...); "OK" for 0; "?" otherwise. */
+const char *osc_ir_refusal_name(int rc);
+
 /* Host entry check for slice parameters of function f called with args[0..nargs)
  * (registers: pointer, length per slice). 0 ok; -1 refused: a non-empty slice
  * with a NULL pointer, a range that wraps the address space, or a cells range

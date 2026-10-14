@@ -7,6 +7,8 @@
 #
 # test-compiler-quick smoke (< 60 s single core): same programs, small sweeps; CI on every change
 # test-compiler-full  = test-compiler (receipts and src/compiler CI use it)
+# test-osc-ir-decode  strict OSC IR decoder (omega#444): full counts, ASan/UBSan, decoder mutants
+#                     (part of test-compiler; test-osc-ir-decode-quick is part of test-compiler-quick)
 # test-compiler       model sweep (10^6) + back end + compiler golden/negative/model
 #                     agreement + cross-process determinism, plain and ASan/UBSan
 #                     + legacy AArch64 writer differential/refusal + frozen-caller check
@@ -75,13 +77,62 @@ $(OSC_DIR)/test_legacy_a64_asan: tests/compiler/test_legacy_a64.c $(OSC_LEGACY_A
 	@mkdir -p $(OSC_DIR)
 	$(CC) $(OSC_CFLAGS) $(OSC_ASAN) -o $@ tests/compiler/test_legacy_a64.c $(OSC_LEGACY_A64)
 
+# omega#444 (one-layer stage 2): the strict OSC IR decoder osc_ir_decode against
+# spec/one-layer-format.md. test_osc_ir_decode quick|full|asan (counts in its output).
+# Decoder mutants: OSC_IR_DECODE_MUTANT=k switches off exactly one refusal in
+# src/compiler/osc_ir.c; each must make the test report a FAIL (negative controls).
+# ASan legs run with detect_stack_use_after_return=0: with the fake stack on, every
+# osc_ir_validate call (a 6 KB frame) ran about 50x slower on the Spark (measured
+# 0.012 ms vs 2.6 ms per encode); use-after-return is not what this test probes.
+OSC_DEC_MUTANTS = 1 2 3 4 5 6 7 8
+OSC_DEC_ASAN_ENV = ASAN_OPTIONS=detect_stack_use_after_return=0
+.PHONY: test-osc-ir-decode test-osc-ir-decode-quick test-osc-ir-decode-mutants
+
+$(OSC_DIR)/test_osc_ir_decode: tests/compiler/test_osc_ir_decode.c $(OSC_LIB) $(OSC_HDRS)
+	@mkdir -p $(OSC_DIR)
+	$(CC) $(OSC_CFLAGS) -o $@ tests/compiler/test_osc_ir_decode.c $(OSC_LIB)
+
+$(OSC_DIR)/test_osc_ir_decode_asan: tests/compiler/test_osc_ir_decode.c $(OSC_LIB) $(OSC_HDRS)
+	@mkdir -p $(OSC_DIR)
+	$(CC) $(OSC_CFLAGS) $(OSC_ASAN) -o $@ tests/compiler/test_osc_ir_decode.c $(OSC_LIB)
+
+$(OSC_DIR)/test_osc_ir_decode_mutant%: tests/compiler/test_osc_ir_decode.c $(OSC_LIB) $(OSC_HDRS)
+	@mkdir -p $(OSC_DIR)
+	$(CC) $(OSC_CFLAGS) -DOSC_IR_DECODE_MUTANT=$* -o $@ tests/compiler/test_osc_ir_decode.c $(OSC_LIB)
+
+test-osc-ir-decode-mutants: $(foreach k,$(OSC_DEC_MUTANTS),$(OSC_DIR)/test_osc_ir_decode_mutant$(k))
+	@for k in $(OSC_DEC_MUTANTS); do \
+		out=$(OSC_DIR)/ir_decode_mutant$$k.out; \
+		if $(abspath $(OSC_DIR))/test_osc_ir_decode_mutant$$k quick > $$out 2>&1; then echo "decoder mutant $$k NOT caught"; exit 1; fi; \
+		grep -q '^FAIL: ' $$out || { echo "decoder mutant $$k stopped without a test FAIL line"; exit 1; }; \
+		echo "decoder mutant $$k caught: $$(grep -m1 '^FAIL: ' $$out | cut -c1-110)"; \
+	done
+	@echo "test-osc-ir-decode-mutants: PASS ($(words $(OSC_DEC_MUTANTS)) of $(words $(OSC_DEC_MUTANTS)) caught)"
+
+test-osc-ir-decode: $(OSC_DIR)/test_osc_ir_decode $(OSC_DIR)/test_osc_ir_decode_asan test-osc-ir-decode-mutants
+	$(abspath $(OSC_DIR)/test_osc_ir_decode) full > $(OSC_DIR)/ir_decode.out
+	@tail -1 $(OSC_DIR)/ir_decode.out; grep -q '^OSC_IR_DECODE_PASS$$' $(OSC_DIR)/ir_decode.out
+	@grep -E "^(corpus|valid objects|malformed|refusal classes):" $(OSC_DIR)/ir_decode.out | cut -c1-160
+	$(OSC_DEC_ASAN_ENV) $(abspath $(OSC_DIR)/test_osc_ir_decode_asan) asan > $(OSC_DIR)/ir_decode_asan.out
+	@tail -1 $(OSC_DIR)/ir_decode_asan.out; grep -q '^OSC_IR_DECODE_PASS$$' $(OSC_DIR)/ir_decode_asan.out
+	@echo "test-osc-ir-decode: PASS (strict decoder, plain full + ASan/UBSan + mutants)"
+
+test-osc-ir-decode-quick: $(OSC_DIR)/test_osc_ir_decode $(OSC_DIR)/test_osc_ir_decode_asan test-osc-ir-decode-mutants
+	@mkdir -p $(OSC_DIR)/quick
+	$(abspath $(OSC_DIR)/test_osc_ir_decode) quick > $(OSC_DIR)/quick/ir_decode.out
+	@tail -1 $(OSC_DIR)/quick/ir_decode.out; grep -q '^OSC_IR_DECODE_PASS$$' $(OSC_DIR)/quick/ir_decode.out
+	$(OSC_DEC_ASAN_ENV) $(abspath $(OSC_DIR)/test_osc_ir_decode_asan) quick > $(OSC_DIR)/quick/ir_decode_asan.out
+	@tail -1 $(OSC_DIR)/quick/ir_decode_asan.out; grep -q '^OSC_IR_DECODE_PASS$$' $(OSC_DIR)/quick/ir_decode_asan.out
+	@echo "test-osc-ir-decode-quick: PASS (smoke counts; not gate evidence)"
+
 # The ASan legs use smaller sweeps (stated in each test's output) to stay inside
 # the 3-minute single-core budget; the plain legs run the full counts.
 test-compiler: $(OSC_DIR)/test_osc_model $(OSC_DIR)/test_osc_model_asan \
 		$(OSC_DIR)/test_osc_backend $(OSC_DIR)/test_osc_backend_asan \
 		$(OSC_DIR)/test_osc_alloc $(OSC_DIR)/test_osc_alloc_asan \
 		$(OSC_DIR)/test_osc_compiler $(OSC_DIR)/test_osc_compiler_asan $(OSC_DIR)/oscc \
-		$(OSC_DIR)/test_legacy_a64 $(OSC_DIR)/test_legacy_a64_asan
+		$(OSC_DIR)/test_legacy_a64 $(OSC_DIR)/test_legacy_a64_asan \
+		test-osc-ir-decode
 	$(abspath $(OSC_DIR)/test_osc_model) > $(OSC_DIR)/model.out
 	@tail -1 $(OSC_DIR)/model.out; grep -q '^OSC0B_MODEL_PASS$$' $(OSC_DIR)/model.out
 	$(abspath $(OSC_DIR)/test_osc_model_asan) 05c0b5eed0010001 100000 > $(OSC_DIR)/model_asan.out
@@ -135,7 +186,8 @@ test-compiler-full: test-compiler
 test-compiler-quick: $(OSC_DIR)/test_osc_model $(OSC_DIR)/test_osc_backend $(OSC_DIR)/test_osc_backend_asan \
 		$(OSC_DIR)/test_osc_alloc $(OSC_DIR)/test_osc_alloc_asan \
 		$(OSC_DIR)/test_osc_compiler $(OSC_DIR)/test_osc_compiler_asan $(OSC_DIR)/oscc \
-		$(OSC_DIR)/test_legacy_a64 $(OSC_DIR)/test_legacy_a64_asan
+		$(OSC_DIR)/test_legacy_a64 $(OSC_DIR)/test_legacy_a64_asan \
+		test-osc-ir-decode-quick
 	@mkdir -p $(OSC_QDIR)
 	$(abspath $(OSC_DIR)/test_osc_model) 05c0b5eed0010001 $(OSC_QUICK_MODEL_SEQ) > $(OSC_QDIR)/model.out
 	@tail -1 $(OSC_QDIR)/model.out; grep -Eq '^OSC0B_MODEL_(SMOKE_)?PASS$$' $(OSC_QDIR)/model.out
