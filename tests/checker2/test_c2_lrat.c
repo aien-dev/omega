@@ -68,6 +68,11 @@ int main(void)
     lrat("empty-proof", UNSAT4, "", "LRAT-NO-EMPTY-CLAUSE");
     lrat("id-repeat", UNSAT4, "5 1 0 1 2 0\n5 0 5 3 4 0\n", "LRAT-ID-ORDER");
     lrat("id-input-range", UNSAT4, "4 1 0 1 2 0\n", "LRAT-ID-ORDER");
+    /* ids are capped at (input clauses + proof lines): a huge id must not size the clause table */
+    lrat("id-huge", UNSAT4, "5 1 0 1 2 0\n99999999 0 5 3 4 0\n", "LRAT-ID-RANGE");
+    lrat("id-huge-first", UNSAT4, "100000000 1 0 1 2 0\n", "LRAT-ID-RANGE");
+    lrat("id-at-cap", UNSAT4, "5 1 0 1 2 0\n7 0 5 3 4 0\n", "LRAT-OK");
+    lrat("id-past-cap", UNSAT4, "5 1 0 1 2 0\n8 0 5 3 4 0\n", "LRAT-ID-RANGE");
     lrat("literal-range", UNSAT4, "5 7 0 1 2 0\n", "LRAT-LITERAL");
     lrat("literal-range-neg", UNSAT4, "5 -3 0 1 2 0\n", "LRAT-LITERAL");
     lrat("truncated", UNSAT4, "5 1 0 1 2", "LRAT-SYNTAX");

@@ -10,7 +10,9 @@
  * Each added clause is checked by assigning all its literals false and walking the hints in order:
  * every hint must be unit (then its last literal is assigned) or falsified (then the step is
  * proved). A hint that is neither, or a hint list that ends without a conflict, fails the proof.
- * The proof is accepted only if it adds the empty clause. Fails closed on any malformed input. */
+ * The proof is accepted only if it adds the empty clause. Added clause ids must be strictly
+ * increasing and at most (input clauses + proof lines), LRAT-ID-RANGE otherwise, so the id-indexed
+ * clause table stays proportional to the input. Fails closed on any malformed input. */
 #ifndef C2_LRAT_H
 #define C2_LRAT_H
 

@@ -163,7 +163,8 @@ passes its `requires` clauses ends without any trap (overflow, division, shift, 
 from the IR bytes (`c2_blast.h`: scalar functions only; calls, memory, division and signed right
 shift are refused, never approximated). The solver (`src/checker2/untrusted/c2sat.c`) is
 untrusted and outside the checker identity. An UNSAT answer counts only when checker2's own LRAT
-checker (`c2_lrat.h`: RUP steps only, RAT hints refused, the empty clause required) accepts the
+checker (`c2_lrat.h`: RUP steps only, RAT hints refused, the empty clause required,
+clause ids at most input clauses plus proof lines so a huge id cannot size its tables) accepts the
 proof against the CNF checker2 rebuilt.
 
 With `--lrat FUNC=PROOF` (functions strictly ascending), `issue` checks every proof and sets
@@ -204,8 +205,8 @@ class 1 receipt). Proofs are deterministic: the solver writes byte-identical pro
   refused (138 by the front end);
 - `test_c2_ir` (plain and ASan/UBSan): 107 units re-encode identically, every truncation refused,
   bit flips never crash, 96 planted defects each refused by its exact rule;
-- `test_c2_lrat` (plain and ASan/UBSan): hand-written LRAT cases, each refusal by its exact rule,
-  20000 corrupted proofs never verify a satisfiable formula;
+- `test_c2_lrat` (plain and ASan/UBSan): hand-written LRAT cases, each refusal by its exact rule
+  (including a huge clause id refused as `LRAT-ID-RANGE` without a large allocation), 20000 corrupted proofs never verify a satisfiable formula;
 - `lrat.sh`: 20 bounded programs proved and replayed, 9 trap programs found to trap, 48 corrupted,
   substituted or misapplied proofs and receipts refused;
 - `test_c2_blast`: non-scalar functions refused; every gate program evaluated input by input

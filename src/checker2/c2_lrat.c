@@ -188,6 +188,11 @@ int c2_lrat_check(const C2Cnf *cnf, const char *proof, size_t len, C2LratResult 
         int32_t *k = dup_clause(c, n);
         if (!k || db_put(&d, i + 1, k)) { free(k); fail(r, "LRAT-RESOURCE", 0); goto out; }
     }
+    /* Clause ids are capped at (input clauses + proof lines): textual LRAT writes one step per line,
+     * so an honest proof with dense ids never exceeds it, and a huge id cannot make the clause table huge (the table
+     * is indexed by id). */
+    long max_id = cnf->nclauses + 1;
+    for (size_t i = 0; i < len; i++) max_id += proof[i] == '\n';
     Lx x = {proof, len, 0, 1};
     long last_id = cnf->nclauses;
     for (;;) {
@@ -211,6 +216,7 @@ int c2_lrat_check(const C2Cnf *cnf, const char *proof, size_t len, C2LratResult 
             continue;
         }
         if (id <= last_id) { fail(r, "LRAT-ID-ORDER", line); goto out; } /* GUARD:id-order */
+        if (id > max_id) { fail(r, "LRAT-ID-RANGE", line); goto out; } /* GUARD:id-range */
         last_id = id;
         /* clause literals */
         int n = 0, na = 0, ok = 0;
