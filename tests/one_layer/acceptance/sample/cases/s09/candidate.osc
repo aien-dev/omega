@@ -1,0 +1,9 @@
+fn spin(x: u64) -> u64 {
+    let mut s: u64 = x;
+    for i in 0 .. 1000000 {
+        for j in 0 .. 1000000 {
+            s = s + x;
+        }
+    }
+    return s;
+}

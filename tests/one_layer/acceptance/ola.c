@@ -635,6 +635,14 @@ static void put_receipt(int rdir, const char *body, size_t n, char h[65])
     unlinkat(rdir, tmp, 0);
 }
 
+/* The transcript must open with "OLA1 <nonce of THIS execution>": a replayed or forged one fails. */
+static int header_ok(const char *out, const char *nonce)
+{
+    char hdr[64];
+    snprintf(hdr, sizeof hdr, "OLA1 %s\n", nonce);
+    return !strncmp(out, hdr, strlen(hdr)); /* OLA:nonce-check */
+}
+
 static const char *judge(const Case *c, const Want *w, const Run *r, const char *nonce, char *det, size_t dn)
 {
     snprintf(det, dn, "-");
@@ -652,10 +660,8 @@ static const char *judge(const Case *c, const Want *w, const Run *r, const char 
     char *t = strdup(r->out), *save = NULL;
     if (!t) die("out of memory");
     const char *reason = "ok";
-    char hdr[64];
-    snprintf(hdr, sizeof hdr, "OLA1 %s", nonce);
     char *ln = strtok_r(t, "\n", &save);
-    if (!ln || strcmp(ln, hdr)) { /* OLA:nonce-check */
+    if (!ln || !header_ok(r->out, nonce)) {
         snprintf(det, dn, "stale_or_forged_transcript");
         free(t);
         return "sandbox_violation";
@@ -881,9 +887,7 @@ static void classify(const Run *r, const char *nonce_or_null, char *out, size_t 
         return;
     }
     if (nonce_or_null) { /* replay: the transcript check is the defence */
-        char hdr[64];
-        snprintf(hdr, sizeof hdr, "OLA1 %s\n", nonce_or_null);
-        if (strncmp(r->out, hdr, strlen(hdr))) { snprintf(out, n, "BLOCKED:stale_or_forged_transcript"); return; }
+        if (!header_ok(r->out, nonce_or_null)) { snprintf(out, n, "BLOCKED:stale_or_forged_transcript"); return; }
         snprintf(out, n, "ESCAPED:transcript_accepted");
         return;
     }

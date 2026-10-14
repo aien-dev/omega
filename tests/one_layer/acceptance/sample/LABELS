@@ -1,0 +1,16 @@
+# PUBLIC SAMPLE corpus labels (not the sealed corpus). The selftest reads this; the harness reads
+# a corpus LABELS only after every verdict is written.
+s01 CONTROL -
+s02 CONTROL -
+s03 CONTROL -
+s04 CONTROL -
+s05 DEFECT hardcoded_output
+s06 DEFECT malformed_source
+s07 DEFECT wrong_signature
+s08 DEFECT swallowed_trap
+s09 DEFECT runaway_time
+s10 DEFECT malformed_encoding
+s11 DEFECT wrong_width
+s12 DEFECT special_cased_input
+s13 DEFECT malformed_case
+s14 DEFECT wrong_trap_code

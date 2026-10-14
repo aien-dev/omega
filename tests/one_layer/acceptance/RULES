@@ -1,0 +1,11 @@
+# One-layer stage 1 acceptance rules (omega#443). Hashed into every receipt as rules_sha256.
+# Changing any line changes rules_sha256; the isolation probe change_rules proves a candidate cannot.
+interface=HARNESS_INTERFACE.md
+interface_version=v1
+interface_sha256=a9e7e2aae27ff43d0e09e6dcd9173ad1f19776007c1a24496b102e830290de5e
+# per-case limits inside the sandbox (wall clock and RLIMIT_CPU; RLIMIT_AS)
+time_ms=5000
+mem_mb=512
+# gate (HARNESS_INTERFACE.md section 4)
+gate_defects=30
+gate_controls=10
