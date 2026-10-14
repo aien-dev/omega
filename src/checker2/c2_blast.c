@@ -218,7 +218,7 @@ static int run(Ex *x, St *s, St *stack, int *sp)
                     add(b, A, nb, in->sub == B_SUB ? T : F, w, r, NULL);
                     if (sg) { /* overflow: operands (after negation for SUB) agree in sign, result differs */
                         int same = in->sub == B_ADD ? -XOR(b, A[w - 1], B[w - 1]) : XOR(b, A[w - 1], B[w - 1]);
-                        s->guard = trap_if(x, s->guard, AND(b, same, XOR(b, r[w - 1], A[w - 1])));
+                        s->guard = trap_if(x, s->guard, AND(b, same, XOR(b, r[w - 1], A[w - 1]))); /* GUARD:add-sub-overflow */
                     }
                     break;
                 }
@@ -229,7 +229,7 @@ static int run(Ex *x, St *s, St *stack, int *sp)
                         for (int k = 0; k < 2 * w; k++) { ax[k] = A[k < w ? k : w - 1]; bx[k] = B[k < w ? k : w - 1]; }
                         mul(b, ax, bx, 2 * w, p);
                         memcpy(r, p, (size_t)w * sizeof *r);
-                        s->guard = trap_if(x, s->guard, -all_equal(b, p, w - 1, 2 * w - 1));
+                        s->guard = trap_if(x, s->guard, -all_equal(b, p, w - 1, 2 * w - 1)); /* GUARD:mul-overflow */
                     }
                     break;
                 case B_AND: for (int k = 0; k < w; k++) r[k] = AND(b, A[k], B[k]); break;
@@ -240,7 +240,7 @@ static int run(Ex *x, St *s, St *stack, int *sp)
                     int wb = width(f->vt[in->b].s), lg = log2w(w);
                     int big = F; /* amount >= w, or negative (sign bit of a signed amount) */
                     for (int k = lg; k < wb; k++) big = OR(b, big, B[k]);
-                    s->guard = trap_if(x, s->guard, big);
+                    s->guard = trap_if(x, s->guard, big); /* GUARD:shift-range */
                     int cur[MAXW], nxt[MAXW];
                     memcpy(cur, A, (size_t)w * sizeof *cur);
                     for (int j = 0; j < lg && j < wb; j++) {
@@ -260,7 +260,7 @@ static int run(Ex *x, St *s, St *stack, int *sp)
                             for (int j = 0; j < lg; j++) amt = AND(b, amt, (k >> j) & 1 ? B[j] : -B[j]);
                             ovf = OR(b, ovf, AND(b, amt, -all_equal(b, A, w - 1 - k, w - 1)));
                         }
-                        s->guard = trap_if(x, s->guard, ovf);
+                        s->guard = trap_if(x, s->guard, ovf); /* GUARD:shl-overflow */
                     }
                     break;
                 }
@@ -280,7 +280,7 @@ static int run(Ex *x, St *s, St *stack, int *sp)
                     if (is_signed(td->s)) { /* -MIN is not representable */
                         int min = A[w - 1];
                         for (int k = 0; k < w - 1; k++) min = AND(b, min, -A[k]);
-                        s->guard = trap_if(x, s->guard, min);
+                        s->guard = trap_if(x, s->guard, min); /* GUARD:neg-overflow */
                     }
                 } else if (in->sub == U_BNOT) neg_bits(A, w, r);
                 else r[0] = -A[0];
@@ -311,13 +311,13 @@ static int run(Ex *x, St *s, St *stack, int *sp)
                 for (int k = 0; k < W; k++) ext[k] = k < ws ? A[k] : (is_signed(ta->s) ? A[ws - 1] : F);
                 int fill = is_signed(td->s) ? ext[wt - 1] : F, fits = T;
                 for (int k = wt; k < W; k++) fits = AND(b, fits, -XOR(b, ext[k], fill));
-                s->guard = trap_if(x, s->guard, -fits);
+                s->guard = trap_if(x, s->guard, -fits); /* GUARD:cast-range */
                 r = val(x, wt);
                 if (r) memcpy(r, ext, (size_t)wt * sizeof *r);
                 break;
             }
             case C2_TRAP:
-                if (in->imm != 9) (void)trap_if(x, s->guard, T); /* 9 = REQUIRES: the caller's fault */
+                if (in->imm != 9) (void)trap_if(x, s->guard, T); /* 9 = REQUIRES: the caller's fault; GUARD:trap-insn */
                 return 0;
             case C2_RET:
                 return 0;

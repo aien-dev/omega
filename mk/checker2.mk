@@ -70,11 +70,16 @@ $(C2_DIR)/test_c2_lrat_asan: tests/checker2/test_c2_lrat.c src/checker2/c2_lrat.
 	@mkdir -p $(C2_DIR)
 	$(CC) $(C2_CFLAGS) $(C2_ASAN) -o $@ tests/checker2/test_c2_lrat.c src/checker2/c2_lrat.c
 
+$(C2_DIR)/test_c2_blast: tests/checker2/test_c2_blast.c $(C2_CORE) $(C2_HDRS)
+	@mkdir -p $(C2_DIR)
+	$(CC) $(C2_CFLAGS) -o $@ tests/checker2/test_c2_blast.c $(C2_CORE)
+
 # 20 bounded programs proved by bit-blasting + c2sat + checker2 LRAT replay, plus negative controls
-test-checker2-lrat: $(C2_DIR)/osc_emit_ir $(C2_DIR)/checker2 $(C2_DIR)/c2sat $(C2_DIR)/test_c2_lrat $(C2_DIR)/test_c2_lrat_asan
+test-checker2-lrat: $(C2_DIR)/osc_emit_ir $(C2_DIR)/checker2 $(C2_DIR)/c2sat $(C2_DIR)/test_c2_lrat $(C2_DIR)/test_c2_lrat_asan $(C2_DIR)/test_c2_blast test-checker2-differential
 	./$(C2_DIR)/test_c2_lrat
 	./$(C2_DIR)/test_c2_lrat_asan
 	sh tests/checker2/lrat.sh $(C2_DIR)/osc_emit_ir $(C2_DIR)/checker2 $(C2_DIR)/c2sat $(C2_DIR)/lrat
+	./$(C2_DIR)/test_c2_blast $(C2_IRDIR) $(C2_DIR)/lrat
 
 test-checker2-unit: $(C2_DIR)/test_c2_receipt $(C2_DIR)/test_c2_receipt_asan $(C2_DIR)/test_c2_ir $(C2_DIR)/test_c2_ir_asan test-checker2-differential test-checker2-lrat
 	./$(C2_DIR)/test_c2_receipt tests/checker2/fixtures
@@ -82,8 +87,8 @@ test-checker2-unit: $(C2_DIR)/test_c2_receipt $(C2_DIR)/test_c2_receipt_asan $(C
 	./$(C2_DIR)/test_c2_ir $(C2_IRDIR)
 	./$(C2_DIR)/test_c2_ir_asan $(C2_IRDIR)
 
-test-checker2-mutants: test-checker2-differential
-	sh tests/checker2/mutants.sh "$(CC)" "$(C2_DIR)/mutants" "$(C2_IRDIR)"
+test-checker2-mutants: test-checker2-differential test-checker2-lrat
+	sh tests/checker2/mutants.sh "$(CC)" "$(C2_DIR)/mutants" "$(C2_IRDIR)" "$(C2_DIR)/lrat"
 
 test-checker2: test-checker2-unit test-checker2-mutants
 
