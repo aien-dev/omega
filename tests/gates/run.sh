@@ -5,8 +5,8 @@
 # evidence-immutable.yml, crumb.yml). Manifests under tests/gates/ name this script plus one
 # step word, so no manifest needs shell expansion (ADR 0028 P6).
 #
-# Pinned sibling sources. The hosted jobs check out aien-dev/physics at physics.lock (rx-host
-# at its own hard-coded commit), aien-dev/aienos at aienos.lock and aien-dev/aienos at
+# Pinned sibling sources. The hosted jobs check out aien-spark/physics at physics.lock (rx-host
+# at its own hard-coded commit), aien-spark/aienos at aienos.lock and aien-spark/aienos at
 # argus.lock, as physics-src/, aienos-src/ and aienos-argus/ next to the Makefile, and exclude
 # them from git status. Here the same commits are materialised under build/pins/ (build/ is
 # gitignored) from the sibling local clones ../physics and ../aienos, offline.

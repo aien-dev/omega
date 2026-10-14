@@ -40,7 +40,7 @@ jobs:
       - name: Checkout pinned Physics
         uses: actions/checkout@v4
         with:
-          repository: aien-dev/physics
+          repository: aien-spark/physics
           ref: ${{ steps.pins.outputs.physics }}
           path: physics-src
       - name: Keep Physics checkout out of Omega tree status

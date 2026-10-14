@@ -60,7 +60,7 @@ jobs:
       - name: Checkout pinned Physics headers
         uses: actions/checkout@v4
         with:
-          repository: aien-dev/physics
+          repository: aien-spark/physics
           ref: e95e3ed2a86fe4bffe4d954fa94c27dfb5284280
           path: physics-src
       - name: Keep Physics checkout out of Omega tree status
@@ -74,7 +74,7 @@ jobs:
       - name: Checkout pinned AIENOS authority
         uses: actions/checkout@v4
         with:
-          repository: aien-dev/aienos
+          repository: aien-spark/aienos
           ref: ${{ steps.aienos.outputs.sha }}
           path: aienos-src
       - name: Keep AIENOS checkout out of Omega tree status
@@ -242,7 +242,7 @@ jobs:
       - name: Checkout pinned Physics headers
         uses: actions/checkout@v4
         with:
-          repository: aien-dev/physics
+          repository: aien-spark/physics
           ref: e95e3ed2a86fe4bffe4d954fa94c27dfb5284280
           path: physics-src
       - name: Read pinned AIENOS authority
@@ -257,13 +257,13 @@ jobs:
       - name: Checkout pinned AIENOS authority
         uses: actions/checkout@v4
         with:
-          repository: aien-dev/aienos
+          repository: aien-spark/aienos
           ref: ${{ steps.aienos.outputs.sha }}
           path: aienos-src
       - name: Checkout pinned ARGUS sources (aienos native/argus, argus.lock; linked into the production R13 program)
         uses: actions/checkout@v4
         with:
-          repository: aien-dev/aienos
+          repository: aien-spark/aienos
           ref: ${{ steps.aienos.outputs.argus }}
           path: aienos-argus
       - name: Keep dependency checkouts out of Omega tree status

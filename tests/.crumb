@@ -424,7 +424,7 @@
         },
         {
           "lane": "lane27",
-          "note": "PR aien-dev/omega#151, squash merge 7e713e301a6733a679f82f6892beda57b313908c",
+          "note": "PR aien-spark/omega#151, squash merge 7e713e301a6733a679f82f6892beda57b313908c",
           "pr": 151,
           "ref": "2026-10-01-push-lane27-report.md",
           "sha": "7e713e3",
@@ -456,7 +456,7 @@
         },
         {
           "lane": "lane27",
-          "note": "PR aien-dev/omega#150, squash merge c77362242b13d7df127eeabec9eda75119f934cc",
+          "note": "PR aien-spark/omega#150, squash merge c77362242b13d7df127eeabec9eda75119f934cc",
           "pr": 150,
           "ref": "2026-10-01-push-lane27-report.md",
           "sha": "c773622",
@@ -480,7 +480,7 @@
         },
         {
           "lane": "lane2",
-          "note": "PR aien-dev/omega#147 MERGED with merge commit 2d8cd68 (head abe923c, rebased on 520c895).",
+          "note": "PR aien-spark/omega#147 MERGED with merge commit 2d8cd68 (head abe923c, rebased on 520c895).",
           "pr": 147,
           "ref": "2026-10-01-push-lane2-report.md",
           "sha": "2d8cd68",
@@ -512,7 +512,7 @@
         },
         {
           "lane": "lane27",
-          "note": "PR aien-dev/omega#149, squash merge 845dce4d53f04bb929b83ebc5cf59c064f16d731",
+          "note": "PR aien-spark/omega#149, squash merge 845dce4d53f04bb929b83ebc5cf59c064f16d731",
           "pr": 149,
           "ref": "2026-10-01-push-lane27-report.md",
           "sha": "845dce4",
@@ -536,7 +536,7 @@
         },
         {
           "lane": "lane27",
-          "note": "PR aien-dev/omega#148, squash merge 0abdb08aec443cad3b66cf17afee6b713b7af271",
+          "note": "PR aien-spark/omega#148, squash merge 0abdb08aec443cad3b66cf17afee6b713b7af271",
           "pr": 148,
           "ref": "2026-10-01-push-lane27-report.md",
           "sha": "0abdb08",
@@ -560,7 +560,7 @@
         },
         {
           "lane": "lane2",
-          "note": "PR aien-dev/omega#147 MERGED with merge commit 2d8cd68 (head abe923c, rebased on 520c895).",
+          "note": "PR aien-spark/omega#147 MERGED with merge commit 2d8cd68 (head abe923c, rebased on 520c895).",
           "pr": 146,
           "ref": "2026-10-01-push-lane2-report.md",
           "sha": "520c895",
@@ -568,7 +568,7 @@
         },
         {
           "lane": "lane28",
-          "note": "Verdict: PASS. PR aien-dev/omega#146, squash-merged 520c895 (520c8956e6614877b0795e2581c8ed2c0113121e).",
+          "note": "Verdict: PASS. PR aien-spark/omega#146, squash-merged 520c895 (520c8956e6614877b0795e2581c8ed2c0113121e).",
           "pr": 146,
           "ref": "2026-10-01-push-lane28-report.md",
           "sha": "520c895",
@@ -624,7 +624,7 @@
         },
         {
           "lane": "lane22",
-          "note": "PR: aien-dev/omega#144, squash-merged, merge commit b81f8500a25ee543ce55750d17aa1fa517fe94a8",
+          "note": "PR: aien-spark/omega#144, squash-merged, merge commit b81f8500a25ee543ce55750d17aa1fa517fe94a8",
           "pr": 144,
           "ref": "2026-10-01-push-lane22-report.md",
           "sha": "b81f850",
@@ -672,7 +672,7 @@
         },
         {
           "lane": "lane21",
-          "note": "PR: aien-dev/omega #140, squash-merged, merge commit 54826a37f54465ceec26b4f6b1ea96942130513e.",
+          "note": "PR: aien-spark/omega #140, squash-merged, merge commit 54826a37f54465ceec26b4f6b1ea96942130513e.",
           "pr": 140,
           "ref": "2026-10-01-push-lane21-report.md",
           "sha": "54826a3",
@@ -824,7 +824,7 @@
         },
         {
           "lane": "lane19",
-          "note": "Part B, omega Fabric 64-byte signature: PASS (host).** PR aien-dev/omega #137, merged 1299b19.",
+          "note": "Part B, omega Fabric 64-byte signature: PASS (host).** PR aien-spark/omega #137, merged 1299b19.",
           "pr": 137,
           "ref": "2026-10-01-push-lane19-report.md",
           "sha": "1299b19",

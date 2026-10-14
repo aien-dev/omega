@@ -1,6 +1,6 @@
 # PD-0 threshold calibration (G1, spec section 11 step 3)
 
-**Spec:** aien-dev/physics `docs/PD0_HIDDEN_EQUATION_BENCHMARK.md` at `2f881b1` (revision 2; byte-identical to branch commit `80d7808`). Nothing in that file is edited here. Every number below was produced by `make physics0-test` on this commit (receipts `evidence/physics0/pd0-oracle-L<n>.json`, `evidence/physics0/pd0-g0-receipt.txt`); the generators are `src/physics0/pd0_gen.c`, the calibration code `tests/physics0/pd0_calib.c`, `pd0_oracle.c`, `pd0_sparse.c`.
+**Spec:** aien-spark/physics `docs/PD0_HIDDEN_EQUATION_BENCHMARK.md` at `2f881b1` (revision 2; byte-identical to branch commit `80d7808`). Nothing in that file is edited here. Every number below was produced by `make physics0-test` on this commit (receipts `evidence/physics0/pd0-oracle-L<n>.json`, `evidence/physics0/pd0-g0-receipt.txt`); the generators are `src/physics0/pd0_gen.c`, the calibration code `tests/physics0/pd0_calib.c`, `pd0_oracle.c`, `pd0_sparse.c`.
 
 > **Revision 3 supersedes the numbers below.** Sections 1 to 4 and the L6 estimator note record the revision 2 runs and stay as history. The revision 3 numbers are in the last section ("Revision 3, substrate cut 3"); old receipts in `evidence/physics0/` are untouched.
 
@@ -74,7 +74,7 @@ Bounds 0.03 in-box and 0.08 extrapolation: met by a wide margin; `oracle_fit` L6
 
 ## Revision 3, substrate cut 3
 
-**Spec:** aien-dev/physics `docs/PD0_HIDDEN_EQUATION_BENCHMARK.md` at `5bd2b04` (revision 3). **Omega commit that produced every number and receipt below:** `9e5ea8b5b5c1afa7a28cbcb0b2c463e51c96b538` (branch `hive/pd0-rev3`, on main `d0ca8ce`, which already contains #243, #246 and the L6 latent estimator #247). Run with `make physics0-test` and `make physics0-evidence` on a clean tree. No threshold was changed; the L6 range check and the generator read one table (`pd0_gen_const_table` in `src/physics0/pd0_gen.c`).
+**Spec:** aien-spark/physics `docs/PD0_HIDDEN_EQUATION_BENCHMARK.md` at `5bd2b04` (revision 3). **Omega commit that produced every number and receipt below:** `9e5ea8b5b5c1afa7a28cbcb0b2c463e51c96b538` (branch `hive/pd0-rev3`, on main `d0ca8ce`, which already contains #243, #246 and the L6 latent estimator #247). Run with `make physics0-test` and `make physics0-evidence` on a clean tree. No threshold was changed; the L6 range check and the generator read one table (`pd0_gen_const_table` in `src/physics0/pd0_gen.c`).
 
 New receipts (old ones untouched): `evidence/physics0/pd0-oracle-L0-rev3.json` to `pd0-oracle-L6-rev3.json` and `evidence/physics0/pd0-g0-receipt-cut3.txt`. Each G1 receipt now lists the reset box, the scoring boxes (in-box = reset box, extrapolation = 1.5x it, spec 6.1), the declared constant ranges and, per instance, the L6 redraw count.
 

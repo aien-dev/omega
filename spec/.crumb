@@ -106,7 +106,7 @@
         },
         {
           "lane": "lane2",
-          "note": "PR aien-dev/omega#124, merged as d3194f6 (merge commit, matching the repo's habit). Merged on top of #122 (ce7821d), which touched different files; the CPU numeric test was rerun on the merged main: ",
+          "note": "PR aien-spark/omega#124, merged as d3194f6 (merge commit, matching the repo's habit). Merged on top of #122 (ce7821d), which touched different files; the CPU numeric test was rerun on the merged main: ",
           "pr": 122,
           "ref": "2026-10-01-push-lane2-report.md",
           "sha": "ce7821d",

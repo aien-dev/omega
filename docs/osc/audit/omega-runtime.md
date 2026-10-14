@@ -2,7 +2,7 @@
 
 # Omega C memory / ownership hazard map (OSC-0 / OSC-0B input)
 
-Repo: aien-dev/omega at 193a7e7 (worktree osc-0). Read-only audit; nothing built or run.
+Repo: aien-spark/omega at 193a7e7 (worktree osc-0). Read-only audit; nothing built or run.
 Scope: all C in src/**, tests/** (harness), tools/*.c = 87,486 lines in 212 files.
 Labels: [FACT] code fact with file:line; [SETTLED] decided in a spec/doc (cited); [PROPOSED] recommended OSC-0B decision; [OPEN] unresolved.
 Non-overlap: src/language, aarch64 encoder/decoder/emitters, canonical/SemanticId (omega_canonical, omega_codec, sha256), self-host and compiler determinism belong to another worker and are only inventoried here. PHYSICS (nvrm.c, m16_native.c, the NVIDIA-open headers) and AIENOS (libaienos_capability.a) belong to a third worker; only their boundary with Omega is noted.

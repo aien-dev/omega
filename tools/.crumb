@@ -158,7 +158,7 @@
         },
         {
           "lane": "lane2",
-          "note": "PR aien-dev/omega#147 MERGED with merge commit 2d8cd68 (head abe923c, rebased on 520c895).",
+          "note": "PR aien-spark/omega#147 MERGED with merge commit 2d8cd68 (head abe923c, rebased on 520c895).",
           "pr": 147,
           "ref": "2026-10-01-push-lane2-report.md",
           "sha": "2d8cd68",
@@ -302,7 +302,7 @@
         },
         {
           "lane": "lane2",
-          "note": "PR aien-dev/omega#124, merged as d3194f6 (merge commit, matching the repo's habit). Merged on top of #122 (ce7821d), which touched different files; the CPU numeric test was rerun on the merged main: ",
+          "note": "PR aien-spark/omega#124, merged as d3194f6 (merge commit, matching the repo's habit). Merged on top of #122 (ce7821d), which touched different files; the CPU numeric test was rerun on the merged main: ",
           "pr": 124,
           "ref": "2026-10-01-push-lane2-report.md",
           "sha": "d3194f6",
