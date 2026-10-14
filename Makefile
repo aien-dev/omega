@@ -36,6 +36,7 @@ SRCS += src/omega_gpu_hostmath.c
 SRCS += src/omega_blackwell_codegen_router.c src/omega_gpu_router_api.c
 # OWN-30B W-L2 (2026-10-13): decode launch collapse, new files only: command list (N launches, one submit) + glue kernels
 SRCS += src/omega_gpu_cmdlist.c src/omega_blackwell_codegen_dec.c
+SRCS += src/omega_gpu_decode_graph.c
 # OWN-30B (2026-10-13): bf16 streaming GEMV for the lm_head (omega_gpu_bf16_gemv_api.h), new files only
 SRCS += src/omega_blackwell_codegen_bf16.c src/omega_gpu_bf16_gemv_api.c
 # OWN-30B prefill (2026-10-13): FP8 grouped GEMM, each expert streamed once per pass (omega_gpu_fp8gemm_api.h), new files only
@@ -2469,3 +2470,12 @@ $(GPU_CMDLIST_TEST): tests/gpu_cmdlist_test.c tests/bw_warp_sim_k.h src/omega_gp
 test-gpu-cmdlist: $(GPU_CMDLIST_TEST)
 	./$(GPU_CMDLIST_TEST) --host-only
 	./$(GPU_CMDLIST_TEST) --sim
+
+# OWN-30B W-L2a (2026-10-13): one decode token as one command list (omega_gpu_decode_graph). test-gpu-decode-graph is
+# host-only; the chip gate is tools/run_gpu_decode_graph_chip.sh under the GB10 lock.
+.PHONY: test-gpu-decode-graph
+GPU_DECODE_GRAPH_TEST = $(OUT_DIR)/gpu_decode_graph_test
+$(GPU_DECODE_GRAPH_TEST): tests/gpu_decode_graph_test.c src/omega_gpu_decode_graph.h src/omega_gpu_cmdlist.h $(OUT_DIR)/libomega_gpu.a
+	$(CC) $(CFLAGS) -ffp-contract=off -o $@ tests/gpu_decode_graph_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+test-gpu-decode-graph: $(GPU_DECODE_GRAPH_TEST)
+	./$(GPU_DECODE_GRAPH_TEST) --host-only
