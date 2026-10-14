@@ -18,6 +18,16 @@
  *        prints the score.txt lines; probes count only if probes.log holds every probe, each PASS.
  *   ola cmp    <a> <b>                      byte-identical files (exit 0) or not (exit 1)
  *
+ * v2 (HARNESS_INTERFACE_V2.md, omega#445; v1 commands above keep their exact meaning):
+ *   ola untar  <tar> <sealed> <destdir> cases2|labels2   corpus.tar, also admits candidate.oscir
+ *   ola untar  <tar> <sealed> <destdir> tasks|public     tasks.tar: everything, or only requirement + prompt
+ *   ola pass2  <corpus_dir> ...                          as pass, plus kind oscir (decoded in the sandbox)
+ *   ola xpass  <tasks_dir> <set_dir|REFERENCES> <verdicts> <receipts> <scratch> <runner> <meta>
+ *        experiment: every task scored with the set's candidate (or REJECT no_candidate), or with its own
+ *        hidden/reference.osc; a set dir holding anything but known task dirs with <= 1 candidate is refused.
+ *   ola tally2 <verdicts> <LABELS> <replay> <probes.log> <clean> <corpus_dir>   v2 corpus gate
+ *   ola xscore <sets_dir> <replay> <probes.log> <clean>                         experiment score.txt
+ *
  * Hosted C (glibc, Linux syscalls) is a temporary dependency: see evidence/ONE-LAYER-1/INVENTORY.txt.
  */
 #include <dirent.h>
@@ -122,8 +132,32 @@ static int case_id_ok(const char *s, size_t n)
     return 1;
 }
 
+/* Which contract layout untar checks: 0 = v1 corpus, 1 = v2 corpus (adds candidate.oscir),
+ * 2 = v2 experiment task corpus (HARNESS_INTERFACE_V2.md section 3). */
+static int g_lay;
+
+static int layout_tasks(const char *p)
+{
+    if (!strcmp(p, "tasks") || !strcmp(p, "tasks/cases")) return 1;
+    if (strncmp(p, "tasks/cases/", 12)) return 0;
+    const char *id = p + 12, *sl = strchr(id, '/');
+    if (!sl) return case_id_ok(id, strlen(id)) ? 1 : 0;
+    if (!case_id_ok(id, (size_t)(sl - id))) return 0;
+    const char *rest = sl + 1;
+    if (!strcmp(rest, "hidden")) return 1;
+    if (!strcmp(rest, "requirement") || !strcmp(rest, "prompt") || !strcmp(rest, "hidden/inputs") ||
+        !strcmp(rest, "hidden/expected") || !strcmp(rest, "hidden/reference.osc"))
+        return 2;
+    return 0;
+}
+
 static int layout(const char *p)
 {
+    if (g_lay == 2) return layout_tasks(p);
+    if (g_lay == 1 && !strncmp(p, "corpus/cases/", 13)) { /* OLA:lay-v2 */
+        const char *sl = strchr(p + 13, '/');
+        if (sl && !strcmp(sl + 1, "candidate.oscir")) return case_id_ok(p + 13, (size_t)(sl - (p + 13))) ? 2 : 0;
+    }
     if (!strcmp(p, "corpus") || !strcmp(p, "corpus/cases")) return 1;
     if (!strcmp(p, "corpus/LABELS")) return 2;
     if (strncmp(p, "corpus/cases/", 13)) return 0;
@@ -175,9 +209,15 @@ static int mkdirs_at(int root, const char *path)
 
 static int cmd_untar(int argc, char **argv)
 {
-    if (argc != 6) die("usage: ola untar <tar> <sealed> <destdir> cases|labels");
-    int want_labels = !strcmp(argv[5], "labels");
-    if (!want_labels && strcmp(argv[5], "cases")) die("untar: mode must be cases or labels");
+    if (argc != 6) die("usage: ola untar <tar> <sealed> <destdir> cases|labels|cases2|labels2|tasks|public");
+    /* v1: cases, labels (corpus.tar). v2: cases2, labels2 (corpus.tar, + candidate.oscir); tasks = the whole
+     * task corpus, public = only requirement + prompt of every task (tasks.tar, HARNESS_INTERFACE_V2.md s.3) */
+    const char *md = argv[5];
+    int want_labels = !strcmp(md, "labels") || !strcmp(md, "labels2");
+    int task_mode = !strcmp(md, "tasks") || !strcmp(md, "public"), public_mode = !strcmp(md, "public");
+    g_lay = task_mode ? 2 : (!strcmp(md, "cases2") || !strcmp(md, "labels2")) ? 1 : 0;
+    const char *tname = task_mode ? "tasks.tar" : "corpus.tar";
+    if (!want_labels && !task_mode && strcmp(md, "cases") && strcmp(md, "cases2")) die("untar: unknown mode %s", md);
     size_t tn = 0, sn = 0;
     uint8_t *tar = slurp(argv[2], MAX_TAR, &tn);
     if (!tar) die("untar: cannot read %s (%s)", argv[2], strerror(errno));
@@ -185,7 +225,9 @@ static int cmd_untar(int argc, char **argv)
     if (!sealed) die("untar: SEALED file %s is missing: the corpus is not sealed yet; refusing to score", argv[3]);
     char h[65];
     sha_hex(tar, tn, h);
-    if (sn != 64 + 2 + strlen("corpus.tar") + 1 || memcmp(sealed, h, 64) || memcmp(sealed + 64, "  corpus.tar\n", 13)) /* OLA:seal-check */
+    char tail[32];
+    snprintf(tail, sizeof tail, "  %s\n", tname);
+    if (sn != 64 + strlen(tail) || memcmp(sealed, h, 64) || memcmp(sealed + 64, tail, strlen(tail))) /* OLA:seal-check */
         die("untar: corpus sha256 %s does not match the sealed hash file; refusing to score", h);
     int root = open(argv[4], O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
     if (root < 0) die("untar: destdir %s", argv[4]);
@@ -241,9 +283,14 @@ static int cmd_untar(int argc, char **argv)
             members++;
             if (pass == 1) {
                 int is_labels = !strcmp(name, "corpus/LABELS");
-                if (kind == 1 && !want_labels) {
+                int is_hidden = !strncmp(name, "tasks/cases/", 12) && strstr(name + 12, "/hidden") != NULL;
+                const char *base = strrchr(name, '/') ? strrchr(name, '/') + 1 : name;
+                int take_dir = kind == 1 && !want_labels && !(public_mode && is_hidden);
+                int take_file = kind == 2 && (task_mode ? (!public_mode || (!is_hidden && (!strcmp(base, "requirement") || !strcmp(base, "prompt")))) /* OLA:public */
+                                                        : is_labels == want_labels);
+                if (take_dir) {
                     if (mkdirs_at(root, name)) die("untar: mkdir %s", name);
-                } else if (kind == 2 && is_labels == want_labels) {
+                } else if (take_file) {
                     char *sl = strrchr(name, '/');
                     *sl = 0;
                     if (mkdirs_at(root, name)) die("untar: mkdir %s", name);
@@ -448,7 +495,9 @@ static uint64_t at_width(uint64_t r, Kind k)
 
 typedef struct {
     char id[48];
-    int osc;                 /* 1 osc, 0 omegaprog */
+    int osc;                 /* 1 osc (and oscir, task: the osc signature keys), 0 omegaprog */
+    int ir;                  /* v2: kind oscir (candidate.oscir) */
+    int task;                /* v2: kind task (experiment task corpus; the candidate decides osc/oscir) */
     char entry[64];
     Kind params[6]; unsigned np;
     Kind ret;
@@ -493,18 +542,24 @@ static int name_ok(const char *s)
 }
 
 /* Parse requirement text; "" on success, else the malformation. */
+/* Kinds a pass admits (bitmask): v1 osc + omegaprog; v2 corpus adds oscir; the experiment admits task only. */
+enum { ADMIT_V1 = 1, ADMIT_OSCIR = 2, ADMIT_TASK = 4 };
+static unsigned g_admit = ADMIT_V1;
+
 static const char *parse_requirement(char *txt, Case *c)
 {
     int have_kind = 0, have_entry = 0, have_params = 0, have_ret = 0, have_width = 0, have_pid = 0;
     char *cur = txt, *ln;
     snprintf(c->pid, sizeof c->pid, "-");
     while ((ln = next_line(&cur))) {
-        char *tok[10]; int nt = 0;
+        char *tok[10] = {0}; int nt = 0;
         for (char *t = strtok(ln, " \t"); t; t = strtok(NULL, " \t")) { if (nt == 10) return "requirement_too_many_tokens"; tok[nt++] = t; }
         if (!strcmp(tok[0], "kind")) {
             if (have_kind++ || nt != 2) return "requirement_kind";
-            if (!strcmp(tok[1], "osc")) c->osc = 1;
-            else if (!strcmp(tok[1], "omegaprog")) c->osc = 0;
+            if (!strcmp(tok[1], "osc") && (g_admit & ADMIT_V1)) c->osc = 1;
+            else if (!strcmp(tok[1], "oscir") && (g_admit & ADMIT_OSCIR)) { c->osc = 1; c->ir = 1; }
+            else if (!strcmp(tok[1], "task") && (g_admit & ADMIT_TASK)) { c->osc = 1; c->task = 1; }
+            else if (!strcmp(tok[1], "omegaprog") && (g_admit & ADMIT_V1)) c->osc = 0;
             else return "requirement_kind";
         } else if (!strcmp(tok[0], "entry")) {
             if (have_entry++ || nt != 2 || !name_ok(tok[1])) return "requirement_entry";
@@ -731,9 +786,72 @@ static void hash_file_at(int dfd, const char *p, char out[65], size_t *len)
     free(b);
 }
 
+/* Which pass: v1 `pass` (osc, omegaprog), v2 `pass2` (+ oscir), v2 `xpass` (experiment task corpus). */
+enum { PM_V1, PM_V2, PM_X };
+
+/* xpass: refuse the whole run unless every entry of the candidate set is a directory named after a
+ * task of the corpus holding at most one regular candidate.osc or candidate.oscir (V2 section 3.3). */
+static void check_set_dir(const char *set, char **ids, size_t nid)
+{
+    DIR *d = opendir(set);
+    if (!d) die("xpass: candidate set %s is not a directory", set);
+    struct dirent *e;
+    while ((e = readdir(d))) {
+        if (!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..")) continue;
+        size_t i;
+        for (i = 0; i < nid; i++) if (!strcmp(ids[i], e->d_name)) break;
+        if (i == nid) die("xpass: refused: '%s' in the candidate set is not a task of the corpus", e->d_name); /* OLA:set-ids */
+        char p[4096];
+        struct stat st;
+        snprintf(p, sizeof p, "%s/%s", set, e->d_name);
+        if (lstat(p, &st) || !S_ISDIR(st.st_mode)) die("xpass: refused: '%s' in the candidate set is not a directory", e->d_name);
+        DIR *t = opendir(p);
+        if (!t) die("xpass: cannot open %s", p);
+        int n = 0;
+        struct dirent *f;
+        while ((f = readdir(t))) {
+            if (!strcmp(f->d_name, ".") || !strcmp(f->d_name, "..")) continue;
+            char q[8192];
+            snprintf(q, sizeof q, "%s/%s", p, f->d_name);
+            if ((strcmp(f->d_name, "candidate.osc") && strcmp(f->d_name, "candidate.oscir")) || lstat(q, &st) || !S_ISREG(st.st_mode))
+                die("xpass: refused: '%s/%s' is not a candidate file", e->d_name, f->d_name); /* OLA:set-files */
+            if (++n > 1) die("xpass: refused: task %s has more than one candidate file", e->d_name); /* OLA:set-one */
+        }
+        closedir(t);
+    }
+    closedir(d);
+}
+
+/* v2 task prompt: bytes '\n' and 0x20..0x7e only, 1..4096 bytes (V2 section 3). "" if fine. */
+static const char *prompt_bad(int cfd)
+{
+    size_t n = 0;
+    uint8_t *p = slurp_at(cfd, "prompt", MAX_FILE, &n);
+    if (!p) return "missing_prompt";
+    const char *r = "";
+    if (n < 1 || n > 4096) r = "prompt_size";
+    else for (size_t i = 0; i < n; i++) if (p[i] != '\n' && (p[i] < 0x20 || p[i] > 0x7e)) { r = "prompt_bytes"; break; } /* OLA:prompt */
+    free(p);
+    return r;
+}
+
 static int cmd_pass(int argc, char **argv)
 {
-    if (argc != 8) die("usage: ola pass <corpus_dir> <verdicts> <receipts_dir> <scratch_root> <ola_runner> <meta>");
+    /* ola pass  <corpus_dir> <verdicts> <receipts_dir> <scratch_root> <ola_runner> <meta>          (v1)
+     * ola pass2 <corpus_dir> <verdicts> <receipts_dir> <scratch_root> <ola_runner> <meta>          (v2 corpus)
+     * ola xpass <tasks_dir> <set_dir|REFERENCES> <verdicts> <receipts_dir> <scratch_root> <ola_runner> <meta> */
+    int pm = !strcmp(argv[1], "xpass") ? PM_X : !strcmp(argv[1], "pass2") ? PM_V2 : PM_V1;
+    const char *set = NULL;
+    if (pm == PM_X) {
+        if (argc != 9) die("usage: ola xpass <tasks_dir> <set_dir|REFERENCES> <verdicts> <receipts_dir> <scratch_root> <ola_runner> <meta>");
+        set = argv[3];
+        static char *pv[8];
+        pv[0] = argv[0]; pv[1] = argv[1]; pv[2] = argv[2];
+        for (int i = 3; i < 8; i++) pv[i] = argv[i + 1]; /* drop the set: the rest lines up with pass */
+        argv = pv; argc = 8;
+    } else if (argc != 8) die("usage: ola %s <corpus_dir> <verdicts> <receipts_dir> <scratch_root> <ola_runner> <meta>", argv[1]);
+    int refs = set && !strcmp(set, "REFERENCES");
+    g_admit = pm == PM_X ? ADMIT_TASK : pm == PM_V2 ? (ADMIT_V1 | ADMIT_OSCIR) : ADMIT_V1;
     const char *corpus = argv[2], *runner = argv[6];
     Meta m;
     read_meta(argv[7], &m);
@@ -743,11 +861,6 @@ static int cmd_pass(int argc, char **argv)
     char lpath[4096];
     snprintf(lpath, sizeof lpath, "%s/LABELS", corpus);
     if (!lstat(lpath, &lst)) die("LABELS is present before verdicts are written; refusing"); /* OLA:labels-late */
-    int vfd = open(argv[3], O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0644);
-    if (vfd < 0) die("verdicts %s exists or cannot be created: never overwritten", argv[3]);
-    FILE *vf = fdopen(vfd, "w");
-    int rdir = open(argv[4], O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-    if (rdir < 0) die("receipts dir %s", argv[4]);
     DIR *d = opendir(cases_path);
     if (!d) die("no cases directory");
     char *ids[1024];
@@ -760,8 +873,16 @@ static int cmd_pass(int argc, char **argv)
     }
     closedir(d);
     qsort(ids, nid, sizeof ids[0], cmpstr);
+    if (set && !refs) check_set_dir(set, ids, nid); /* before anything is written */
+    int vfd = open(argv[3], O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0644);
+    if (vfd < 0) die("verdicts %s exists or cannot be created: never overwritten", argv[3]);
+    FILE *vf = fdopen(vfd, "w");
+    int rdir = open(argv[4], O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (rdir < 0) die("receipts dir %s", argv[4]);
     int casesfd = open(cases_path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
     if (casesfd < 0) die("cases dir");
+    int setfd = set && !refs ? open(set, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC) : -1;
+    if (set && !refs && setfd < 0) die("xpass: candidate set %s", set);
     for (size_t ci = 0; ci < nid; ci++) {
         Case c;
         memset(&c, 0, sizeof c);
@@ -777,9 +898,18 @@ static int cmd_pass(int argc, char **argv)
         hash_file_at(cfd, "requirement", c.sha_req, NULL);
         hash_file_at(cfd, "hidden/inputs", c.sha_in, NULL);
         hash_file_at(cfd, "hidden/expected", c.sha_exp, NULL);
-        struct stat so, sp;
-        int has_osc = !fstatat(cfd, "candidate.osc", &so, AT_SYMLINK_NOFOLLOW);
-        int has_op = !fstatat(cfd, "candidate.opir", &sp, AT_SYMLINK_NOFOLLOW);
+        /* where the candidate lives: the case dir (v1, v2), the set's task dir, or the case's reference */
+        int dfd = cfd, own_dfd = 0;
+        const char *n_osc = "candidate.osc";
+        if (refs) n_osc = "hidden/reference.osc";
+        else if (set) {
+            dfd = openat(setfd, c.id, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+            own_dfd = dfd >= 0;
+        }
+        struct stat so, sp, si;
+        int has_osc = dfd >= 0 && !fstatat(dfd, n_osc, &so, AT_SYMLINK_NOFOLLOW);
+        int has_op = pm != PM_X && !fstatat(cfd, "candidate.opir", &sp, AT_SYMLINK_NOFOLLOW);
+        int has_ir = pm != PM_V1 && !refs && dfd >= 0 && !fstatat(dfd, "candidate.oscir", &si, AT_SYMLINK_NOFOLLOW);
         snprintf(c.sha_cand, sizeof c.sha_cand, "-");
         const char *bad = "";
         Want *want = NULL;
@@ -788,17 +918,26 @@ static int cmd_pass(int argc, char **argv)
         else if (!ascii_ok(req, rn) || !ascii_ok(inp, inn)) bad = "not_ascii";
         const char *kinds = "-";
         if (!*bad) bad = parse_requirement((char *)req, &c);
-        if (!*bad) kinds = c.osc ? "osc" : "omegaprog";
-        if (!*bad && has_osc + has_op != 1) bad = "candidate_count";
-        if (!*bad && c.osc != has_osc) bad = "candidate_kind";
-        if (!*bad) {
-            c.cand_name = c.osc ? "candidate.osc" : "candidate.opir";
-            const struct stat *cs = c.osc ? &so : &sp;
+        if (!*bad && pm == PM_X) {
+            bad = prompt_bad(cfd);
+            if (!*bad && refs && !has_osc) bad = "missing_reference";
+            if (!*bad && has_osc + has_ir == 1) c.ir = has_ir; /* the candidate decides osc or oscir */
+        }
+        if (!*bad) kinds = c.ir ? "oscir" : c.osc ? "osc" : "omegaprog";
+        int none = pm == PM_X && has_osc + has_ir == 0;
+        if (none) kinds = "-";
+        if (!*bad && !none && has_osc + has_op + has_ir != 1) bad = "candidate_count";
+        if (!*bad && !none && (c.ir ? !has_ir : c.osc != has_osc)) bad = "candidate_kind";
+        if (!*bad && !none) {
+            c.cand_name = c.ir ? "candidate.oscir" : c.osc ? n_osc : "candidate.opir";
+            const struct stat *cs = c.ir ? &si : c.osc ? &so : &sp;
             if (!S_ISREG(cs->st_mode)) bad = "candidate_not_regular";
-            else { c.cand_len = (size_t)cs->st_size; hash_file_at(cfd, c.cand_name, c.sha_cand, NULL); }
+            else { c.cand_len = (size_t)cs->st_size; hash_file_at(c.osc ? dfd : cfd, c.cand_name, c.sha_cand, NULL); }
         }
         if (!*bad) bad = parse_inputs((char *)inp, &c);
+        if (!*bad && pm == PM_X && c.n < 8) bad = "inputs_fewer_than_8"; /* OLA:inputs-8 */
         if (*bad) snprintf(det, sizeof det, "%s", bad);
+        else if (none) { verdict = "REJECT"; reason = "no_candidate"; } /* OLA:no-candidate */
         else if (c.cand_len > MAX_CAND) { verdict = "REJECT"; reason = "oversize"; snprintf(det, sizeof det, "bytes=%zu", c.cand_len); } /* OLA:oversize */
         else {
             /* the candidate runs BEFORE hidden/expected is even read */
@@ -808,7 +947,7 @@ static int cmd_pass(int argc, char **argv)
             ib[0] = (uint8_t)c.n; ib[1] = (uint8_t)(c.n >> 8); ib[2] = (uint8_t)(c.n >> 16); ib[3] = (uint8_t)(c.n >> 24);
             for (size_t k = 0; k < (size_t)c.n * c.np; k++)
                 for (int b = 0; b < 8; b++) ib[4 + 8 * k + b] = (uint8_t)(c.in[k] >> (8 * b));
-            int cand = openat(cfd, c.cand_name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+            int cand = openat(c.osc ? dfd : cfd, c.cand_name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
             if (cand < 0) die("open candidate");
             char nonce[33], scratch[4096];
             new_nonce(nonce);
@@ -817,7 +956,7 @@ static int cmd_pass(int argc, char **argv)
             int ac = 0;
             char wbuf[8];
             av[ac++] = (char *)"ola_runner";
-            av[ac++] = (char *)(c.osc ? "osc" : "omegaprog");
+            av[ac++] = (char *)(c.ir ? "oscir" : c.osc ? "osc" : "omegaprog");
             av[ac++] = nonce;
             av[ac++] = scratch;
             if (c.osc) {
@@ -860,9 +999,11 @@ static int cmd_pass(int argc, char **argv)
         fprintf(vf, "%s %s %s %s\n", c.id, verdict, reason, rh);
         fprintf(stderr, "  %-40s %s %s %s\n", c.id, verdict, reason, det);
         free(req); free(inp); free(exp); free(want); free(c.in);
+        if (own_dfd) close(dfd);
         close(cfd);
         free(ids[ci]);
     }
+    if (setfd >= 0) close(setfd);
     if (fflush(vf) || fsync(fileno(vf)) || fclose(vf)) die("verdicts write");
     close(rdir);
     return 0;
@@ -1089,7 +1230,10 @@ static int probes_complete(const char *path)
 
 static int cmd_tally(int argc, char **argv)
 {
-    if (argc != 7) die("usage: ola tally <verdicts> <LABELS> <replay_identical> <probes.log> <clean>");
+    /* v2 `tally2` adds <corpus_dir>: counts come from LABELS, oscir cases from the requirements */
+    int v2 = !strcmp(argv[1], "tally2");
+    if (argc != (v2 ? 8 : 7)) die(v2 ? "usage: ola tally2 <verdicts> <LABELS> <replay_identical> <probes.log> <clean> <corpus_dir>"
+                                     : "usage: ola tally <verdicts> <LABELS> <replay_identical> <probes.log> <clean>");
     size_t vn, ln;
     char *v = (char *)slurp(argv[2], MAX_FILE, &vn), *l = (char *)slurp(argv[3], MAX_FILE, &ln);
     if (!v || !l) die("tally: cannot read verdicts or LABELS");
@@ -1118,12 +1262,88 @@ static int cmd_tally(int argc, char **argv)
         if (!strcmp(lab[i], "CONTROL") && !strcmp(verdict, "ACCEPT")) cacc++;
     }
     int replay = !strcmp(argv[4], "1"), probes = probes_complete(argv[5]), clean = !strcmp(argv[6], "1");
+    if (v2) {
+        unsigned ird = 0, irc = 0;
+        g_admit = ADMIT_V1 | ADMIT_OSCIR;
+        for (size_t i = 0; i < nl; i++) {
+            char p[4096];
+            size_t rn;
+            snprintf(p, sizeof p, "%s/cases/%s/requirement", argv[7], ids[i]);
+            char *rq = case_id_ok(ids[i], strlen(ids[i])) ? (char *)slurp(p, MAX_FILE, &rn) : NULL;
+            Case c;
+            memset(&c, 0, sizeof c);
+            if (rq && ascii_ok((uint8_t *)rq, rn) && !*parse_requirement(rq, &c) && c.ir) { if (!strcmp(lab[i], "DEFECT")) ird++; else irc++; }
+            free(rq);
+        }
+        int gate2 = drej == defects && cacc == controls && errors == 0 && seen == nl && !unlabelled &&
+                    ird >= 10 && irc >= 5 && replay && probes && clean; /* OLA:v2-gate */
+        printf("defects_rejected=%u/%u controls_accepted=%u/%u errors=%u\n", drej, defects, cacc, controls, errors);
+        printf("labelled_defects=%u labelled_controls=%u verdicts_matched=%u unlabelled_verdicts=%u\n", defects, controls, seen, unlabelled);
+        printf("replay_identical=%s probes=%s clean_tree=%s\n", replay ? "yes" : "no", probes ? "PASS" : "FAIL", clean ? "yes" : "no");
+        printf("oscir_defects=%u oscir_controls=%u\n", ird, irc);
+        printf("GATE %s\n", gate2 ? "PASS" : "FAIL");
+        return 0;
+    }
     int gate = defects == 30 && controls == 10 && drej == 30 && cacc == 10 && errors == 0 && seen == nl && !unlabelled &&
                replay && probes && clean; /* OLA:gate */
     printf("defects_rejected=%u/30 controls_accepted=%u/10 errors=%u\n", drej, cacc, errors);
     printf("labelled_defects=%u labelled_controls=%u verdicts_matched=%u unlabelled_verdicts=%u\n", defects, controls, seen, unlabelled);
     printf("replay_identical=%s probes=%s clean_tree=%s\n", replay ? "yes" : "no", probes ? "PASS" : "FAIL", clean ? "yes" : "no");
     printf("GATE %s\n", gate ? "PASS" : "FAIL");
+    return 0;
+}
+
+/* ola xscore <sets_dir> <replay_identical 0|1> <probes.log> <clean 0|1>: experiment score.txt
+ * (HARNESS_INTERFACE_V2.md section 3.3). sets_dir/<set>/verdicts.txt; set `references` is the
+ * authors' reference solutions. No LABELS, no gate: RUN VALID|INVALID only. */
+static int cmd_xscore(int argc, char **argv)
+{
+    if (argc != 6) die("usage: ola xscore <sets_dir> <replay_identical> <probes.log> <clean>");
+    DIR *d = opendir(argv[2]);
+    if (!d) die("xscore: no sets dir");
+    char *sets[1024];
+    size_t ns = 0;
+    struct dirent *e;
+    while ((e = readdir(d))) {
+        if (e->d_name[0] == '.') continue;
+        if (ns == 1024) die("xscore: too many sets");
+        sets[ns++] = strdup(e->d_name);
+    }
+    closedir(d);
+    qsort(sets, ns, sizeof sets[0], cmpstr);
+    unsigned ref_n = 0, ref_acc = 0, errors = 0, have_ref = 0, mismatch = 0;
+    char out[1024][160];
+    size_t no = 0;
+    unsigned ns_n[1024];
+    for (size_t s = 0; s < ns; s++) {
+        char p[4096];
+        size_t vn;
+        snprintf(p, sizeof p, "%s/%s/verdicts.txt", argv[2], sets[s]);
+        char *v = (char *)slurp(p, MAX_FILE, &vn), *cur, *line;
+        if (!v) die("xscore: cannot read %s", p);
+        unsigned n = 0, a = 0, r = 0, er = 0, k = 0;
+        cur = v;
+        while ((line = next_line(&cur))) {
+            char id[64], verdict[16], reason[40], rh[80];
+            if (sscanf(line, "%63s %15s %39s %79s", id, verdict, reason, rh) != 4) die("xscore: bad verdict line");
+            n++;
+            if (!strcmp(verdict, "ACCEPT")) a++;
+            else if (!strcmp(verdict, "REJECT")) { r++; if (!strcmp(reason, "no_candidate")) k++; }
+            else er++;
+        }
+        free(v);
+        errors += er;
+        if (!strcmp(sets[s], "references")) { have_ref = 1; ref_n = n; ref_acc = a; continue; }
+        ns_n[no] = n;
+        snprintf(out[no++], sizeof out[0], "set=%s accepted=%u/%u rejected=%u errors=%u no_candidate=%u", sets[s], a, n, r, er, k);
+    }
+    for (size_t i = 0; i < no; i++) if (ns_n[i] != ref_n) mismatch++;
+    int replay = !strcmp(argv[3], "1"), probes = probes_complete(argv[4]), clean = !strcmp(argv[5], "1");
+    int valid = have_ref && ref_n > 0 && ref_acc == ref_n && errors == 0 && !mismatch && replay && probes && clean; /* OLA:run-valid */
+    for (size_t i = 0; i < no; i++) printf("%s\n", out[i]);
+    printf("references_accepted=%u/%u\n", ref_acc, ref_n);
+    printf("replay_identical=%s probes=%s clean_tree=%s\n", replay ? "yes" : "no", probes ? "PASS" : "FAIL", clean ? "yes" : "no");
+    printf("RUN %s\n", valid ? "VALID" : "INVALID");
     return 0;
 }
 
@@ -1138,11 +1358,12 @@ static int cmd_cmp(int argc, char **argv)
 int main(int argc, char **argv)
 {
     signal(SIGPIPE, SIG_IGN);
-    if (argc < 2) die("usage: ola untar|pass|probes|tally|cmp ...");
+    if (argc < 2) die("usage: ola untar|pass|pass2|xpass|probes|tally|tally2|xscore|cmp ...");
     if (!strcmp(argv[1], "untar")) return cmd_untar(argc, argv);
-    if (!strcmp(argv[1], "pass")) return cmd_pass(argc, argv);
+    if (!strcmp(argv[1], "pass") || !strcmp(argv[1], "pass2") || !strcmp(argv[1], "xpass")) return cmd_pass(argc, argv);
     if (!strcmp(argv[1], "probes")) return cmd_probes(argc, argv);
-    if (!strcmp(argv[1], "tally")) return cmd_tally(argc, argv);
+    if (!strcmp(argv[1], "tally") || !strcmp(argv[1], "tally2")) return cmd_tally(argc, argv);
+    if (!strcmp(argv[1], "xscore")) return cmd_xscore(argc, argv);
     if (!strcmp(argv[1], "cmp")) return cmd_cmp(argc, argv);
     die("unknown command %s", argv[1]);
     return 2;

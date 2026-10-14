@@ -1,0 +1,5 @@
+# SAMPLE task (public, not sealed)
+kind task
+entry add
+params u32 u32
+ret u32

@@ -6,10 +6,11 @@
  *   fd 0  inputs: u32 LE line count n, then n * nparams u64 LE canonical arguments
  *   fd 1  transcript (a memfd the parent reads after exit)
  *   fd 2  diagnostics (a memfd)
- *   fd 3  candidate bytes (osc / omegaprog only)
+ *   fd 3  candidate bytes (osc / oscir / omegaprog only)
  * It never receives a path to hidden/, LABELS, the corpus tarball, the evidence tree or a key.
  *
  *   ola_runner osc       <nonce> <scratch> <entry> <ret> <param kinds...>
+ *   ola_runner oscir     <nonce> <scratch> <entry> <ret> <param kinds...>   (v2: OSC binary IR bytes, osc_ir_decode)
  *   ola_runner omegaprog <nonce> <scratch> <width> <program_id hex | ->
  *   ola_runner probe     <nonce> <scratch> <control 0|1> <name> [target]
  *
@@ -268,9 +269,9 @@ static int kind_of(const char *s)
     return -1;
 }
 
-static int run_osc(int argc, char **argv)
+static int run_osc(int argc, char **argv, int ir)
 {
-    /* argv: osc nonce scratch entry ret k... */
+    /* argv: osc|oscir nonce scratch entry ret k... (oscir: the candidate is OSC binary IR bytes, v2) */
     if (argc < 6 || argc > 12) return OLA_EXIT_USAGE;
     const char *entry = argv[4];
     int ret_kind = kind_of(argv[5]);
@@ -289,13 +290,22 @@ static int run_osc(int argc, char **argv)
     enter_sandbox(argv[3]);
     printf("OLA1 %s\n", g_nonce);
     g_header = 1;
-    OscDiag d;
-    memset(&d, 0, sizeof d);
-    if (osc_compile((const char *)src, slen, u, &d, NULL)) {
-        char det[96];
-        snprintf(det, sizeof det, "kind=%s,line=%u", osc_diag_kind_name(d.kind), d.line);
-        token(det);
-        refuse("compile_refused", det);
+    if (ir) { /* v2 kind oscir: the strict reader, inside the sandbox; then exactly the osc path */
+        int rc = osc_ir_decode(src, slen, u);
+        if (rc) { /* OLA:oscir-decode */
+            char det[64];
+            snprintf(det, sizeof det, "class=%s", osc_ir_refusal_name(rc));
+            refuse("decode_refused", det);
+        }
+    } else {
+        OscDiag d;
+        memset(&d, 0, sizeof d);
+        if (osc_compile((const char *)src, slen, u, &d, NULL)) {
+            char det[96];
+            snprintf(det, sizeof det, "kind=%s,line=%u", osc_diag_kind_name(d.kind), d.line);
+            token(det);
+            refuse("compile_refused", det);
+        }
     }
     int fi = -1;
     for (unsigned i = 0; i < u->nfuncs; i++)
@@ -472,7 +482,8 @@ int main(int argc, char **argv)
 {
     if (argc < 4) { fprintf(stderr, "usage: ola_runner osc|omegaprog|probe <nonce> <scratch> ...\n"); return OLA_EXIT_USAGE; }
     g_nonce = argv[2];
-    if (!strcmp(argv[1], "osc")) return run_osc(argc, argv);
+    if (!strcmp(argv[1], "osc")) return run_osc(argc, argv, 0);
+    if (!strcmp(argv[1], "oscir")) return run_osc(argc, argv, 1); /* v2 */
     if (!strcmp(argv[1], "omegaprog")) return run_omegaprog(argc, argv);
     if (!strcmp(argv[1], "probe")) return run_probe(argc, argv);
     return OLA_EXIT_USAGE;
