@@ -64,7 +64,7 @@
         },
         {
           "digest": "1b01542d91e3b1c7c5263d6b393338a3d9d40e138a12ec833ce7852d83887ce2",
-          "last_commit": "e0abd0b5",
+          "last_commit": "5901baa5",
           "name": "crumbs",
           "purpose": "Directory docs/crumbs. Purpose not yet described by a human."
         },
@@ -88,15 +88,21 @@
         },
         {
           "digest": "5f91761066f42aceaa64aa34ac2e168ed70553c8174747c9a4a02938124609fd",
-          "last_commit": "e0abd0b5",
+          "last_commit": "5901baa5",
           "name": "osc",
           "purpose": "Directory docs/osc. Purpose not yet described by a human."
         },
         {
           "digest": "4229246f2ec98403252caafc8fe7ad1fac5950accff0c94ffdaecb4a2341a32c",
-          "last_commit": "e0abd0b5",
+          "last_commit": "5901baa5",
           "name": "polyglot",
           "purpose": "Directory docs/polyglot. Purpose not yet described by a human."
+        },
+        {
+          "digest": "44d0b1daddff0c7a50f2538f76f30688733ba93eff7aa380c7dc6863d305ace7",
+          "last_commit": "ac35a166",
+          "name": "reservoir",
+          "purpose": "Reservoir reference and contracts (omega#440): RESERVOIR_REFERENCE.md pins the authors' paper an"
         },
         {
           "digest": "2ab37838f8694e5060a3789f08a16146996050af949fba329ed805429d85f695",
@@ -112,20 +118,20 @@
         },
         {
           "digest": "a34f126f92a0ec36794a17c3c4834101c44bc9b0f6e412894e3f152598133638",
-          "last_commit": "e0abd0b5",
+          "last_commit": "5901baa5",
           "name": "turing",
           "purpose": "Directory docs/turing. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:21baf488e23c336e0bda51d4085a214730da428e07bb75e05318fda829527330",
-      "compiled_at": "2026-10-14T01:16:48Z",
+      "children_root": "sha256:0d8cf44c9b89cfe40c6e552e602b9aabf10a7196a199d7dfd27af38e2b5bf944",
+      "compiled_at": "2026-10-14T16:14:56Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:c5fe948d9189727537c8fd182841fa0258f7e1399065a75a378a64cb98eb4627",
+      "digest": "sha256:0c9b353c06389a23e8b4b938d32c3b572b6a8f6f105cadb48fdc5cf78079341d",
       "evidence_files": 34,
       "evidence_root": "sha256:589d8b3706e6d7a202ab20b278dac5fc5bafc973f1c2a867b2668aa7210b65cc",
-      "files": 121,
-      "generated_at_commit": "e0abd0b524f5bf8e3ba6960b53868980bdd41b4e",
-      "source_tree": "sha256:45069bfdaeb2bcf8d4c545c676ebf76ad39afa2a77d638c72950d7fa0c663cbe"
+      "files": 123,
+      "generated_at_commit": "1978e2b4aa4c1e3639e11c6950ba7e509fad9924",
+      "source_tree": "sha256:eabc24ac7f2008a3733dc67e4a454eb33d447b45b10768a3d1d8cf2fe26d00ea"
     },
     "owner_lane": "",
     "provenance": {

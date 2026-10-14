@@ -139,14 +139,20 @@
           "purpose": "Directory src/polyglot. Purpose not yet described by a human."
         },
         {
+          "digest": "4165310012cf87a64d3fe7baffd648bba3139126eebfe3523ddca88d870b6855",
+          "last_commit": "63bfba2c",
+          "name": "reservoir",
+          "purpose": "Ionic-droplet reservoir simulator (omega#440): binary32 fixed-step RK4 of the authors' droplet m"
+        },
+        {
           "digest": "9e27882accc1db2881793e3f389519f5dd37f83cd37c4d1a6e19f2aa2e84d217",
-          "last_commit": "e0abd0b5",
+          "last_commit": "5901baa5",
           "name": "runtime",
           "purpose": "Directory src/runtime. Purpose not yet described by a human."
         },
         {
           "digest": "d7bb5fb627dfe92066f94fa556e86be5d025c0ff5e81d823ba177a56ea099d31",
-          "last_commit": "e0abd0b5",
+          "last_commit": "5901baa5",
           "name": "searchtrace",
           "purpose": "Directory src/searchtrace. Purpose not yet described by a human."
         },
@@ -175,15 +181,15 @@
           "purpose": "Directory src/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:ca0aa9172b90a62bf95822a7fd9b264c5450204b82c13db7a473ed242e9c2257",
-      "compiled_at": "2026-10-14T01:16:48Z",
+      "children_root": "sha256:e5fb7b5144e8f1de0aee7caaeaa023a0afdc0d6c033326e6c7bb7ba7306c3091",
+      "compiled_at": "2026-10-14T16:14:21Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:10a7c4a3722e34cc5476cb9feb128616b59dfb58bcf33f6aad7db51c014576ef",
+      "digest": "sha256:f8df9e0065df045b1fa4ea7a369664c2e6b4b76243d6f98b84262bff6bb6ef95",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 459,
-      "generated_at_commit": "e0abd0b524f5bf8e3ba6960b53868980bdd41b4e",
-      "source_tree": "sha256:795ed92eff7a070b7c6e4a4262945e9245cae22c971e84f3a4496958fd126ee9"
+      "files": 463,
+      "generated_at_commit": "1978e2b4aa4c1e3639e11c6950ba7e509fad9924",
+      "source_tree": "sha256:6d765b93e06cb1dca154525b95798f702f9c206d1f27f2a2760bebc350284a60"
     },
     "owner_lane": "",
     "provenance": {

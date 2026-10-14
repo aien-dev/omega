@@ -1,9 +1,13 @@
 # Ionic-droplet reservoir: pinned reference and Gate 2 contract (omega#440)
 
-Status: Gate 0 (reference pinned) and Gate 1 (CPU simulator, tests) done on
-branch `research/reservoir-440`. Gate 2 (comparison against the archived
-reference results) is specified in section 7 and not yet run. The authors'
-MATLAB was not run: no MATLAB or Octave on this machine (section 5).
+Status: Gate 0 (reference pinned), Gate 1 (CPU simulator, tests) and Gate 2
+(comparison against the archived reference outputs, benchmarks, timing) run
+on branch `research/reservoir-440`; Gate 2 results and their receipt are in
+section 11. Gate 2 result in one line: the three Lorenz networks PASS, the
+one comparable NARMA case FAILs (an ill-conditioned reference fit, section
+11.1), 63 NARMA cases are BLOCKED, and no reservoir beats the conventional
+baselines in the benchmarks. The authors' MATLAB was not run: no MATLAB or
+Octave on this machine (section 5).
 
 The design of `src/reservoir/` is Omega's own. The authors' code and numbers
 are used only as a correctness reference: no line of MATLAB was ported, the
@@ -483,18 +487,27 @@ It proves that this configuration, this input and this numeric policy
 produced this final state on Omega's CPU tier, bit for bit, and lets anyone
 rerun and compare. Together with the test results above it records
 agreement with the binary64 oracle on the stated scenarios. Agreement with
-the published reference is what Gate 2 adds. No receipt or test here says
+the published reference is what Gate 2 adds; section 11.7 states what its receipt proves and what it does not. No receipt or test here says
 the model describes real droplets: that is the authors' physical claim, and
 section 4 lists where their own paper and code disagree about the model.
 
 ## 9. Decisions for Drake
 
-1. MATLAB access (section 5): without it the authors' code stays NOT_RUN,
-   and only one of the 64 NARMA grid cells and the three Lorenz networks
-   can be compared (from archived outputs).
-2. Which model the project treats as "the" model where paper and code
-   disagree (discrepancies 1-3, 9-10). Omega follows the code, because the
-   archived numbers come from the code.
+Decided by Drake on 2026-10-14:
+
+1. MATLAB access (section 5): no MATLAB or Octave is installed. Gate 2
+   compares against archived outputs only: the one NARMA grid cell whose
+   inputs are archived and the three Lorenz networks. The authors' code
+   stays NOT_RUN and the other 63 NARMA cells stay BLOCKED.
+2. Where paper and code disagree (discrepancies 1-3, 9-10), the canonical
+   model is the authors' code, because the archived numbers come from the
+   code. The discrepancy list (section 4) is kept.
+
+Open, raised by the Gate 2 results (section 11), not yet decided:
+
+3. Whether the simulator's range bound of 1 V should apply to the membrane
+   voltage instead of the node voltage. As it stands, the 50-node NARMA
+   chain of the paper's best configuration is refused (section 11.2).
 
 ## 10. Gate 2 benchmark protocol (declared 2026-10-14, before any benchmark run)
 
@@ -596,3 +609,192 @@ ablation built the same way (4 driven nodes and 3 grounded droplets). Its
 masks are the first four of the 49 drawn for that seed. Nothing else
 changes, and no network size or current was searched. The 50-node runs are
 kept in the output.
+
+## 11. Gate 2 results
+
+All numbers in this section come from one receipt,
+`evidence/RESERVOIR/6d1c5abbb524ca557989a1dc9a9eae53469892d096ab9ae4ed712e9d1eacedcb.json`
+**[measured]**, written by `make qualify-reservoir` on commit
+`ac35a16615c2ebe0e6916b23a8234172f6362849` (tree `f0f68308`), clean tree,
+unchanged during the run, 2026-10-14 15:55 to 16:00 UTC, host NVIDIA DGX
+Spark (Linux 7.0.0-1019-nvidia aarch64, 20 cores), gcc 13.3.0, CPU only.
+The receipt status is RECORDED: every step ran, the tree was clean and
+stable, the 22 archive pins matched, the unit tests passed (656 + 656
+simulator checks, 67 + 52 reader checks, plain and ASan/UBSan) and both
+negative controls failed as they must. RECORDED says the run is complete
+and clean; it is not a PASS of Gate 2 (11.1). Later commits on the branch
+change only this document, crumbs, CONTRIBUTORS.md and evidence/, plus a
+merge of main (d58023e6, #441: link and mutant-test rules in `Makefile`,
+and `tests/gates/run.sh`; the reservoir rules in `mk/reservoir.mk` are
+unchanged, and `make test-reservoir` passes after the merge).
+
+### 11.1 Comparison with the archived reference outputs (section 7)
+
+| Case | Verdict | Numbers |
+|---|---|---|
+| Archive pins (22 files) | PASS | 22 of 22 sha256 match |
+| G2-N1 N1a (v1 features V, u) | **FAIL** | the declared solver refuses the fit at every order (ERR_SINGULAR; smallest pivot ratio of the design -8.9e-16, refusal at or below 1e-13); (a) targets match exactly (max difference 0); QR diagnostic: (b) prediction difference 2.5 % to 25 % of the target std at orders 2 to 10, train and test (bound 1 %), (c) NRMSE within bound at orders 2 to 9, out at order 10 (test 0.661 against 0.624) |
+| G2-N1 N1b (v2 features V, V^2, u) against v1 outputs | **FAIL** | the declared solver refuses at every order; the QR diagnostic also finds the design rank deficient |
+| G2-N1 N1b-v2 against v2 outputs | **FAIL** | as N1b |
+| NC-N (N1a, permittivity x 2.1) | FAIL, as required | not discriminating here: the case it controls fails too |
+| G2-L1 13 nodes | **PASS** | prediction difference at most 6e-6 of the target std; test NRMSE x, y, z 0.124515 / 0.243520 / 0.222342 against 0.124516 / 0.243520 / 0.222343 |
+| G2-L1 25 nodes | **PASS** | at most 6.5e-5; test NRMSE 0.109878 / 0.155553 / 0.217199 against 0.109889 / 0.155561 / 0.217220 |
+| G2-L1 43 nodes | **PASS** | at most 1.04e-4; test NRMSE 0.070690 / 0.182553 / 0.173749 against 0.070683 / 0.182511 / 0.173711 (paper: 0.071, 0.183, 0.174) |
+| NC-L (13 nodes, NARMA permittivity) | FAIL, as required | prediction difference 12 % to 19 % of the target std |
+
+Positive controls pass in every case: each archived NRMSE recomputes from
+the archived predictions to 1e-9, and the archived Lorenz Ytrain and Ytest
+equal LorenzData1 and LorenzData2. The Lorenz input resampling error is at
+most 3.1e-5, 5.9e-5 and 4.8e-5 of the largest current (x, y, z channels),
+reported before the comparison as declared. The chosen ridge lambdas are
+0.035 (13 and 25 nodes) and 0.033 (43 nodes).
+
+**Why G2-N1 fails (diagnosis, [archive] and [measured]).** In the archived
+NARMA inputs the summed current into the four non-ground nodes is the same
+at every knot (2e-10 A, to 1e-25 A). The chain therefore carries almost the
+same total current at every moment, and the voltages are close to linear
+combinations of one another: node 4's last and first sub-pulse samples
+differ by 5.2e-9 V RMS, about one binary32 step at that voltage. The
+least-squares problem is then ill conditioned. Perturbing Omega's features
+by 1e-6 relative moves the QR predictions by 3 % to 11 % of the target std,
+three to eleven times the 1 % tolerance. A binary32 simulator cannot be
+expected to reproduce predictions that sensitive, and the declared solver
+refuses instead of returning them. This is a finding about the reference
+case, not tuned away: the tolerances stay as declared and G2-N1 stays FAIL.
+Whether the authors' MATLAB, rerun, reproduces its own archived predictions
+to 1 % is not checkable here (BLOCKED, needs MATLAB).
+
+### 11.2 Benchmarks (section 10), test NRMSE, mean over seeds 1 to 5
+
+NARMA (one output; lower is better):
+
+| Model | NARMA-2 | NARMA-5 | NARMA-10 |
+|---|---|---|---|
+| RC-connected, 50-node chain (declared) | REFUSED (5 of 5 seeds) | REFUSED | REFUSED |
+| RC-disconnected, 50-node ablation | 0.0876 | 0.491 | 0.544 |
+| BL-linear (12 delays) | 0.334 | 0.381 | 0.446 |
+| BL-quadratic (90 features) | **0.0068** | **0.0189** | **0.299** |
+| RC-connected, 5-node chain (post hoc, 10.1) | 0.230 | 0.486 | 0.590 |
+| RC-disconnected, 5-node ablation (post hoc) | 0.220 | 0.534 | 0.567 |
+
+- The declared connected 50-node chain is refused in every seed, training
+  and test: a node voltage leaves |V| <= 1 V at step 347 to 359 (3.5 ms).
+  The paper's best NARMA configuration is this network size; the chain sums
+  49 injected currents toward one ground, and the reference drive is
+  one-signed (every current in [0, I_hi]). Omega's bound is on the node
+  voltage: in a diagnostic run of the same chain with one-signed currents,
+  the largest membrane voltage was about 0.83 V when a node voltage reached
+  1 V. Whether the bound should apply to the membrane voltage instead is
+  an open question for the model, not decided here. Whether the authors'
+  50-node runs also pass 1 V cannot be checked without MATLAB
+  (UNVERIFIED, 70 % that they do: same model, same chain, same current
+  range).
+- Post hoc 5-node chain: connected beats disconnected in 2 of 5 seeds
+  (NARMA-2, mean difference +0.010), 5 of 5 (NARMA-5, -0.048) and 1 of 5
+  (NARMA-10, +0.023). It never beats the best baseline (0 of 15 seed-task
+  pairs). No significance test is claimed with five seeds.
+- The paper reports connected NARMA-2 test 0.0124 and NARMA-10 0.327 on 50
+  nodes with squared states. This benchmark does not reproduce or refute
+  those numbers: its 50-node connected run is refused, squared states are
+  NOT_RUN for NARMA (295 features above the readout bound of 256), and its
+  masks and sampling follow section 10, not the reference code.
+
+Lorenz63 (mean over x, y, z; connected = 43-node lattice, disconnected = 5
+nodes):
+
+| Model | T0 (X(t)) | T1 (X(t + 0.01 s)) | T25 (X(t + 0.25 s)) |
+|---|---|---|---|
+| RC-connected-lin (42 features) | 0.206 (sd 0.147) | 0.181 | 0.953 |
+| RC-connected-sq (84) | 0.195 (sd 0.245) | 0.174 | 0.977 |
+| RC-disconnected-lin (3) | 0.479 | 0.501 | 0.981 |
+| RC-disconnected-sq (6) | 0.259 | 0.290 | 0.911 |
+| BL-linear (15) | 1.1e-6 | 1.3e-4 | 0.670 |
+| BL-quadratic (135) | **1.2e-7** | **9.0e-7** | **0.475** |
+
+- Connected-lin beats disconnected-lin in 5 of 5 seeds on T0 and T1 and 4
+  of 5 on T25; connected-sq beats disconnected-sq in 4, 4 and 3 of 5. The
+  disconnected ablation also has far fewer features (section 10), so this
+  is not a clean measure of coupling alone.
+- No reservoir beats the best baseline in any seed or task. On T0 and T1
+  the baselines see the input itself, so near-exact baseline scores are
+  expected (section 10). On T25 the quadratic delay-line baseline is best
+  (0.475 against 0.911 to 0.981).
+- Every failure and null result above is kept in the receipt, seed by seed.
+
+### 11.3 Performance (task e)
+
+Quiet flag CLEAR, no GPU job running. One process pinned to CPU 5 (Cortex
+X925), gcc 13.3.0 `-O2 -ffp-contract=off -fno-fast-math`, 5 repetitions of
+40,000 timed steps after 10,000 warm-up steps; latency of one
+`omega_res_step` (one RK4 step of 1e-5 s, including a 22 ns clock read):
+
+| Network | p50 | p95 | p99 | steps/s | simulated s per wall s |
+|---|---|---|---|---|---|
+| 5-node chain (G2-N1) | 752 ns | 784 ns | 800 ns | 1.31 M | 13.1 |
+| 50-node chain | 10.9 us | 11.0 us | 12.1 us | 91.4 k | 0.91 |
+| 43-node lattice (99 membranes) | 14.9 us | 15.1 us | 16.9 us | 67.0 k | 0.67 |
+
+CPU time over wall time 0.9997 to 0.9999 (one core busy). Peak resident
+memory of the process 8,536 KiB. Fixed struct sizes: config 19,948 B, state
+3,632 B, workspace 13,360 B, readout workspace 538,672 B. Energy and power:
+NOT_RUN (not instrumented). No efficiency claim is made, and nothing here is
+GPU qualification.
+
+### 11.4 Timing inputs
+
+The NARMA drive cannot be used for the 50-node timing run: it is refused
+after about 350 steps (11.2), which would end the loop. The two chains are
+timed instead with zero-mean pulses of 1 ms on every non-ground node,
+uniform in +-0.1 nA divided by the number of driven nodes, drawn from the
+benchmark generator (seed 1). A diagnostic run showed these keep the
+50-node chain inside the range for the whole run, while one-signed pulses
+of the same size do not. The 43-node lattice is timed with the reference
+Lorenz currents of a trajectory. The simulator is fixed-step RK4 with no
+adaptive step or iteration, so the timing input mainly has to stay in
+range; any value-dependent cost inside the math library (exp) was not
+measured.
+
+### 11.5 BLOCKED and NOT_RUN
+
+- BLOCKED: 63 of the 64 archived NARMA grid cells (masks from MATLAB's
+  random stream, not reimplemented); a state-trace comparison with the
+  authors' code (the v1 archive holds no state trajectories); whether the
+  archived outputs came from the archived code (discrepancy 15); rerunning
+  the authors' MATLAB; the paper's parallel reservoir (S5, a different,
+  voltage-clamped model, not implemented).
+- NOT_RUN: energy and power (not instrumented); RC with squared states on
+  the 50-node NARMA chain (295 features above the readout bound of 256);
+  the AIEN telemetry workload (task d). The only telemetry-like data in the
+  repository are the ARGUS A/B benchmark rounds under `evidence/ARGUS`
+  (at most about 600 rows of wall times per configuration). They have no
+  forecasting target and no declared time-ordered train, validation and
+  test split, so the condition of section 10 is not met.
+
+### 11.6 Committed fixtures
+
+`tests/reservoir/fixtures/Length5.mat` (sha256
+`dc6e7914d216a21f664adcd4843e9f705616df47511879ba0bbeceb241b9b50a`, 2,130
+B) and `tests/reservoir/fixtures/Length50.mat` (sha256
+`ff4c9d14abb6f64b1ab9f301072dc67316b7fd59fe61d0b7632ee467a8c2aae3`, 3,324
+B) are unmodified copies of the archived files of the same name (section
+1), from Armendarez N., Mohamed A., Hasan M. S., Najem J., Zenodo
+10.5281/zenodo.17296788, licensed CC-BY-4.0 (the `LICENSE` inside the
+archive says MIT; both permit this with attribution). They let CI test the
+`.mat` reader without the archive. No other archive file is committed.
+
+### 11.7 What the Gate 2 receipt proves, and what it does not
+
+It proves, for commit `ac35a166` with gcc 13.3.0 on this host: agreement,
+under the tolerances declared before the runs, between Omega's binary32
+simulator with its binary64 readout and the authors' archived outputs for
+the three Lorenz networks (13, 25 and 43 nodes; targets, predictions and
+NRMSE on the archived inputs); that G2-N1 does not meet the declared
+criteria, in all three variants, with the diagnostics above; and the
+benchmark and timing numbers of 11.2 and 11.3. Anyone with the archive can
+rerun `make qualify-reservoir RES_ARCHIVE=...` and compare.
+
+It does not prove: anything about real droplets or devices; agreement on
+the BLOCKED cases or with the authors' code beyond its archived outputs;
+that a reservoir beats a conventional baseline (it does not, in any seed
+or task here); GPU qualification of any kind; energy, power or efficiency;
+production readiness.

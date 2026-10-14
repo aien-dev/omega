@@ -1,0 +1,27 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [
+        {
+          "digest": "3f7fa0c52f7bb68844ccc5ace8d5e96284fe1846698f9df59483c2e13b9cf2e9",
+          "last_commit": "ac35a166",
+          "name": "fixtures",
+          "purpose": "Two unmodified CC-BY-4.0 files from the authors' Zenodo archive 10.5281/zenodo.17296788 (Length5"
+        }
+      ],
+      "children_root": "sha256:7f9e3ef224698ef23587379e76f59fa3b24eb483797f039bb99529208213655e",
+      "compiled_at": "2026-10-14T16:13:42Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:f4d940e357b707df0b3491677f4a6212c222b0396984c75272dd017e4d4ffd9e",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 7,
+      "generated_at_commit": "ac35a16615c2ebe0e6916b23a8234172f6362849",
+      "source_tree": "sha256:988442267be0cc9575ac326a65cc77ba9d2b97c00b31bc98c0fd4e583d0dbd62"
+    }
+  },
+  "layer": "tests/reservoir",
+  "name": "tests/reservoir",
+  "purpose": "Reservoir tests (omega#440): Gate 1 simulator and readout checks against an independent binary64 oracle, and the Gate 2 .mat and inflate reader tests; run by make test-reservoir, plain and ASan/UBSan.",
+  "schema_version": "1.0.0"
+}
