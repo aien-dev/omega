@@ -33,5 +33,6 @@ $(OLA_DIR)/ola_runner: $(OLA_SRC_DIR)/ola_runner.c $(OLA_OSC_LIB) $(OLA_PROG_STA
 one-layer-acceptance-tools: $(OLA_DIR)/ola $(OLA_DIR)/ola_runner
 
 test-one-layer-acceptance: one-layer-acceptance-tools
-	sh $(OLA_SRC_DIR)/selftest.sh $(abspath $(OLA_DIR))
+	CC="$(CC)" OLA_CFLAGS="$(OLA_CFLAGS)" OLA_RUNNER_SRCS="$(OLA_OSC_LIB) $(OLA_PROG_STACK) src/sha256.c" \
+	  OLA_PROG_SRCS="$(OLA_PROG_STACK) src/sha256.c" bash $(OLA_SRC_DIR)/selftest.sh $(abspath $(OLA_DIR))
 endif
