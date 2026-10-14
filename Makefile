@@ -28,6 +28,8 @@ SRCS += src/omega_gpu_moe_api.c
 
 # OWN-30B Cut 6 / Cut 5 (2026-10-13): FP8 e4m3 GEMV kernel family, new files only (omega_gpu_fp8_api.h)
 SRCS += src/omega_blackwell_codegen_moe.c src/omega_gpu_fp8_pack.c src/omega_gpu_fp8_api.c
+# OWN-30B W-L2c (2026-10-14): FP8 GEMV variant 2, row-pipelined (omega_blackwell_codegen_moe2.h), selectable, variant 1 untouched
+SRCS += src/omega_blackwell_codegen_moe2.c
 # OWN-30B cut 8 (2026-10-13): one-launch decode attention (omega_gpu_decode_attn_api.h), new files only
 SRCS += src/omega_blackwell_codegen_attn.c src/omega_gpu_decode_attn_api.c
 # OWN-30B (2026-10-13): libm-free host math (omega_gpu_hostmath.h) so libomega_gpu.a links without -lm
