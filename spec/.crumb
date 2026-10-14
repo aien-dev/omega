@@ -14,20 +14,20 @@
       "children": [
         {
           "digest": "851e0dc0f5a16f7b103752ff2da976003f56c2d2a53c1e82c3a770eadad83111",
-          "last_commit": "f3467db",
+          "last_commit": "f3467db9",
           "name": "searchtrace",
           "purpose": "Directory spec/searchtrace. Purpose not yet described by a human."
         }
       ],
       "children_root": "sha256:6834a3241647d3a098283d4eafedbdb1428dfa4d834f9ed5f22025b6d2303093",
-      "compiled_at": "2026-10-08T00:23:24Z",
+      "compiled_at": "2026-10-14T01:16:48Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:830ce7faaea9ae86190aa304fd8d7797881fbaca9d14fc39a327d202712f73fb",
+      "digest": "sha256:f655e5afb5df3eb5e0f3cc607e3bc129121cefd31bcba3790f16ce9204379f23",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 56,
-      "generated_at_commit": "b980783a4674275e720592e4c3887679dd24ec8b",
-      "source_tree": "sha256:30f3be311019f12dcbd02f89c3a9524c5e60c505686833c2209a7b76a2711c9f"
+      "generated_at_commit": "e0abd0b524f5bf8e3ba6960b53868980bdd41b4e",
+      "source_tree": "sha256:65aae2eccf55aac8d2bbe28e80c80b7ed864fa3dd51125ef309375745ff792a7"
     },
     "owner_lane": "",
     "provenance": {

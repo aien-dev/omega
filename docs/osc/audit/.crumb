@@ -14,20 +14,20 @@
       "children": [
         {
           "digest": "362eb4664e9e5a8099509b028a69c4fa1b023d58b3b0f2050172b0cde15632fd",
-          "last_commit": "a927bd6",
+          "last_commit": "a927bd6c",
           "name": "baseline",
           "purpose": "Directory docs/osc/audit/baseline. Purpose not yet described by a human."
         }
       ],
       "children_root": "sha256:5bad2e37a82c74f65f94511437b8ef17992b2462e417ee489f4543fe64fe497c",
-      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiled_at": "2026-10-14T01:16:48Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:ae58633db1f1b69f46c1e1b5bcf86878e8aae8ebd048dafa126eaf96b0054804",
+      "digest": "sha256:dd88e66963c539dfc4d24530fb8b19002aa11eb05d52e5b509bc6de33f07b163",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 6,
-      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
-      "source_tree": "sha256:315475787d216e991489394ed7cb1502685e5aa34cd99f11f455687be06f0ad4"
+      "generated_at_commit": "e0abd0b524f5bf8e3ba6960b53868980bdd41b4e",
+      "source_tree": "sha256:e8649f8740d85070492eec0b5fda3e5851f61a4a2e89dc4160a8c46cb25eaca2"
     },
     "owner_lane": "",
     "provenance": {

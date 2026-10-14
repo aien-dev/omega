@@ -134,7 +134,7 @@
         },
         {
           "digest": "5446c693d59f25f1871d39f66c5f1fac33cf9e7476101a9b303e8e59079a4516",
-          "last_commit": "eb8dedf7",
+          "last_commit": "18531691",
           "name": "compiler",
           "purpose": "Directory tests/compiler. Purpose not yet described by a human."
         },
@@ -211,8 +211,8 @@
           "purpose": "Directory tests/path. Purpose not yet described by a human."
         },
         {
-          "digest": "d5153d318a11642a5e13824353222fc392ead92108540bc8ffd747fcfd40b813",
-          "last_commit": "e59633e5",
+          "digest": "024a746eff9cd1871d1e507c2f56ed6a1f7125cb457915904f9b1455140f8942",
+          "last_commit": "e0abd0b5",
           "name": "physics0",
           "purpose": "PD-0 gates: world self-test, oracle calibration, learner L0/L1/NULL, mutations, OSC differential"
         },
@@ -289,15 +289,15 @@
           "purpose": "Directory tests/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:8e5b6fd98b308bb3bdcd2acd9b846ecb5126f9c3102c178dce1cc61275c8d437",
-      "compiled_at": "2026-10-13T05:18:54Z",
+      "children_root": "sha256:a80059a12ccef6b1902ebde2550dd8a76e75029cca2b2bb3a5ede7312b9784a6",
+      "compiled_at": "2026-10-14T01:16:48Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:0075ade7c3a06e1bf6a27224f8b13e9fbe3a31c0f3505238eb802e0262c9b5c4",
+      "digest": "sha256:773e29540c64ad3c40ec8a23c26e2155159f77d5db71b24fc7dec0dfcacb41bc",
       "evidence_files": 16,
       "evidence_root": "sha256:96d08097822ad95f4e562c19e0ba5df5a035774c48632f1832912c40a27bd27a",
       "files": 1029,
-      "generated_at_commit": "c3a767da68428b4ed1b3d034e215c4e3bb281160",
-      "source_tree": "sha256:41466dcee22a2db878279591096320636ec4e0d7430f36b07a1e7164383e573f"
+      "generated_at_commit": "e0abd0b524f5bf8e3ba6960b53868980bdd41b4e",
+      "source_tree": "sha256:1c02f7861cb6555065d99305074da7e2083ae66d4c9aadced27f4229ec73d237"
     },
     "owner_lane": "",
     "provenance": {
