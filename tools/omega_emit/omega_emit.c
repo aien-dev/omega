@@ -279,6 +279,13 @@ static void type_name(const OscType *t, char *o, size_t n)
 static int is_int(const OscType *t) { return t->s >= OSC_T_U8 && t->s <= OSC_T_I64 && t->ref == 0; }
 static int is_scalar(const OscType *t) { return t->s >= OSC_T_BOOL && t->s <= OSC_T_I64 && t->ref == 0; }
 static int is_arr(const OscType *t) { return t->s == OSC_T_REF && t->sid == 0; }
+/* may array register `a` be bound to array slot `p` (mov dst or call parameter)? osc_ir.c ref_bindable */
+static int ref_ok(const OscType *p, const OscType *a)
+{
+    return is_arr(p) && is_arr(a) && a->elem == p->elem && a->len == p->len &&
+           (p->ref == OSC_REF_SHARED || (p->ref == OSC_REF_MUT && a->ref != OSC_REF_SHARED) ||
+            (p->ref == OSC_REF_OWN && a->ref == OSC_REF_OWN));
+}
 static int teq(const OscType *a, const OscType *b) { return a->s == b->s && a->ref == b->ref && a->elem == b->elem && a->len == b->len && a->sid == b->sid; }
 
 /* ============================================================================== op table */
@@ -439,7 +446,11 @@ static int step(Ctx *c, const J *o, int last, OscInsn *in)
     }
     case OSC_I_MOV:
         if (reg_field(c, o, "dst", &in->dst) || reg_field(c, o, "a", &in->a)) return -1;
-        if (!is_scalar(&T[in->dst]) || !teq(&T[in->dst], &T[in->a]))
+        if (is_arr(&T[in->dst])) { /* EMIT:mov-ref: binding rule of osc_ir.c ref_bindable, as for call arguments */
+            if (!ref_ok(&T[in->dst], &T[in->a]))
+                return STEP(AT "mov to r%d (%s) from r%d (%s): an array register takes an own: (move), own: or mut: (into mut:), or any array (into shared:) of the same element type and length",
+                            ATV, in->dst, tn(&T[in->dst]), in->a, tn(&T[in->a]));
+        } else if (!is_scalar(&T[in->dst]) || !teq(&T[in->dst], &T[in->a]))
             return STEP(AT "mov needs two scalar registers of the same type (r%d is %s, r%d is %s)", ATV, in->dst, tn(&T[in->dst]), in->a, tn(&T[in->a]));
         break;
     case OSC_I_BIN: {
@@ -510,9 +521,7 @@ static int step(Ctx *c, const J *o, int last, OscInsn *in)
             if (jint(args->kid[i], &neg, &v) || neg || v >= c->f->nvregs) return STEP(AT "args[%zu] is not a register of this function", ATV, i);
             in->args[i] = (int16_t)v;
             const OscType *p = &G->vtype[i], *a = &T[v];
-            int ok = is_scalar(p) ? teq(p, a) : (is_arr(a) && a->elem == p->elem && a->len == p->len &&
-                                                 (p->ref == OSC_REF_SHARED || (p->ref == OSC_REF_MUT && a->ref != OSC_REF_SHARED) ||
-                                                  (p->ref == OSC_REF_OWN && a->ref == OSC_REF_OWN)));
+            int ok = is_scalar(p) ? teq(p, a) : ref_ok(p, a);
             if (!ok) return STEP(AT "args[%zu] r%" PRIu64 " is %s; %s parameter %zu is %s", ATV, i, v, tn(a), G->name, i, tn(p));
         }
         const J *dj = jget(o, "dst");

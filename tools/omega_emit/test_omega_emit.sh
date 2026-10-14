@@ -87,6 +87,71 @@ corpus_rt() {
 corpus_rt "$E" && ok "compiler corpus: $n_ok units lift -> emit byte-identical; $n_ref outside the schema refused by lift with a reason" ||
   bad "corpus round trip ok=$n_ok bad=$n_bad"
 
+
+# ---- 2b. decoder vs omega_emit, op by op and type by type (typediff.c) ----------------------------
+# typediff writes one unit per op x operand-type combination (17 op shapes covering every type rule of
+# the schema: the arithmetic, logical and shift groups, comparisons, unary, mov, cast, alloc, release,
+# load, store, cbr, ret, const, call arguments and results) with the decoder's verdict. Required: every
+# unit the decoder accepts, omega_emit emits byte-identically, and lift -> emit of its bytes is
+# byte-identical; every unit the decoder refuses, omega_emit refuses at its own step or validator
+# stage (its op-by-op check, the one that gives a model a reason), never only at the whole-unit validator or the final encoding check.
+typediff_chk() { # typediff_chk <omega_emit>: prints one line per disagreement
+  split -n l/8 -d "$T/td.list" "$T/td.part."
+  for p in "$T"/td.part.*; do
+    ( while read -r id v; do
+        f="$T/td/$id"
+        if out="$("$1" emit "$f.json" "$f.$$.re" 2>&1)"; then r=ACCEPT; else r=REFUSE; fi
+        if [ "$v" = ACCEPT ]; then
+          if [ "$r" = REFUSE ]; then echo "MISS $id: $out"
+          elif ! cmp -s "$f.oscir" "$f.$$.re"; then echo "DIFF $id"
+          elif ! { "$E" lift "$f.oscir" > "$f.$$.lj" && "$1" emit "$f.$$.lj" "$f.$$.lr" > /dev/null && cmp -s "$f.oscir" "$f.$$.lr"; }; then echo "LIFT $id"; fi
+        else
+          case "$r/$out" in ACCEPT/*) echo "EXTRA $id" ;; "REFUSE/REFUSED step: "*) ;; *) echo "LATE $id: $out" ;; esac
+        fi
+        rm -f "$f.$$.re" "$f.$$.lj" "$f.$$.lr"
+      done < "$p" ) &
+  done
+  wait; rm -f "$T"/td.part.*
+}
+mkdir -p "$T/td"; "$BIN/typediff" "$T/td" > "$T/td.list" 2> /dev/null
+n_acc="$(grep -c ' ACCEPT$' "$T/td.list")"; n_ref="$(grep -c ' REFUSE$' "$T/td.list")"
+typediff_chk "$E" > "$T/td.res"
+if [ ! -s "$T/td.res" ] && [ "$n_acc" -ge 100 ]; then ok "decoder vs omega_emit over $((n_acc + n_ref)) op x type units: all $n_acc decoder-accepted emit byte-identically (and lift -> emit), all $n_ref decoder-refused refused at a step"
+else bad "decoder vs omega_emit: $(wc -l < "$T/td.res") disagreements"; head -5 "$T/td.res"; fi
+for k in mov_4_w5 mov_4_w6 mov_6_w5 mov_4_w4 call_4_p5 call_6_p6; do grep -qx "$k ACCEPT" "$T/td.list" || bad "typediff: $k should be a decoder-accepted case"; done
+for k in mov_5_w4 mov_5_w6 mov_7_w4 mov_8_w5 call_5_p6 call_5_p4; do grep -qx "$k REFUSE" "$T/td.list" || bad "typediff: $k should be a decoder-refused case"; done
+
+# ---- 2c. lift -> emit over the public references and controls --------------------------------------
+# the 10 exp445 dev references, the sample task references, the stage-1 PUBLIC sample controls
+# (s01..s04; the sealed stage-1 controls are not readable by tool builders) and a borrow fixture whose
+# IR moves arrays into own:, mut: and shared: registers (the case that omega_emit once refused).
+cat > "$T/borrow.osc" <<'OSC'
+fn g(v: u32) -> u32 {
+    let a: own [u32; 1] = alloc(v);
+    let m: &mut [u32; 1] = &mut a;
+    m[0] = v + 1;
+    return m[0];
+}
+fn f(v: u32) -> u32 {
+    let a: own [u32; 1] = alloc(v);
+    let s: &[u32; 1] = &a;
+    return s[0];
+}
+OSC
+refs_rt() { # refs_rt <omega_emit>
+  n_rr=0
+  for f in tests/one_layer/exp445/dev/tasks/cases/*/hidden/reference.osc tests/one_layer/acceptance/sample/tasks/cases/*/hidden/reference.osc \
+           tests/one_layer/acceptance/sample/cases/s0[1-4]/candidate.osc "$T/borrow.osc"; do
+    b="r_$(echo "$f" | tr / _)"
+    "$OSCC" "$f" "$T/$b" > /dev/null || { echo "oscc refused $f"; return 1; }
+    "$E" lift "$T/$b.ir" > "$T/$b.json" || { echo "lift refused $f"; return 1; }
+    "$1" emit "$T/$b.json" "$T/$b.re" > /dev/null && cmp -s "$T/$b.ir" "$T/$b.re" || { echo "emit differs $f"; return 1; }
+    n_rr=$((n_rr + 1))
+  done
+}
+if refs_rt "$E" > "$T/rr.out"; then ok "public references and controls: $n_rr units lift -> emit byte-identical (incl. the borrow fixture)"; else bad "references round trip: $(cat "$T/rr.out")"; fi
+grep -q '"op": "mov", "dst": 2, "a": 1' "$T/r_$(echo "$T/borrow.osc" | tr / _).json" && ok "  the borrow fixture's IR does hold array movs" || bad "borrow fixture has no array mov"
+
 # ---- 3. refusals: stage and reason ---------------------------------------------------------------
 R() { # R <name> <expected> <json>
   if refuses "$E" "$1" "$2" "$3"; then ok "refused $1: $(cut -c1-110 "$T/$1.out")"; else bad "$1: expected '$2', got: $(cat "$T/$1.out")"; fi
@@ -152,5 +217,10 @@ M="signed constants not sign-extended"; mut nosext 's/in->imm = neg ? (uint64_t)
 M="lift prints unsigned constants off by one"; mut liftoff '/EMIT:lift-const/s/x->imm);/x->imm ^ 1);/' && caught not corpus_rt "$T/m_liftoff"
 M="duplicate JSON keys accepted"; mut nodup 's/if (!strcmp(j->key\[q\], k)) { fail/if (0) { fail/' &&
   caught not refuses "$T/m_nodup" mv6 'json: duplicate key' "$(unit '["u32"]' '[[{"op": "add", "op": "sub", "dst": 2, "a": 0, "b": 1}, {"op": "ret", "a": 2}]]')"
+td_clean() { typediff_chk "$1" > "$T/td.m"; [ ! -s "$T/td.m" ]; }
+M="array mov refused (the old scalar-only mov rule)"; mut movref '/EMIT:mov-ref/s/if (is_arr(&T\[in->dst\])) {/if (0) {/' && caught not td_clean "$T/m_movref"
+M="shared array bound into mut: at a step"; mut refmut 's/(p->ref == OSC_REF_MUT \&\& a->ref != OSC_REF_SHARED)/(p->ref == OSC_REF_MUT)/' && caught not td_clean "$T/m_refmut"
+refs_q() { refs_rt "$1" > /dev/null; }
+M="borrow fixture: array mov refused"; caught not refs_q "$T/m_movref"
 echo
 if [ "$fails" -eq 0 ]; then echo "test-omega-emit: PASS"; else echo "test-omega-emit: FAIL ($fails)"; exit 1; fi

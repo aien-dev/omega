@@ -31,7 +31,7 @@ Fields are register numbers unless stated. `dst` is written; the others are read
 | op | fields | meaning |
 |---|---|---|
 | `const` | `dst`, `value` | dst = value (a whole decimal number that fits dst's type; `true`/`false` for bool) |
-| `mov` | `dst`, `a` | dst = a (same scalar type) |
+| `mov` | `dst`, `a` | dst = a: the same scalar type; or, for an array dst, an array of the same element type and length: `own:` from `own:` (a move), `mut:` from `own:` or `mut:`, `shared:` from any |
 | `add` `sub` `mul` `div` `rem` | `dst`, `a`, `b` | dst = a op b; dst, a, b the same integer type |
 | `and` `or` `xor` | `dst`, `a`, `b` | bitwise (or logical, on bool); dst, a, b the same type |
 | `shl` `shr` | `dst`, `a`, `b` | dst = a shifted by b; dst and a the same integer type, b any integer type |
