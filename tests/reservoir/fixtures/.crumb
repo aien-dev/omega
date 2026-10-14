@@ -1,0 +1,20 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-14T16:13:42Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:3f7fa0c52f7bb68844ccc5ace8d5e96284fe1846698f9df59483c2e13b9cf2e9",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 2,
+      "generated_at_commit": "ac35a16615c2ebe0e6916b23a8234172f6362849",
+      "source_tree": "sha256:422014f985ebdf7a9f241f45b4757c79e7da5711037deb2ed589c44a417eef16"
+    }
+  },
+  "layer": "tests/reservoir/fixtures",
+  "name": "tests/reservoir/fixtures",
+  "purpose": "Two unmodified CC-BY-4.0 files from the authors' Zenodo archive 10.5281/zenodo.17296788 (Length5.mat, Length50.mat), sha256-pinned in RESERVOIR_REFERENCE.md section 11.6, so CI can test the .mat reader without the archive. Data, never code; do not edit.",
+  "schema_version": "1.0.0"
+}
