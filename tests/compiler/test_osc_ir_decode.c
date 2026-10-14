@@ -36,6 +36,12 @@
 #include "osc_ir.h"
 #include "sha256.h"
 
+/* spec/one-layer-format.md section 3 states these numbers; a renumbering must fail here. */
+_Static_assert(OSC_I_CONST == 1 && OSC_I_CALL == 11 && OSC_I_RET == 15 && OSC_I_FLOAD == 16 && OSC_I_AOPEN == 18 &&
+               OSC_I_POPEN == 21 && OSC_I_HSTORE == 27 && OSC_I_SSTORE == 29, "opcode numbers in the spec");
+_Static_assert(OSC_T_BOOL == 1 && OSC_T_U64 == 5 && OSC_T_I64 == 9 && OSC_T_REF == 10 && OSC_T_CELLS == 12, "scalar tags in the spec");
+_Static_assert(OSC_REF_OWN == 1 && OSC_REF_MUT == 3, "ref kinds in the spec");
+
 static int g_fail;
 static void fail(const char *fmt, ...) {
     va_list ap;
