@@ -85,8 +85,8 @@
  * (tests/reservoir), not by this guard.
  *
  * Refusals, never silent repair: invalid topology or parameters, NaN or
- * infinity anywhere, |V| > OMEGA_RES_V_LIMIT, y outside [OMEGA_RES_Y_MIN,
- * OMEGA_RES_Y_MAX], current outside +-OMEGA_RES_MAX_CURRENT_A, time past
+ * infinity anywhere, a membrane voltage |V_a - V_b| > OMEGA_RES_VM_LIMIT, y
+ * outside [OMEGA_RES_Y_MIN, OMEGA_RES_Y_MAX], current outside +-OMEGA_RES_MAX_CURRENT_A, time past
  * the last knot, a state bound to another configuration. A refused step
  * leaves the caller's state unchanged.
  *
@@ -107,7 +107,16 @@
 #define OMEGA_RES_MAX_SIDES (2u * OMEGA_RES_MAX_EDGES)
 
 #define OMEGA_RES_STABILITY_LIMIT 2.0f  /* max h * lambda accepted per step */
-#define OMEGA_RES_V_LIMIT 1.0f          /* |V| above 1 V is outside the model */
+/* Voltage guard (orchestrator decision 2026-10-14, after the first Gate 2 run,
+ * RESERVOIR_REFERENCE.md section 12): the refusal applies to the voltage
+ * across each membrane, |V_a - V_b|, which is what the pore kinetics see.
+ * Node voltages are referenced to the common ground and add up along a
+ * chain, so they get no bound beyond finiteness. 1 V is a numerical guard
+ * that catches blowups; it is not a physical limit. Membranes above
+ * OMEGA_RES_VM_PLAUSIBLE are counted as physically implausible (the paper:
+ * rupture "when voltages exceed ~200 to 300 mV"), recorded, never refused. */
+#define OMEGA_RES_VM_LIMIT 1.0f      /* |V_a - V_b| above 1 V: refused */
+#define OMEGA_RES_VM_PLAUSIBLE 0.3f  /* |V_a - V_b| above 0.3 V: flagged */
 #define OMEGA_RES_Y_MIN (-80.0f)        /* ln N bounds: e^y stays a normal float */
 #define OMEGA_RES_Y_MAX 80.0f
 #define OMEGA_RES_MAX_CURRENT_A 1.0e-6f /* 1 uA; the reference uses <= 1 nA */
@@ -119,9 +128,10 @@
 #define OMEGA_RES_DOMAIN_STATE "omega.reservoir.state.v1"
 #define OMEGA_RES_DOMAIN_RUN "omega.reservoir.run.v1"
 #define OMEGA_RES_NUMERIC_POLICY \
-    "omega.reservoir.numeric.v1: binary32 RNE no-FTZ; ffp-contract=off; " \
+    "omega.reservoir.numeric.v2: binary32 RNE no-FTZ; ffp-contract=off; " \
     "omega_math_exp/log/div/sqrt; state y=lnN; rk4 fixed step, TwoSum-compensated update; " \
-    "1-e^w Taylor9 |w|<=0.5; dense Cholesky of reduced Laplacian"
+    "1-e^w Taylor9 |w|<=0.5; dense Cholesky of reduced Laplacian; " \
+    "refuse |Va-Vb|>1 V per membrane, node V finite only"
 
 typedef enum {
     OMEGA_RES_OK = 0,
@@ -131,7 +141,7 @@ typedef enum {
                                      connected component without a ground */
     OMEGA_RES_ERR_PARAM = -3,     /* parameter non-finite or out of its range */
     OMEGA_RES_ERR_NONFINITE = -4, /* NaN or infinity in input, state or result */
-    OMEGA_RES_ERR_RANGE = -5,     /* |V| or ln N outside the declared bounds */
+    OMEGA_RES_ERR_RANGE = -5,     /* membrane |V_a - V_b| or ln N outside the bounds */
     OMEGA_RES_ERR_STIFF = -6,     /* h * lambda above OMEGA_RES_STABILITY_LIMIT */
     OMEGA_RES_ERR_INPUT = -7,     /* input shape, current bound, time past last knot */
     OMEGA_RES_ERR_MISMATCH = -8,  /* state bound to another configuration */
@@ -299,6 +309,29 @@ OmegaResStatus omega_res_step(const OmegaResConfig *cfg, const OmegaResInput *in
  * (s->step says where it stopped) and the refusal code is returned. */
 OmegaResStatus omega_res_advance(const OmegaResConfig *cfg, const OmegaResInput *in, OmegaResWorkspace *ws,
                                  OmegaResState *s, uint64_t steps);
+
+/* Physical-plausibility record of a run (recorded, never refused): every
+ * accepted state passed to omega_res_membrane_observe is counted. A
+ * membrane is implausible when |V_a - V_b| > OMEGA_RES_VM_PLAUSIBLE. */
+typedef struct {
+    uint64_t states_observed;
+    uint64_t states_implausible;     /* states with at least one implausible membrane */
+    uint32_t membranes_implausible;  /* distinct membranes implausible at least once */
+    float max_membrane_abs_v;        /* largest |V_a - V_b| seen */
+    float max_node_abs_v;            /* largest |V_i| seen (no bound applies) */
+    uint8_t edge_flag[OMEGA_RES_MAX_EDGES];
+} OmegaResMembraneStats;
+
+/* Zeroes *st. */
+void omega_res_membrane_stats_init(OmegaResMembraneStats *st);
+
+/* Adds state s to *st. Refuses NULL and a state of another configuration. */
+OmegaResStatus omega_res_membrane_observe(const OmegaResConfig *cfg, const OmegaResState *s,
+                                          OmegaResMembraneStats *st);
+
+/* omega_res_advance, observing every accepted state into *st (NULL: none). */
+OmegaResStatus omega_res_advance_observed(const OmegaResConfig *cfg, const OmegaResInput *in, OmegaResWorkspace *ws,
+                                          OmegaResState *s, uint64_t steps, OmegaResMembraneStats *st);
 
 /* Fastest decay rate bound lambda (1/s) of the stiffness guard at state s. */
 OmegaResStatus omega_res_stiffness(const OmegaResConfig *cfg, const OmegaResState *s, float *lambda);

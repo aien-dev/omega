@@ -324,9 +324,12 @@ static OmegaResStatus state_check(const OmegaResConfig *cfg, const OmegaResState
         return OMEGA_RES_ERR_MISMATCH;
     for (uint32_t i = 0; i < s->node_count; i++) {
         if (!fin(s->v[i]) || !fin(s->vc[i])) return OMEGA_RES_ERR_NONFINITE;
-        if (fabs32(s->v[i]) > OMEGA_RES_V_LIMIT || (cfg->topo.is_ground[i] && s->v[i] != 0.0f) ||
-            !carry_ok(s->v[i], s->vc[i]))
-            return OMEGA_RES_ERR_RANGE;
+        if ((cfg->topo.is_ground[i] && s->v[i] != 0.0f) || !carry_ok(s->v[i], s->vc[i])) return OMEGA_RES_ERR_RANGE;
+    }
+    /* The voltage guard is on each membrane; node voltages are finite only. */
+    for (uint32_t e = 0; e < cfg->topo.edge_count; e++) {
+        const float dv = s->v[cfg->topo.edge[e].a] - s->v[cfg->topo.edge[e].b];
+        if (!(fabs32(dv) <= OMEGA_RES_VM_LIMIT)) return OMEGA_RES_ERR_RANGE; /* also an overflowed difference */
     }
     for (uint32_t k = 0; k < s->side_count; k++) {
         if (!fin(s->y[k]) || !fin(s->yc[k])) return OMEGA_RES_ERR_NONFINITE;
@@ -509,12 +512,53 @@ OmegaResStatus omega_res_step(const OmegaResConfig *cfg, const OmegaResInput *in
     return step_impl(cfg, in, ws, cur, next);
 }
 
+void omega_res_membrane_stats_init(OmegaResMembraneStats *st)
+{
+    if (st) memset(st, 0, sizeof *st);
+}
+
+OmegaResStatus omega_res_membrane_observe(const OmegaResConfig *cfg, const OmegaResState *s,
+                                          OmegaResMembraneStats *st)
+{
+    if (!cfg || !s || !st) return OMEGA_RES_ERR_NULL;
+    if (memcmp(s->config_id, cfg->id, OMEGA_RES_DIGEST_SIZE) != 0 || s->node_count != cfg->topo.node_count)
+        return OMEGA_RES_ERR_MISMATCH;
+    for (uint32_t i = 0; i < s->node_count; i++) {
+        const float m = fabs32(s->v[i]);
+        if (m > st->max_node_abs_v) st->max_node_abs_v = m;
+    }
+    int any = 0;
+    for (uint32_t e = 0; e < cfg->topo.edge_count; e++) {
+        const float dv = fabs32(s->v[cfg->topo.edge[e].a] - s->v[cfg->topo.edge[e].b]);
+        if (dv > st->max_membrane_abs_v) st->max_membrane_abs_v = dv;
+        if (dv > OMEGA_RES_VM_PLAUSIBLE) {
+            any = 1;
+            if (!st->edge_flag[e]) {
+                st->edge_flag[e] = 1u;
+                st->membranes_implausible++;
+            }
+        }
+    }
+    st->states_observed++;
+    if (any) st->states_implausible++;
+    return OMEGA_RES_OK;
+}
+
 OmegaResStatus omega_res_advance(const OmegaResConfig *cfg, const OmegaResInput *in, OmegaResWorkspace *ws,
                                  OmegaResState *s, uint64_t steps)
+{
+    return omega_res_advance_observed(cfg, in, ws, s, steps, NULL);
+}
+
+OmegaResStatus omega_res_advance_observed(const OmegaResConfig *cfg, const OmegaResInput *in, OmegaResWorkspace *ws,
+                                          OmegaResState *s, uint64_t steps, OmegaResMembraneStats *obs)
 {
     if (!cfg || !in || !ws || !s) return OMEGA_RES_ERR_NULL;
     if (overlaps(ws, sizeof *ws, s, sizeof *s) || overlaps(ws, sizeof *ws, cfg, sizeof *cfg) ||
         overlaps(s, sizeof *s, cfg, sizeof *cfg) || overlaps(s, sizeof *s, in, sizeof *in))
+        return OMEGA_RES_ERR_ALIAS;
+    if (obs && (overlaps(obs, sizeof *obs, s, sizeof *s) || overlaps(obs, sizeof *obs, ws, sizeof *ws) ||
+                overlaps(obs, sizeof *obs, cfg, sizeof *cfg)))
         return OMEGA_RES_ERR_ALIAS;
     /* Double buffering: the two state buffers are *s and ws->spare. */
     OmegaResState *a = s, *b = &ws->spare;
@@ -522,6 +566,7 @@ OmegaResStatus omega_res_advance(const OmegaResConfig *cfg, const OmegaResInput 
     for (uint64_t i = 0; i < steps; i++) {
         st = step_impl(cfg, in, ws, a, b);
         if (st != OMEGA_RES_OK) break;
+        if (obs) (void)omega_res_membrane_observe(cfg, b, obs); /* b passed state_check: cannot refuse */
         OmegaResState *tmp = a;
         a = b;
         b = tmp;

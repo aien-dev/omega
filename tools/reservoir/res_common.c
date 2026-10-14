@@ -186,7 +186,7 @@ OmegaResStatus res_sim_at_steps(ResSim *sim, const OmegaResInput *in, const uint
     for (size_t k = 0; k < n; k++) {
         if (steps[k] < sim->s.step) return OMEGA_RES_ERR_INPUT;
         if (steps[k] > sim->s.step) {
-            OmegaResStatus st = omega_res_advance(&sim->cfg, in, &sim->ws, &sim->s, steps[k] - sim->s.step);
+            OmegaResStatus st = omega_res_advance_observed(&sim->cfg, in, &sim->ws, &sim->s, steps[k] - sim->s.step, &sim->mstats);
             if (st != OMEGA_RES_OK) return st;
         }
         for (uint32_t i = 0; i < L; i++) v_out[k * L + i] = (double)sim->s.v[i];
@@ -206,7 +206,7 @@ OmegaResStatus res_sim_at_positions(ResSim *sim, const OmegaResInput *in, const 
         double f = p - (double)n0;
         if (n0 < sim->s.step) return OMEGA_RES_ERR_INPUT;
         if (n0 > sim->s.step) {
-            OmegaResStatus st = omega_res_advance(&sim->cfg, in, &sim->ws, &sim->s, n0 - sim->s.step);
+            OmegaResStatus st = omega_res_advance_observed(&sim->cfg, in, &sim->ws, &sim->s, n0 - sim->s.step, &sim->mstats);
             if (st != OMEGA_RES_OK) return st;
         }
         if (f > 0.0) {

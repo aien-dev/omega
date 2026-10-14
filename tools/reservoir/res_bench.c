@@ -79,7 +79,7 @@ static Run simulate(const OmegaResTopology *t, const OmegaResParams *p, OmegaRes
     const uint64_t last = (uint64_t)(knots - 1u) * KSTEP;
     if (r.st == OMEGA_RES_OK) r.st = res_sim_at_steps(sim, &in, steps, ns, v);
     if (r.st == OMEGA_RES_OK && sim->s.step < last)
-        r.st = omega_res_advance(&sim->cfg, &in, &sim->ws, &sim->s, last - sim->s.step);
+        r.st = omega_res_advance_observed(&sim->cfg, &in, &sim->ws, &sim->s, last - sim->s.step, &sim->mstats);
     if (r.st == OMEGA_RES_OK) r.st = omega_res_run_receipt(&sim->cfg, &in, &sim->s, &r.rc);
     r.stopped_at = sim->s.step;
     free(sim);

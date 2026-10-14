@@ -567,7 +567,7 @@ static void test_refusals(void)
     CHECK_ST(omega_res_step(&g_cfg, &in, &g_ws, &g_s, &nx), OMEGA_RES_ERR_NONFINITE);
     g_s = keep; g_s.v[2] = 1e-3f; /* ground not at zero */
     CHECK_ST(omega_res_step(&g_cfg, &in, &g_ws, &g_s, &nx), OMEGA_RES_ERR_RANGE);
-    g_s = keep; g_s.v[0] = 1.5f;
+    g_s = keep; g_s.v[0] = 1.5f; /* membrane 0-1 at 1.5 V */
     CHECK_ST(omega_res_step(&g_cfg, &in, &g_ws, &g_s, &nx), OMEGA_RES_ERR_RANGE);
     g_s = keep; g_s.y[1] = 100.0f;
     CHECK_ST(omega_res_step(&g_cfg, &in, &g_ws, &g_s, &nx), OMEGA_RES_ERR_RANGE);
@@ -616,6 +616,88 @@ static void test_refusals(void)
     OmegaResInput inb = {2, 101, g_tab};
     CHECK_ST(omega_res_advance(&g_cfg, &inb, &g_ws, &g_s, 1000), OMEGA_RES_ERR_RANGE);
     CHECK(g_s.v[0] <= 1.0f && g_s.v[0] > 0.99f && g_s.step == 11); /* 9.04 V/s * 1e-5 s per step */
+}
+
+
+/* Voltage guard on membranes, not nodes (orchestrator decision 2026-10-14,
+ * RESERVOIR_REFERENCE.md section 12). A 30-node chain grounded at node 29
+ * whose membranes neither conduct nor adapt is a series of equal
+ * capacitors: 10 nA into node 0 charges every membrane at I / C = 90.4 V/s
+ * and node 0 at 29 times that. Node 0 passes 1 V after about 38 steps,
+ * where the earlier node-voltage guard refused; the run must go on, flag
+ * every membrane once it passes 0.3 V, and refuse only when a membrane
+ * passes 1 V (about step 1106). */
+static float max_membrane(const OmegaResConfig *c, const OmegaResState *s)
+{
+    float m = 0.0f;
+    for (uint32_t e = 0; e < c->topo.edge_count; e++) {
+        float d = s->v[c->topo.edge[e].a] - s->v[c->topo.edge[e].b];
+        if (d < 0.0f) d = -d;
+        if (d > m) m = d;
+    }
+    return m;
+}
+
+static void test_membrane_guard(void)
+{
+    OmegaResTopology t;
+    OmegaResParams p;
+    OmegaResIntegrator ig = integ(1e-5f, 10);
+    CHECK_ST(omega_res_topology_chain(30, 29, &t), OMEGA_RES_OK);
+    CHECK_ST(omega_res_params_reference(OMEGA_RES_REF_NARMA, 30, &p), OMEGA_RES_OK);
+    p.rate_scale = 1e-12f;
+    CHECK_ST(omega_res_config_build(&t, &p, &ig, &g_cfg), OMEGA_RES_OK);
+    CHECK_ST(omega_res_state_init(&g_cfg, OMEGA_RES_INIT_CONST, 1e-30f, &g_s), OMEGA_RES_OK);
+    const OmegaResState rest = g_s;
+    float cur[30] = {0};
+    cur[0] = 1e-8f;
+    fill_const(g_tab, 201, 30, cur);
+    OmegaResInput in = {30, 201, g_tab};
+    OmegaResMembraneStats ms;
+    omega_res_membrane_stats_init(&ms);
+
+    /* Node voltages far above 1 V, every membrane below 0.3 V: runs, no flag. */
+    CHECK_ST(omega_res_advance_observed(&g_cfg, &in, &g_ws, &g_s, 300, &ms), OMEGA_RES_OK);
+    CHECK(g_s.step == 300);
+    CHECK(g_s.v[0] > 7.5f && g_s.v[0] < 8.2f);              /* 29 * 90.4 V/s * 3 ms = 7.86 V */
+    CHECK(max_membrane(&g_cfg, &g_s) > 0.26f && max_membrane(&g_cfg, &g_s) < 0.28f);
+    CHECK(ms.states_observed == 300 && ms.states_implausible == 0 && ms.membranes_implausible == 0);
+    CHECK(ms.max_node_abs_v == g_s.v[0] && ms.max_membrane_abs_v == max_membrane(&g_cfg, &g_s));
+
+    /* Past 0.3 V every membrane is flagged (recorded, not refused); past 1 V
+     * the step is refused and the last accepted state is kept. */
+    CHECK_ST(omega_res_advance_observed(&g_cfg, &in, &g_ws, &g_s, 1900, &ms), OMEGA_RES_ERR_RANGE);
+    CHECK(g_s.step > 1090 && g_s.step < 1120);
+    CHECK(ms.states_observed == g_s.step);
+    CHECK(ms.membranes_implausible == 29);
+    CHECK(ms.states_implausible > 700 && ms.states_implausible < ms.states_observed);
+    CHECK(ms.max_membrane_abs_v <= OMEGA_RES_VM_LIMIT && ms.max_membrane_abs_v > 0.99f);
+    CHECK(g_s.v[0] > 28.0f);
+    /* Without the observer the same run stops at the same step. */
+    OmegaResState plain = rest;
+    CHECK_ST(omega_res_advance(&g_cfg, &in, &g_ws, &plain, 1900), OMEGA_RES_ERR_RANGE);
+    CHECK(plain.step == g_s.step && memcmp(plain.v, g_s.v, sizeof plain.v) == 0);
+
+    /* Hand-set states: a 0.09 V ramp (node 0 at 2.61 V) steps; one membrane
+     * over 1 V with every node below 2.8 V is refused. */
+    OmegaResState nx;
+    g_s = rest;
+    for (uint32_t i = 0; i < 29; i++) g_s.v[i] = 0.09f * (float)(29u - i);
+    CHECK_ST(omega_res_step(&g_cfg, &in, &g_ws, &g_s, &nx), OMEGA_RES_OK);
+    g_s.v[10] += 1.05f; /* membranes 9-10 and 10-11 at 0.96 V and 1.14 V */
+    CHECK_ST(omega_res_step(&g_cfg, &in, &g_ws, &g_s, &nx), OMEGA_RES_ERR_RANGE);
+    g_s.v[10] -= 1.05f;
+    g_s.v[28] = 1.2f; /* the membrane to the ground */
+    CHECK_ST(omega_res_step(&g_cfg, &in, &g_ws, &g_s, &nx), OMEGA_RES_ERR_RANGE);
+
+    /* Observer refusals. */
+    CHECK_ST(omega_res_membrane_observe(&g_cfg, &rest, NULL), OMEGA_RES_ERR_NULL);
+    g_s = rest;
+    g_s.config_id[0] ^= 1u;
+    CHECK_ST(omega_res_membrane_observe(&g_cfg, &g_s, &ms), OMEGA_RES_ERR_MISMATCH);
+    g_s = rest;
+    CHECK_ST(omega_res_advance_observed(&g_cfg, &in, &g_ws, &g_s, 1, (OmegaResMembraneStats *)(void *)&g_ws),
+             OMEGA_RES_ERR_ALIAS);
 }
 
 /* --------------------------------------- agreement with the binary64 oracle */
@@ -790,6 +872,7 @@ int main(void)
     test_connected_and_disconnected();
     test_reproducibility();
     test_refusals();
+    test_membrane_guard();
     test_oracle_agreement();
     test_readout();
     printf("test_reservoir: %d checks, %d failed\n", g_checks, g_fail);

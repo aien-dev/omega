@@ -317,7 +317,7 @@ static int cmd_g2_narma(const char *root, const char *variant, const char *v2_re
         rst[sp] = omega_res_state_init(&sim->cfg, OMEGA_RES_INIT_N0, 0.0f, &sim->s);
         if (rst[sp] == OMEGA_RES_OK) rst[sp] = res_sim_at_steps(sim, &in, steps, ns, vs);
         if (rst[sp] == OMEGA_RES_OK && sim->s.step < last)
-            rst[sp] = omega_res_advance(&sim->cfg, &in, &sim->ws, &sim->s, last - sim->s.step);
+            rst[sp] = omega_res_advance_observed(&sim->cfg, &in, &sim->ws, &sim->s, last - sim->s.step, &sim->mstats);
         if (rst[sp] == OMEGA_RES_OK) rst[sp] = omega_res_run_receipt(&sim->cfg, &in, &sim->s, &rc[sp]);
         /* features: row 0 zeros; row r >= 1 = reference sample row r (1-based), node-major */
         for (uint32_t r = 1; r <= nvalid; r++)
@@ -637,7 +637,7 @@ static int cmd_g2_lorenz(const char *root, int nodes, int control, FILE *o)
         rst[sp] = omega_res_state_init(&sim->cfg, OMEGA_RES_INIT_CONST, 1.0f, &sim->s);
         if (rst[sp] == OMEGA_RES_OK) rst[sp] = res_sim_at_positions(sim, &in, pos, nts[sp], last, V[sp]);
         if (rst[sp] == OMEGA_RES_OK && sim->s.step < last)
-            rst[sp] = omega_res_advance(&sim->cfg, &in, &sim->ws, &sim->s, last - sim->s.step);
+            rst[sp] = omega_res_advance_observed(&sim->cfg, &in, &sim->ws, &sim->s, last - sim->s.step, &sim->mstats);
         if (rst[sp] == OMEGA_RES_OK) rst[sp] = omega_res_run_receipt(&sim->cfg, &in, &sim->s, &rc[sp]);
         for (int c = 0; c < 3; c++) { /* targets: interp1(t, X, timeSolution) */
             uint32_t hint = 0;
@@ -788,12 +788,15 @@ static int cmd_g2_lorenz(const char *root, int nodes, int control, FILE *o)
 static int cmd_config(FILE *o)
 {
     fprintf(o, "{\n  \"schema\": \"omega-reservoir-gate2-config/1\",\n"
-               "  \"doc\": \"docs/reservoir/RESERVOIR_REFERENCE.md sections 7, 7.1, 10, 10.1\",\n"
+               "  \"doc\": \"docs/reservoir/RESERVOIR_REFERENCE.md sections 7, 7.1, 10, 10.1, 12\",\n"
                "  \"reference_record\": \"10.5281/zenodo.17296788\",\n"
                "  \"reference_zip_sha256\": \"54582293dff8e9327b9187d3e5526b0e0cdcc41ca7ac87c762850bdb342dea15\",\n"
                "  \"simulator\": {\"step_s\": %.9g, \"steps_per_knot\": %u, \"numeric_policy\": ",
             (double)STEP_S, STEPS_PER_KNOT);
     res_json_str(o, OMEGA_RES_NUMERIC_POLICY);
+    fprintf(o, ", \"refused_membrane_abs_v_above\": %.9g, \"implausible_membrane_abs_v_above\": %.9g, "
+               "\"node_voltage_bound\": \"finite only\"",
+            (double)OMEGA_RES_VM_LIMIT, (double)OMEGA_RES_VM_PLAUSIBLE);
     fprintf(o, "},\n  \"g2_narma\": {\"grid_cell\": {\"nodes\": 5, \"current_hi_a\": 1e-10, \"mask_length\": 2}, "
                "\"variants\": [\"N1a\", \"N1b\", \"N1b-v2\"], \"v2_results_sha256\": \"317af7a76051e6c30aa0476a612c29e417b199c9ef226f4f00d7f7505512fc92\", \"negative_control\": \"NC-N\", \"fit_rows_1based\": [100, 995], "
                "\"orders\": [2, 10]},\n");

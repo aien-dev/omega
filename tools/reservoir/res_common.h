@@ -52,6 +52,7 @@ typedef struct {
     OmegaResConfig cfg;
     OmegaResState s, next;
     OmegaResWorkspace ws;
+    OmegaResMembraneStats mstats; /* every accepted state of the run; reset with the state */
 } ResSim;
 
 /* Runs from the state in sim->s (already initialised) and records the node
