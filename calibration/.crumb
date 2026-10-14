@@ -39,18 +39,6 @@
           "purpose": "Directory calibration/docs. Purpose not yet described by a human."
         },
         {
-          "digest": "1cfc0113fa05f78ebe448d6e09d205399b96d4d7381299e9b8eff508304a34ac",
-          "last_commit": "d5c97ce9",
-          "name": "experiments/EXP-001",
-          "purpose": "Directory calibration/experiments/EXP-001. Purpose not yet described by a human."
-        },
-        {
-          "digest": "9c1f1bbe230c6ecdac42dbcaa60c5d757470499349dd7cb1124baa45be183ae8",
-          "last_commit": "190ff891",
-          "name": "experiments/EXP-001R",
-          "purpose": "Directory calibration/experiments/EXP-001R. Purpose not yet described by a human."
-        },
-        {
           "digest": "6b36741c5f34a363b7e8cd3c29f8b3f0d43acbb3c2cddd3f5b9ebbade3f85d25",
           "last_commit": "1cff5260",
           "name": "preregistration",
@@ -75,14 +63,14 @@
           "purpose": "Directory calibration/scripts. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:3beb3c97b6608f6ccb9b9b84892f708e896bd013f4f5d17afa107a29555a045d",
-      "compiled_at": "2026-10-14T04:13:25Z",
+      "children_root": "sha256:e58b9cc78de81a51c7ed21c725616ddb80bd3d24d171b24a189e8f7132499433",
+      "compiled_at": "2026-10-14T21:46:29Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:3f2f29e905246ceb0b8778e1392f090ac93c949f89a139da0bd77b520946f30c",
+      "digest": "sha256:fb7cc6e608fdbe68a9735a1313285782b9717ff12bde17343f8ce635de3644f6",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 110,
-      "generated_at_commit": "d0889a944b02066f84fec71af7b9bbb92f5c986f",
+      "generated_at_commit": "2a6d6d7b9091bd2184b15dcde893035dbcca40d3",
       "source_tree": "sha256:b39f40915ce2ed4092ade2a38665d99f6daab78fd462433177cdd0aec5f00bd7"
     },
     "owner_lane": "",

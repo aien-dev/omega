@@ -1,0 +1,15 @@
+{
+  "schema": "omega-reservoir-gate2-config/1",
+  "doc": "docs/reservoir/RESERVOIR_REFERENCE.md sections 7, 7.1, 10, 10.1, 12",
+  "reference_record": "10.5281/zenodo.17296788",
+  "reference_zip_sha256": "54582293dff8e9327b9187d3e5526b0e0cdcc41ca7ac87c762850bdb342dea15",
+  "simulator": {"step_s": 9.99999975e-06, "steps_per_knot": 10, "numeric_policy": "omega.reservoir.numeric.v2: binary32 RNE no-FTZ; ffp-contract=off; omega_math_exp/log/div/sqrt; state y=lnN; rk4 fixed step, TwoSum-compensated update; 1-e^w Taylor9 |w|<=0.5; dense Cholesky of reduced Laplacian; refuse |Va-Vb|>1 V per membrane, node V finite only", "refused_membrane_abs_v_above": 1, "implausible_membrane_abs_v_above": 0.300000012, "node_voltage_bound": "finite only"},
+  "g2_narma": {"grid_cell": {"nodes": 5, "current_hi_a": 1e-10, "mask_length": 2}, "variants": ["N1a", "N1b", "N1b-v2"], "v2_results_sha256": "317af7a76051e6c30aa0476a612c29e417b199c9ef226f4f00d7f7505512fc92", "negative_control": "NC-N", "fit_rows_1based": [100, 995], "orders": [2, 10]},
+  "g2_lorenz": {"nodes": [13, 25, 43], "negative_control": "NC-L (13 nodes)", "knots": 400001, "lambda_grid": "linspace(0.033, 0.035, 101)", "folds": 5},
+  "tolerances": {"target_max_abs": 1e-12, "prediction_rms_over_target_std": 0.01, "nrmse_abs": 0.005, "nrmse_rel": 0.05, "metric_recompute_rel": 1e-09},
+  "benchmark": {"seeds": [1, 2, 3, 4, 5], "generator": "splitmix64", "lambda_grid": [1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1, 10, 100], "folds": 5,
+    "narma": {"orders": [2, 5, 10], "train": 2000, "test": 1000, "washout": 100, "mask_length": 3, "current_hi_a": 1e-10, "networks": ["Length50 chain (declared)", "Length5 chain (post hoc, section 10.1)"], "delay_line": 12},
+    "lorenz": {"dt": 1e-4, "transient_s": 20, "record_s": 20, "sample_s": 0.01, "washout_samples": 200, "rows": [200, 1975], "horizons_samples": [0, 1, 25], "network": "hex43", "delay_line": 5}},
+  "performance": {"warmup_steps": 10000, "timed_steps": 40000, "repetitions": 5, "networks": ["chain5 NARMA", "chain50 NARMA", "hex43 Lorenz"]},
+  "energy": "NOT_RUN (not instrumented)"
+}

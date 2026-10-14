@@ -1,0 +1,3 @@
+fn add(a: u64, b: u32) -> u32 {
+    return (a as u32) + b;
+}

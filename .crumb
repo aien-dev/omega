@@ -45,19 +45,13 @@
     "generated": {
       "children": [
         {
-          "digest": "106590f7de0ce420a9124def908e436ce0334521416343705fb543fe27b400b7",
-          "last_commit": "95829f2a",
-          "name": "bench/prime_race",
-          "purpose": "AIEN Prime Drag Race implementation side: the shared protocol helper (command line, timed loop, "
-        },
-        {
-          "digest": "3f2f29e905246ceb0b8778e1392f090ac93c949f89a139da0bd77b520946f30c",
+          "digest": "fb7cc6e608fdbe68a9735a1313285782b9717ff12bde17343f8ce635de3644f6",
           "last_commit": "190ff891",
           "name": "calibration",
           "purpose": "Directory calibration. Purpose not yet described by a human."
         },
         {
-          "digest": "17c02b5464f58d3e33a54cebbdf19ee1933553c6d26d9322baafa5441f0c4363",
+          "digest": "26ad30306af327e06a46a0b30e06fa9726c95a627772ebcf31eb54a824ec5366",
           "last_commit": "18531691",
           "name": "docs",
           "purpose": "Directory docs. Purpose not yet described by a human."
@@ -69,7 +63,7 @@
           "purpose": "Directory doctrine. Purpose not yet described by a human."
         },
         {
-          "digest": "f6d1a9bb8d18f58cddfbea2f9ecce90f27f5b5f75b584b3a0f1ce1cea509044c",
+          "digest": "5f0f4cfb1ef5837569c712847c5f7c8c9c93fe1083a42b582cf2a9cbe27f4d3f",
           "last_commit": "18531691",
           "name": "mk",
           "purpose": "Directory mk. Purpose not yet described by a human."
@@ -81,45 +75,45 @@
           "purpose": "Directory polyglot. Purpose not yet described by a human."
         },
         {
-          "digest": "3c7bddebf9d321b786dc3ac6dadaabc061ceb510338de3f9fca7f7417bbdb5fb",
+          "digest": "eccc4aec1037ae222d6370836953732b031b8ed70de28967b7af7ca62c2abe0b",
           "last_commit": "c02b278c",
           "name": "research",
           "purpose": "Directory research. Purpose not yet described by a human."
         },
         {
-          "digest": "830ce7faaea9ae86190aa304fd8d7797881fbaca9d14fc39a327d202712f73fb",
+          "digest": "3d892a08078369eebc9a5e2a7ee2b6a24c278f2dbd91db5e7026decb8d8399f8",
           "last_commit": "9e168fc8",
           "name": "spec",
           "purpose": "Directory spec. Purpose not yet described by a human."
         },
         {
-          "digest": "49ffed020b3c23880cf8f80a05eede6e4003d7e19745d570542b623932adb131",
+          "digest": "d69b7371545db3c5920b5e035b3d1d8b8205664f393fedd7b9fc1bb582f23821",
           "last_commit": "d0889a94",
           "name": "src",
           "purpose": "Directory src. Purpose not yet described by a human."
         },
         {
-          "digest": "3f3261b1635d8b71125e502fe64fc2bef5dbe6527d6b945fc98a9fdc1a04f1b5",
+          "digest": "792cfc471ce3778cf2a4f7c90d0cddeae9cbe5494b013045e4f81cc5f4a7daa4",
           "last_commit": "d0889a94",
           "name": "tests",
           "purpose": "Directory tests. Purpose not yet described by a human."
         },
         {
-          "digest": "0978b965415b82014915dfad331371307f01e33be2c5e7bc5fc60e8ca79c0ee7",
+          "digest": "84e7502fdc66e65c9c94ffaa834cc53aec818ee3215716ba98926cf1c70bcca8",
           "last_commit": "d0889a94",
           "name": "tools",
           "purpose": "Directory tools. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:61b7d33837bff1c1a049e2b97930faaa4782ec2936489ddadb39bc61a37d3403",
-      "compiled_at": "2026-10-14T04:13:25Z",
+      "children_root": "sha256:e5feee9f2e633a6186591944f7fb182e76437d5369b36c7dc4602536ab2fa1f5",
+      "compiled_at": "2026-10-14T21:46:29Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:4f11644c55e68777b7d6daa882b5f865be88beedbda6cd8bb1888df7bcdfbfad",
-      "evidence_files": 7870,
-      "evidence_root": "sha256:a978ef7c2423bc13e3bf5a22359f5b274da5bd166cc6e43024fa9bc10dcd094c",
-      "files": 10479,
-      "generated_at_commit": "d0889a944b02066f84fec71af7b9bbb92f5c986f",
-      "source_tree": "sha256:964c8ff8a65aa5aa074b7894c6007d081c1d9c075b3d35c5654b9a29e8391184"
+      "digest": "sha256:82c7b5e82537fc6491d0257898fa82d9391c8cdd096f2b2b18d3bedf5b9769de",
+      "evidence_files": 7963,
+      "evidence_root": "sha256:d198e446f05fd456453e386f3d6cfa4f28afb8ea8adbe0ed352bd9815d3cf3dd",
+      "files": 10722,
+      "generated_at_commit": "2a6d6d7b9091bd2184b15dcde893035dbcca40d3",
+      "source_tree": "sha256:6bad7bb3adfbed940e36cff7b6502bb83a2a5d02563733e2e096fad3512ed7be"
     },
     "owner_lane": "",
     "provenance": {
@@ -422,7 +416,7 @@
         },
         {
           "lane": "lane27",
-          "note": "PR aien-dev/omega#151, squash merge 7e713e301a6733a679f82f6892beda57b313908c",
+          "note": "PR aien-spark/omega#151, squash merge 7e713e301a6733a679f82f6892beda57b313908c",
           "pr": 151,
           "ref": "2026-10-01-push-lane27-report.md",
           "sha": "7e713e3",
@@ -454,7 +448,7 @@
         },
         {
           "lane": "lane27",
-          "note": "PR aien-dev/omega#150, squash merge c77362242b13d7df127eeabec9eda75119f934cc",
+          "note": "PR aien-spark/omega#150, squash merge c77362242b13d7df127eeabec9eda75119f934cc",
           "pr": 150,
           "ref": "2026-10-01-push-lane27-report.md",
           "sha": "c773622",
@@ -478,7 +472,7 @@
         },
         {
           "lane": "lane2",
-          "note": "PR aien-dev/omega#147 MERGED with merge commit 2d8cd68 (head abe923c, rebased on 520c895).",
+          "note": "PR aien-spark/omega#147 MERGED with merge commit 2d8cd68 (head abe923c, rebased on 520c895).",
           "pr": 147,
           "ref": "2026-10-01-push-lane2-report.md",
           "sha": "2d8cd68",
@@ -510,7 +504,7 @@
         },
         {
           "lane": "lane27",
-          "note": "PR aien-dev/omega#149, squash merge 845dce4d53f04bb929b83ebc5cf59c064f16d731",
+          "note": "PR aien-spark/omega#149, squash merge 845dce4d53f04bb929b83ebc5cf59c064f16d731",
           "pr": 149,
           "ref": "2026-10-01-push-lane27-report.md",
           "sha": "845dce4",
@@ -534,7 +528,7 @@
         },
         {
           "lane": "lane27",
-          "note": "PR aien-dev/omega#148, squash merge 0abdb08aec443cad3b66cf17afee6b713b7af271",
+          "note": "PR aien-spark/omega#148, squash merge 0abdb08aec443cad3b66cf17afee6b713b7af271",
           "pr": 148,
           "ref": "2026-10-01-push-lane27-report.md",
           "sha": "0abdb08",
@@ -558,7 +552,7 @@
         },
         {
           "lane": "lane2",
-          "note": "PR aien-dev/omega#147 MERGED with merge commit 2d8cd68 (head abe923c, rebased on 520c895).",
+          "note": "PR aien-spark/omega#147 MERGED with merge commit 2d8cd68 (head abe923c, rebased on 520c895).",
           "pr": 146,
           "ref": "2026-10-01-push-lane2-report.md",
           "sha": "520c895",
@@ -566,7 +560,7 @@
         },
         {
           "lane": "lane28",
-          "note": "Verdict: PASS. PR aien-dev/omega#146, squash-merged 520c895 (520c8956e6614877b0795e2581c8ed2c0113121e).",
+          "note": "Verdict: PASS. PR aien-spark/omega#146, squash-merged 520c895 (520c8956e6614877b0795e2581c8ed2c0113121e).",
           "pr": 146,
           "ref": "2026-10-01-push-lane28-report.md",
           "sha": "520c895",
@@ -622,7 +616,7 @@
         },
         {
           "lane": "lane24",
-          "note": "PR aien-dev/omega#145 MERGED (squash), merge commit 4c8ca18. New file .github/workflows/host-suites-2.yml only; no test, Makefile or source change; nothing loosened.",
+          "note": "PR aien-spark/omega#145 MERGED (squash), merge commit 4c8ca18. New file .github/workflows/host-suites-2.yml only; no test, Makefile or source change; nothing loosened.",
           "pr": 145,
           "ref": "2026-10-01-push-lane24-report.md",
           "sha": "4c8ca18",
@@ -654,7 +648,7 @@
         },
         {
           "lane": "lane22",
-          "note": "PR: aien-dev/omega#144, squash-merged, merge commit b81f8500a25ee543ce55750d17aa1fa517fe94a8",
+          "note": "PR: aien-spark/omega#144, squash-merged, merge commit b81f8500a25ee543ce55750d17aa1fa517fe94a8",
           "pr": 144,
           "ref": "2026-10-01-push-lane22-report.md",
           "sha": "b81f850",
@@ -710,7 +704,7 @@
       "git": {
         "branch": "docs/crumb-seed",
         "head": "fac1b87",
-        "remote": "git@github.com:aien-dev/omega.git"
+        "remote": "git@github.com:aien-spark/omega.git"
       },
       "purpose_auto": "Repository root cs-omega. Purpose not yet described by a human."
     }

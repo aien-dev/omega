@@ -7,14 +7,14 @@
     "generated": {
       "children": [],
       "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "compiled_at": "2026-10-13T04:37:52Z",
+      "compiled_at": "2026-10-14T18:36:27Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:f6d1a9bb8d18f58cddfbea2f9ecce90f27f5b5f75b584b3a0f1ce1cea509044c",
+      "digest": "sha256:5f0f4cfb1ef5837569c712847c5f7c8c9c93fe1083a42b582cf2a9cbe27f4d3f",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 67,
-      "generated_at_commit": "cc3f8584d83571c4d53336742af0ebdda254a0ab",
-      "source_tree": "sha256:702fc6a621e0ca7a96ac452f23cd9102d8ca7c8ff636d8b816d3f60b82138f7a"
+      "files": 70,
+      "generated_at_commit": "4fa52370f177d268e4248955dc7adec53519e215",
+      "source_tree": "sha256:1eb1827be8d0df76b1b76db2a0a6ea03b519f4fe9817f2c4e796feb213dd4761"
     },
     "owner_lane": "",
     "provenance": {
@@ -45,7 +45,7 @@
         },
         {
           "lane": "lane27",
-          "note": "PR aien-dev/omega#151, squash merge 7e713e301a6733a679f82f6892beda57b313908c",
+          "note": "PR aien-spark/omega#151, squash merge 7e713e301a6733a679f82f6892beda57b313908c",
           "pr": 151,
           "ref": "2026-10-01-push-lane27-report.md",
           "sha": "7e713e3",
@@ -77,7 +77,7 @@
         },
         {
           "lane": "lane27",
-          "note": "PR aien-dev/omega#150, squash merge c77362242b13d7df127eeabec9eda75119f934cc",
+          "note": "PR aien-spark/omega#150, squash merge c77362242b13d7df127eeabec9eda75119f934cc",
           "pr": 150,
           "ref": "2026-10-01-push-lane27-report.md",
           "sha": "c773622",
@@ -101,7 +101,7 @@
         },
         {
           "lane": "lane27",
-          "note": "PR aien-dev/omega#149, squash merge 845dce4d53f04bb929b83ebc5cf59c064f16d731",
+          "note": "PR aien-spark/omega#149, squash merge 845dce4d53f04bb929b83ebc5cf59c064f16d731",
           "pr": 149,
           "ref": "2026-10-01-push-lane27-report.md",
           "sha": "845dce4",
@@ -125,7 +125,7 @@
         },
         {
           "lane": "lane27",
-          "note": "PR aien-dev/omega#148, squash merge 0abdb08aec443cad3b66cf17afee6b713b7af271",
+          "note": "PR aien-spark/omega#148, squash merge 0abdb08aec443cad3b66cf17afee6b713b7af271",
           "pr": 148,
           "ref": "2026-10-01-push-lane27-report.md",
           "sha": "0abdb08",
@@ -149,7 +149,7 @@
         },
         {
           "lane": "lane22",
-          "note": "PR: aien-dev/omega#144, squash-merged, merge commit b81f8500a25ee543ce55750d17aa1fa517fe94a8",
+          "note": "PR: aien-spark/omega#144, squash-merged, merge commit b81f8500a25ee543ce55750d17aa1fa517fe94a8",
           "pr": 144,
           "ref": "2026-10-01-push-lane22-report.md",
           "sha": "b81f850",
@@ -173,7 +173,7 @@
         },
         {
           "lane": "lane21",
-          "note": "PR: aien-dev/omega #140, squash-merged, merge commit 54826a37f54465ceec26b4f6b1ea96942130513e.",
+          "note": "PR: aien-spark/omega #140, squash-merged, merge commit 54826a37f54465ceec26b4f6b1ea96942130513e.",
           "pr": 140,
           "ref": "2026-10-01-push-lane21-report.md",
           "sha": "54826a3",
@@ -301,7 +301,7 @@
         },
         {
           "lane": "lane2",
-          "note": "PR aien-dev/omega#124, merged as d3194f6 (merge commit, matching the repo's habit). Merged on top of #122 (ce7821d), which touched different files; the CPU numeric test was rerun on the merged main: ",
+          "note": "PR aien-spark/omega#124, merged as d3194f6 (merge commit, matching the repo's habit). Merged on top of #122 (ce7821d), which touched different files; the CPU numeric test was rerun on the merged main: ",
           "pr": 122,
           "ref": "2026-10-01-push-lane2-report.md",
           "sha": "ce7821d",

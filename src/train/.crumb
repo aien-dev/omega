@@ -29,7 +29,7 @@
         },
         {
           "lane": "lane21",
-          "note": "PR: aien-dev/omega #140, squash-merged, merge commit 54826a37f54465ceec26b4f6b1ea96942130513e.",
+          "note": "PR: aien-spark/omega #140, squash-merged, merge commit 54826a37f54465ceec26b4f6b1ea96942130513e.",
           "pr": 140,
           "ref": "2026-10-01-push-lane21-report.md",
           "sha": "54826a3",

@@ -63,8 +63,8 @@
           "purpose": "Directory docs/brownian. Purpose not yet described by a human."
         },
         {
-          "digest": "bffa3f51dd1982c179ba28f52971c38cb9592c795be0e93b958005e55190be5e",
-          "last_commit": "a0e59f42",
+          "digest": "1b01542d91e3b1c7c5263d6b393338a3d9d40e138a12ec833ce7852d83887ce2",
+          "last_commit": "5901baa5",
           "name": "crumbs",
           "purpose": "Directory docs/crumbs. Purpose not yet described by a human."
         },
@@ -75,7 +75,7 @@
           "purpose": "DUAL (ARCH-0031) documents in omega: applicability experiment method and findings (APPLICABILITY"
         },
         {
-          "digest": "1c554227f29c8c6d4f81ca2a5f5380d3646c8c925f4ab0248df73f88138f5432",
+          "digest": "56a5a999ce726e90d89c1c88b9e20c81857c8e6ee82af8d651ac80ea70e2c46d",
           "last_commit": "38a6a569",
           "name": "estimation",
           "purpose": "Directory docs/estimation. Purpose not yet described by a human."
@@ -87,16 +87,22 @@
           "purpose": "Directory docs/numeric. Purpose not yet described by a human."
         },
         {
-          "digest": "39dc2cde3376d909cb4182944f31e87f2148e5bf2d83d6459c91140ce622b8a7",
-          "last_commit": "18531691",
+          "digest": "5f91761066f42aceaa64aa34ac2e168ed70553c8174747c9a4a02938124609fd",
+          "last_commit": "5901baa5",
           "name": "osc",
           "purpose": "Directory docs/osc. Purpose not yet described by a human."
         },
         {
-          "digest": "0d858e0a20456e8380c530e4c77f523985f95657bf66b7418f341e84c6e9ec49",
-          "last_commit": "32ad8a51",
+          "digest": "4229246f2ec98403252caafc8fe7ad1fac5950accff0c94ffdaecb4a2341a32c",
+          "last_commit": "5901baa5",
           "name": "polyglot",
           "purpose": "Directory docs/polyglot. Purpose not yet described by a human."
+        },
+        {
+          "digest": "46d3e2d59a468271e044ccd2398eb32345df6436c15eb6d8c703953c838023a9",
+          "last_commit": "0f6d7151",
+          "name": "reservoir",
+          "purpose": "Reservoir reference and contracts (omega#440): RESERVOIR_REFERENCE.md pins the authors' paper an"
         },
         {
           "digest": "2ab37838f8694e5060a3789f08a16146996050af949fba329ed805429d85f695",
@@ -111,21 +117,21 @@
           "purpose": "Directory docs/train. Purpose not yet described by a human."
         },
         {
-          "digest": "0c7aadec66484284529b6633942ac901ef5240d4963ed945f3eecfeab222c005",
-          "last_commit": "fad0f49b",
+          "digest": "a34f126f92a0ec36794a17c3c4834101c44bc9b0f6e412894e3f152598133638",
+          "last_commit": "5901baa5",
           "name": "turing",
           "purpose": "Directory docs/turing. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:4150f6c13921ab83762207c66625ac67dd09bb8516bb67111a15318836911441",
-      "compiled_at": "2026-10-14T04:13:25Z",
+      "children_root": "sha256:bd77c6d04a64e013d571cb019c3ae53a6bd44997d0999ccaf3075f20f2cf58a4",
+      "compiled_at": "2026-10-14T17:04:09Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:17c02b5464f58d3e33a54cebbdf19ee1933553c6d26d9322baafa5441f0c4363",
+      "digest": "sha256:26ad30306af327e06a46a0b30e06fa9726c95a627772ebcf31eb54a824ec5366",
       "evidence_files": 34,
       "evidence_root": "sha256:589d8b3706e6d7a202ab20b278dac5fc5bafc973f1c2a867b2668aa7210b65cc",
-      "files": 121,
-      "generated_at_commit": "d0889a944b02066f84fec71af7b9bbb92f5c986f",
-      "source_tree": "sha256:e00996aaac44b18404d6a3e518355059a389272687cacfe1ecec455bb06a5675"
+      "files": 123,
+      "generated_at_commit": "ee2a3833b3abab5df585bd7e089f764c6dd273e9",
+      "source_tree": "sha256:637aaa352dd331f567968c2c14f136e91ac1b7629e3725a1dbfc1bda13ea484e"
     },
     "owner_lane": "",
     "provenance": {
@@ -260,7 +266,7 @@
         },
         {
           "lane": "lane27",
-          "note": "PR aien-dev/omega#151, squash merge 7e713e301a6733a679f82f6892beda57b313908c",
+          "note": "PR aien-spark/omega#151, squash merge 7e713e301a6733a679f82f6892beda57b313908c",
           "pr": 151,
           "ref": "2026-10-01-push-lane27-report.md",
           "sha": "7e713e3",
@@ -292,7 +298,7 @@
         },
         {
           "lane": "lane27",
-          "note": "PR aien-dev/omega#150, squash merge c77362242b13d7df127eeabec9eda75119f934cc",
+          "note": "PR aien-spark/omega#150, squash merge c77362242b13d7df127eeabec9eda75119f934cc",
           "pr": 150,
           "ref": "2026-10-01-push-lane27-report.md",
           "sha": "c773622",
@@ -316,7 +322,7 @@
         },
         {
           "lane": "lane2",
-          "note": "PR aien-dev/omega#147 MERGED with merge commit 2d8cd68 (head abe923c, rebased on 520c895).",
+          "note": "PR aien-spark/omega#147 MERGED with merge commit 2d8cd68 (head abe923c, rebased on 520c895).",
           "pr": 147,
           "ref": "2026-10-01-push-lane2-report.md",
           "sha": "2d8cd68",
@@ -348,7 +354,7 @@
         },
         {
           "lane": "lane27",
-          "note": "PR aien-dev/omega#149, squash merge 845dce4d53f04bb929b83ebc5cf59c064f16d731",
+          "note": "PR aien-spark/omega#149, squash merge 845dce4d53f04bb929b83ebc5cf59c064f16d731",
           "pr": 149,
           "ref": "2026-10-01-push-lane27-report.md",
           "sha": "845dce4",
@@ -372,7 +378,7 @@
         },
         {
           "lane": "lane27",
-          "note": "PR aien-dev/omega#148, squash merge 0abdb08aec443cad3b66cf17afee6b713b7af271",
+          "note": "PR aien-spark/omega#148, squash merge 0abdb08aec443cad3b66cf17afee6b713b7af271",
           "pr": 148,
           "ref": "2026-10-01-push-lane27-report.md",
           "sha": "0abdb08",
@@ -428,7 +434,7 @@
         },
         {
           "lane": "lane22",
-          "note": "PR: aien-dev/omega#144, squash-merged, merge commit b81f8500a25ee543ce55750d17aa1fa517fe94a8",
+          "note": "PR: aien-spark/omega#144, squash-merged, merge commit b81f8500a25ee543ce55750d17aa1fa517fe94a8",
           "pr": 144,
           "ref": "2026-10-01-push-lane22-report.md",
           "sha": "b81f850",
@@ -476,7 +482,7 @@
         },
         {
           "lane": "lane21",
-          "note": "PR: aien-dev/omega #140, squash-merged, merge commit 54826a37f54465ceec26b4f6b1ea96942130513e.",
+          "note": "PR: aien-spark/omega #140, squash-merged, merge commit 54826a37f54465ceec26b4f6b1ea96942130513e.",
           "pr": 140,
           "ref": "2026-10-01-push-lane21-report.md",
           "sha": "54826a3",
@@ -572,7 +578,7 @@
         },
         {
           "lane": "lane2",
-          "note": "PR aien-dev/omega#124, merged as d3194f6 (merge commit, matching the repo's habit). Merged on top of #122 (ce7821d), which touched different files; the CPU numeric test was rerun on the merged main: ",
+          "note": "PR aien-spark/omega#124, merged as d3194f6 (merge commit, matching the repo's habit). Merged on top of #122 (ce7821d), which touched different files; the CPU numeric test was rerun on the merged main: ",
           "pr": 124,
           "ref": "2026-10-01-push-lane2-report.md",
           "sha": "d3194f6",

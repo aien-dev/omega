@@ -1,7 +1,7 @@
 /*
  * rx_argus.h -- the live ARGUS producer inside the reaction runtime (ABI v1.1).
  *
- * ARGUS (aien-dev/aienos native/argus, ABI argus_abi.h) observes authority
+ * ARGUS (aien-spark/aienos native/argus, ABI argus_abi.h) observes authority
  * decisions; it never authorizes. The runtime copies each decision the
  * authority or AEGIS already made into ARGUS events. Nothing here
  * re-validates a capability.

@@ -79,7 +79,7 @@
           "purpose": "M21 OMEGA_AUTODIFF: reverse-mode tape over M20 tensor CPU ops, caller-owned nodes and scratch, p"
         },
         {
-          "digest": "436bd3a2666c7573fe572fc3078a75748d06255b4e64168877dad1adb6de3420",
+          "digest": "bdc017bf3baddb9034478651fb3f170f045ce8aa27187481d15ac5da7fbfd18c",
           "last_commit": "18531691",
           "name": "compiler",
           "purpose": "Directory src/compiler. Purpose not yet described by a human."
@@ -139,13 +139,19 @@
           "purpose": "Directory src/polyglot. Purpose not yet described by a human."
         },
         {
-          "digest": "d18c270e53a477eecae5ad46c18dbce6318ccfbf1c24a0722c5e8eb4406b8689",
+          "digest": "4785d8df268c31047589c5dff4ebc1f9a12a0fa4d5c94ce6dee156a841cf9502",
+          "last_commit": "",
+          "name": "reservoir",
+          "purpose": "Ionic-droplet reservoir simulator (omega#440): binary32 fixed-step RK4 of the authors' droplet m"
+        },
+        {
+          "digest": "9e27882accc1db2881793e3f389519f5dd37f83cd37c4d1a6e19f2aa2e84d217",
           "last_commit": "501d555c",
           "name": "runtime",
           "purpose": "Directory src/runtime. Purpose not yet described by a human."
         },
         {
-          "digest": "9f6d98a6d9b0020aa56df481a5ab3aa301533cb85173f96a851d1d779fca2d3a",
+          "digest": "d7bb5fb627dfe92066f94fa556e86be5d025c0ff5e81d823ba177a56ea099d31",
           "last_commit": "5ae192a4",
           "name": "searchtrace",
           "purpose": "Directory src/searchtrace. Purpose not yet described by a human."
@@ -175,15 +181,15 @@
           "purpose": "Directory src/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:46b008ff99a65f5bf20ffaf5feb3c89b8bbd6997aeeaa1cb68260f422bec0f61",
-      "compiled_at": "2026-10-14T04:13:25Z",
+      "children_root": "sha256:93f32e91c5b498226d6ef4a040e3fbd2873dfb1f8b2405c26ea63b3a63df5f22",
+      "compiled_at": "2026-10-14T21:46:29Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:49ffed020b3c23880cf8f80a05eede6e4003d7e19745d570542b623932adb131",
+      "digest": "sha256:d69b7371545db3c5920b5e035b3d1d8b8205664f393fedd7b9fc1bb582f23821",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 519,
-      "generated_at_commit": "d0889a944b02066f84fec71af7b9bbb92f5c986f",
-      "source_tree": "sha256:c19636ca886bf206fc1e8a6164a29ce6c4ab5be6b77ca799b495b33c451515ea"
+      "files": 534,
+      "generated_at_commit": "2a6d6d7b9091bd2184b15dcde893035dbcca40d3",
+      "source_tree": "sha256:c8f51a54a529457e4d7f2a0280349ddb609d67ab3793b6aecabc9599de6fc88e"
     },
     "owner_lane": "",
     "provenance": {
@@ -294,7 +300,7 @@
         },
         {
           "lane": "lane27",
-          "note": "PR aien-dev/omega#151, squash merge 7e713e301a6733a679f82f6892beda57b313908c",
+          "note": "PR aien-spark/omega#151, squash merge 7e713e301a6733a679f82f6892beda57b313908c",
           "pr": 151,
           "ref": "2026-10-01-push-lane27-report.md",
           "sha": "7e713e3",
@@ -326,7 +332,7 @@
         },
         {
           "lane": "lane27",
-          "note": "PR aien-dev/omega#150, squash merge c77362242b13d7df127eeabec9eda75119f934cc",
+          "note": "PR aien-spark/omega#150, squash merge c77362242b13d7df127eeabec9eda75119f934cc",
           "pr": 150,
           "ref": "2026-10-01-push-lane27-report.md",
           "sha": "c773622",
@@ -350,7 +356,7 @@
         },
         {
           "lane": "lane2",
-          "note": "PR aien-dev/omega#147 MERGED with merge commit 2d8cd68 (head abe923c, rebased on 520c895).",
+          "note": "PR aien-spark/omega#147 MERGED with merge commit 2d8cd68 (head abe923c, rebased on 520c895).",
           "pr": 147,
           "ref": "2026-10-01-push-lane2-report.md",
           "sha": "2d8cd68",
@@ -382,7 +388,7 @@
         },
         {
           "lane": "lane27",
-          "note": "PR aien-dev/omega#149, squash merge 845dce4d53f04bb929b83ebc5cf59c064f16d731",
+          "note": "PR aien-spark/omega#149, squash merge 845dce4d53f04bb929b83ebc5cf59c064f16d731",
           "pr": 149,
           "ref": "2026-10-01-push-lane27-report.md",
           "sha": "845dce4",
@@ -406,7 +412,7 @@
         },
         {
           "lane": "lane27",
-          "note": "PR aien-dev/omega#148, squash merge 0abdb08aec443cad3b66cf17afee6b713b7af271",
+          "note": "PR aien-spark/omega#148, squash merge 0abdb08aec443cad3b66cf17afee6b713b7af271",
           "pr": 148,
           "ref": "2026-10-01-push-lane27-report.md",
           "sha": "0abdb08",
@@ -462,7 +468,7 @@
         },
         {
           "lane": "lane22",
-          "note": "PR: aien-dev/omega#144, squash-merged, merge commit b81f8500a25ee543ce55750d17aa1fa517fe94a8",
+          "note": "PR: aien-spark/omega#144, squash-merged, merge commit b81f8500a25ee543ce55750d17aa1fa517fe94a8",
           "pr": 144,
           "ref": "2026-10-01-push-lane22-report.md",
           "sha": "b81f850",
@@ -510,7 +516,7 @@
         },
         {
           "lane": "lane21",
-          "note": "PR: aien-dev/omega #140, squash-merged, merge commit 54826a37f54465ceec26b4f6b1ea96942130513e.",
+          "note": "PR: aien-spark/omega #140, squash-merged, merge commit 54826a37f54465ceec26b4f6b1ea96942130513e.",
           "pr": 140,
           "ref": "2026-10-01-push-lane21-report.md",
           "sha": "54826a3",
@@ -630,7 +636,7 @@
         },
         {
           "lane": "lane19",
-          "note": "Part B, omega Fabric 64-byte signature: PASS (host).** PR aien-dev/omega #137, merged 1299b19.",
+          "note": "Part B, omega Fabric 64-byte signature: PASS (host).** PR aien-spark/omega #137, merged 1299b19.",
           "pr": 137,
           "ref": "2026-10-01-push-lane19-report.md",
           "sha": "1299b19",

@@ -1,0 +1,8 @@
+// prove: count
+// expect: trap
+// negative control: n > 20 exceeds the loop bound.
+fn count(n: u8) -> u8 {
+    let mut i: u8 = 0;
+    while i < n bound 20 { i = i + 1; }
+    return i;
+}

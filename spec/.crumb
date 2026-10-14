@@ -14,20 +14,20 @@
       "children": [
         {
           "digest": "851e0dc0f5a16f7b103752ff2da976003f56c2d2a53c1e82c3a770eadad83111",
-          "last_commit": "f3467db",
+          "last_commit": "f3467db9",
           "name": "searchtrace",
           "purpose": "Directory spec/searchtrace. Purpose not yet described by a human."
         }
       ],
       "children_root": "sha256:6834a3241647d3a098283d4eafedbdb1428dfa4d834f9ed5f22025b6d2303093",
-      "compiled_at": "2026-10-08T00:23:24Z",
+      "compiled_at": "2026-10-14T18:36:27Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:830ce7faaea9ae86190aa304fd8d7797881fbaca9d14fc39a327d202712f73fb",
+      "digest": "sha256:3d892a08078369eebc9a5e2a7ee2b6a24c278f2dbd91db5e7026decb8d8399f8",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 56,
-      "generated_at_commit": "b980783a4674275e720592e4c3887679dd24ec8b",
-      "source_tree": "sha256:30f3be311019f12dcbd02f89c3a9524c5e60c505686833c2209a7b76a2711c9f"
+      "files": 58,
+      "generated_at_commit": "4fa52370f177d268e4248955dc7adec53519e215",
+      "source_tree": "sha256:a1fb731468c43b20acfa4e5a2cde5e3adde0d6ab71b10aba4eaeadffcd2dfec0"
     },
     "owner_lane": "",
     "provenance": {
@@ -106,7 +106,7 @@
         },
         {
           "lane": "lane2",
-          "note": "PR aien-dev/omega#124, merged as d3194f6 (merge commit, matching the repo's habit). Merged on top of #122 (ce7821d), which touched different files; the CPU numeric test was rerun on the merged main: ",
+          "note": "PR aien-spark/omega#124, merged as d3194f6 (merge commit, matching the repo's habit). Merged on top of #122 (ce7821d), which touched different files; the CPU numeric test was rerun on the merged main: ",
           "pr": 122,
           "ref": "2026-10-01-push-lane2-report.md",
           "sha": "ce7821d",

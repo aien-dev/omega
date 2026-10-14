@@ -7,7 +7,7 @@ episodes only (the harness withholds HOLDOUT, TRIAL and REP records, and the
 learner refuses them if offered), and it emits evidence for the independent
 ladder checker of `src/physics0/ladder`. It never declares a ladder state.
 
-Spec: aien-dev/physics `docs/PD0_HIDDEN_EQUATION_BENCHMARK.md` rev 2
+Spec: aien-spark/physics `docs/PD0_HIDDEN_EQUATION_BENCHMARK.md` rev 2
 (2f881b1); world parameters follow rev 3 (omega #248, merged); the rev 5 rules
 (requested-reset preregistration hash, no T2 self pairs) and the rev 6 rules
 (rollout error over the pooled FIT sd, EPISODE_END records count as

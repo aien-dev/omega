@@ -5,8 +5,8 @@
 # evidence-immutable.yml, crumb.yml). Manifests under tests/gates/ name this script plus one
 # step word, so no manifest needs shell expansion (ADR 0028 P6).
 #
-# Pinned sibling sources. The hosted jobs check out aien-dev/physics at physics.lock (rx-host
-# at its own hard-coded commit), aien-dev/aienos at aienos.lock and aien-dev/aienos at
+# Pinned sibling sources. The hosted jobs check out aien-spark/physics at physics.lock (rx-host
+# at its own hard-coded commit), aien-spark/aienos at aienos.lock and aien-spark/aienos at
 # argus.lock, as physics-src/, aienos-src/ and aienos-argus/ next to the Makefile, and exclude
 # them from git status. Here the same commits are materialised under build/pins/ (build/ is
 # gitignored) from the sibling local clones ../physics and ../aienos, offline.
@@ -28,11 +28,15 @@ pin() {
     echo "run.sh: ../$repo is missing; the hosted job checks out aien-dev/$repo at $sha" >&2
     exit 3
   fi
-  if [ ! -d "$dir" ] || [ "$(git -C "$dir" rev-parse HEAD 2>/dev/null)" != "$sha" ]; then
-    rm -rf "$dir"; mkdir -p "$PINS"
-    git clone --quiet --shared --no-checkout "../$repo" "$dir"
-    git -C "$dir" checkout --quiet --detach "$sha"
-  fi
+  mkdir -p "$PINS"
+  (
+    flock -x 9
+    if [ ! -d "$dir" ] || [ "$(git -C "$dir" rev-parse HEAD 2>/dev/null)" != "$sha" ]; then
+      rm -rf "$dir"
+      git clone --quiet --shared --no-checkout "../$repo" "$dir"
+      git -C "$dir" checkout --quiet --detach "$sha"
+    fi
+  ) 9>"$PINS/.$name.lock"
   obs "pin_${name//-/_}" "\"$sha\""
 }
 physics_pin() { pin physics-src physics "$(lock physics.lock)"; export PHYSICS_DIR="$PINS/physics-src"; }
@@ -97,6 +101,7 @@ case "$step" in
   numeric-cpu)        for t in test-numeric-cpu test-numeric-qualify test-e1-combine test-chipwait-campaign test-gpu-wait test-gpu-wait-mutants test-gpu-code-alloc; do make $NOPHYS $t; done ;;
   train)              make $NOPHYS test-train ;;
   compiler)           make $NOPHYS test-compiler-quick; make $NOPHYS test-compiler-full ;;
+  one-layer-acceptance) make $NOPHYS test-one-layer-acceptance ;;
   physics0)           make $NOPHYS physics0-test ;;
   chip-tool-selftests) for t in test-m19r-qualify test-gate14-combine test-window-lane-guard test-unwritten-trap-host test-ldst-host; do make $NOPHYS $t; done ;;
   # host-suites-2.yml

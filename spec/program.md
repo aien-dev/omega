@@ -5,7 +5,7 @@ Document ID:     SPEC-OMEGA-M8
 Milestone:       Milestone 8 (OMEGA_PROGRAM_CORE)
 Classification:  Sovereign Machine Canonical Specification
 Target Substrate: Explicit Program Objects, Contracts, Cost Accounting, and Composition
-Status:          SPECIFIED / IN PROGRESS (aien-dev/omega#14)
+Status:          SPECIFIED / IN PROGRESS (aien-spark/omega#14)
 Lineage:         SILICON -> ATLAS (M1) -> PHYSICS (M2/M3) -> OMEGA (M4-M8) -> AIEN
 ```
 

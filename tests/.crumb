@@ -133,7 +133,7 @@
           "purpose": "Directory tests/canonicalization. Purpose not yet described by a human."
         },
         {
-          "digest": "5446c693d59f25f1871d39f66c5f1fac33cf9e7476101a9b303e8e59079a4516",
+          "digest": "f041b7daf38c51e8db72834bb764cef7741637981223039d89731a30aa91e224",
           "last_commit": "18531691",
           "name": "compiler",
           "purpose": "Directory tests/compiler. Purpose not yet described by a human."
@@ -211,7 +211,7 @@
           "purpose": "Directory tests/path. Purpose not yet described by a human."
         },
         {
-          "digest": "d5153d318a11642a5e13824353222fc392ead92108540bc8ffd747fcfd40b813",
+          "digest": "024a746eff9cd1871d1e507c2f56ed6a1f7125cb457915904f9b1455140f8942",
           "last_commit": "e59633e5",
           "name": "physics0",
           "purpose": "PD-0 gates: world self-test, oracle calibration, learner L0/L1/NULL, mutations, OSC differential"
@@ -229,7 +229,7 @@
           "purpose": "Directory tests/program. Purpose not yet described by a human."
         },
         {
-          "digest": "f6d89b21e8eee52d45a45d38627562b70d91a3ff8153b5a3656257f1ae4af7e4",
+          "digest": "ba0c09f67d12b5d7de906129bdbe2f6e0a228e1a34236ecc4b779c523cb2061e",
           "last_commit": "6fdc4c33",
           "name": "r16_inventory",
           "purpose": "Directory tests/r16_inventory. Purpose not yet described by a human."
@@ -257,6 +257,12 @@
           "last_commit": "30bb116c",
           "name": "relations",
           "purpose": "Directory tests/relations. Purpose not yet described by a human."
+        },
+        {
+          "digest": "e505518cad5dd5bb87591ad6e105c0394161cebe5ac399ff0cde45d0dec59ee9",
+          "last_commit": "",
+          "name": "reservoir",
+          "purpose": "Reservoir tests (omega#440): Gate 1 simulator and readout checks against an independent binary64"
         },
         {
           "digest": "bc2b514054f69604a155900fb1884948a78e12b88a15852296cbea1f751055b2",
@@ -289,15 +295,15 @@
           "purpose": "Directory tests/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:453a2072b4398eef85a38abbc29daae28b0f2872e9bb61cd4ab53c64940752c9",
-      "compiled_at": "2026-10-14T04:13:25Z",
+      "children_root": "sha256:007780788467b076e31455e97b09ed7fb861af2e96184fd750995606dac0dc60",
+      "compiled_at": "2026-10-14T21:46:29Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:3f3261b1635d8b71125e502fe64fc2bef5dbe6527d6b945fc98a9fdc1a04f1b5",
+      "digest": "sha256:792cfc471ce3778cf2a4f7c90d0cddeae9cbe5494b013045e4f81cc5f4a7daa4",
       "evidence_files": 16,
       "evidence_root": "sha256:96d08097822ad95f4e562c19e0ba5df5a035774c48632f1832912c40a27bd27a",
-      "files": 1055,
-      "generated_at_commit": "d0889a944b02066f84fec71af7b9bbb92f5c986f",
-      "source_tree": "sha256:ad969d1d97e8b87cc026e47ed2327ea39ee27e552e097edf3631a82e59175c9e"
+      "files": 1173,
+      "generated_at_commit": "2a6d6d7b9091bd2184b15dcde893035dbcca40d3",
+      "source_tree": "sha256:373f62cb1aa94f1490d7fc8a071c38e0d1beb9856e661ff85ef628019f7a24e1"
     },
     "owner_lane": "",
     "provenance": {
@@ -424,7 +430,7 @@
         },
         {
           "lane": "lane27",
-          "note": "PR aien-dev/omega#151, squash merge 7e713e301a6733a679f82f6892beda57b313908c",
+          "note": "PR aien-spark/omega#151, squash merge 7e713e301a6733a679f82f6892beda57b313908c",
           "pr": 151,
           "ref": "2026-10-01-push-lane27-report.md",
           "sha": "7e713e3",
@@ -456,7 +462,7 @@
         },
         {
           "lane": "lane27",
-          "note": "PR aien-dev/omega#150, squash merge c77362242b13d7df127eeabec9eda75119f934cc",
+          "note": "PR aien-spark/omega#150, squash merge c77362242b13d7df127eeabec9eda75119f934cc",
           "pr": 150,
           "ref": "2026-10-01-push-lane27-report.md",
           "sha": "c773622",
@@ -480,7 +486,7 @@
         },
         {
           "lane": "lane2",
-          "note": "PR aien-dev/omega#147 MERGED with merge commit 2d8cd68 (head abe923c, rebased on 520c895).",
+          "note": "PR aien-spark/omega#147 MERGED with merge commit 2d8cd68 (head abe923c, rebased on 520c895).",
           "pr": 147,
           "ref": "2026-10-01-push-lane2-report.md",
           "sha": "2d8cd68",
@@ -512,7 +518,7 @@
         },
         {
           "lane": "lane27",
-          "note": "PR aien-dev/omega#149, squash merge 845dce4d53f04bb929b83ebc5cf59c064f16d731",
+          "note": "PR aien-spark/omega#149, squash merge 845dce4d53f04bb929b83ebc5cf59c064f16d731",
           "pr": 149,
           "ref": "2026-10-01-push-lane27-report.md",
           "sha": "845dce4",
@@ -536,7 +542,7 @@
         },
         {
           "lane": "lane27",
-          "note": "PR aien-dev/omega#148, squash merge 0abdb08aec443cad3b66cf17afee6b713b7af271",
+          "note": "PR aien-spark/omega#148, squash merge 0abdb08aec443cad3b66cf17afee6b713b7af271",
           "pr": 148,
           "ref": "2026-10-01-push-lane27-report.md",
           "sha": "0abdb08",
@@ -560,7 +566,7 @@
         },
         {
           "lane": "lane2",
-          "note": "PR aien-dev/omega#147 MERGED with merge commit 2d8cd68 (head abe923c, rebased on 520c895).",
+          "note": "PR aien-spark/omega#147 MERGED with merge commit 2d8cd68 (head abe923c, rebased on 520c895).",
           "pr": 146,
           "ref": "2026-10-01-push-lane2-report.md",
           "sha": "520c895",
@@ -568,7 +574,7 @@
         },
         {
           "lane": "lane28",
-          "note": "Verdict: PASS. PR aien-dev/omega#146, squash-merged 520c895 (520c8956e6614877b0795e2581c8ed2c0113121e).",
+          "note": "Verdict: PASS. PR aien-spark/omega#146, squash-merged 520c895 (520c8956e6614877b0795e2581c8ed2c0113121e).",
           "pr": 146,
           "ref": "2026-10-01-push-lane28-report.md",
           "sha": "520c895",
@@ -624,7 +630,7 @@
         },
         {
           "lane": "lane22",
-          "note": "PR: aien-dev/omega#144, squash-merged, merge commit b81f8500a25ee543ce55750d17aa1fa517fe94a8",
+          "note": "PR: aien-spark/omega#144, squash-merged, merge commit b81f8500a25ee543ce55750d17aa1fa517fe94a8",
           "pr": 144,
           "ref": "2026-10-01-push-lane22-report.md",
           "sha": "b81f850",
@@ -672,7 +678,7 @@
         },
         {
           "lane": "lane21",
-          "note": "PR: aien-dev/omega #140, squash-merged, merge commit 54826a37f54465ceec26b4f6b1ea96942130513e.",
+          "note": "PR: aien-spark/omega #140, squash-merged, merge commit 54826a37f54465ceec26b4f6b1ea96942130513e.",
           "pr": 140,
           "ref": "2026-10-01-push-lane21-report.md",
           "sha": "54826a3",
@@ -824,7 +830,7 @@
         },
         {
           "lane": "lane19",
-          "note": "Part B, omega Fabric 64-byte signature: PASS (host).** PR aien-dev/omega #137, merged 1299b19.",
+          "note": "Part B, omega Fabric 64-byte signature: PASS (host).** PR aien-spark/omega #137, merged 1299b19.",
           "pr": 137,
           "ref": "2026-10-01-push-lane19-report.md",
           "sha": "1299b19",

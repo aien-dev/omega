@@ -1,0 +1,8 @@
+// prove: count
+// expect: holds
+// data-dependent loop: with n <= 20 the bound 20 is never exceeded.
+fn count(n: u8) -> u8 requires n <= 20 ensures result == n {
+    let mut i: u8 = 0;
+    while i < n bound 20 { i = i + 1; }
+    return i;
+}

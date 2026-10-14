@@ -1,4 +1,4 @@
-/* AT-1 candidate engine (Agent 3, aien-dev/omega#371). Portable C11, libc + libm only.
+/* AT-1 candidate engine (Agent 3, aien-spark/omega#371). Portable C11, libc + libm only.
  *
  * Contracts (frozen, aien-architecture cbe4c8e): AT1_CASE_V1 (sha256 e62018d8...),
  * AT1_RESULT_V1 (sha256 3e6efd7e...), with AT0_RESULT_V2 sections 2, 4, 5, 7 normative by

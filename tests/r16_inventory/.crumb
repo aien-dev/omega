@@ -13,20 +13,20 @@
     "generated": {
       "children": [
         {
-          "digest": "6af59a55e74de68003eb6fdb730872d26605f8f6d0f937f509a48902d656d640",
+          "digest": "3b8ee545f13c1a168892b617671eebf2ee65413994332269f5d2f2dcf492aba7",
           "last_commit": "6fdc4c33",
           "name": "fixture",
           "purpose": "Directory tests/r16_inventory/fixture. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:b46adf544583644c50807d180382fe446edd8ff8d265cb170f657f9cc1ba0dfa",
-      "compiled_at": "2026-10-14T04:13:25Z",
+      "children_root": "sha256:36bda09ce85e797adb7f7712504802354c0adb1e1fc65e0d2ebf6a252f6ee1f0",
+      "compiled_at": "2026-10-14T21:46:29Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:f6d89b21e8eee52d45a45d38627562b70d91a3ff8153b5a3656257f1ae4af7e4",
+      "digest": "sha256:ba0c09f67d12b5d7de906129bdbe2f6e0a228e1a34236ecc4b779c523cb2061e",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 9,
-      "generated_at_commit": "d0889a944b02066f84fec71af7b9bbb92f5c986f",
+      "generated_at_commit": "2a6d6d7b9091bd2184b15dcde893035dbcca40d3",
       "source_tree": "sha256:c5359714281d3aee892eff6e268df24c436e97d07a5ac36ca452894067359808"
     },
     "owner_lane": "",

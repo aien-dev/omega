@@ -49,21 +49,27 @@
           "purpose": "Directory tools/estimation. Purpose not yet described by a human."
         },
         {
+          "digest": "b91acbb0b29060651bc17dc79406adeb9376748f4d4a3005175cd307aa52b9c8",
+          "last_commit": "",
+          "name": "reservoir",
+          "purpose": "Gate 2 tooling for the reservoir (omega#440): in-house zlib inflate and MAT v5 reader, the archi"
+        },
+        {
           "digest": "98d1f4d802b90006977d73b14acb92971927f2cf5bdf05d8dc5653a1b10fcf1b",
           "last_commit": "ae1dd00a",
           "name": "turing_verify_indep",
           "purpose": "Directory tools/turing_verify_indep. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:3051f793dc23155cfff1c4a549e97d3bfe74b3e094d3bd812985bba517919051",
-      "compiled_at": "2026-10-14T04:13:25Z",
+      "children_root": "sha256:e1f826c2beb8604bb0dcba49575f7c6b48cf5488c40b616b212fda2ed70c62ee",
+      "compiled_at": "2026-10-14T21:46:29Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:0978b965415b82014915dfad331371307f01e33be2c5e7bc5fc60e8ca79c0ee7",
+      "digest": "sha256:84e7502fdc66e65c9c94ffaa834cc53aec818ee3215716ba98926cf1c70bcca8",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 156,
-      "generated_at_commit": "d0889a944b02066f84fec71af7b9bbb92f5c986f",
-      "source_tree": "sha256:cb16d3497ca446f2f3bdc915a0cb58af68c884edda91667723a1a54452c6f1ac"
+      "files": 165,
+      "generated_at_commit": "2a6d6d7b9091bd2184b15dcde893035dbcca40d3",
+      "source_tree": "sha256:163386bc23529fbe9000dab6ba742deaffb524e8e65cb2c8f3a10674b9a1e743"
     },
     "owner_lane": "",
     "provenance": {
@@ -158,7 +164,7 @@
         },
         {
           "lane": "lane2",
-          "note": "PR aien-dev/omega#147 MERGED with merge commit 2d8cd68 (head abe923c, rebased on 520c895).",
+          "note": "PR aien-spark/omega#147 MERGED with merge commit 2d8cd68 (head abe923c, rebased on 520c895).",
           "pr": 147,
           "ref": "2026-10-01-push-lane2-report.md",
           "sha": "2d8cd68",
@@ -302,7 +308,7 @@
         },
         {
           "lane": "lane2",
-          "note": "PR aien-dev/omega#124, merged as d3194f6 (merge commit, matching the repo's habit). Merged on top of #122 (ce7821d), which touched different files; the CPU numeric test was rerun on the merged main: ",
+          "note": "PR aien-spark/omega#124, merged as d3194f6 (merge commit, matching the repo's habit). Merged on top of #122 (ce7821d), which touched different files; the CPU numeric test was rerun on the merged main: ",
           "pr": 124,
           "ref": "2026-10-01-push-lane2-report.md",
           "sha": "d3194f6",

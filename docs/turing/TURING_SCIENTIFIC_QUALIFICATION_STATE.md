@@ -79,7 +79,7 @@ All paths below exist on `62f5ba5`. States are about evidence, not code quality.
   `tests/runtime/rx_r16_negative.c` is not on main. No `AIEN_RX_R16_ORCHESTRATOR_RETIRED_V1` receipt.
 - aien-architecture `CURRENT_EXECUTION_PLAN.md` (at `b63297b`) line 45: R16 "IN PROGRESS ... G3-G8 qualification
   and final receipt are absent from `main`". Line 553: "No edits to `omega/src/runtime/` (or other R16-mapped
-  files) until R16 (`aien-dev/omega#68`) closes."
+  files) until R16 (`aien-spark/omega#68`) closes."
 - Not on main, not counted toward closure: branch `feat/r16-g3-g5-host` contains `tests/runtime/rx_r16_negative.c`,
   and a host run log from that branch reports `R16_G4_LEGACY_REFUSED=PASS`. The silicon G3 run was still in progress
   when this was written. Until that branch is merged with receipts, R16 stays IN PROGRESS.

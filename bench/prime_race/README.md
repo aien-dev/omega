@@ -44,4 +44,4 @@ license and not an upstream language), so results are kept as AIEN receipts, not
 The canonical answer is the contract: bit k of the output is set exactly when 2k+1 is prime. The number 2
 is implied. Unused bits at the end are zero. A previous pass's result is never reused.
 
-The full contract will live in the aien-dev/benchmarks repository once it exists (link to be added).
+The full contract will live in the aien-spark/benchmarks repository once it exists (link to be added).

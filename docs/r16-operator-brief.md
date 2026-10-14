@@ -20,11 +20,11 @@ First perform an organization-wide CODE audit.
 
 At minimum inspect:
 
-aien-dev/omega
-aien-dev/aien-sovereign-core
-aien-dev/aegis-runtime
-aien-dev/aienos
-aien-dev/physics
+aien-spark/omega
+aien-spark/aien-sovereign-core
+aien-spark/aegis-runtime
+aien-spark/aienos
+aien-spark/physics
 
 Search for:
 

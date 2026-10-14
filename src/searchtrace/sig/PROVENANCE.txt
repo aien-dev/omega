@@ -1,6 +1,6 @@
 Vendored Ed25519 signature code (pure Ed25519, RFC 8032 section 5.1) and SHA-512.
 
-Source: aien-dev/aienos native/sig/ at commit
+Source: aien-spark/aienos native/sig/ at commit
 913b962ee59c3da7bdb2874582d24b1f38dc3daa (aienos PR #188, in-house, no outside library).
 Copied byte for byte; nothing changed. Omega does not read the aienos tree at build
 time; these copies are the build input. To update, copy the files again from a newer

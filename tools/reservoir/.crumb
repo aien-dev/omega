@@ -1,0 +1,20 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-14T17:03:15Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:b91acbb0b29060651bc17dc79406adeb9376748f4d4a3005175cd307aa52b9c8",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 9,
+      "generated_at_commit": "0f6d71513dfd29b85b22fe2ca15e4287991e7303",
+      "source_tree": "sha256:0c7bc062441363c2b926e51d2db71fd644d52f854d36c343b341f8dccdc92699"
+    }
+  },
+  "layer": "tools/reservoir",
+  "name": "tools/reservoir",
+  "purpose": "Gate 2 tooling for the reservoir (omega#440): in-house zlib inflate and MAT v5 reader, the archived-reference comparison (res_qualify), benchmarks and timing (res_bench), and qualify_reservoir.sh, which writes the content-addressed receipt under evidence/RESERVOIR. No Python; reads the untrusted archive as data only.",
+  "schema_version": "1.0.0"
+}

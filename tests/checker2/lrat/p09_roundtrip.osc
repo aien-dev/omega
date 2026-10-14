@@ -1,0 +1,7 @@
+// prove: rt
+// expect: holds
+// widening then narrowing a byte is the identity and never traps CAST.
+fn rt(x: u8) -> u8 ensures result == x {
+    let y: i16 = x as i16;
+    return y as u8;
+}
