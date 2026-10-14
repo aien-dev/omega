@@ -60,6 +60,42 @@ Platform: PCWIN64"), data elements zlib-compressed (miCOMPRESSED). None is
 v7.3/HDF5. They were read with a throwaway reader outside this repository;
 nothing in the archive was executed or built.
 
+### 1.1 A newer version of the code and data exists (not the pinned reference)
+
+**[archive]** Zenodo concept 10.5281/zenodo.17296787 has a second version,
+record 20277956, dated 2026-05-18, CC-BY-4.0, one file
+`Neuromorphic_Tissues_Manuscript_Repo.zip`, 2,584,641,526 bytes, md5
+`61c10efb77f6140882ab16c6ab25dbe5` (record metadata, read by the
+orchestrator through the Zenodo API). The pinned reference stays version 1
+(record 17296788): it is the version the paper's data-availability statement
+cites, and Drake's decision is to compare against its archived outputs.
+
+Version 2 was examined without downloading it, from its zip central
+directory (last 1 MiB of the file, HTTP range request) and one 8 KiB range
+holding one changed file:
+
+- 78 entries, 2,586,892,630 bytes uncompressed.
+- All 19 version-1 `.mat` files are present with the same size and CRC-32.
+- 5 of the 6 `.m` files are identical (size and CRC-32). The exception is
+  `HyperParameterTuningOptimized.m` (v1 32,353 bytes, CRC-32 aaf83c2e; v2
+  32,689 bytes, CRC-32 001a836f, sha256 of the extracted v2 file
+  `125187e7697113c25186345eff93f3baba8ae16a0d96e2465720a50adcbe6aed`). Its
+  header now says "Edited filepath to work in arbitrary folder", and the
+  diff has two changes: the Length file path (v2 lines 54-58), and the
+  readout features, which now append squared states, `[statesSampled,
+  statesSampled.^2]` with twice the state columns (v2 lines 168, 176-177).
+  That is the paper's "augmented with squared states" (discrepancy 6) and is
+  a functional change, despite the v1 header.
+- New in version 2: `src/.../Connected Reservoir/HyperParameterOutputAll.mat`
+  (2,506,601,735 bytes, the bulk of the archive; by its name the
+  `save('HyperParameterOutputAll.mat')` of the whole workspace at v1 H:212,
+  which would include the ode15s state trajectories `xTrainCell`, UNVERIFIED
+  (60%), not downloaded), a second
+  `HyperParameterOptimizationVariablesToPlot.mat` under `src/` (14,525,399
+  bytes, CRC-32 fdea4aa1, differs from the v1 copy under `data/raw/`),
+  `Trainsignal.mat` and `Testsignal.mat` (about 1.4 MB each), editor
+  autosave files (`.asv`), a manuscript PDF and manifest files.
+
 ## 2. What the paper claims
 
 - **[paper] S4 eq. 18**: one membrane, dV/dt = (h / (eps A)) (I_inj - V G_u N_a A).
@@ -350,6 +386,50 @@ grounded at node 5), I_hi = 0.1 nA, M = 2, condition 7.
   per variable; NRMSE against nrmseTraining / nrmseTest: |difference| <=
   max(0.005, 5 % of the reference value).
 
+### 7.1 Amendments, declared 2026-10-14 before any Gate 2 comparison was run
+
+Committed before the comparison tool was first run against the archive
+(the commit order on the branch shows it). They clarify or tighten the
+contract above; none loosens a tolerance.
+
+1. **Second NARMA feature set (N1b).** Zenodo version 2 of the same concept
+   (section 1.1) changes HyperParameterTuningOptimized.m to append squared
+   states: features [V, V.^2, u] (v2 lines 168, 176-177). G2-N1 is therefore
+   run twice with identical inputs, simulation and acceptance criteria:
+   **N1a** = v1 code features (V, u), as contracted above; **N1b** = v2 code
+   features (V, V^2, u). Each gets its own PASS or FAIL. Neither substitutes
+   for the other. If exactly one passes, that is evidence about which code
+   produced the archived v1 results (discrepancy 15), not a choice of the
+   better number.
+2. Feature columns that are identically zero over the fit rows (the ground
+   node's voltage and its square) are removed before the fit. fitlm drops
+   them as rank deficient; the predictions do not depend on them.
+3. PASS or FAIL uses `omega_res_readout_fit` (lambda = 0, LDL of the normal
+   matrix). A Householder QR solve of the same least-squares problem (the
+   method family of fitlm) is reported as a diagnostic only.
+4. "Target standard deviation" in criterion (b) of both cases is the
+   population standard deviation of the archived reference targets of that
+   split and output.
+5. State traces: the v1 archive holds no reservoir state trajectories, only
+   inputs, targets, predictions and NRMSE. A state-trace comparison against
+   the authors' code is BLOCKED. The intermediate quantities compared are the
+   input currents (knot rounding and resampling error), the targets and the
+   predictions. Omega's state traces were compared with the independent
+   binary64 oracle in Gate 1 (section 6.1).
+6. Negative controls, expected to FAIL: **NC-N** = N1a with the permittivity
+   multiplied by 2.1 (the Lorenz value); **NC-L** = G2-L1 on 13 nodes with
+   the NARMA permittivity 8.85e-12 F/m. A control that passes is reported as
+   a finding that the contract cannot see that error.
+7. Positive controls: each archived NRMSE is recomputed from the archived
+   predictions and targets with the S6 formula (checks the metric
+   definition); for Lorenz, archived Ytrain/Ytest must equal LorenzData1/2 X.
+8. Lorenz time mapping: an archived sample time t maps to step position
+   t / 1e-5. The binary32 step is fl32(1e-5) = 9.99999975e-6 s, so Omega's
+   integration time runs 2.5e-8 relative short of nominal (1 us over 40 s);
+   declared, not corrected.
+9. Lorenz knot grid: 400001 knots, k * 1e-4 s for k = 0..400000 (archived t
+   runs from 0 to 40 exactly).
+
 **BLOCKED or out of scope**
 - NARMA grid cells other than (5, 0.1 nA, 2): their masks come from
   MATLAB's rng(n) / randi, which is not reimplemented. Needs MATLAB, or a
@@ -382,3 +462,87 @@ section 4 lists where their own paper and code disagree about the model.
 2. Which model the project treats as "the" model where paper and code
    disagree (discrepancies 1-3, 9-10). Omega follows the code, because the
    archived numbers come from the code.
+
+## 10. Gate 2 benchmark protocol (declared 2026-10-14, before any benchmark run)
+
+Omega's own benchmark, on data from Omega's own generator. It is not a
+reproduction of the paper's numbers (those are section 7). The same
+simulator, step (h = 1e-5 s, K = 10) and readout serve every reservoir.
+
+**Generator.** splitmix64 (`tools/reservoir/res_common.c`), one stream per
+(seed, purpose). Seeds 1, 2, 3, 4, 5. Every seed is reported, including
+failures.
+
+**Readout (all models alike).** Features standardized with the training
+mean and population standard deviation; ridge with an unpenalized bias
+(`omega_res_readout_fit`); lambda from {1e-6, 1e-5, ..., 1e2} (9 values) by
+5-fold blocked cross-validation on the training rows only (contiguous folds,
+score = mean validation NRMSE); refit on all training rows; the test run is
+touched once, for the reported test NRMSE (S6 formula).
+
+**NARMA-2, -5, -10.** u ~ U[0, 0.5) i.i.d.; 2000 training and 1000 test
+inputs, separate runs from rest; targets by the reference recursion
+(section 3.4); the first 100 targets of each run are washout. Drive as the
+reference condition 7: M = 3 sub-pulses of 1 ms, I_hi = 0.1 nA, mask bit 1
+-> I = 2 u I_hi, bit 0 -> I_hi - I; per-node masks are cyclic slices of the
+de Bruijn sequence 0011 with a start drawn from the generator. Sampling: the
+voltages at the end of each sub-pulse of input c - 1, plus u(c - 1), are the
+features for target y(c) (the paper's "end of each pulse"; not the code's
+one-sample offset, discrepancy 7).
+- **RC-connected**: the 50-node reference chain (Length50.mat), NARMA
+  constants, 49 driven nodes, 148 features.
+- **RC-disconnected**: the same 49 driven nodes, concentrations, masks and
+  currents; every inter-droplet membrane removed and each driven node given
+  one membrane to a grounded droplet of its own concentration (grounds shared
+  by at most six driven nodes; a grounded droplet is held at 0 V, so this
+  couples nothing). 58 nodes, 148 features. This is the coupling ablation in
+  the same current-driven model. The paper's parallel reservoir (S5,
+  ParallelReservoirNARMA.m) is a different, voltage-clamped model with other
+  kinetics and is not implemented.
+- **RC with squared states**: NOT_RUN for NARMA (295 features, above the
+  readout bound of 256).
+- **BL-linear**: ridge on the delay line u(c-1) .. u(c-12) (12 features).
+- **BL-quadratic**: the same plus every product u(c-i) u(c-j), i <= j
+  (90 features).
+
+**Lorenz63.** sigma 10, rho 28, beta 8/3, binary64 RK4 at dt = 1e-4 (1
+Lorenz time unit = 1 s, as the paper). Initial state from the generator
+(x, y in [-10, 10), z in [10, 40)), 20 time units discarded, then 20 time
+units recorded; training and test are separate trajectories. Currents into
+injection nodes 1, 28, 42 of the 43-node lattice as the reference code
+(section 3.3); the 1e-4 s trajectory points are the knots. Sampling every
+10 ms; the first 2 s are washout; rows 200 .. 1975 (1776 per run) for every
+task. Tasks: **T0** target X(t) (what the reference code fits,
+discrepancy 10), **T1** X(t + 0.01 s) (the paper's "next state"), **T25**
+X(t + 0.25 s). One ridge fit per task with three outputs.
+- **RC-connected**: 43-node lattice, Lorenz constants, the 42 non-ground
+  voltages (RC-lin) or those plus their squares (RC-sq, 84 features).
+- **RC-disconnected**: the three injection nodes, each with one membrane to
+  a grounded droplet of its own concentration (5 nodes); 3 or 6 features.
+  Without coupling the other 40 droplets receive nothing, so this ablation
+  also has far fewer features; reported as such.
+- **BL-linear**: the input X at t, t - 10 ms, .., t - 40 ms (15 features);
+  **BL-quadratic**: plus all 120 pairwise products (135 features). On T0 the
+  baselines see the target itself, so they are expected to be near exact:
+  the reference Lorenz task is a reconstruction of the current input.
+
+**Reported per model, task and seed:** test NRMSE (per output for Lorenz),
+training NRMSE, chosen lambda, CV score, simulator status and run receipt.
+Summaries: mean, sample standard deviation, min and max over seeds, and the
+paired difference connected minus disconnected and connected minus best
+baseline, with the number of seeds where connected wins. No significance
+test is claimed with five seeds.
+
+**Performance (task e).** On an idle machine (quiet flag checked), one
+process pinned to one core: per-step latency of `omega_res_step` for the
+5-node chain (G2-N1), the 50-node chain and the 43-node lattice, 5
+repetitions of 40,000 timed steps after 10,000 warm-up steps; p50, p95,
+p99, max; throughput in steps/s and simulated seconds per wall second; CPU
+time over wall time from getrusage; peak resident memory of the process
+(ru_maxrss) and the fixed sizes of the simulator structs; host, core,
+kernel, compiler, flags and commit. Energy and power: NOT_RUN (not
+instrumented). No efficiency claim.
+
+**AIEN telemetry workload (task d).** Run only if real telemetry with a
+time-ordered train/validation/test split exists in the repository or on
+this machine; otherwise NOT_RUN with the reason.
