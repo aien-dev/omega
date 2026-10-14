@@ -24,6 +24,12 @@ if [ "$pin" = a9e7e2aae27ff43d0e09e6dcd9173ad1f19776007c1a24496b102e830290de5e ]
    [ "$(sha256sum "$HERE/HARNESS_INTERFACE.md" | cut -d' ' -f1)" = "$pin" ]; then ok "contract v1 hash pinned and matching"
 else bad "contract hash"; fi
 
+# ---- 0b. dependency inventory: every entry has a removal stage 2..7 (no permanent one) --------------
+inv_ok() { awk -F" [|] " '/^#/ || NF == 0 { next } { n++; if (NF != 4 || $3 !~ /^removal_stage=[2-7]$/) bad++ } END { exit (n >= 10 && !bad) ? 0 : 1 }' "$1"; }
+cp "$ROOT/evidence/ONE-LAYER-1/INVENTORY.txt" "$T/inv"; echo "new libfoo | ola.c | removal_stage=never | permanent" >> "$T/inv"
+if inv_ok "$ROOT/evidence/ONE-LAYER-1/INVENTORY.txt" && ! inv_ok "$T/inv"; then ok "inventory: $(grep -vc '^#' "$ROOT/evidence/ONE-LAYER-1/INVENTORY.txt") dependencies, each with a removal stage (an entry without one is caught)"
+else bad "inventory"; fi
+
 # ---- 1. sample OmegaProgram IR bytes are reproducible from the repo's own encoder ----------------
 $CC $OLA_CFLAGS -o "$T/mkopir" "$S/mkopir.c" $OLA_PROG_SRCS
 "$T/mkopir" "$T/p8.opir" 8 add 200 > "$T/p8.id"

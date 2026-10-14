@@ -1,0 +1,33 @@
+# ONE-LAYER-1 trusted-base inventory: every C/Linux dependency the stage-1 acceptance path still has,
+# with the stage that removes it. Plan: omega-vision/OMEGA-ONE-LAYER-PLAN.md section 4 ("no stage before 7
+# may add a new permanent C/Linux dependency; a temporary one enters the stage-1 inventory, with a removal
+# stage, when added"). Stage meanings (plan section 4): 2 binary front door (strict OSC binary IR),
+# 3 independent acceptance authority (checker2, signed receipts), 4 one meaning on both processors,
+# 5 checked programs on aienos (bounded effects, hosted deps leave the runtime slice), 6 own GB10 startup
+# (replace Linux RM/UVM), 7 Omega builds the whole layer (C compilers, hosted libraries, Linux leave the
+# delivered closure).
+# Format: <dependency> | <where the acceptance path uses it> | removal_stage=<n> | <note>
+# Nothing below is permanent. Nothing new was added that the plan's stage-1 list does not already name,
+# except the Linux sandbox primitives, which enter here as temporary (removal stage 5).
+
+gcc 13.3 (C compiler) | builds ola, ola_runner, oscc library, program stack (mk/one-layer-acceptance.mk) | removal_stage=7 | plan stage 7: remove C compilers from the closure
+GNU make | builds the tools; ola.sh calls make one-layer-acceptance-tools | removal_stage=7 | plan stage 1 list: gcc/make/binutils
+GNU binutils (as, ld) | linking the tools | removal_stage=7 | plan stage 1 list: gcc/make/binutils
+glibc (hosted C library) | ola.c, ola_runner.c, the compiler and program stack (malloc, stdio, setjmp/longjmp in osc_rt) | removal_stage=7 | stage 5 removes hosted deps from the runtime slice; stage 7 from the closure
+Linux kernel | process isolation, files, memfd, pidfd, rlimits | removal_stage=7 | plan stage 7: Linux leaves the delivered closure
+Linux Landlock LSM (ABI >= 1; net rules at ABI >= 4) | ola_runner enter_landlock: no filesystem access except scratch | removal_stage=5 | TEMPORARY, added by this harness; aienos enforcement (stage 5) replaces it; the harness fails closed without it
+Linux seccomp-bpf | ola_runner enter_seccomp: syscall allow-list, default trap | removal_stage=5 | TEMPORARY, added by this harness; same replacement as Landlock
+Linux rlimits (RLIMIT_CPU, RLIMIT_AS, RLIMIT_FSIZE, RLIMIT_CORE, RLIMIT_NOFILE) | ola.c spawn: time and memory limits | removal_stage=5 | TEMPORARY; aienos bounded effects and console abort (stage 5)
+Linux memfd_create, pidfd_open, close_range, getrandom | ola.c spawn (transcripts, wall-clock wait, fd hygiene, nonces) | removal_stage=5 | TEMPORARY
+NVIDIA kernel module and vendored NVIDIA headers | NOT used by the stage-1 acceptance path (CPU only) | removal_stage=6 | listed because the plan's stage-1 inventory names it; stage 6 replaces Linux RM/UVM
+text OSC parser (src/compiler/osc_lex.c, osc_parse.c, osc_front.c: osc_compile) | ola_runner run_osc: candidate.osc is compiled from text | removal_stage=2 | stage 2 makes strict OSC binary IR the front door (issue b / omega#444); C source itself leaves at 7
+OSC compiler back end in C (src/compiler/osc_cg.c, osc_a64.c, osc_native.c, osc_rt.c, osc_check.c, osc_lower.c, osc_ir.c) | ola_runner: code generation, native mapping, runtime traps | removal_stage=7 | plan stage 7: AI reauthors the compiler in canonical Omega objects
+OmegaProgram stack in C (src/omega_program_ir.c omega_program_ir_decode, omega_program.c realize/exec, omega_exec.c, aarch64_encoder.c ...) | ola_runner run_omegaprog | removal_stage=7 | same
+src/sha256.c | receipts, corpus hash (ola.c) | removal_stage=7 | same
+hosted harness (tests/one_layer/acceptance/ola.sh, ola.c, ola_runner.c, selftest.sh) | the whole acceptance path | removal_stage=3 | stage 3 moves acceptance authority to checker2 + signed receipts (omega#446); its hosted code leaves at 7
+bash | ola.sh, selftest.sh | removal_stage=7 | part of the hosted harness
+GNU coreutils (sha256sum, mktemp, realpath, date, head, sort, ls, cmp, chmod) | ola.sh, selftest.sh | removal_stage=7 | part of the hosted harness; the corpus hash itself is computed in ola.c
+awk, sed, grep, diff | ola.sh (RULES lookup), selftest.sh (mutants, comparisons) | removal_stage=7 | part of the hosted harness
+git | ola.sh: clean-tree check, commit id, harness file list | removal_stage=7 | part of the hosted harness
+GNU tar | selftest.sh only (builds the sample tarball); scoring reads tar with its own reader in ola.c | removal_stage=7 | never on the scoring path
+GitHub-hosted runner ubuntu-24.04-arm | CI job one-layer-acceptance (.github/workflows/host-suites.yml) | removal_stage=7 | hosted verification, not part of the delivered system
