@@ -1,0 +1,9 @@
+# exp445 generation parameters, frozen by docs/one_layer/EXP445_PROTOCOL.md before any generation.
+# run.sh reads these; any command-line override is recorded in meta.txt as protocol=OVERRIDDEN.
+attempts=3
+max_tokens=3072
+temperature=0.7
+top_p=0.8
+seed_base=445000
+timeout_s=900
+retries=2

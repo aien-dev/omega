@@ -2,7 +2,7 @@
 # binary IR, and tools/exp445 (the representation experiment driver helper).
 # Picked up by `-include mk/*.mk`; not part of `all` or `test`.
 #
-# omega-emit          build/omega_emit/{omega_emit,x445}
+# omega-emit          build/omega_emit/{omega_emit,x445,fake445}
 # test-omega-emit     omega_emit: every op of the schema, step refusals with reasons, negative controls,
 #                     lift -> emit byte-identical over the compiler corpus; x445 helper checks
 # test-exp445         driver dry run against a fake local endpoint (no model, no network beyond loopback)
@@ -21,7 +21,11 @@ $(OME_DIR)/x445: tools/exp445/x445.c $(OME_OSC_LIB) $(wildcard src/compiler/*.h)
 	@mkdir -p $(OME_DIR)
 	$(CC) $(OME_CFLAGS) -o $@ tools/exp445/x445.c $(OME_OSC_LIB) -lm
 
-omega-emit: $(OME_DIR)/omega_emit $(OME_DIR)/x445
+$(OME_DIR)/fake445: tools/exp445/fake445.c
+	@mkdir -p $(OME_DIR)
+	$(CC) $(OME_CFLAGS) -o $@ tools/exp445/fake445.c
+
+omega-emit: $(OME_DIR)/omega_emit $(OME_DIR)/x445 $(OME_DIR)/fake445
 
 test-omega-emit: omega-emit $(OUT_DIR)/compiler/oscc
 	bash tools/omega_emit/test_omega_emit.sh $(abspath $(OME_DIR)) $(abspath $(OUT_DIR)/compiler/oscc)
