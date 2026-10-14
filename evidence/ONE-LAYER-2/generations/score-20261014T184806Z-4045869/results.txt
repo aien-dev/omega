@@ -1,0 +1,10 @@
+exp445 results (harness: RUN VALID; references accepted 10/10)
+success = harness ACCEPT on hidden inputs; attempt 1 is the pre-registered primary measure; 95% Wilson intervals
+
+config a   arm bytes      attempt1 0/10    0.000 [0.000, 0.278]   any-of-attempts 0/10    0.000 [0.000, 0.278]
+                          completion tokens 548 total, 548.0 per generation; prompt 4032.0 per generation; wall 22.3 s; repaired 1 (accepted 0)
+config a   arm structured attempt1 0/10    0.000 [0.000, 0.278]   any-of-attempts 0/10    0.000 [0.000, 0.278]
+                          completion tokens 402 total, 402.0 per generation; prompt 3710.0 per generation; wall 16.6 s; repaired 1 (accepted 0)
+config a   arm text       attempt1 0/10    0.000 [0.000, 0.278]   any-of-attempts 0/10    0.000 [0.000, 0.278]
+                          completion tokens 105 total, 105.0 per generation; prompt 3414.0 per generation; wall 4.8 s; repaired 1 (accepted 0)
+token cost relative to text, config a: bytes x5.22, structured x3.83 (mean completion tokens per generation)

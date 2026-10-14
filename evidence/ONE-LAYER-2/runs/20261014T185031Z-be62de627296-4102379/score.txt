@@ -1,0 +1,5 @@
+defects_rejected=24/24 controls_accepted=6/6 errors=0
+labelled_defects=24 labelled_controls=6 verdicts_matched=30 unlabelled_verdicts=0
+replay_identical=yes probes=PASS clean_tree=yes
+oscir_defects=24 oscir_controls=6
+GATE PASS

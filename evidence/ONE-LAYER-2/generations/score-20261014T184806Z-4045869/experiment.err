@@ -1,0 +1,106 @@
+ola.sh: run 20261014T184806Z-e27a33ee052d-4046246 tasks e27a33ee052d3aed58027d92ba14cac31f909b50dc562634224939cbe67fb346 sets 3
+pass A set references:
+  dev01                                    ACCEPT ok -
+  dev02                                    ACCEPT ok -
+  dev03                                    ACCEPT ok -
+  dev04                                    ACCEPT ok -
+  dev05                                    ACCEPT ok -
+  dev06                                    ACCEPT ok -
+  dev07                                    ACCEPT ok -
+  dev08                                    ACCEPT ok -
+  dev09                                    ACCEPT ok -
+  dev10                                    ACCEPT ok -
+pass A set a-bytes-1:
+  dev01                                    REJECT decode_refused class_OVERSIZED
+  dev02                                    REJECT no_candidate -
+  dev03                                    REJECT no_candidate -
+  dev04                                    REJECT no_candidate -
+  dev05                                    REJECT no_candidate -
+  dev06                                    REJECT no_candidate -
+  dev07                                    REJECT no_candidate -
+  dev08                                    REJECT no_candidate -
+  dev09                                    REJECT no_candidate -
+  dev10                                    REJECT no_candidate -
+pass A set a-structured-1:
+  dev01                                    REJECT no_candidate -
+  dev02                                    REJECT no_candidate -
+  dev03                                    REJECT no_candidate -
+  dev04                                    REJECT no_candidate -
+  dev05                                    REJECT no_candidate -
+  dev06                                    REJECT no_candidate -
+  dev07                                    REJECT no_candidate -
+  dev08                                    REJECT no_candidate -
+  dev09                                    REJECT no_candidate -
+  dev10                                    REJECT no_candidate -
+pass A set a-text-1:
+  dev01                                    REJECT wrong_result line_4
+  dev02                                    REJECT no_candidate -
+  dev03                                    REJECT no_candidate -
+  dev04                                    REJECT no_candidate -
+  dev05                                    REJECT no_candidate -
+  dev06                                    REJECT no_candidate -
+  dev07                                    REJECT no_candidate -
+  dev08                                    REJECT no_candidate -
+  dev09                                    REJECT no_candidate -
+  dev10                                    REJECT no_candidate -
+pass B set references:
+  dev01                                    ACCEPT ok -
+  dev02                                    ACCEPT ok -
+  dev03                                    ACCEPT ok -
+  dev04                                    ACCEPT ok -
+  dev05                                    ACCEPT ok -
+  dev06                                    ACCEPT ok -
+  dev07                                    ACCEPT ok -
+  dev08                                    ACCEPT ok -
+  dev09                                    ACCEPT ok -
+  dev10                                    ACCEPT ok -
+pass B set a-bytes-1:
+  dev01                                    REJECT decode_refused class_OVERSIZED
+  dev02                                    REJECT no_candidate -
+  dev03                                    REJECT no_candidate -
+  dev04                                    REJECT no_candidate -
+  dev05                                    REJECT no_candidate -
+  dev06                                    REJECT no_candidate -
+  dev07                                    REJECT no_candidate -
+  dev08                                    REJECT no_candidate -
+  dev09                                    REJECT no_candidate -
+  dev10                                    REJECT no_candidate -
+pass B set a-structured-1:
+  dev01                                    REJECT no_candidate -
+  dev02                                    REJECT no_candidate -
+  dev03                                    REJECT no_candidate -
+  dev04                                    REJECT no_candidate -
+  dev05                                    REJECT no_candidate -
+  dev06                                    REJECT no_candidate -
+  dev07                                    REJECT no_candidate -
+  dev08                                    REJECT no_candidate -
+  dev09                                    REJECT no_candidate -
+  dev10                                    REJECT no_candidate -
+pass B set a-text-1:
+  dev01                                    REJECT wrong_result line_4
+  dev02                                    REJECT no_candidate -
+  dev03                                    REJECT no_candidate -
+  dev04                                    REJECT no_candidate -
+  dev05                                    REJECT no_candidate -
+  dev06                                    REJECT no_candidate -
+  dev07                                    REJECT no_candidate -
+  dev08                                    REJECT no_candidate -
+  dev09                                    REJECT no_candidate -
+  dev10                                    REJECT no_candidate -
+isolation probes:
+  probe read_hidden_inputs     sandboxed=BLOCKED:errno=13                         control=ESCAPED:read                 PASS
+  probe read_expected          sandboxed=BLOCKED:errno=13                         control=ESCAPED:read                 PASS
+  probe read_labels            sandboxed=BLOCKED:errno=13                         control=ESCAPED:read                 PASS
+  probe read_corpus_tar        sandboxed=BLOCKED:errno=13                         control=ESCAPED:read                 PASS
+  probe read_key               sandboxed=BLOCKED:errno=13                         control=ESCAPED:read                 PASS
+  probe write_evidence         sandboxed=BLOCKED:errno=13                         control=ESCAPED:opened_for_write     PASS
+  probe write_scorer           sandboxed=BLOCKED:errno=13                         control=ESCAPED:opened_for_write     PASS
+  probe change_rules           sandboxed=BLOCKED:errno=13                         control=ESCAPED:opened_for_write     PASS
+  probe network                sandboxed=BLOCKED:seccomp_syscall=198              control=ESCAPED:connected            PASS
+  probe outlive_time           sandboxed=BLOCKED:time_limit                       control=ESCAPED:outlived             PASS
+  probe outlive_fork           sandboxed=BLOCKED:seccomp_syscall=220              control=ESCAPED:forked               PASS
+  probe exceed_memory          sandboxed=BLOCKED:errno=12                         control=ESCAPED:mapped               PASS
+  probe write_outside_scratch  sandboxed=BLOCKED:errno=13                         control=ESCAPED:created              PASS
+  probe replay_verdict         sandboxed=BLOCKED:stale_or_forged_transcript       control=ESCAPED:transcript_accepted  PASS
+  probe scratch_ok             sandboxed=ESCAPED:wrote_scratch                    control=ESCAPED:wrote_scratch        PASS
+ola.sh: evidence in evidence/ONE-LAYER-2/runs/20261014T184806Z-e27a33ee052d-4046246

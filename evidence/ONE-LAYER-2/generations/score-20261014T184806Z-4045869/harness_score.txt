@@ -1,0 +1,6 @@
+set=a-bytes-1 accepted=0/10 rejected=10 errors=0 no_candidate=9
+set=a-structured-1 accepted=0/10 rejected=10 errors=0 no_candidate=10
+set=a-text-1 accepted=0/10 rejected=10 errors=0 no_candidate=9
+references_accepted=10/10
+replay_identical=yes probes=PASS clean_tree=yes
+RUN VALID
