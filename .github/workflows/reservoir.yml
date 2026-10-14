@@ -1,0 +1,59 @@
+name: Omega reservoir
+
+# omega#440 ionic-droplet reservoir (docs/reservoir/RESERVOIR_REFERENCE.md).
+# Path-filtered, physics-free, CPU only (nothing here opens a GPU): the Gate 1
+# simulator and readout tests, the Gate 2 archive-reader tests on the two
+# committed CC-BY fixtures (plain and ASan/UBSan), the build of the Gate 2
+# tool and its config-drift check. The Gate 2 comparison itself needs the
+# authors' archive (Zenodo 10.5281/zenodo.17296788) and runs locally
+# (make qualify-reservoir RES_ARCHIVE=...); its receipts are under
+# evidence/RESERVOIR/.
+# On pull_request actions/checkout uses refs/pull/N/merge: the merged result is tested.
+
+on:
+  pull_request:
+    paths:
+      - 'src/reservoir/**'
+      - 'tests/reservoir/**'
+      - 'tools/reservoir/**'
+      - 'mk/reservoir.mk'
+      - 'docs/reservoir/gate2_config.json'
+      - 'src/omega_numeric*'
+      - 'src/omega_blackwell_*'
+      - 'src/sha256.*'
+      - '.github/workflows/reservoir.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/reservoir/**'
+      - 'tests/reservoir/**'
+      - 'tools/reservoir/**'
+      - 'mk/reservoir.mk'
+      - 'docs/reservoir/gate2_config.json'
+      - 'src/omega_numeric*'
+      - 'src/omega_blackwell_*'
+      - 'src/sha256.*'
+      - '.github/workflows/reservoir.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  reservoir:
+    name: reservoir-gates
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reservoir tests (Gate 1, Gate 2 reader, Gate 2 config)
+        run: |
+          set -o pipefail
+          make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-reservoir | tee res.log
+          test "$(grep -cE '^test_reservoir: [0-9]+ checks, 0 failed' res.log)" -eq 2
+          test "$(grep -cE '^test_res_mat: [0-9]+ checks, 0 failed' res.log)" -eq 2
+          grep -q 'Gate 2 config unchanged' res.log
