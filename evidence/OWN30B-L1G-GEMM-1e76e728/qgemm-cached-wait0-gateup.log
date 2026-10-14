@@ -1,0 +1,8 @@
+gateup second launch identical: yes
+gateup bit-identity on 64 sampled rows: 0 differ (beyond 1 bf16 ulp; 0 within 1 ulp of 49152)
+QGEMM-cached gateup tokens 3600 M 28800 n 1536 k 2048 tiles 509: median 3.866 ms (min 3.715), 46.9 TFLOPS, weights 403 MB -> 104 GB/s of distinct weights
+gateup mutant 1: caught
+gateup mutant 2: caught
+gateup mutant 3: caught
+gateup mutant 4: caught
+GPU_QGEMM: PASS
