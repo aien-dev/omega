@@ -200,7 +200,7 @@ checked by `run.sh` itself (it only sees the endpoint); that is the operator's s
 - every run: `protocol=PARAMS` (no command-line override), `params_sha256` equal to the PARAMS in
   force, the configuration named in PARAMS with its frozen model id, endpoint and request extra, arm
   prompts equal to what the current arm documents give, the public view of the scored tarball, a
-  clean generation commit whose `tools/`, `tests/one_layer/` and `docs/one_layer/` equal the
+  clean generation commit whose `tools/`, `tests/one_layer/`, `docs/one_layer/`, `src/compiler/` and `src/sha256.c` (linked into the readers), `mk/omega-emit.mk` and `Makefile` equal the
   scoring commit's;
 - every run's `SHA256SUMS` verifies and lists exactly its saved requests, responses and prompts;
 - every generation's candidate, re-derived from its hashed final response with the same reader
