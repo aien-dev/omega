@@ -212,7 +212,7 @@
         },
         {
           "digest": "024a746eff9cd1871d1e507c2f56ed6a1f7125cb457915904f9b1455140f8942",
-          "last_commit": "e0abd0b5",
+          "last_commit": "5901baa5",
           "name": "physics0",
           "purpose": "PD-0 gates: world self-test, oracle calibration, learner L0/L1/NULL, mutations, OSC differential"
         },
@@ -290,14 +290,14 @@
         }
       ],
       "children_root": "sha256:a80059a12ccef6b1902ebde2550dd8a76e75029cca2b2bb3a5ede7312b9784a6",
-      "compiled_at": "2026-10-14T01:16:48Z",
+      "compiled_at": "2026-10-14T14:16:58Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:773e29540c64ad3c40ec8a23c26e2155159f77d5db71b24fc7dec0dfcacb41bc",
+      "digest": "sha256:c5837ce9777c62e8a126c1be31fffcabf2a5291d901a682607ed2ce257ba521a",
       "evidence_files": 16,
       "evidence_root": "sha256:96d08097822ad95f4e562c19e0ba5df5a035774c48632f1832912c40a27bd27a",
       "files": 1029,
-      "generated_at_commit": "e0abd0b524f5bf8e3ba6960b53868980bdd41b4e",
-      "source_tree": "sha256:1c02f7861cb6555065d99305074da7e2083ae66d4c9aadced27f4229ec73d237"
+      "generated_at_commit": "5901baa51d97c34632c12a783776ada5336b4fed",
+      "source_tree": "sha256:938a3678f2f5f710001d1fabdebeff1a38ab749d5d8235be30a234e33fba2129"
     },
     "owner_lane": "",
     "provenance": {
