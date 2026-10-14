@@ -1,0 +1,15 @@
+# What the harness must say about each PUBLIC SAMPLE case: <case> <verdict> <reason>
+s01 ACCEPT ok
+s02 ACCEPT ok
+s03 ACCEPT ok
+s04 ACCEPT ok
+s05 REJECT wrong_result
+s06 REJECT compile_refused
+s07 REJECT signature_mismatch
+s08 REJECT missing_trap
+s09 REJECT timeout
+s10 REJECT decode_refused
+s11 REJECT signature_mismatch
+s12 REJECT missing_trap
+s13 ERROR case_malformed
+s14 REJECT wrong_trap
