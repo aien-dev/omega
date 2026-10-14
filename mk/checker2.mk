@@ -5,11 +5,12 @@
 # Links only src/sha256.c and the vendored in-house Ed25519 (src/searchtrace/sig, PROVENANCE.txt).
 #   make checker2                build/checker2/checker2
 #   make test-checker2           receipt, checker and LRAT tests (plain and ASan/UBSan), corpus +
-#                                black-box differential against oscc, then the mutant negative controls
+#                                black-box differential against oscc, blaster semantics against oscc's
+#                                compiled code (black box), then the mutant negative controls
 #   make test-checker2-mutants   negative controls only: each GUARD line removed must fail a test
 ifndef CHECKER2_MK
 CHECKER2_MK := 1
-.PHONY: checker2 test-checker2 test-checker2-lrat test-checker2-unit test-checker2-mutants test-checker2-differential
+.PHONY: checker2 test-checker2 test-checker2-lrat test-checker2-unit test-checker2-mutants test-checker2-differential test-checker2-blast-native
 C2_DIR = $(OUT_DIR)/checker2
 C2_CFLAGS = -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -O2 -Isrc -Isrc/checker2
 C2_ASAN = -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all
@@ -87,7 +88,16 @@ test-checker2-lrat: $(C2_DIR)/osc_emit_ir $(C2_DIR)/checker2 $(C2_DIR)/checker2_
 	sh tests/checker2/lrat.sh $(C2_DIR)/osc_emit_ir $(C2_DIR)/checker2 $(C2_DIR)/c2sat $(C2_DIR)/lrat $(C2_DIR)/checker2_other
 	./$(C2_DIR)/test_c2_blast $(C2_IRDIR) $(C2_DIR)/lrat
 
-test-checker2-unit: $(C2_DIR)/test_c2_receipt $(C2_DIR)/test_c2_receipt_asan $(C2_DIR)/test_c2_ir $(C2_DIR)/test_c2_ir_asan test-checker2-differential test-checker2-lrat
+# blaster semantics against oscc's compiled AArch64 code, run as a black box (no ASan build:
+# the harness jumps into mapped machine code and leaves traps with siglongjmp)
+$(C2_DIR)/test_c2_blast_native: tests/checker2/test_c2_blast_native.c $(C2_CORE) $(C2_HDRS)
+	@mkdir -p $(C2_DIR)
+	$(CC) $(C2_CFLAGS) -o $@ tests/checker2/test_c2_blast_native.c $(C2_CORE)
+
+test-checker2-blast-native: $(OUT_DIR)/compiler/oscc $(C2_DIR)/test_c2_blast_native
+	sh tests/checker2/blast_native.sh $(OUT_DIR)/compiler/oscc $(C2_DIR)/test_c2_blast_native $(C2_DIR)/blast_native
+
+test-checker2-unit: $(C2_DIR)/test_c2_receipt $(C2_DIR)/test_c2_receipt_asan $(C2_DIR)/test_c2_ir $(C2_DIR)/test_c2_ir_asan test-checker2-differential test-checker2-lrat test-checker2-blast-native
 	./$(C2_DIR)/test_c2_receipt tests/checker2/fixtures
 	./$(C2_DIR)/test_c2_receipt_asan tests/checker2/fixtures
 	./$(C2_DIR)/test_c2_ir $(C2_IRDIR)

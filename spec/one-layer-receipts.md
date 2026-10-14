@@ -211,6 +211,12 @@ class 1 receipt). Proofs are deterministic: the solver writes byte-identical pro
   in this change.
 - A differential of the planted IR defects against the producer's checker needs an IR-bytes entry
   point on the producer side (omega#444); until then those 96 defects are judged by checker2 only.
+- Bit-blaster semantics are cross-checked against oscc's compiled AArch64 code (section 12,
+  `blast_native.sh`), not against an independent reference interpreter. Agreement shows checker2's
+  CNF and the producer's back end read section 5 of OSC-1-DESIGN the same way; a misreading shared
+  by both would pass. Operands wider than 16 bits are checked on edge values and samples, not
+  exhaustively; gate programs are compared on trap or no trap only, not on return values. UNVERIFIED
+  beyond those inputs.
 
 ## 12. Tests
 
@@ -233,6 +239,12 @@ class 1 receipt). Proofs are deterministic: the solver writes byte-identical pro
   accepted with `--accept-checker`, and a wrong producer or dependency digest);
 - `test_c2_blast`: non-scalar functions refused; every gate program evaluated input by input
   without a solver (exhaustive to 16 argument bits), agreeing with its expectation;
+- `blast_native.sh` + `test_c2_blast_native` (AArch64 host): 180 one-operation programs (every
+  blastable operation, comparison, cast pair and unary operation on every integer type and bool) and
+  the 29 gate programs, compiled by oscc as a black box; for every input (exhaustive to 16 operand
+  bits, else edge values and 3000 samples) checker2's CNF must agree with the compiled code on the
+  trap and, through an `ensures result != c` probe, on the exact result value; 8 negative controls
+  (the CNF of one operation against the code of another) must disagree;
 - `mutants.sh`: each line tagged `GUARD:<name>` in the receipt code, decoder, acceptance rules,
   LRAT checker and bit-blaster is removed in turn; a test must fail every time (104 of 104); the script also refuses a tag count that differs
   from the mutant count.
