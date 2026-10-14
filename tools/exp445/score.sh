@@ -127,6 +127,10 @@ gcheck() {
     if [ -e "$f" ]; then inval "$G has a round 2 without a round-1 refusal"; break; fi; done; fi
   for f in "$d"/r[03-9]*.req.json "$d"/r[03-9]*.transport "$d"/r[03-9]*.resp.json; do if [ -e "$f" ]; then inval "$G has a round other than 1 and 2"; break; fi; done
   gen_row "$sid" "$task" "$d" "$v"
+  # token counts come from the untrusted server response: each must be a non-negative integer (or "-"
+  # for an absent round 2); reader.sh usage_of prints BAD otherwise
+  awk -F'\t' '{ for (i = 4; i <= 6; i++) if ($i !~ /^[0-9]+$/ && !(i == 6 && $i == "-")) exit 1 }' <<< "$ROW" ||
+    inval "$G token counts in the response are not non-negative integers ($(cut -f4-6 <<< "$ROW" | tr '\t' ' '))"
   printf '%s\n' "$ROW" >> "$W/derived"
   local want got n=0; want="$(cut -f12 <<< "$ROW")" got=-
   for f in "$r/cands/$sid/$task"/*; do [ -f "$f" ] || continue; n=$((n + 1)); got="$(sha256sum < "$f" | cut -d' ' -f1)"; done

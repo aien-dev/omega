@@ -254,6 +254,13 @@ invalid "edited token column (not re-hashed)" "b: SHA256SUMS does not verify" "$
 rehash "$T/neg/b"
 invalid "edited token column (re-hashed: only the cross-check sees it)" "log.tsv differs from the rows re-derived from the raw files (first: b-bytes-1" "${NB[@]}"
 smut 's/^  if ! cmp -s "\$W\/derived_s" "\$W\/log_s"; then$/  if false; then/' "the log.tsv cross-check" "${NB[@]}"
+# the response's token counts are untrusted: a non-integer one (here a shell-arithmetic payload) is refused,
+# and never reaches shell arithmetic; log.tsv carries the same BAD value, so only the usage check sees it
+cpr; jqi '.usage.prompt_tokens = "a[$(touch '"$T"'/pwned)]"' "$T/neg/b/gen/b-text-1/dev01/r1.resp.json"
+awk -F'\t' -v OFS='\t' '$1 == "b-text-1" && $2 == "dev01" { $4 = "BAD" } { print }' "$FB/log.tsv" > "$T/neg/b/log.tsv"; rehash "$T/neg/b"
+invalid "non-integer token count in a response (re-hashed)" "b-text-1 dev01 token counts in the response are not non-negative integers (BAD" "${NB[@]}"
+[ ! -e "$T/pwned" ] && ok "  the token payload was never evaluated" || bad "token payload evaluated by the shell"
+smut 's/^    inval "\$G token counts in the response/    true "/' "the token-count check" "${NB[@]}"
 cpr; awk -F'\t' -v OFS='\t' '$1 == "a-structured-1" && $2 == "dev01" { $12 = "0000" } { print }' "$FA/log.tsv" > "$T/neg/a/log.tsv"; rehash "$T/neg/a"
 invalid "log candidate hash edited (re-hashed)" "log.tsv differs from the rows re-derived from the raw files (first: a-structured-1 dev01)" "${NA[@]}"
 # requests: settings, seed, config extra and the repair chain are checked in the hashed requests themselves

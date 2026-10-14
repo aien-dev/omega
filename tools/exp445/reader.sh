@@ -39,8 +39,14 @@ request_json() {
 seed_of() { echo $(($1 + 1000 * $2 + $3)); }
 resp_ok() { jq -e '.choices[0].message.content | type == "string"' "$1" > /dev/null 2>&1; }
 content_of() { jq -r '.choices[0].message.content' "$1"; }
-# usage_of <response>: prompt tokens, completion tokens, finish reason (tab-separated)
-usage_of() { jq -r '[(.usage.prompt_tokens // 0), (.usage.completion_tokens // 0), (.choices[0].finish_reason // "-")] | @tsv' "$1"; }
+# usage_of <response>: prompt tokens, completion tokens, finish reason (tab-separated). The response is
+# untrusted: a token count that is not a non-negative integer (or is missing) prints BAD, a finish reason
+# outside [A-Za-z_]{1,32} prints BAD; score.sh refuses a run with a BAD token count.
+usage_of() {
+  jq -r 'def n: if type == "number" and . >= 0 and . == floor and . < 100000000 then floor | tostring else "BAD" end;
+    [(.usage.prompt_tokens | n), (.usage.completion_tokens | n),
+     (.choices[0].finish_reason | if type == "string" and test("^[A-Za-z_]{1,32}$") then . else "BAD" end)] | @tsv' "$1"
+}
 # A round <p> = <gen dir>/rN is committed when <p>.transport exists: one line per try,
 #   try=K http=CODE curl_exit=E time_s=T body=rN.resp.json|rN.err.K.json|none msg=<curl message>
 # and it succeeded when its last try's body is rN.resp.json.
@@ -56,7 +62,7 @@ gen_row() {
     rounds=1; IFS=$'\t' read -r pt c1 f1 < <(usage_of "$d/r1.resp.json"); k1="$(< "$v/r1.check")"
     if [ "$k1" = OK ]; then FINAL=1
     elif round_ok "$d/r2"; then
-      rounds=2; IFS=$'\t' read -r p2 c2 f2 < <(usage_of "$d/r2.resp.json"); pt=$((pt + p2)); k2="$(< "$v/r2.check")"; FINAL=2
+      rounds=2; IFS=$'\t' read -r p2 c2 f2 < <(usage_of "$d/r2.resp.json"); if [[ "$pt" =~ ^[0-9]+$ && "$p2" =~ ^[0-9]+$ ]]; then pt=$((pt + p2)); else pt=BAD; fi; k2="$(< "$v/r2.check")"; FINAL=2
     else k2="REQUEST FAILED"; fi
   else k1="REQUEST FAILED"; fi
   if [ -n "$FINAL" ]; then
