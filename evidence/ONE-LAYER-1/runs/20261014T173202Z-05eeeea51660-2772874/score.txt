@@ -1,0 +1,4 @@
+defects_rejected=30/30 controls_accepted=10/10 errors=0
+labelled_defects=30 labelled_controls=10 verdicts_matched=40 unlabelled_verdicts=0
+replay_identical=yes probes=PASS clean_tree=yes
+GATE PASS

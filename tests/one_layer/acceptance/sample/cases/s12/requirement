@@ -1,0 +1,5 @@
+# SAMPLE
+kind osc
+entry inc
+params i32
+ret i32
