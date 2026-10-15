@@ -83,7 +83,7 @@ static float emu_phys(const Prob *p, uint32_t i, uint32_t c) {
  * (bw_warp_sim_tc.h): the chip's MUFU flushes a subnormal result to a sign-preserving zero, so for t = -g log2 e in (126, 128)
  * (g in (-88.72, -87.34)) the reciprocal is +-0 and the activation is +-0, not the 2^-56-ish product an IEEE 1/d would give. */
 static uint16_t swiglu_bits(float g, float u) {
-    float t = g * u2f(0xbfb8aa3bu), ex = exp2f(t), d = ex + 1.0f, r = 1.0f / d, o = g * r; /* RED: IEEE reference, replaced by the fix commit */
+    float t = g * u2f(0xbfb8aa3bu), ex = ws_mufu_ftz(exp2f(ws_mufu_ftz(t))), d = ex + 1.0f, r = ws_mufu_ftz(1.0f / ws_mufu_ftz(d)), o = g * r;
     o = o * u; o = o * u2f(0x5f800000u);
     return bf16_rn(o);
 }
