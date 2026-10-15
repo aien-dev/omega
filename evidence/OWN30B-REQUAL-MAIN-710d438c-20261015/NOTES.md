@@ -1,6 +1,6 @@
 # OWN-30B re-qualification at omega main (after #439), 2026-10-15
 
-Base: omega main 710d438c (62833658 #439 plus #455, which touches only tests/.crumb and tests/checker2; no src change),
+Base: omega main 710d438c (62833658 #439 plus #455: checker2 fixtures, mk/checker2.mk, spec/one-layer-receipts.md and crumbs; no src change),
 clean tree. Physics 6d7cf0d4 (physics.lock), clean. Driver nvidia-open 580.173.02, GB10.
 libomega_gpu.a at this base: sha256 6a6cb4df479ddbcc5cd4ef0fda1aea968832b2b70be2ff3312051c3e9921aad5, byte-identical to
 the pre-merge RC archive (d0889a94 notes) and to the archive aien-sovereign-core now locks.
@@ -16,7 +16,7 @@ Verdict lines: `gates/summary.txt`; full output: `gates/<name>.out`; receipts: `
 | bf16_gemv | PASS | numbers UNVERIFIED (no committed pre-merge log) |
 | cmdlist | PASS, chip 31/31 | same as DECODE-LAUNCH-COLLAPSE-20261013/cmdlist-r5-stamps (31/31) |
 | decode_attn | PASS | UNVERIFIED |
-| decode_graph main | PASS, chip 13/13; C one list 3978.7 us/token (2 layers) vs A 5002.5, B 5337.5 | pre-merge graph-r3-stamps C 3928.2, A 4891.4, B 5320.6 (C +1.3%) |
+| decode_graph main | PASS, chip 13/13; C one list 3978.7 us/token (2 layers) vs A 5002.5, B 5337.5 | pre-merge graph-r3-stamps C 3928.2, A 4891.4, B 5320.6 (C +1.3%, calc:c370931847535fb8) |
 | decode_graph red | FAILED_AS_EXPECTED | same |
 | decode_graph cached | PASS | UNVERIFIED |
 | fp8, fp8_v2, fp8gemm | PASS | UNVERIFIED |
