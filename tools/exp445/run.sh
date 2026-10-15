@@ -13,7 +13,8 @@
 #   1 system prompt = arms/common.md + the arm document; user prompt = signature + task prompt
 #   2 POST <base-url>/chat/completions (max_tokens = the per-round cap), raw request and response saved
 #   3 payload = first fenced block; the arm's own reader turns it into a candidate and checks it with
-#     public data only (text: OSC compiler; bytes: strict hex + OSC IR decoder; structured: omega_emit),
+#     public data only (text: OSC compiler; bytes: strict hex + OSC IR decoder; structured: omega_emit;
+#     glyph, not in the frozen arms: tools/glyph then omega_emit, docs/one_layer/GLYPH.md),
 #     then entry/params/ret and the back end (x445 check)
 #   4 if refused: exactly one repair round with the same message format in every arm; the last
 #     round's answer is final
@@ -75,7 +76,8 @@ cfg="$(echo "$CONFIG" | tr 'A-Z' 'a-z')"
 find "$TASKS/tasks/cases" -path '*/hidden*' | grep -q . && die "$TASKS contains hidden files: the driver must see only requirement + prompt"
 B="$ROOT/build/omega_emit"
 make -s -C "$ROOT" PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 omega-emit >&2
-X="$B/x445" EMIT="$B/omega_emit"
+case ",$ARMS," in *,glyph,*) make -s -C "$ROOT" PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 glyph >&2 ;; esac
+X="$B/x445" EMIT="$B/omega_emit" G="$ROOT/build/glyph/glyph"
 . "$HERE/reader.sh"
 weights_ok "$OUT" "$WLIST" "$FMODEL" ||
   die "$OUT/weights.check + server.json missing or not all OK: run tools/exp445/check_weights.sh $CONFIG $OUT first (protocol section 9)"
@@ -87,6 +89,7 @@ for arm in ${ARMS//,/ }; do
   case "$arm" in
     text|bytes) doc="$HERE/arms/$arm.md" ;;
     structured) doc="$HERE/arms/structured.md" ;;
+    glyph) doc="$HERE/arms/glyph.md" ;;
     *) die "unknown arm $arm" ;;
   esac
   { cat "$HERE/arms/common.md"; echo; cat "$doc"; [ "$arm" = structured ] && cat "$ROOT/tools/omega_emit/SCHEMA.md"; true; } > "$OUT/prompts/$arm.system.tmp"
