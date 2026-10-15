@@ -3,7 +3,7 @@
 Status: v1 (nested values, 2026-10-15). Phase 1 done (language, translator, checks, token measurement);
 phase 2 started (section 7).
 Tool: `tools/omegese/omegese.c`; tests: `make test-omegese`. Named Glyph until 2026-10-15 (the name was
-taken); evidence recorded before then says glyph.
+taken); evidence recorded before then says glyph. Home: omegese.com (owned by Drake since 2026-10-15).
 
 ## 1. Why
 
