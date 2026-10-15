@@ -257,6 +257,11 @@ static void walk(const uint32_t *w, size_t n, int exec)
                 logev(FK_EV_PB_QMD, qaddr, (launch && (q[9] & 1u) != 0) ? 1u : 0u, 0);
                 if (launch && (q[9] & 1u) != 0) run_kernel(q);
             }
+        } else if (subc == 1u && mthd == 0x02b4u && cnt == 1u) {
+            /* SEND_PCAS_A (clcec0.h, QMD address >> 8): a standalone QMD the command list (src/omega_gpu_cmdlist.c)
+             * wrote to memory. Modelled only with FK_KERNEL_SKIP: the launch releases its completion semaphore. */
+            const uint32_t *q = (const uint32_t *)(uintptr_t)((uint64_t)d[0] << 8);
+            if (exec && fk.kernel_mode == FK_KERNEL_SKIP && d[0] != 0u && (q[9] & 1u) != 0) run_kernel(q);
         } else if (subc == 0u && mthd == 0x005cu && cnt == 5u) {
             uint64_t addr = ((uint64_t)d[1] << 32) | d[0];
             uint32_t payload = d[2];
