@@ -1,0 +1,21 @@
+dgraph prefetch 0 (red 0)
+fp8 knobs: variant 1 barrier 0 (wfi+inval_all) cta_budget 0 shape 0/0/0 cached 0
+ok: RES NORM builds (101 instructions, peak 40 registers)
+ok: RES ADD builds (45 instructions, peak 28 registers)
+ok: RES COMBINE|NORM builds (264 instructions, peak 49 registers)
+ok: SWIGLU builds (29 instructions, peak 16 registers)
+ok: ARGMAX identity builds (165 instructions, peak 32 registers)
+ok: ARGMAX indexed builds (160 instructions, peak 40 registers)
+ok: SWIGLU mutant 1 builds (29 instructions, peak 16 registers)
+ok: RES COMBINE|NORM mutant 2 builds (246 instructions, peak 49 registers)
+ok: RES ADD|COMBINE refused by codegen
+ok: fp8 record without a list: BAD_ARGS
+ok: bf16 record without a list: BAD_ARGS
+ok: router record without a list: BAD_ARGS
+ok: decode attn record without a list: BAD_ARGS
+ok: fp8 record with tab_va 0: BAD_ARGS
+ok: bf16 record with x_va 0: BAD_ARGS
+ok: router record with a NULL router: BAD_ARGS
+ok: decode attn record with a NULL cache: BAD_ARGS
+ok: graph create with an empty config: BAD_ARGS
+host-only: 18 checks, 0 failed: PASS

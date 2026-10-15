@@ -639,7 +639,7 @@ Migration Route:
 | Component | Initial Implementation | Classification | Target Substrate | Migration Strategy |
 |---|---|---|---|---|
 | `rx_path.h` / `rx_path.c` | Host C99 | `BOOTSTRAP` | Bare-Metal Omega | Lower struct definitions to native Omega memory frame declarations. |
-| Canonical Path Encoder | Host C99 / SHA-256 | `REFERENCE` | Native ASM / Mojo | Verify byte-for-byte equivalence against host reference oracle. |
+| Canonical Path Encoder | Host C99 / SHA-256 | `REFERENCE` | Native ASM | Verify byte-for-byte equivalence against host reference oracle. |
 | Prefix Branch Allocator | Host C99 Arena | `BOOTSTRAP` | Resident Reaction Memory | Transition from POSIX memory arenas to native Omega frame buffers. |
 | Test Harnesses | C / Shell (`make test-path`) | `TEST HARNESS` | Self-Hosting Verifier | Run within Visor qualification suite without host Linux dependencies. |
 

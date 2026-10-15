@@ -1,0 +1,7 @@
+rope rows vs libm: 1013 positions x 64 dims, 1 one-ulp differences, 0 worse
+hostmath vs libm: sincos max abs 2.22e-16, pow/exp/log max rel 1.31e-14
+codegen depth 1: 988 instructions, 112 registers (declared 120, 256 threads -> 30720 of 65536)
+codegen depth 2: 996 instructions, 116 registers (declared 120, 256 threads -> 30720 of 65536)
+codegen depth 3: 1004 instructions, 120 registers (declared 128, 256 threads -> 32768 of 65536)
+codegen depth 4: 1012 instructions, 124 registers (declared 128, 256 threads -> 32768 of 65536)
+gpu_decode_attn_test: 41 checks, 0 failed: PASS

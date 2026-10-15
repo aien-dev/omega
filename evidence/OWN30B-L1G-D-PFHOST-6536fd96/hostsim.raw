@@ -1,0 +1,26 @@
+host pack R4: 0 wrong
+host -0.0 start: -0 + (-0) = -0 (ok)
+host router mutant 1 reference differs in 89 of 160
+host router mutant 2 reference differs in 128 of 160
+host combine mutant 1 reference differs in 176 of 384
+host combine mutant 2 reference differs in 381 of 384
+sim router k 2048 e 128 t 16 rows 37 order 0: ran, 0 of 4736 differ
+sim router k 2048 e 128 t 16 rows 37 order 1: ran, 0 of 4736 differ
+sim router mutant 1: caught
+sim router mutant 2: caught
+sim router k 256 e 32 t 4 rows 9 order 0: ran, 0 of 288 differ
+sim router k 256 e 32 t 4 rows 9 order 1: ran, 0 of 288 differ
+sim router k 384 e 64 t 8 rows 21 order 0: ran, 0 of 1344 differ
+sim router k 384 e 64 t 8 rows 21 order 1: ran, 0 of 1344 differ
+sim router k 2048 e 128 t 4 rows 16 order 0: ran, 0 of 2048 differ
+sim router k 2048 e 128 t 4 rows 16 order 1: ran, 0 of 2048 differ
+sim combine h 2048 top_k 8 rows 7 order 0: ran, 0 of 14336 differ
+sim combine h 2048 top_k 8 rows 7 order 1: ran, 0 of 14336 differ
+sim combine mutant 1: caught
+sim combine mutant 2: caught
+sim combine h 128 top_k 4 rows 5 order 0: ran, 0 of 640 differ
+sim combine h 128 top_k 4 rows 5 order 1: ran, 0 of 640 differ
+sim combine h 384 top_k 16 rows 3 order 0: ran, 0 of 1152 differ
+sim combine h 384 top_k 16 rows 3 order 1: ran, 0 of 1152 differ
+GPU_PFHOST: PASS
+rc=0

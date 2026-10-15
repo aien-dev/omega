@@ -1,0 +1,72 @@
+== small_m1_unaligned_cols: k=48 n=1000 m=1 cols=13 windows=3
+  upload classic 135 ms, moe 0 ms (0 MB bf16)
+  whole: 0.330 ms call, chip 0.121 ms, grid 125x1
+  window 0 col0=8: mismatches vs whole 0/13, oracle worst 3.23e-08 bad 0, chip 0.008 ms, grid 2x1, hit=1
+  window 1 col0=16: mismatches vs whole 0/13, oracle worst 2.91e-08 bad 0, chip 0.007 ms, grid 2x1, hit=1
+  window 2 col0=976: mismatches vs whole 0/13, oracle worst 2.54e-08 bad 0, chip 0.007 ms, grid 2x1, hit=1
+  timing: 3 windows/call median 0.024 ms (7.9 us/window, chip mean 7.3 us/window, 0.2 GB/s); single window median 0.008 ms (0.2 GB/s, chip mean 7.3 us); 0.00 MB per window
+== small_m5: k=48 n=1000 m=5 cols=200 windows=2
+  upload classic 0 ms, moe 0 ms (0 MB bf16)
+  whole: 0.035 ms call, chip 0.033 ms, grid 125x1
+  window 0 col0=792: mismatches vs whole 0/1000, oracle worst 5.16e-08 bad 0, chip 0.016 ms, grid 25x1, hit=1
+  window 1 col0=0: mismatches vs whole 0/1000, oracle worst 7.30e-08 bad 0, chip 0.009 ms, grid 25x1, hit=1
+  timing: 2 windows/call median 0.020 ms (10.0 us/window, chip mean 9.8 us/window, 1.9 GB/s); single window median 0.010 ms (1.9 GB/s, chip mean 8.8 us); 0.02 MB per window
+== gate_up_16_experts: k=2048 n=24576 m=1 cols=1536 windows=8
+  upload classic 30 ms, moe 28 ms (96 MB bf16)
+  whole: 1.138 ms call, chip 0.477 ms, grid 1024x1
+  window 0 col0=15360: mismatches vs whole 0/1536, oracle worst 2.21e-07 bad 0, chip 0.074 ms, grid 192x1, hit=1
+  window 1 col0=18432: mismatches vs whole 0/1536, oracle worst 2.64e-07 bad 0, chip 0.046 ms, grid 192x1, hit=1
+  window 2 col0=6144: mismatches vs whole 0/1536, oracle worst 2.67e-07 bad 0, chip 0.046 ms, grid 192x1, hit=1
+  window 3 col0=21504: mismatches vs whole 0/1536, oracle worst 2.46e-07 bad 0, chip 0.046 ms, grid 192x1, hit=1
+  window 4 col0=16896: mismatches vs whole 0/1536, oracle worst 2.19e-07 bad 0, chip 0.045 ms, grid 192x1, hit=1
+  window 5 col0=0: mismatches vs whole 0/1536, oracle worst 2.55e-07 bad 0, chip 0.045 ms, grid 192x1, hit=1
+  window 6 col0=10752: mismatches vs whole 0/1536, oracle worst 2.57e-07 bad 0, chip 0.046 ms, grid 192x1, hit=1
+  window 7 col0=4608: mismatches vs whole 0/1536, oracle worst 2.58e-07 bad 0, chip 0.047 ms, grid 192x1, hit=1
+  timing: 8 windows/call median 0.365 ms (45.6 us/window, chip mean 45.3 us/window, 137.8 GB/s); single window median 0.047 ms (135.0 GB/s, chip mean 44.0 us); 6.29 MB per window
+== gate_up_128_experts: k=2048 n=196608 m=1 cols=1536 windows=8
+  upload classic 217 ms, moe 215 ms (768 MB bf16)
+  whole: 5.720 ms call, chip 4.126 ms, grid 1024x1
+  window 0 col0=38400: mismatches vs whole 0/1536, oracle worst 2.31e-07 bad 0, chip 0.057 ms, grid 192x1, hit=1
+  window 1 col0=132096: mismatches vs whole 0/1536, oracle worst 2.23e-07 bad 0, chip 0.056 ms, grid 192x1, hit=1
+  window 2 col0=113664: mismatches vs whole 0/1536, oracle worst 2.23e-07 bad 0, chip 0.055 ms, grid 192x1, hit=1
+  window 3 col0=98304: mismatches vs whole 0/1536, oracle worst 2.92e-07 bad 0, chip 0.057 ms, grid 192x1, hit=1
+  window 4 col0=139776: mismatches vs whole 0/1536, oracle worst 2.48e-07 bad 0, chip 0.057 ms, grid 192x1, hit=1
+  window 5 col0=49152: mismatches vs whole 0/1536, oracle worst 3.04e-07 bad 0, chip 0.056 ms, grid 192x1, hit=1
+  window 6 col0=21504: mismatches vs whole 0/1536, oracle worst 2.87e-07 bad 0, chip 0.055 ms, grid 192x1, hit=1
+  window 7 col0=150528: mismatches vs whole 0/1536, oracle worst 2.47e-07 bad 0, chip 0.056 ms, grid 192x1, hit=1
+  timing: 8 windows/call median 0.447 ms (55.9 us/window, chip mean 55.2 us/window, 112.6 GB/s); single window median 0.057 ms (110.8 GB/s, chip mean 54.3 us); 6.29 MB per window
+== down_128_experts: k=768 n=262144 m=1 cols=2048 windows=8
+  upload classic 105 ms, moe 105 ms (384 MB bf16)
+  whole: 4.101 ms call, chip 1.926 ms, grid 1024x1
+  window 0 col0=141312: mismatches vs whole 0/2048, oracle worst 1.39e-07 bad 0, chip 0.039 ms, grid 256x1, hit=1
+  window 1 col0=98304: mismatches vs whole 0/2048, oracle worst 1.81e-07 bad 0, chip 0.027 ms, grid 256x1, hit=1
+  window 2 col0=188416: mismatches vs whole 0/2048, oracle worst 1.39e-07 bad 0, chip 0.026 ms, grid 256x1, hit=1
+  window 3 col0=0: mismatches vs whole 0/2048, oracle worst 1.57e-07 bad 0, chip 0.026 ms, grid 256x1, hit=1
+  window 4 col0=147456: mismatches vs whole 0/2048, oracle worst 1.95e-07 bad 0, chip 0.027 ms, grid 256x1, hit=1
+  window 5 col0=65536: mismatches vs whole 0/2048, oracle worst 1.42e-07 bad 0, chip 0.026 ms, grid 256x1, hit=1
+  window 6 col0=106496: mismatches vs whole 0/2048, oracle worst 1.78e-07 bad 0, chip 0.026 ms, grid 256x1, hit=1
+  window 7 col0=22528: mismatches vs whole 0/2048, oracle worst 1.56e-07 bad 0, chip 0.027 ms, grid 256x1, hit=1
+  timing: 8 windows/call median 0.214 ms (26.7 us/window, chip mean 25.1 us/window, 117.7 GB/s); single window median 0.027 ms (116.2 GB/s, chip mean 25.0 us); 3.15 MB per window
+== gate_up_16_experts_m16: k=2048 n=24576 m=16 cols=1536 windows=8
+  upload classic 27 ms, moe 27 ms (96 MB bf16)
+  whole: 0.592 ms call, chip 0.499 ms, grid 1024x1
+  window 0 col0=13824: mismatches vs whole 0/24576, oracle worst 2.62e-07 bad 0, chip 0.065 ms, grid 192x1, hit=1
+  window 1 col0=12288: mismatches vs whole 0/24576, oracle worst 2.81e-07 bad 0, chip 0.064 ms, grid 192x1, hit=1
+  window 2 col0=10752: mismatches vs whole 0/24576, oracle worst 3.33e-07 bad 0, chip 0.069 ms, grid 192x1, hit=1
+  window 3 col0=0: mismatches vs whole 0/24576, oracle worst 2.89e-07 bad 0, chip 0.064 ms, grid 192x1, hit=1
+  window 4 col0=9216: mismatches vs whole 0/24576, oracle worst 3.06e-07 bad 0, chip 0.066 ms, grid 192x1, hit=1
+  window 5 col0=3072: mismatches vs whole 0/24576, oracle worst 2.89e-07 bad 0, chip 0.064 ms, grid 192x1, hit=1
+  window 6 col0=19968: mismatches vs whole 0/24576, oracle worst 3.03e-07 bad 0, chip 0.066 ms, grid 192x1, hit=1
+  window 7 col0=16896: mismatches vs whole 0/24576, oracle worst 2.94e-07 bad 0, chip 0.066 ms, grid 192x1, hit=1
+  timing: 8 windows/call median 0.571 ms (71.4 us/window, chip mean 65.3 us/window, 88.2 GB/s); single window median 0.087 ms (72.1 GB/s, chip mean 65.7 us); 6.29 MB per window
+== gate_up_1_expert_standalone: k=2048 n=1544 m=1 cols=1536 windows=1
+  upload classic 2 ms, moe 2 ms (6 MB bf16)
+  whole: 0.269 ms call, chip 0.096 ms, grid 193x1
+  window 0 col0=0: mismatches vs whole 0/1536, oracle worst 2.06e-07 bad 0, chip 0.087 ms, grid 192x1, hit=1
+  timing: 1 windows/call median 0.052 ms (51.9 us/window, chip mean 49.8 us/window, 121.3 GB/s); single window median 0.052 ms (122.0 GB/s, chip mean 49.3 us); 6.29 MB per window
+== down_1_expert_standalone: k=768 n=2056 m=1 cols=2048 windows=1
+  upload classic 1 ms, moe 1 ms (3 MB bf16)
+  whole: 0.177 ms call, chip 0.057 ms, grid 257x1
+  window 0 col0=0: mismatches vs whole 0/2048, oracle worst 1.34e-07 bad 0, chip 0.051 ms, grid 256x1, hit=1
+  timing: 1 windows/call median 0.040 ms (40.1 us/window, chip mean 38.3 us/window, 78.4 GB/s); single window median 0.040 ms (78.7 GB/s, chip mean 38.0 us); 3.15 MB per window
+PASS: 143 checks, 0 failed

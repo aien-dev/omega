@@ -1,0 +1,10 @@
+chip o: 3600 tokens, M 3600 rows, 1 segments, 57 tiles, grid 16 x 57, rt 4 ct 2 warps 8, declared 128 registers
+chip bit-identity: 0 of 524288 sampled outputs (256 rows) differ from the emulation (bit-identical)
+chip second call: identical
+chip mutant 1: caught (7372800 of 7372800 differ)
+chip mutant 2: caught (7372800 of 7372800 differ)
+chip mutant 3: caught (7372800 of 7372800 differ)
+chip mutant 4: caught (7372800 of 7372800 differ)
+TCGEMM o (medians of 9): chip 4108.5 us, call 22746.0 us; 14.70 TFLOPS; weights streamed 478 MB (116.4 GB/s), activations gathered 478 MB, output 29 MB; total 239.9 GB/s
+chip: PASS
+GPU_TCGEMM: PASS

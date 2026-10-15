@@ -34,7 +34,7 @@ name: Host suites
 #   test-composition-gate-gpu, test-r12-silicon, test-r13-silicon,
 #   test-r14-silicon, test-r15-parity-silicon, test-r16-authpath-silicon,
 #   test-m5, test-m16..test-m19 (chip milestones; test-m17 is a skipped job in
-#   host-suites-3.yml), test-polyglot-mojo (needs Mojo toolchain), test-r13-host / test-r14-host
+#   host-suites-3.yml), test-r13-host / test-r14-host
 #   (need both GB10 core classes; rx-host builds them only).
 # Not yet wired (host-only, follow-up): test-numeric-sweep,
 #   test-numeric-e1-exhaustive (2^32 inputs per op, too long), visor-*,

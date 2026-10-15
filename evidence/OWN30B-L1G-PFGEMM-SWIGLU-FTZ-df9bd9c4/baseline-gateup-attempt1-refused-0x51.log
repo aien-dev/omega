@@ -1,0 +1,3 @@
+gateup setup: CHIP_FAIL (m16_native_create_channel: RM_ALLOC class 0xcec0 status 0x51)
+GPU_PFGEMM: FAIL
+exit 1

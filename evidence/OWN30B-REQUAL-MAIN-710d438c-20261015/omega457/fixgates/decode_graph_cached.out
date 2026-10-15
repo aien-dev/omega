@@ -1,0 +1,43 @@
+dgraph prefetch 0 (red 0)
+fp8 knobs: variant 1 barrier 0 (wfi+inval_all) cta_budget 0 shape 0/0/0 cached 0
+ok: RES NORM builds (101 instructions, peak 40 registers)
+ok: RES ADD builds (45 instructions, peak 28 registers)
+ok: RES COMBINE|NORM builds (264 instructions, peak 49 registers)
+ok: SWIGLU builds (29 instructions, peak 16 registers)
+ok: ARGMAX identity builds (165 instructions, peak 32 registers)
+ok: ARGMAX indexed builds (160 instructions, peak 40 registers)
+ok: SWIGLU mutant 1 builds (29 instructions, peak 16 registers)
+ok: RES COMBINE|NORM mutant 2 builds (246 instructions, peak 49 registers)
+ok: RES ADD|COMBINE refused by codegen
+ok: fp8 record without a list: BAD_ARGS
+ok: bf16 record without a list: BAD_ARGS
+ok: router record without a list: BAD_ARGS
+ok: decode attn record without a list: BAD_ARGS
+ok: fp8 record with tab_va 0: BAD_ARGS
+ok: bf16 record with x_va 0: BAD_ARGS
+ok: router record with a NULL router: BAD_ARGS
+ok: decode attn record with a NULL cache: BAD_ARGS
+ok: graph create with an empty config: BAD_ARGS
+host-only: 18 checks, 0 failed: PASS
+dgraph prefetch 0 (red 0)
+fp8 knobs: variant 1 barrier 0 (wfi+inval_all) cta_budget 0 shape 0/0/0 cached 1
+model built in 1.4 s (layers 2, vocab 151936, pos 300)
+ok: A (baseline, host glue) 20 reps ran
+ok: A deterministic over 20 reps (token 62700)
+A: token 62700 logit 5.820572, runner-up 107672 logit 5.779164 (gap 0.0414)
+ok: C (one list per token) 20 reps ran: 22 launches in 1 submission(s)
+ok: C deterministic over 20 reps (token 62700)
+A vs C: token 62700 vs 62700, logits max |d| 1.19e-06 (scale 6.03, rel 1.98e-07, tol 1e-04), x max rel 1.4e-07, hidden max rel 1.57e-07
+ok: argmax token identical: A 62700, C 62700
+ok: logits A vs C within 1e-04 of max|logit| (max |d| 1.19e-06, scale 6.03)
+ok: B (one launch per submission) 20 reps ran: 22 launches in 22 submissions
+ok: B bit-identical to C (x, hidden, logits, token) in every rep
+ok: negative control: SWIGLU mutant fails the comparison (token 107672 vs 62700, max |d| 1.35 = 0.223 of scale)
+ok: negative control: COMBINE mutant fails the comparison (token 62700 vs 62700, max |d| 0.124 = 0.0205 of scale)
+ok: C after the mutants bit-identical to the first C
+ok: timeline: rc 0, 22 stamps for 22 launches, monotonic 1, span 3904.1 us <= chip 3992.0 us, token and logits unchanged
+TIMELINE (2 layers, pos 300): norm x1 12.4 us qkv x2 146.0 us attn x2 144.6 us o_proj x2 115.5 us res_add x2 9.9 us router x2 49.4 us gate_up x2 289.1 us swiglu x2 6.8 us down x2 174.1 us combine_norm x2 20.3 us lm_head x1 2920.9 us argmax x2 15.2 us
+ok: timeline off: token rc 0, stamps accessor refuses (-1)
+PER TOKEN (median of 20, 2 layers): A host-glue 13 launches 4993.0 us | C one list 22 launches 3938.7 us (chip 3929.9 us, record 3.7 us) | B per-launch submits 22 launches 5422.3 us (chip sum 5405.8 us)
+chip: 13 checks, 0 failed: PASS
+GPU_DECODE_GRAPH_CHIP_CACHED: PASS

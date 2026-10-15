@@ -1,0 +1,168 @@
+diff --git a/Makefile b/Makefile
+index b7b853c3..c0c41699 100644
+--- a/Makefile
++++ b/Makefile
+@@ -36,6 +36,7 @@ SRCS += src/omega_gpu_hostmath.c
+ SRCS += src/omega_blackwell_codegen_router.c src/omega_gpu_router_api.c
+ # OWN-30B W-L2 (2026-10-13): decode launch collapse, new files only: command list (N launches, one submit) + glue kernels
+ SRCS += src/omega_gpu_cmdlist.c src/omega_blackwell_codegen_dec.c
++SRCS += src/omega_gpu_mem_cached.c
+ SRCS += src/omega_gpu_decode_graph.c
+ # OWN-30B (2026-10-13): bf16 streaming GEMV for the lm_head (omega_gpu_bf16_gemv_api.h), new files only
+ SRCS += src/omega_blackwell_codegen_bf16.c src/omega_gpu_bf16_gemv_api.c
+diff --git a/src/omega_gpu_fp8_api.c b/src/omega_gpu_fp8_api.c
+index 934cc583..501ad1b6 100644
+--- a/src/omega_gpu_fp8_api.c
++++ b/src/omega_gpu_fp8_api.c
+@@ -4,6 +4,7 @@
+  * coherent with direct CPU mappings"), one launch = omega_gpu_session_launch (shader-cache
+  * invalidate, constant bank, QMD0/QMD1, marker, L2_FLUSH_DIRTY, second marker on uncached memory). */
+ #include "omega_gpu_fp8_api.h"
++#include "omega_gpu_mem_cached.h"
+ #include "omega_blackwell_codegen_moe.h"
+ #include "omega_gpu_session.h"
+ #include "omega_gpu_fmt.h"
+@@ -35,6 +36,7 @@ static struct {
+     int depth_set; uint32_t depth;    /* depth override (depth_set: 0 = automatic) */
+     uint32_t gpr_pad;                 /* registers declared beyond the kernel's peak (diagnosis knob) */
+     int mutant, no_fold, sealed;
++    int weights_cached; /* omega_gpu_fp8_set_weight_cache: uploads after it allocate GPU-cached (read-only weights) */
+     bool hooked;
+     Slot cache[CACHE_SLOTS];
+     unsigned next;
+@@ -224,7 +226,8 @@ int omega_gpu_fp8_tensor_upload(uint32_t experts, uint32_t n, uint32_t k, const
+     t->experts = experts; t->n = n; t->k = k;
+     int rc = OMEGA_GPU_FP8_OK;
+     omega_gpu_session_lock();
+-    if (!dev_open_locked() || omega_gpu_session_alloc(wbytes, &t->w) != 0 || omega_gpu_session_alloc(scount * 4u, &t->s) != 0) rc = OMEGA_GPU_FP8_CHIP_FAIL;
++    int (*const alloc)(size_t, OmegaGpuMem *) = g.weights_cached ? omega_gpu_session_alloc_cached : omega_gpu_session_alloc;
++    if (!dev_open_locked() || alloc(wbytes, &t->w) != 0 || alloc(scount * 4u, &t->s) != 0) rc = OMEGA_GPU_FP8_CHIP_FAIL;
+     omega_gpu_session_unlock();
+     if (rc == OMEGA_GPU_FP8_OK) {
+         memcpy(t->w.cpu, w, wbytes);
+@@ -367,3 +370,7 @@ int omega_gpu_fp8_gemv_grouped_record(OmegaGpuCmdList *cl, const OmegaGpuFp8Tens
+     if (!cl) return OMEGA_GPU_FP8_BAD_ARGS;
+     return gemv_core(t, groups, NULL, NULL, NULL, x_rows, NULL, NULL, tab_va, x_va, cl, y_va);
+ }
++
++/* ---- weight cache policy (OWN-30B L2 kernel-time cut) ---- */
++void omega_gpu_fp8_set_weight_cache(int on) { omega_gpu_session_lock(); g.weights_cached = on ? 1 : 0; omega_gpu_session_unlock(); }
++int omega_gpu_fp8_weight_cache(void) { return g.weights_cached; }
+diff --git a/src/omega_gpu_fp8_api.h b/src/omega_gpu_fp8_api.h
+index 7e43cc3e..43e97650 100644
+--- a/src/omega_gpu_fp8_api.h
++++ b/src/omega_gpu_fp8_api.h
+@@ -135,6 +135,10 @@ uint32_t omega_gpu_fp8_depth_for(const OmegaFp8GemvSpec *spec, uint32_t n, uint3
+ int omega_gpu_fp8_kernel_fits(const OmegaFp8GemvSpec *spec, uint32_t *declared);
+ /* CTAs per group per launch (0 restores the automatic choice: MAX_CTAS single, GROUPED_CTAS grouped). */
+ void omega_gpu_fp8_set_cta_budget(uint32_t ctas);
++/* 1: tensors uploaded from now on live in GPU-cached memory (read-only weights; omega_gpu_mem_cached.h). Default 0:
++ * GPU-uncached like every session buffer. Tensors already uploaded keep their policy. */
++void omega_gpu_fp8_set_weight_cache(int on);
++int omega_gpu_fp8_weight_cache(void);
+ /* Diagnosis: declare `pad` registers beyond the kernel's peak in the QMD (0 = exact peak). */
+ void omega_gpu_fp8_set_gpr_pad(uint32_t pad);
+ /* TEST ONLY: deliberately wrong kernels (1 scale dropped, 2 scale block never advances, 3 group table entry
+diff --git a/src/omega_gpu_platform_linux.c b/src/omega_gpu_platform_linux.c
+index 0aaae738..12736760 100644
+--- a/src/omega_gpu_platform_linux.c
++++ b/src/omega_gpu_platform_linux.c
+@@ -177,14 +177,22 @@ static int ref_dma_alloc(void *ctx, OmegaGpuDeviceHandle dev, const OmegaGpuBuff
+     ref_lock(r);
+     int rc = dev_ok(r, dev);
+     if (rc == OMEGA_GPU_PLAT_OK) rc = omega_gpu_platform_check_buffer(desc, &g_caps);
+-    /* everything here is GPU-uncached; a cached buffer would need flushes nobody issues */
+-    if (rc == OMEGA_GPU_PLAT_OK && desc->gpu_cache != OMEGA_GPU_CACHE_GPU_UNCACHED) rc = OMEGA_GPU_PLAT_REFUSED_CACHE_POLICY;
++    /* GPU-uncached by default. GPU-cached only for DEVICE-PRIVATE data buffers (OWN-30B T3b, 2026-10-13): no CPU_READ, no
++     * HOST_POLLED, so the CPU never reads a line the GPU may still hold in L2 (nvos.h:1116 "For system memory this will not be
++     * coherent with direct CPU mappings"). omega_gpu_mem_cached.c (OWN-30B L2) writes such a buffer from the CPU exactly once,
++     * before any GPU read, then syncs; omega_gpu_devmem.h (T3b) fills them with GPU writes only. Either way no stale L2 line exists. */
++    /* (original T3b note:) nvos.h:1116 "For system memory this will not be
++     * coherent with direct CPU mappings"); omega_gpu_devmem.h fills them with GPU writes only, so no stale L2 line exists. */
++    const int cached = desc->gpu_cache == OMEGA_GPU_CACHE_GPU_CACHED;
++    if (rc == OMEGA_GPU_PLAT_OK && cached &&
++        (desc->kind != OMEGA_GPU_HANDLE_BUF_DATA || (desc->rights & (OMEGA_GPU_RIGHT_CPU_READ | OMEGA_GPU_RIGHT_HOST_POLLED))))
++        rc = OMEGA_GPU_PLAT_REFUSED_CACHE_POLICY;
+     if (rc != OMEGA_GPU_PLAT_OK) { rc = refuse(r, rc, "dma_alloc"); ref_unlock(r); return rc; }
+     uint32_t idx = 0, gen = 0;
+     rc = omega_gpu_handles_open(&r->t, desc->kind, desc->bytes, LINUX_REF_BUFFERS, g_caps.max_total_bytes, &idx, &gen);
+     if (rc != OMEGA_GPU_PLAT_OK) { rc = refuse(r, rc, "dma_alloc"); ref_unlock(r); return rc; }
+     NvrmMem m;
+-    if (nvrm_alloc_gpu_uncached(&r->m16.rm, desc->bytes, &m) != 0) {
++    if ((cached ? nvrm_alloc(&r->m16.rm, desc->bytes, &m) : nvrm_alloc_gpu_uncached(&r->m16.rm, desc->bytes, &m)) != 0) {
+         (void)omega_gpu_handles_close(&r->t, idx, gen, desc->kind); /* this slot never got memory: its generation moves on */
+         rc = refuse(r, OMEGA_GPU_PLAT_REFUSED_DEVICE, "nvrm_alloc_gpu_uncached");
+         ref_unlock(r);
+diff --git a/tests/gpu_decode_graph_test.c b/tests/gpu_decode_graph_test.c
+index 620c8bae..7abf27fd 100644
+--- a/tests/gpu_decode_graph_test.c
++++ b/tests/gpu_decode_graph_test.c
+@@ -199,9 +199,10 @@ static int host_only(void) {
+     return g_failed ? 1 : 0;
+ }
+ 
+-static int chip_run(uint32_t layers, uint32_t vocab, uint32_t reps, int red, const char *out_path) {
++static int chip_run(uint32_t layers, uint32_t vocab, uint32_t reps, int red, int cached, const char *out_path) {
+     FILE *out = out_path ? fopen(out_path, "w") : NULL;
+-    if (out) fprintf(out, "{\"layers\":%u,\"vocab\":%u,\"pos\":%u,\"reps\":%u,\"red\":%d,", layers, vocab, POS, reps, red);
++    if (out) fprintf(out, "{\"layers\":%u,\"vocab\":%u,\"pos\":%u,\"reps\":%u,\"red\":%d,\"cached_weights\":%d,", layers, vocab, POS, reps, red, cached);
++    omega_gpu_fp8_set_weight_cache(cached); /* one variable: the FP8 tensors uploaded below live GPU-cached or not */
+     Model m;
+     uint64_t t0 = omega_gpu_session_now_ns();
+     if (model_build(&m, layers, vocab) != 0) { CHECK(0, "synthetic model build"); return 1; }
+@@ -283,6 +284,8 @@ static int chip_run(uint32_t layers, uint32_t vocab, uint32_t reps, int red, con
+         int prc = run_graph(gr, &m, &C, &st);
+         CHECK(prc == 0 && C.tok == C0.tok && !memcmp(C.logits, C0.logits, (size_t)vocab * 4), "C after the mutants bit-identical to the first C");
+ 
++        if (out) { uint64_t h = 1469598103934665603ull; const unsigned char *b = (const unsigned char *)C0.logits; for (size_t i = 0; i < (size_t)vocab * 4; i++) { h ^= b[i]; h *= 1099511628211ull; }
++                   fprintf(out, "\"C0_token\":%u,\"C0_logits_fnv\":\"%016" PRIx64 "\",", C0.tok, h); }
+         /* timeline instrument: stamps on -> one timestamp per launch, monotonic, span within the chip time; token unchanged; off -> refuses */
+         {
+             static uint64_t sts[OMEGA_GPU_CMDLIST_MAX_LAUNCHES + 1]; static uint8_t kinds[OMEGA_GPU_CMDLIST_MAX_LAUNCHES];
+@@ -319,10 +322,11 @@ static int chip_run(uint32_t layers, uint32_t vocab, uint32_t reps, int red, con
+ }
+ 
+ int main(int argc, char **argv) {
+-    int host = 0, red = 0; uint32_t reps = 20, layers = 2, vocab = 151936; const char *out = NULL;
++    int host = 0, red = 0, cached = 0; uint32_t reps = 20, layers = 2, vocab = 151936; const char *out = NULL;
+     for (int i = 1; i < argc; i++) {
+         if (strcmp(argv[i], "--host-only") == 0) host = 1;
+         else if (strcmp(argv[i], "--red") == 0) red = 1;
++        else if (strcmp(argv[i], "--cached-weights") == 0) cached = 1;
+         else if (strcmp(argv[i], "--reps") == 0 && i + 1 < argc) reps = (uint32_t)atoi(argv[++i]);
+         else if (strcmp(argv[i], "--layers") == 0 && i + 1 < argc) layers = (uint32_t)atoi(argv[++i]);
+         else if (strcmp(argv[i], "--vocab") == 0 && i + 1 < argc) vocab = (uint32_t)atoi(argv[++i]);
+@@ -331,7 +335,7 @@ int main(int argc, char **argv) {
+     }
+     if (reps == 0) reps = 1;
+     if (layers == 0 || layers > 8) layers = 2;
+-    int rc = host ? host_only() : chip_run(layers, vocab, reps, red, out);
++    int rc = host ? host_only() : chip_run(layers, vocab, reps, red, cached, out);
+     printf("%s: %d checks, %d failed: %s\n", host ? "host-only" : red ? "chip-red" : "chip", g_checks, g_failed, rc ? "FAIL" : "PASS");
+     return rc;
+ }
+diff --git a/tools/run_gpu_decode_graph_chip.sh b/tools/run_gpu_decode_graph_chip.sh
+index 0fd229cf..6b7955bf 100755
+--- a/tools/run_gpu_decode_graph_chip.sh
++++ b/tools/run_gpu_decode_graph_chip.sh
+@@ -1,5 +1,6 @@
+ #!/bin/bash
+-# run_gpu_decode_graph_chip.sh EVIDENCE_DIR [red] [PHYSICS_DIR]
++# run_gpu_decode_graph_chip.sh EVIDENCE_DIR [main|red|cached] [PHYSICS_DIR]
++#   cached: main with --cached-weights (FP8 tensors in GPU-cached memory); verdict "GPU_DECODE_GRAPH_CHIP_CACHED: PASS|FAIL"
+ # OWN-30B W-L2a chip gate for omega_gpu_decode_graph (one Qwen3-30B-A3B decode token as one command list).
+ # Caller holds the GB10 lock: flock /tmp/aien-gb10.lock tools/run_gpu_decode_graph_chip.sh EVID
+ #   0. host proofs first (never hardware results): --host-only
+@@ -23,6 +24,12 @@ T=./build/gpu_decode_graph_test
+ sha256sum "$T" build/libomega_gpu.a > "$EVID/binaries.sha256"
+ fail=0
+ $T --host-only 2>&1 | tee "$EVID/host-only.log"; [ "${PIPESTATUS[0]}" = 0 ] || fail=1
++if [ "$MODE" = cached ]; then
++  $T --cached-weights --reps "${REPS:-20}" --out "$EVID/receipt-cached.json" 2>&1 | tee "$EVID/cached.log"; rc=${PIPESTATUS[0]}
++  echo "end $(date -u +%FT%TZ) cached_exit=$rc" >> "$EVID/device.txt"
++  (cd "$EVID" && sha256sum *.json *.log *.txt *.diff *.sha256 > SHA256SUMS)
++  if [ "$rc" = 0 ] && [ $fail = 0 ]; then echo "GPU_DECODE_GRAPH_CHIP_CACHED: PASS"; exit 0; else echo "GPU_DECODE_GRAPH_CHIP_CACHED: FAIL"; exit 1; fi
++fi
+ if [ "$MODE" = red ]; then
+   $T --red --reps "${REPS:-3}" --out "$EVID/receipt-red.json" 2>&1 | tee "$EVID/red.log"; rc=${PIPESTATUS[0]}
+   echo "end $(date -u +%FT%TZ) red_exit=$rc" >> "$EVID/device.txt"

@@ -33,7 +33,6 @@ name: Host suites 2
 # Pinned dependencies are read from physics.lock, aienos.lock and argus.lock.
 #
 # Deliberately NOT here:
-#   test-polyglot-mojo (needs the Mojo toolchain);
 #   test-turing-exp001-eval: environment. Its fail-closed tests run the
 #   evaluator inside a bubblewrap jail (/usr/bin/bwrap), which the runner does
 #   not have (79 passed, 4 failed: "bubblewrap not found"). Spark -j1: PASS;
@@ -159,7 +158,7 @@ jobs:
           sel argus     "^src/runtime/|^tests/runtime/|^tests/bench_rx_argus\.c$|^mk/machine-identity\.mk$|^src/(sha256|omega_evidence)\.|^(physics|aienos|argus)\.lock$"
           sel numeric2  "^tests/(test_omega_reduce|test_omega_divsqrt_gb10)\.c$|^tests/numeric_oracle\.h$|^src/(omega_numeric|omega_blackwell_(encoder|codegen|matmul|qmd)|sha256)"
           sel tensor    "^tools/m20_receipt(_mutations)?\.sh$|^tests/test_m20_receipt\.sh$|^tests/fixtures/m20_receipt/|^src/tensor/|^tests/test_omega_tensor(_store)?\.c$|^tools/tensor_mutations\.sh$|^mk/tensor\.mk$|^src/(omega_numeric|omega_blackwell_(encoder|codegen|matmul|qmd)|sha256)"
-          sel gpuengine "^src/omega_gpu_(engine|platform)\.|^src/omega_blackwell_(encoder|qmd|realize|codegen|matmul)\.|^src/omega_gpu_(session|serving|matmul_api|attention_api|wait|fmt|platform_linux)\.|^src/sha256\.|^tests/test_omega_(gpu_engine|gpu_engine_compile|gpu_platform|codegen_freestanding|gpu_session_platform|gpu_platform_linux)\.c$|^tests/fake_m16_native\.c$|^physics\.lock$|^tools/gpu_engine_mutations\.sh$|^mk/omega-gpu-engine\.mk$"
+          sel gpuengine "^src/omega_gpu_(engine|platform)\.|^src/omega_blackwell_(encoder|qmd|realize|codegen|matmul)\.|^src/omega_gpu_(session|serving|matmul_api|attention_api|wait|fmt|platform_linux|cmdlist|mem_cached)\.|^src/sha256\.|^tests/test_omega_(gpu_engine|gpu_engine_compile|gpu_platform|codegen_freestanding|gpu_session_platform|gpu_platform_linux)\.c$|^tests/fake_m16_native\.c$|^physics\.lock$|^tools/gpu_engine_mutations\.sh$|^mk/omega-gpu-engine\.mk$"
 
   visor:
     needs: changes

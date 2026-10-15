@@ -1,0 +1,3 @@
+start 2026-10-14T00:08:01Z omega=a634e85adbb97b703f604b065c389b81da3a4f52 dirty=1 cmd='./build/gpu_prefill_attn_test --timing-only --reps 300' camera='nvidia-smi -lms 20'
+NVIDIA GB10, 580.173.02
+end 2026-10-14T00:08:24Z

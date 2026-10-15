@@ -1,0 +1,3 @@
+codegen warps 4: 917 instructions, 120 registers (declared 128, 128 threads -> 16384 of 65536), 16 placeholders patched
+codegen warps 8: 866 instructions, 120 registers (declared 128, 256 threads -> 32768 of 65536), 16 placeholders patched
+gpu_prefill_attn_test: 26 checks, 0 failed: PASS

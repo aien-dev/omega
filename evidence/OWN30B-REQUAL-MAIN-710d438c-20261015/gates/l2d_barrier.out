@@ -1,0 +1,43 @@
+COST m=1  barrier=wfi+inval_all  span_us=152.9 per_launch_us=157.7 first_launch_us=152.9 elapsed_us=157.7 GB/s=212.8 fixed_per_extra_launch_us=0.00
+COST m=2  barrier=wfi+inval_all  span_us=181.1 per_launch_us=93.0 first_launch_us=80.5 elapsed_us=186.1 GB/s=180.3 fixed_per_extra_launch_us=28.35
+COST m=4  barrier=wfi+inval_all  span_us=222.3 per_launch_us=56.8 first_launch_us=55.3 elapsed_us=227.3 GB/s=147.7 fixed_per_extra_launch_us=23.18
+COST m=8  barrier=wfi+inval_all  span_us=326.8 per_launch_us=41.5 first_launch_us=39.0 elapsed_us=331.8 GB/s=101.2 fixed_per_extra_launch_us=24.86
+COST m=16 barrier=wfi+inval_all  span_us=538.9 per_launch_us=34.0 first_launch_us=31.4 elapsed_us=543.9 GB/s=61.7 fixed_per_extra_launch_us=25.75
+COST m=1  barrier=wfi_only       span_us=150.7 per_launch_us=155.7 first_launch_us=150.7 elapsed_us=155.7 GB/s=215.6 fixed_per_extra_launch_us=0.00
+COST m=2  barrier=wfi_only       span_us=172.4 per_launch_us=88.7 first_launch_us=79.3 elapsed_us=177.4 GB/s=189.2 fixed_per_extra_launch_us=21.68
+COST m=4  barrier=wfi_only       span_us=215.6 per_launch_us=55.2 first_launch_us=51.2 elapsed_us=220.6 GB/s=152.1 fixed_per_extra_launch_us=21.64
+COST m=8  barrier=wfi_only       span_us=325.7 per_launch_us=41.3 first_launch_us=38.2 elapsed_us=330.8 GB/s=101.5 fixed_per_extra_launch_us=25.01
+COST m=16 barrier=wfi_only       span_us=537.0 per_launch_us=33.8 first_launch_us=32.4 elapsed_us=541.0 GB/s=62.0 fixed_per_extra_launch_us=25.69
+COST m=1  barrier=wfi+inval_data span_us=156.1 per_launch_us=160.9 first_launch_us=156.1 elapsed_us=160.9 GB/s=208.6 fixed_per_extra_launch_us=0.00
+COST m=2  barrier=wfi+inval_data span_us=175.4 per_launch_us=90.1 first_launch_us=83.4 elapsed_us=180.2 GB/s=186.2 fixed_per_extra_launch_us=19.34
+COST m=4  barrier=wfi+inval_data span_us=213.8 per_launch_us=54.7 first_launch_us=50.8 elapsed_us=218.7 GB/s=153.5 fixed_per_extra_launch_us=19.26
+COST m=8  barrier=wfi+inval_data span_us=321.0 per_launch_us=40.7 first_launch_us=37.4 elapsed_us=326.0 GB/s=103.0 fixed_per_extra_launch_us=23.58
+COST m=16 barrier=wfi+inval_data span_us=539.2 per_launch_us=34.0 first_launch_us=31.2 elapsed_us=544.1 GB/s=61.7 fixed_per_extra_launch_us=25.55
+COST m=1  barrier=flush_data     span_us=148.0 per_launch_us=153.0 first_launch_us=148.0 elapsed_us=153.0 GB/s=219.4 fixed_per_extra_launch_us=0.00
+COST m=2  barrier=flush_data     span_us=179.1 per_launch_us=92.0 first_launch_us=85.4 elapsed_us=184.0 GB/s=182.4 fixed_per_extra_launch_us=31.04
+COST m=4  barrier=flush_data     span_us=216.9 per_launch_us=55.5 first_launch_us=54.8 elapsed_us=221.8 GB/s=151.3 fixed_per_extra_launch_us=22.95
+COST m=8  barrier=flush_data     span_us=317.8 per_launch_us=40.3 first_launch_us=38.0 elapsed_us=322.7 GB/s=104.0 fixed_per_extra_launch_us=24.25
+COST m=16 barrier=flush_data     span_us=538.5 per_launch_us=34.0 first_launch_us=31.8 elapsed_us=543.4 GB/s=61.8 fixed_per_extra_launch_us=26.03
+COST m=1  barrier=none           span_us=0.0 per_launch_us=157.2 first_launch_us=0.0 elapsed_us=157.2 GB/s=213.5 fixed_per_extra_launch_us=0.00
+COST m=2  barrier=none           span_us=0.0 per_launch_us=78.2 first_launch_us=0.0 elapsed_us=156.3 GB/s=214.7 fixed_per_extra_launch_us=-0.88
+COST m=4  barrier=none           span_us=0.0 per_launch_us=42.7 first_launch_us=0.0 elapsed_us=170.8 GB/s=196.5 fixed_per_extra_launch_us=4.53
+COST m=8  barrier=none           span_us=0.0 per_launch_us=23.4 first_launch_us=0.0 elapsed_us=187.2 GB/s=179.3 fixed_per_extra_launch_us=4.28
+COST m=16 barrier=none           span_us=0.0 per_launch_us=11.6 first_launch_us=0.0 elapsed_us=185.4 GB/s=181.0 fixed_per_extra_launch_us=1.88
+COST m=1  barrier=wfi+inval_all  span_us=149.2 per_launch_us=154.1 first_launch_us=149.2 elapsed_us=154.1 GB/s=217.8 fixed_per_extra_launch_us=0.00
+COST m=2  barrier=wfi+inval_all  span_us=180.3 per_launch_us=92.6 first_launch_us=84.2 elapsed_us=185.2 GB/s=181.2 fixed_per_extra_launch_us=31.12
+COST m=4  barrier=wfi+inval_all  span_us=214.5 per_launch_us=54.9 first_launch_us=49.4 elapsed_us=219.5 GB/s=152.9 fixed_per_extra_launch_us=21.79
+COST m=8  barrier=wfi+inval_all  span_us=326.9 per_launch_us=41.5 first_launch_us=39.5 elapsed_us=331.9 GB/s=101.1 fixed_per_extra_launch_us=25.40
+COST m=16 barrier=wfi+inval_all  span_us=569.1 per_launch_us=35.9 first_launch_us=33.9 elapsed_us=574.0 GB/s=58.5 fixed_per_extra_launch_us=27.99
+gpu_launch_cost_test: 31 checks, 0 failed: PASS
+graph 1 barrier 0: fp8 knobs: variant 1 barrier 0 (wfi+inval_all) cta_budget 0 shape 0/0/0 cached 0 TIMELINE (2 layers, pos 300): norm x1 11.9 us qkv x2 166.9 us attn x2 158.5 us o_proj x2 125.1 us res_add x2 9.6 us router x2 61.5 us gate_up x2 334.4 us swiglu x2 6.5 us down x2 245.3 us combine_norm x2 19.8 us lm_head x1 2919.4 us argmax x2 15.6 us PER TOKEN (median of 10, 2 layers): A host-glue 13 launches 5003.6 us | C one list 22 launches 4060.7 us (chip 4057.6 us, record 2.3 us) | B per-launch submits 22 launches 5336.8 us (chip sum 5326.4 us) chip: 13 checks, 0 failed: PASS 
+"C0_logits_fnv":"77e35a29071d8fa7"
+graph 2 barrier 2: fp8 knobs: variant 1 barrier 2 (wfi_only) cta_budget 0 shape 0/0/0 cached 0 TIMELINE (2 layers, pos 300): norm x1 13.8 us qkv x2 155.7 us attn x2 145.2 us o_proj x2 122.2 us res_add x2 10.1 us router x2 48.7 us gate_up x2 297.8 us swiglu x2 6.2 us down x2 175.1 us combine_norm x2 18.5 us lm_head x1 2894.3 us argmax x2 15.6 us PER TOKEN (median of 10, 2 layers): A host-glue 13 launches 4995.2 us | C one list 22 launches 3986.3 us (chip 3982.9 us, record 2.5 us) | B per-launch submits 22 launches 5336.9 us (chip sum 5326.9 us) chip: 13 checks, 0 failed: PASS 
+"C0_logits_fnv":"77e35a29071d8fa7"
+graph 3 barrier 3: fp8 knobs: variant 1 barrier 3 (wfi+inval_data) cta_budget 0 shape 0/0/0 cached 0 TIMELINE (2 layers, pos 300): norm x1 5.9 us qkv x2 146.8 us attn x2 143.9 us o_proj x2 119.9 us res_add x2 10.1 us router x2 47.8 us gate_up x2 281.9 us swiglu x2 7.2 us down x2 178.4 us combine_norm x2 19.8 us lm_head x1 2917.3 us argmax x2 15.1 us PER TOKEN (median of 10, 2 layers): A host-glue 13 launches 5004.9 us | C one list 22 launches 4080.1 us (chip 4076.7 us, record 2.5 us) | B per-launch submits 22 launches 5337.1 us (chip sum 5327.1 us) chip: 13 checks, 0 failed: PASS 
+"C0_logits_fnv":"77e35a29071d8fa7"
+graph 4 barrier 4: fp8 knobs: variant 1 barrier 4 (flush_data) cta_budget 0 shape 0/0/0 cached 0 TIMELINE (2 layers, pos 300): norm x1 7.1 us qkv x2 131.7 us attn x2 145.1 us o_proj x2 122.1 us res_add x2 10.3 us router x2 49.5 us gate_up x2 306.2 us swiglu x2 6.0 us down x2 175.8 us combine_norm x2 19.2 us lm_head x1 2902.9 us argmax x2 14.6 us PER TOKEN (median of 10, 2 layers): A host-glue 13 launches 4996.5 us | C one list 22 launches 3976.8 us (chip 3973.6 us, record 2.4 us) | B per-launch submits 22 launches 5525.5 us (chip sum 5515.7 us) chip: 13 checks, 0 failed: PASS 
+"C0_logits_fnv":"77e35a29071d8fa7"
+graph 5 barrier 0: fp8 knobs: variant 1 barrier 0 (wfi+inval_all) cta_budget 0 shape 0/0/0 cached 0 TIMELINE (2 layers, pos 300): norm x1 15.5 us qkv x2 155.9 us attn x2 142.0 us o_proj x2 125.4 us res_add x2 10.0 us router x2 50.4 us gate_up x2 293.0 us swiglu x2 6.1 us down x2 178.9 us combine_norm x2 20.1 us lm_head x1 2905.9 us argmax x2 16.2 us PER TOKEN (median of 10, 2 layers): A host-glue 13 launches 4996.2 us | C one list 22 launches 3977.2 us (chip 3974.1 us, record 2.4 us) | B per-launch submits 22 launches 5340.3 us (chip sum 5329.8 us) chip: 13 checks, 0 failed: PASS 
+"C0_logits_fnv":"77e35a29071d8fa7"
+negative control barrier none: exit 1 (chip: 13 checks, 6 failed: FAIL)
+GPU_L2D_BARRIER_CHIP: PASS

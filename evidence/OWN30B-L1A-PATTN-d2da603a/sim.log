@@ -1,0 +1,15 @@
+codegen warps 4: 917 instructions, 120 registers (declared 128, 128 threads -> 16384 of 65536), 16 placeholders patched
+codegen warps 8: 866 instructions, 120 registers (declared 128, 256 threads -> 32768 of 65536), 16 placeholders patched
+sim one token at position 0                  W=8: ok bad=0 worst=0.000 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim 5 tokens from 0 (partial CTA)            W=8: ok bad=0 worst=0.257 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim 19 tokens from 37, warps 4               W=4: ok bad=0 worst=0.112 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim 19 tokens from 37, sharp q (x4)          W=8: ok bad=0 worst=0.107 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim 64 tokens from 100 (full chunk)          W=8: ok bad=0 worst=0.067 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim 70 tokens from 0 (two chunks)            W=8: ok bad=0 worst=0.291 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim 33 tokens from 200, warps 4              W=4: ok bad=0 worst=0.051 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim mutant 1 at 24 tokens from 40: caught (bad=1083432 worst=41.538 rows: k 7851 v 0 words differ from the emulation (max 34162 ulp))
+sim mutant 2 at 24 tokens from 40: caught (bad=65059 worst=33.577 rows: k 0 v 0 words differ from the emulation (max 0 ulp))
+sim mutant 3 at 24 tokens from 40: caught (bad=1000000 worst=0.083 rows: k 12288 v 12288 words differ from the emulation (max 49195 ulp))
+sim mutant 4 at 24 tokens from 40: caught (bad=53792 worst=183.288 rows: k 0 v 0 words differ from the emulation (max 0 ulp))
+sim: 3570736 warp issues in total
+gpu_prefill_attn_test: 37 checks, 0 failed: PASS

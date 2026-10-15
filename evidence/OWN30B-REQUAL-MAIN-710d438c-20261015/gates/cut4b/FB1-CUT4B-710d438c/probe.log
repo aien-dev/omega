@@ -1,0 +1,10 @@
+## negative_control (fd limit 4: the loader runs, /dev/nvidiactl cannot be opened)
+./build/gpu_session_probe: error while loading shared libraries: libc.so.6: cannot open shared object file: Error 24
+negative_control exit=127 (must be non-zero with a named stage)
+## baseline N=30
+baseline: failures 0 / 30
+## back_to_back N=30
+back_to_back: failures 0 / 30
+## overlap N=30
+overlap: failures 0 / 30
+PROBE_GPU_OPEN: negative_control_exit=127 first_call_failures=0/90 (details /home/drakestapleton/workspace/requal-0c63/omega-gates/cut4b/FB1-CUT4B-710d438c/probe/failures.txt)

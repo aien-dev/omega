@@ -1,5 +1,9 @@
 # Omega language evidence ledger (POLYGLOT-0)
 
+> **Lane B3 (Mojo) removed on 2026-10-15.** Modular MAX and Mojo were dropped from AIEN, and the Mojo lane's source,
+> build rules and test were deleted from this repo. Mojo text below is the original design record, kept unchanged;
+> the Mojo receipts stay in `evidence/`.
+
 What this is: for one exact operation (Omega-X, `y = W.x` with ternary W, int8 x, int32 y; contract
 `spec/polyglot-0.md` section 1), which language and weight representation was fastest on each workload shape,
 by how much, and where the difference is too small to call. Every number below comes from the receipts of one

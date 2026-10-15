@@ -25,7 +25,7 @@
  *     manifest command; for a candidate with an in-process build, e.g. the
  *     own encoder, min of 5 in-process builds instead), object SHA-256 and
  *     text bytes, code size (run + pack symbols, or the candidate's named
- *     code parts: Mojo kernels behind the C adapter, encoder-emitted bytes),
+ *     code parts, e.g. encoder-emitted bytes),
  *     peak RSS.
  * One JSON receipt per candidate x workload (the three sparsities are cells
  * inside it) under --out. Refuses to run if ~/workspace/.spark-quiet exists.
@@ -316,10 +316,8 @@ static void source_info(const char *path, long *lines, long *unsafe, const char 
     if (!f) return;
     size_t l = strlen(path);
     int is_asm = l > 2 && (strcmp(path + l - 2, ".S") == 0 || strcmp(path + l - 2, ".s") == 0);
-    int is_mojo = l > 5 && strcmp(path + l - 5, ".mojo") == 0;
     *rule = is_asm ? "instruction lines (not blank, not comment, not directive, not label-only)"
-            : is_mojo ? "occurrences of 'UnsafePointer' plus 'bitcast'"
-                      : "occurrences of '*)' (pointer casts)";
+            : "occurrences of '*)' (pointer casts)";
     char line[1024];
     long n = 0, u = 0;
     while (fgets(line, sizeof line, f)) {
@@ -333,9 +331,6 @@ static void source_info(const char *path, long *lines, long *unsafe, const char 
                 while (*p == ' ' || *p == '\t') p++;
             }
             if (*p && *p != '\n' && *p != '.' && *p != '/' && *p != '#' && *p != '*' && *p != '@') u++;
-        } else if (is_mojo) {
-            for (char *p = line; (p = strstr(p, "UnsafePointer")); p++) u++;
-            for (char *p = line; (p = strstr(p, "bitcast")); p++) u++;
         } else {
             for (char *p = line; (p = strstr(p, "*)")); p++) u++;
         }
@@ -450,10 +445,10 @@ static int write_receipt(const char *dir, const omx_candidate *c, int wi, const 
     fprintf(f, ", \"thermal_c_after\": ");
     print_thermal(f, ri->th1, ri->nth1);
     fprintf(f, ", \"loadavg_before\": \"%s\", \"loadavg_after\": \"%s\"},\n", ri->load0, ri->load1);
-    /* code size (review G-B2): a candidate that names its code parts (Mojo
-     * kernels behind a C adapter, encoder-emitted bytes behind a thunk) is
-     * counted by those parts; otherwise run + pack symbol sizes. A part whose
-     * size cannot be found makes code_size_bytes null, never a partial sum. */
+    /* code size (review G-B2): a candidate that names its code parts
+     * (encoder-emitted bytes behind a thunk) is counted by those parts;
+     * otherwise run + pack symbol sizes. A part whose size cannot be found
+     * makes code_size_bytes null, never a partial sum. */
     size_t ci = 0;
     for (; ci < g_nc; ci++)
         if (omx_candidate_get(ci) == c) break;
@@ -1016,8 +1011,8 @@ int main(int argc, char **argv) {
     omx_loadavg(ri.load1, sizeof ri.load1);
 
     /* build facts, after timing. The compile commands must not inherit the
-     * one-core timing pin (review G-S9: mojo build is multithreaded, gcc is
-     * not): the original affinity is restored first and recorded. */
+     * one-core timing pin (review G-S9: a compiler may be multithreaded):
+     * the original affinity is restored first and recorded. */
     if (sched_setaffinity(0, sizeof orig_set, &orig_set) == 0)
         snprintf(g_affinity_note, sizeof g_affinity_note, "the bench's original CPU affinity (%d cpus), not the "
                  "timing pin", CPU_COUNT(&orig_set));

@@ -7,14 +7,14 @@
     "generated": {
       "children": [],
       "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiled_at": "2026-10-15T11:15:35Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:4619a90a957e77cd3d5680132ab4d1a5ef65f43419ddcc089743ca5b7a7719ee",
+      "digest": "sha256:280660b9772d5248dacc5bc1a0e879a34ef76bb2e58b1ca341adad13f481258c",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 7,
-      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
-      "source_tree": "sha256:daa71e59849c7450e4b0ac94a11bdeba354b5a2469f2a46cecb06a83f32c6b66"
+      "files": 6,
+      "generated_at_commit": "61c09411331e992ebb9882a50412f938c6bb687f",
+      "source_tree": "sha256:83fa2ed20069d1ab8f011339cf5bb25eb9373e5e41bab3981210b387a682ab95"
     },
     "owner_lane": "",
     "provenance": {
@@ -39,7 +39,6 @@
         "polyglot_explain.c",
         "test_asm.c",
         "test_encoder.c",
-        "test_mojo.c",
         "verify_polyglot.c"
       ],
       "purpose_auto": "Directory tests/polyglot. Purpose not yet described by a human."

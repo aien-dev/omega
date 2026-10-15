@@ -1,0 +1,248 @@
+# ground check 2026-10-15T00:49:42Z
+== physics
+e95e3ed Merge pull request #18 from aien-dev/feat/gate34-receipt
+== omega
+ce42e62f gpu-engine: GB10-1 chip qualification receipt at candidate 2eb912d (M17 18/18, M18 36/36, GPU_ENGINE PASS)
+M  .github/workflows/host-suites-2.yml
+M  .github/workflows/host-suites-3.yml
+M  .github/workflows/host-suites.yml
+M  .gitignore
+M  CONTRIBUTORS.md
+== queue
+quiet flag: CLEAR
+queue: 0 job(s)  flush lock: none
+workers (task dir /tmp/claude-1000/-home-drakestapleton/294ea9b6-30d4-4265-b77f-085ab4d95397/tasks):
+a3f3321afa2a46899|builder|C3-FENCE-FIX|completed  (no output yet)
+== docs-read
+== 2026-10-07-qwen3-decode-matmul
+2026-10-07T07:12:27Z	CUDA Programming Guide, Writing CUDA Kernels > Coalesced Global Memory Access	Global memory is accessed via 32-byte memory transactions. To maximize efficiency, all threads within a warp should utilize the data fetched in a single memory transaction.
+2026-10-07T07:50:07Z	nvcc 13.0.88 -arch=sm_121 SASS oracle (oracle/frag_plain.sass) + CUDA PTX ISA mma.m16n8k16 fragment table	dependent HMMA.16816 chain: HMMA ctrl 0x004fde00 (stall 15) then NOP 0x000fdc00 (stall 14); LDG.E.64 w2 0x0c1e1b00, LDG.E.128 0x0c1e1d00, offset at bits 40..63 | DOCS SILENT on scoreboard counter depth (16 loads on SB2)
+== CHIPWAIT
+2026-10-04T01:04:38Z	physics third_party/nvidia-open-580.173.02 .../sdk/nvidia/inc/nvos.h:1114-1118 (read 2026-10-04 via Read tool, helper 69f80259)	NVOS32_ATTR2_GPU_CACHEABLE: GPU-cacheable system memory is not coherent with CPU mappings; completion words must be allocated GPU-uncached (nvrm_alloc_gpu_uncached), which is what the CHIPWAIT stack and the M19R qualification exercise
+== F277
+2026-10-08T14:18:26Z	n/a: no driver or chip call touched; only the env-switch policy and docs/tests, host CPU only	DOCS SILENT on env-switch policy (not a hardware matter)
+== G286
+2026-10-08T15:08:32Z	linux-headers-7.0.0-1019-nvidia include/acpi/actbl2.h:1837-1843 (ACPI MCFG allocation)	u64 address; /* Base address, processor-relative */ u16 pci_segment; /* PCI segment group number */ u8 start_bus_number; u8 end_bus_number; | NVIDIA docs SILENT on GB10 MCFG segment layout
+2026-10-08T17:27:33Z	native/kernel/core/ipc.h + docs/GB10_NATIVE_ACCELERATOR_BOUNDARY.md	Mapping MMIO is a separate, capability-gated kernel service; Accelerator MMIO region: read/write of a bounded BAR window; ipc.h: Pure logic... generation-checked handles, attenuating derive, cascading revoke
+2026-10-08T19:02:30Z	native/kernel/mm/pt.h + mm/mmu.c tlb_sync (in-repo)	pt.h: 'Live: only fills invalid entries (or accepts identical ones), else CK_PT_ELIVE'; mmu.c ck_mm_mmio_try_map: 'if (pt.live) tlb_sync();' after changing entries (dsb ishst; tlbi vmalle1is; dsb ish; isb). Arm ARM not read: DOCS SILENT on formal BBM text, using repo pattern only
+2026-10-08T20:03:32Z	~/workspace/hive/G286/docs/GB10_PLATFORM_TOPOLOGY.md:47-62	Segments 0 to 14 use base 0xF300000000 plus a 0x10000000 stride and cover buses 0 to 15; NVMe BDF/segment not recorded there (DOCS SILENT on Spark NVMe location)
+== G31-crash
+2026-10-08T20:03:32Z	~/workspace/hive/G286/docs/GB10_PLATFORM_TOPOLOGY.md:47-62	Segment 15, the GB10 segment, has ECAM base 0x29000000 and covers buses 0 to 1; DOCS SILENT on Spark NVMe BDF
+== Q277
+2026-10-08T12:25:13Z	docs/design/gb10-weight-ownership.md:308-309	The default refusal in omega_model_refusal_with stays until the verdict is PASS and merged. Flipping it is a separate PR that cites the verdict.
+== a2
+2026-10-07T05:44:57Z	nvidia-open-580.173.02 nvstatuscodes.h:110 + Context7 /nvidia/open-gpu-kernel-modules errors.md	NV_ERR_NO_MEMORY 0x00000051 "Out of memory"; can be triggered by exhausted system RAM or resource pressure during session and device creation; DOCS SILENT on RM page-cache reclaim policy
+== aien-architecture
+2026-10-11T16:33:51Z	spark-hardware-manual SKILL.md section 0 + nvidia-open-580.173.02 nvos.h	DOCS SILENT on reading /proc/locks for the /tmp/aien-gb10.lock holder (aien-test status display only, no chip or driver call)
+== aien-platform-linux
+2026-10-04T11:09:44Z	https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/understanding-memory.html (Unified Memory) + omega src/omega_gpu_attention_api.c:525 at 3d4648c	On systems with Heterogeneous Memory Management (HMM) or Unified Address Translation Services (ATS), all system memory is implicitly managed memory, requiring no special allocation. | OUR LAYER: omega copies the KV pool into its own nvrm session scratch (memcpy line 525) before launch, so the platform buffer is never read by the chip directly
+== aien-sovereign-core
+2026-10-14T00:55:35Z	nvidia-open-580.173.02 nvos.h:1113-1118 (NVOS32_ATTR2_GPU_CACHEABLE)	YES - Enable gpu caching if supported on this surface type. For system memory this will not be coherent with direct CPU mappings. | W-L1G-C gate recorder: device reads only via GPU-uncached HOST buffers
+2026-10-14T05:23:54Z	physics-own30b nvos.h:1117	YES - Enable gpu caching if supported on this hardware. For system memory this will not be coherent with direct CPU mappings.
+2026-10-14T12:47:37Z	nvidia-open 580.173.02: kernel-open/nvidia/nv-reg.h:181-198 InitializeSystemMemoryAllocations; arch/nvalloc/unix/src/os.c:1013 nv_alloc_pages(zeroed=PDB_PROP_SYS_INITIALIZE_SYSTEM_MEMORY_ALLOCATIONS); nvidia/nv-vm.c:263 __GFP_ZERO; mem_desc.c:802 ADDR_SYSMEM->osAllocPages; live /proc/driver/nvidia/params InitializeSystemMemoryAllocations: 1; physics nvrm.c:527 memset(cpu,0,size)	The NVIDIA Linux driver normally clears system memory it allocates for use with GPUs ... 1 = zero out system memory allocations (default)
+2026-10-14T21:47:22Z	docs.nvidia.com/dgx/dgx-spark/known-issues.html (Context7 /websites/nvidia_dgx_dgx-spark)	the cudaMemGetInfo API may report less memory than is actually allocatable ... sudo sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches' | DOCS SILENT on two processes sharing one KV store dir
+2026-10-15T00:49:39Z	physics 6d7cf0d third_party/nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:1114-1118 + class/clc96f.h:72-73	YES - Enable gpu caching if supported on this surface type. For system memory this will not be coherent with direct CPU mappings. | clc96f.h:73 NVC96F_MEM_OP_D_OPERATION_L2_SYSMEM_NCOH_INVALIDATE 0x11 exists (no comment). DOCS SILENT on whether a host write to a GPU-cached sysmem buffer is seen by the next launch without an L2 invalidate (omega #457, measured here); DOCS SILENT on whether RM invalidates L2 on nvrm_free
+== aienos
+2026-10-13T21:17:33Z	raspberrypi/linux rpi-6.12.y drivers/clk/clk-rp1.c:1846-1860,1920-1940,2079-2095,997-1070,1101-1170; include/dt-bindings/clock/rp1.h	[RP1_CLK_ETH] = REGISTER_CLK(.name = "clk_eth", .parents = {"pll_sys_sec", ...}, .ctrl_reg = CLK_ETH_CTRL, .div_int_reg = CLK_ETH_DIV_INT, .sel_reg = CLK_ETH_SEL, .max_freq = 125 * MHz
+2026-10-13T21:17:33Z	raspberrypi/linux rpi-6.12.y drivers/pinctrl/pinctrl-rp1.c:44-46,101,123-125,292-296,702-780; bcm2712-rpi-5-b.dts:169-173	phy-reset-gpios = <&rp1_gpio 32 GPIO_ACTIVE_LOW>; phy-reset-duration = <5>; { 28, 6, 0x4000, 0x411c, 0x4124, 0x4000, 0x4004 }
+2026-10-13T21:17:33Z	raspberrypi/linux rpi-6.12.y drivers/net/ethernet/cadence/macb_main.c:344-366 macb_mdio_read_c22, :500-508 macb_mdio_reset; macb.h GEM_CLK	macb_writel(bp, MAN, (MACB_BF(SOF, MACB_MAN_C22_SOF) | MACB_BF(RW, MACB_MAN_C22_READ) | MACB_BF(PHYA, mii_id) | MACB_BF(REGA, regnum) | MACB_BF(CODE, MACB_MAN_C22_CODE)));
+2026-10-13T21:17:33Z	RP1 peripherals datasheet RP-008370-DS-1 section 2.2 Address map, 7.1 ETH_CFG	0x00.0000.0000 512G n/a PCIe Outbound direct mapped space; 7 Ethernet: Cadence GEM_GXL, RGMII, SRAM based packet buffer DMA 64-bit address
+2026-10-14T15:40:12Z	nvidia-open-580.173.02 src/common/sdk/nvidia/inc/nvos.h:1116-1118	Typically this is gpu cached for video memory and gpu uncached for system memory. ... For system memory this will not be coherent with direct CPU mappings.
+== aienos-git
+2026-10-12T12:01:27Z	open-gpu-kernel-modules 580.173.02 src/nvidia/generated/g_bindata_kgspGetBinArchiveGspRmFmcGfwProdSigned_GB10B.c:3,25,31-37	SPDX-License-Identifier: MIT / THIS FILE IS AUTOMATICALLY GENERATED, DO NOT EDIT! / FILE NAME: kernel/inc/gspcc/bin/g_gsp_gb10b_dyn_prd_gfw_image.bin FILE TYPE: BINARY COMPRESSION: NO COMPLEX_STRUCT: NO DATA SIZE (bytes): 195912
+== aienos-i286-b5
+2026-10-10T04:12:19Z	Arm IHI 0070 H.a SMMUv3 architecture spec, ~/docs/arm/IHI0070H_a.txt line 1903	Arm recommends that StreamID be a dense namespace starting at 0. The StreamID namespace is per-SMMU.
+2026-10-10T04:12:19Z	Arm IHI 0070 H.a, line 2306	Or, the SMMU_GBPA register might be configured to abort all transactions.
+== allen-gb10
+2026-10-08T12:31:51Z	omega 03d2820 src/omega_gpu_session seat: rx_gpu_seat_kill comment	Destroying the channel under a spinning seat makes the driver's stop request time out (NV_ERR_TIMEOUT on STOP_CHANNEL) until the seat's own countdown ends; a process that dies stops the lease. DOCS SILENT on a daemon-side session-close log line
+== crates
+2026-10-03T16:19:23Z	docs.nvidia.com/dgx/dgx-spark (Context7 /websites/nvidia_dgx_dgx-spark), GB10 spec; same read as sc-kv-admission this session	Blackwell GPU (compute capability SM 12.1, which differs from datacenter Blackwell)
+== cta1024
+2026-10-12T09:25:35Z	DGX Spark User Guide (Context7 /websites/nvidia_dgx_dgx-spark), hardware overview; spark-hardware-manual skill section 1	128 GB LPDDR5x unified (one pool shared by CPU and GPU), 273 GB/s. DOCS SILENT on host-vs-GPU dispatch of small per-token vector ops (norms, rope): no driver flag involved, host arrays stay host arrays.
+== drakestapleton
+2026-10-06T11:23:02Z	physics/third_party/nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:1116	YES - Enable gpu caching if supported on this surface type. For system memory this will not be coherent with direct CPU mappings.
+2026-10-08T11:38:21Z	nvos.h:1114-1119 (nvidia-open-580.173.02) read; this lane launches the daemon only, no allocation flag changes	DEFAULT - Highest performance cache policy... gpu uncached for system memory. DOCS SILENT on RM sysmem allocation vs page-cache state.
+2026-10-11T03:57:48Z	n/a: CLI banner text edit in crates/aien-cli/src/ui.rs (hook matched the word GB10 in a string)	DOCS SILENT on chip/driver: this edit changes a printed string only, no chip, driver or launch code
+2026-10-11T13:59:22Z	aienos docs/GB10_IORT_DECODE.md section 10 (B7b expected output; docs-only task, no chip action)	B7b itself (the attended hardware boot) is not authorized and was not run
+2026-10-12T11:25:59Z	/usr/share/doc/nvidia-firmware-580-580.173.02/copyright (NVIDIA Driver License Agreement 1.1(d), 2.1-2.3, 2.6)	1.1(d) Distribute the SOFTWARE provided for use with operating system kernels distributed under the terms of an OSI-approved open source license ... provided that (i) the binary files thereof are not modified in any way ... and (ii) this Agreement is provided to each SOFTWARE recipient. 2.1 You may only use firmware in NVIDIA Platforms. You may not translate firmware ... into any other architecture or language. 2.2 You may not reverse engineer, decompile, or disassemble the SOFTWARE provided in binary form. 2.6 You may not bypass ... authentication mechanism.
+== fastload-omega
+2026-10-14T12:47:37Z	nvidia-open 580.173.02: kernel-open/nvidia/nv-reg.h:181-198 InitializeSystemMemoryAllocations; arch/nvalloc/unix/src/os.c:1013 nv_alloc_pages(zeroed=PDB_PROP_SYS_INITIALIZE_SYSTEM_MEMORY_ALLOCATIONS); nvidia/nv-vm.c:263 __GFP_ZERO; mem_desc.c:802 ADDR_SYSMEM->osAllocPages; live /proc/driver/nvidia/params InitializeSystemMemoryAllocations: 1; physics nvrm.c:527 memset(cpu,0,size)	The NVIDIA Linux driver normally clears system memory it allocates for use with GPUs ... 1 = zero out system memory allocations (default)
+== fastload-sc
+2026-10-14T12:47:37Z	nvidia-open 580.173.02: kernel-open/nvidia/nv-reg.h:181-198 InitializeSystemMemoryAllocations; arch/nvalloc/unix/src/os.c:1013 nv_alloc_pages(zeroed=PDB_PROP_SYS_INITIALIZE_SYSTEM_MEMORY_ALLOCATIONS); nvidia/nv-vm.c:263 __GFP_ZERO; mem_desc.c:802 ADDR_SYSMEM->osAllocPages; live /proc/driver/nvidia/params InitializeSystemMemoryAllocations: 1; physics nvrm.c:527 memset(cpu,0,size)	The NVIDIA Linux driver normally clears system memory it allocates for use with GPUs ... 1 = zero out system memory allocations (default)
+== gpu
+2026-10-06T15:40:34Z	physics/third_party/nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:1118	GPU_CACHEABLE_YES: For system memory this will not be coherent with direct CPU mappings. (np1-v5 worker: running pinned omega 62b6a28 campaign only, no chip/driver edits; physics nvrm.c:474 provides GPU_CACHEABLE_NO path)
+== interplane
+2026-10-07T22:59:49Z	nvos.h:1113-1119 (nvidia-open-580.173.02)	YES - Enable gpu caching if supported on this surface type. For system memory this will not be coherent with direct CPU mappings. (Relevance: this run uses the CPU-only stub build with the GPU engine NOT linked, no chip allocation is made.)
+== investigations
+2026-10-05T18:46:26Z	https://docs.nvidia.com/cuda/cuda-programming-guide/03-advanced/advanced-kernel-programming.html (Independent Thread Scheduling) via Context7 /websites/nvidia_cuda_cuda-programming-guide	Independent thread scheduling, available on GPUs with compute capability 7.0 and later, maintains execution state per thread, including a program counter and call stack. | DOCS SILENT on SASS encodings and control-word (stall/scoreboard/yield) fields; own layer omega src/omega_gpu_elementwise_api.c:9-18
+== lock-link
+2026-10-07T04:33:06Z	nvidia-open-580.173.02 src/common/sdk/nvidia/inc/nvstatuscodes.h:110	NV_STATUS_CODE(NV_ERR_NO_MEMORY, 0x00000051, "Out of memory") (linked sc#268 test run; GB10 tests open one session each)
+== m311
+2026-10-08T04:28:30Z	https://docs.nvidia.com/dgx/dgx-spark/known-issues.html (Context7 /websites/nvidia_dgx_dgx-spark)	DGX Spark systems utilize a unified memory architecture (UMA) where the GPU shares system DRAM with the CPU ... cudaMemGetInfo API may report less memory than is actually allocatable; DOCS SILENT on RM allocation failure thresholds under low MemFree
+== memory
+2026-10-06T19:56:00Z	nvos.h:1114-1119 (nvidia-open 580.173.02)	YES: Enable gpu caching if supported on this surface type. For system memory this will not be coherent with direct CPU mappings. (Lane S only runs the existing engine unchanged; no chip code edited)
+== nvopen-580
+2026-10-12T11:28:14Z	/usr/share/doc/nvidia-firmware-580-580.173.02/copyright (NVIDIA Driver License Agreement 2.2, 1.1(d)) + open-gpu-kernel-modules tag 580.173.02 kernel-open/common/inc/nv-firmware.h	2.2 You may not reverse engineer, decompile, or disassemble the SOFTWARE provided in binary form. 1.1(d) Distribute ... provided that (i) the binary files thereof are not modified in any way. Reading the open-source driver (MIT/GPL dual licensed kernel-open and src/nvidia) is reading, not disassembly: inventory only, no loading.
+== odysseus
+2026-10-13T16:56:40Z	physics/third_party/nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:1117	YES - Enable gpu caching if supported on this surface type. For system memory this will not be coherent with direct CPU mappings.
+2026-10-14T02:03:58Z	mesa clca6f.h NVCA6F_SEM_EXECUTE + clcec0qmd.h; CUDA programming guide device graph launch/grid.sync (Context7)	NVCA6F_SEM_EXECUTE_OPERATION_ACQUIRE 0x0 / RELEASE 0x1; GP_ENTRY0_FETCH_CONDITIONAL; QMDV05 DEPENDENT_QMD0_ACTION_QMD_DECREMENT_DEPENDENCE
+== omega
+2026-10-14T12:47:37Z	nvidia-open 580.173.02: kernel-open/nvidia/nv-reg.h:181-198 InitializeSystemMemoryAllocations; arch/nvalloc/unix/src/os.c:1013 nv_alloc_pages(zeroed=PDB_PROP_SYS_INITIALIZE_SYSTEM_MEMORY_ALLOCATIONS); nvidia/nv-vm.c:263 __GFP_ZERO; mem_desc.c:802 ADDR_SYSMEM->osAllocPages; live /proc/driver/nvidia/params InitializeSystemMemoryAllocations: 1; physics nvrm.c:527 memset(cpu,0,size)	The NVIDIA Linux driver normally clears system memory it allocates for use with GPUs ... 1 = zero out system memory allocations (default)
+2026-10-14T12:49:38Z	NVIDIA Floating Point guide section 2.2 https://docs.nvidia.com/cuda/archive/12.2.2/floating-point/index.html	Here, the order in which operations are executed affects the accuracy of the result. DOCS SILENT on Omega split invariance.
+2026-10-14T22:04:23Z	nvidia-open-580.173.02 nvos.h:1117-1118	YES - Enable gpu caching if supported on this surface type. For system memory this will not be coherent with direct CPU mappings. (read-only code review of PR 439, no chip runs)
+2026-10-14T22:04:24Z	code review only, PR sc#510 read-only, no chip launch or alloc edits	DOCS SILENT on FFI signature review (no hardware change made)
+2026-10-15T00:49:39Z	physics 6d7cf0d third_party/nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:1114-1118 + class/clc96f.h:72-73	YES - Enable gpu caching if supported on this surface type. For system memory this will not be coherent with direct CPU mappings. | clc96f.h:73 NVC96F_MEM_OP_D_OPERATION_L2_SYSMEM_NCOH_INVALIDATE 0x11 exists (no comment). DOCS SILENT on whether a host write to a GPU-cached sysmem buffer is seen by the next launch without an L2 invalidate (omega #457, measured here); DOCS SILENT on whether RM invalidates L2 on nvrm_free
+== omega-0a
+2026-10-04T19:24:19Z	physics/third_party/nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:1117-1118,961	YES - Enable gpu caching if supported on this surface type. For system memory this will not be coherent with direct CPU mappings. / GPU_CACHE_SNOOPABLE: Only applies to fully coherent platforms.
+== omega-233
+2026-10-04T01:04:38Z	physics third_party/nvidia-open-580.173.02 .../sdk/nvidia/inc/nvos.h:1114-1118 (read 2026-10-04 via Read tool, helper 69f80259)	NVOS32_ATTR2_GPU_CACHEABLE: GPU-cacheable system memory is not coherent with CPU mappings; completion words must be allocated GPU-uncached (nvrm_alloc_gpu_uncached), which is what the CHIPWAIT stack and the M19R qualification exercise
+== omega-frag
+2026-10-07T07:50:07Z	nvcc 13.0.88 -arch=sm_121 SASS oracle (oracle/frag_plain.sass) + CUDA PTX ISA mma.m16n8k16 fragment table	dependent HMMA.16816 chain: HMMA ctrl 0x004fde00 (stall 15) then NOP 0x000fdc00 (stall 14); LDG.E.64 w2 0x0c1e1b00, LDG.E.128 0x0c1e1d00, offset at bits 40..63 | DOCS SILENT on scoreboard counter depth (16 loads on SB2)
+== omega-lib
+2026-10-08T01:37:47Z	omega src/omega_gpu_matmul_api.h:138 + src/omega_gpu_session.h (own layer); NVIDIA open-gpu-kernel-modules RM docs	DOCS SILENT on a per-kernel code-buffer allocation limit; own header: 'From then on a call that fits never allocates' (only true for cached shapes)
+== omega-m18-uncached
+2026-10-03T16:18:05Z	docs.nvidia.com/dgx/dgx-spark (Context7 /websites/nvidia_dgx_dgx-spark), GB10 spec; nvos.h:1115-1118 already read this session (#239)	Blackwell GPU (compute capability SM 12.1); GPU_CACHEABLE_YES on system memory is not coherent with CPU mappings
+== omega-main
+2026-10-04T02:45:01Z	nvidia-open-580.173.02 nvos.h:	NVOS32_ATTR2_GPU_CACHEABLE_YES: Enable gpu caching if supported on this surface type. For system memory this will not be coherent with direct CPU mappings.
+== omega-own30b-a
+2026-10-13T17:10:31Z	physics-own30b/third_party/nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:1117	YES - Enable gpu caching if supported on this surface type. For system memory this will not be coherent with direct CPU mappings. | DOCS SILENT on column-window addressing of a resident matmul B tensor; own layer: omega src/omega_blackwell_codegen.h:253 fragment-major B, column tile nt occupies kp*8 contiguous bf16
+== omega-own30b-a16
+2026-10-14T03:57:10Z	nvidia-open-580.173.02 src/common/sdk/nvidia/inc/nvos.h:1117-1118 (NVOS32_ATTR2_GPU_CACHEABLE)	YES - Enable gpu caching if supported on this surface type.  For system memory this will not be coherent with direct CPU mappings. | W8A16 kernels use only the existing omega_gpu_prefill buffer policy (device-private GPU-cached buffers filled by GPU writes; host buffers uncached); HMMA.16816 fragment layout per PTX ISA mma.m16n8k16 as cited in omega_blackwell_codegen_tc.h; DOCS SILENT on MUFU.EX2/RCP exact rounding (modelled as exp2f/1/x, chip-checked as in the W8A8 SwiGLU)
+== omega-own30b-a16b
+2026-10-14T04:59:24Z	nvos.h:1117	YES - Enable gpu caching if supported on this surface type.  For system memory this will not be coherent with direct CPU mappings. | DOCS SILENT on HMMA bf16 rounding of Q/P; own layer omega codegen_pattn.h:20-26 (Q bf16, P F2FP bf16, l from f32 P)
+== omega-own30b-decode
+2026-10-14T01:50:39Z	CUDA Programming Guide 04-special-topics/programmatic-dependent-launch (Context7 /websites/nvidia_cuda_cuda-programming-guide) + Mesa clcec0qmd.h QMDV05 fields	The driver can initiate the secondary kernel once all primary thread blocks have executed a programmatic trigger or have exited ... cudaGridDependencySynchronize: Will block until all primary kernels ... have completed and flushed results to global memory | DOCS SILENT on QMD semantics of ENABLE_PROGRAM_PRE_EXIT(639)/PRE_EXIT_AT_LAST_CTA_LAUNCH(638)/WAIT_ON_LATCH/ARRIVE_AT_LATCH/HOLD_CTA_LAUNCH_UNTIL_PARENT_LATCH_ACQUIRE_AND_CTA_COMPLETE (names only, no comments, unused by Mesa)
+2026-10-14T02:08:11Z	CUDA programming guide 05-appendices/device-callable-apis.html (Grid Synchronization, Launch Cooperative Kernel) via Context7 /websites/nvidia_cuda_cuda-programming-guide	Launch a kernel ensuring co-residency by launching as many blocks as there are SMs ... grid = multiProcessorCount*numBlocksPerSm (cudaOccupancyMaxActiveBlocksPerMultiprocessor) | compute-capabilities.html: registers per SM 64K across 7.5 through 12.x | DOCS SILENT on GB10 SM count and 12.x resident blocks/warps per SM (measure with on-chip co-residency probe); own layer: attn codegen membar+bar.sync+ATOMG pattern (omega_blackwell_codegen_attn.c:464-476), L2e strong-sys poll + CCTL.IVALL (codegen_moe.c wait)
+2026-10-14T02:27:23Z	mesa nak_private.h:133 + PTX ISA 10.28 (page too long for fetch: body unread) + nvcc 13.0.88 sm_121 oracle /tmp/wl2g-oracle	NAK_SV_CLOCK_LO = 0x50; oracle: CS2R.32 Rd, SR_GLOBALTIMERLO = 0x7805|Rd<<16, w2 0x5200, no scoreboard; DOCS SILENT on %globaltimer resolution and cross-SM sync for GB10 (measure it)
+2026-10-14T02:44:09Z	docs/own30b/resident-control-block.md + nvos.h:1117 (nvidia-open-580.173.02)	For system memory this will not be coherent with direct CPU mappings | control block uncached, stage table + barrier word GPU-cached never host-polled; DOCS SILENT on GB10 co-resident CTA count (chip probe: 192)
+2026-10-14T03:11:16Z	CUDA Programming Guide 02-basics/writing-cuda-kernels (Kernel Launch and Occupancy) + 03-advanced Hardware Multithreading via Context7 /websites/nvidia_cuda_cuda-programming-guide	limiting registers can sometimes increase occupancy by allowing more thread blocks to be scheduled, potentially leading to a net performance gain | The number of blocks and warps that can run concurrently on an SM is constrained by the kernel's resource usage (registers and shared memory) | DOCS SILENT on GB10 loads-in-flight per SM needed to saturate LPDDR5X (measure)
+== omega-own30b-k
+2026-10-13T17:44:36Z	physics-own30b-k/nvrm/nvos.h:1117	Host-polled or host-rewritten memory stays GPU-uncached (NVOS32 attr); existing session release sequence, no new allocation flags
+2026-10-13T23:54:23Z	omega src/omega_gpu_session.h:192-195 (our layer, launch timing) + nvidia-smi --help-query-gpu clocks.sm	elapsed_ns (submit to second marker) | DOCS SILENT on GB10 idle-clock ramp (SM clock read 208 MHz idle, max 3003 MHz)
+== omega-own30b-rc3
+2026-10-14T05:23:54Z	physics-own30b nvos.h:1117	YES - Enable gpu caching if supported on this hardware. For system memory this will not be coherent with direct CPU mappings.
+2026-10-14T11:46:49Z	nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:1113-1118	YES - Enable gpu caching if supported on this surface type.  For system memory this will not be coherent with direct CPU mappings. | host-written per-round tables (GEMM segments, row maps) and every verify buffer use omega_gpu_session_alloc (uncached). DOCS SILENT on SASS kernel numerics (own layer: omega src/omega_blackwell_codegen_dec.h, omega_blackwell_codegen_gemm.h)
+== omega-own30b-spec
+2026-10-14T03:30:04Z	src/omega_blackwell_codegen_attn.h (own layer)	the last CTA of the KV head combines the partials with the usual max rescale
+2026-10-14T03:40:33Z	handoffs/own30b-L4d-report.md Next (own layer)	DOCS SILENT on speculative verify on GB10 (own algorithm; no vendor doc)
+== omega-own30b-specbatch
+2026-10-14T11:46:49Z	nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:1113-1118	YES - Enable gpu caching if supported on this surface type.  For system memory this will not be coherent with direct CPU mappings. | host-written per-round tables (GEMM segments, row maps) and every verify buffer use omega_gpu_session_alloc (uncached). DOCS SILENT on SASS kernel numerics (own layer: omega src/omega_blackwell_codegen_dec.h, omega_blackwell_codegen_gemm.h)
+== omega-own30b-tc
+2026-10-13T21:52:38Z	nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:1117 + Context7 /websites/nvidia_cuda_parallel-thread-execution (mma)	YES - Enable gpu caching if supported on this surface type. For system memory this will not be coherent with direct CPU mappings. | DOCS SILENT on HMMA/mma internal rounding, accumulation order and subnormal input handling (Context7 PTX ISA returned no semantics); measured on the chip instead
+2026-10-13T22:42:01Z	physics/third_party/nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:1116-1118; class/clc96f.h:72-73	YES - Enable gpu caching if supported on this surface type. For system memory this will not be coherent with direct CPU mappings. | clc96f.h: L2_FLUSH_DIRTY 0x10, L2_SYSMEM_NCOH_INVALIDATE 0x11. Plan: GPU-cached buffers only for GPU-written/GPU-read data; host inputs stay uncached; weights reach cached memory via a GPU copy so no stale L2 line can exist
+== omega-reconv
+2026-10-05T23:14:36Z	NVIDIA CUDA PTX ISA / NAK sm120 BSSY/BSYNC; omega docs/gpu-reconvergence nvcc 13.0.88 oracle	DOCS: BSSY/BSYNC encodings MEASURED from nvcc oracle cf.sass, per cc-0016 golden values; no new chip/driver edits, running existing launchers only
+== omega-requal-main
+2026-10-15T00:49:39Z	physics 6d7cf0d third_party/nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:1114-1118 + class/clc96f.h:72-73	YES - Enable gpu caching if supported on this surface type. For system memory this will not be coherent with direct CPU mappings. | clc96f.h:73 NVC96F_MEM_OP_D_OPERATION_L2_SYSMEM_NCOH_INVALIDATE 0x11 exists (no comment). DOCS SILENT on whether a host write to a GPU-cached sysmem buffer is seen by the next launch without an L2 invalidate (omega #457, measured here); DOCS SILENT on whether RM invalidates L2 on nvrm_free
+== open-model-qwen3
+2026-10-07T08:31:00Z	/usr/src/nvidia-580.173.02/nvidia/nv-vm.c:236-261 (driver 580.173.02)	gfp_mask |= __GFP_RETRY_MAYFAIL; (page allocations may fail under memory pressure instead of retrying) | DOCS SILENT on GR context buffer contiguity (omega#327 trigger)
+2026-10-09T13:16:50Z	nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:1114-1116	DEFAULT - Highest performance cache policy that is coherent with the highest performance CPU mapping. Typically this is gpu cached for video memory and gpu uncached for system memory. (Running the pinned frozen build unchanged; no chip/driver code edited; host-polled words are uncached per omega#225/#230.)
+2026-10-12T00:59:33Z	evidence-v7/run/records/nvrm-*.txt (recorded kernel-log line counts, read-only; no chip or driver code touched)	DOCS SILENT on reading recorded NVRM log line counts from campaign evidence files
+== oq3-v2-records
+2026-10-07T11:50:11Z	/usr/src/nvidia-580.173.02/nvidia/nv-vm.c:236-261 (driver 580.173.02)	gfp_mask |= __GFP_RETRY_MAYFAIL; (page allocations may fail under memory pressure instead of retrying) | DOCS SILENT on GR context buffer contiguity (omega#327 trigger)
+== oq3-v5-real
+2026-10-09T13:18:09Z	nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:1114-1116	DEFAULT - Highest performance cache policy that is coherent with the highest performance CPU mapping. Typically this is gpu cached for video memory and gpu uncached for system memory. (Launch scripts for the pinned frozen build only; no chip/driver code edited.)
+== overnight-1005
+2026-10-05T03:22:32Z	physics/third_party/nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:1117	YES - Enable gpu caching if supported on this surface type.  For system memory this will not be coherent with direct CPU mappings.
+== physics
+2026-10-14T01:25:56Z	~/workspace/.ref/mesa/src/nouveau/vulkan/nvk_cmd_buffer.c:633-644,819-830	This is also implicitly a WFI: INVALIDATE_SHADER_CACHES {data, flush_data} for storage writes; INVALIDATE_SHADER_CACHES_NO_WFI {global_data, constant} for storage/uniform reads; no instruction invalidate between dispatches
+2026-10-14T11:46:49Z	nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:1113-1118	YES - Enable gpu caching if supported on this surface type.  For system memory this will not be coherent with direct CPU mappings. | host-written per-round tables (GEMM segments, row maps) and every verify buffer use omega_gpu_session_alloc (uncached). DOCS SILENT on SASS kernel numerics (own layer: omega src/omega_blackwell_codegen_dec.h, omega_blackwell_codegen_gemm.h)
+2026-10-14T12:47:37Z	nvidia-open 580.173.02: kernel-open/nvidia/nv-reg.h:181-198 InitializeSystemMemoryAllocations; arch/nvalloc/unix/src/os.c:1013 nv_alloc_pages(zeroed=PDB_PROP_SYS_INITIALIZE_SYSTEM_MEMORY_ALLOCATIONS); nvidia/nv-vm.c:263 __GFP_ZERO; mem_desc.c:802 ADDR_SYSMEM->osAllocPages; live /proc/driver/nvidia/params InitializeSystemMemoryAllocations: 1; physics nvrm.c:527 memset(cpu,0,size)	The NVIDIA Linux driver normally clears system memory it allocates for use with GPUs ... 1 = zero out system memory allocations (default)
+2026-10-14T22:04:23Z	nvidia-open-580.173.02 nvos.h:1117-1118	YES - Enable gpu caching if supported on this surface type. For system memory this will not be coherent with direct CPU mappings. (read-only code review)
+2026-10-15T00:49:39Z	physics 6d7cf0d third_party/nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:1114-1118 + class/clc96f.h:72-73	YES - Enable gpu caching if supported on this surface type. For system memory this will not be coherent with direct CPU mappings. | clc96f.h:73 NVC96F_MEM_OP_D_OPERATION_L2_SYSMEM_NCOH_INVALIDATE 0x11 exists (no comment). DOCS SILENT on whether a host write to a GPU-cached sysmem buffer is seen by the next launch without an L2 invalidate (omega #457, measured here); DOCS SILENT on whether RM invalidates L2 on nvrm_free
+== physics-own30b
+2026-10-14T12:47:37Z	nvidia-open 580.173.02: kernel-open/nvidia/nv-reg.h:181-198 InitializeSystemMemoryAllocations; arch/nvalloc/unix/src/os.c:1013 nv_alloc_pages(zeroed=PDB_PROP_SYS_INITIALIZE_SYSTEM_MEMORY_ALLOCATIONS); nvidia/nv-vm.c:263 __GFP_ZERO; mem_desc.c:802 ADDR_SYSMEM->osAllocPages; live /proc/driver/nvidia/params InitializeSystemMemoryAllocations: 1; physics nvrm.c:527 memset(cpu,0,size)	The NVIDIA Linux driver normally clears system memory it allocates for use with GPUs ... 1 = zero out system memory allocations (default)
+== primes-race
+2026-10-05T21:42:54Z	~/workspace/.ref/mesa/src/nouveau/headers/nvidia/classes/clcdc0qmd.h:252	#define NVCDC0_QMDV05_00_SHARED_MEMORY_SIZE_SHIFTED7 MW(1162:1152) (word 36, the per-CTA shared size the staged kernel sets; min/max/target SM config at :253-254 unchanged). DOCS SILENT on the runtime cost of staging vs global loads after lane reconvergence.
+== qk-chip
+2026-10-07T04:28:08Z	Context7 /nvidia/open-gpu-kernel-modules _autodocs/errors.md NV_ERR_NO_MEMORY + local dmesg 04:25:16Z	NV_ERR_NO_MEMORY ... can be triggered by exhausted ... system RAM, insufficient internal driver memory, or resource pressure during session and device creation; DOCS SILENT on whether kgrctxAllocMainCtxBuffer needs physically contiguous system memory
+== qual-omega-f523edd
+2026-10-03T16:42:55Z	nvidia-open-580.173.02 src/common/sdk/nvidia/inc/nvos.h ~1112	NVOS32_ATTR2_GPU_CACHEABLE_YES: For system memory this will not be coherent with direct CPU mappings.
+== records
+2026-10-09T13:56:07Z	spark-hardware-manual skill section 0 (read)	DOCS SILENT on copying read-only run records into a docs folder: no chip, driver or launcher code touched
+== reserve
+2026-10-08T03:02:32Z	https://docs.nvidia.com/dgx/dgx-spark/known-issues.html (Context7 /websites/nvidia_dgx_dgx-spark)	DGX Spark systems utilize a unified memory architecture (UMA) where the GPU shares system DRAM with the CPU ... cudaMemGetInfo API may report less memory than is actually allocatable; DOCS SILENT on RM allocation failure thresholds under low MemFree
+== sc
+2026-10-07T23:25:50Z	nvos.h:1113-1119 (nvidia-open-580.173.02), read this session	YES - Enable gpu caching if supported on this surface type. For system memory this will not be coherent with direct CPU mappings. (Relevance: CPU-reference build, GPU engine not linked, no chip allocation.)
+2026-10-08T00:35:19Z	docs/DAEMON_GENERATION_RECORD.md at 12c1a5f	A verifier must treat an absent record as an absent claim, not as a pass.
+2026-10-08T22:06:25Z	https://docs.nvidia.com/dgx/dgx-spark/known-issues.html (Context7 /websites/nvidia_dgx_dgx-spark)	On iGPU platforms, nvidia-smi may report Memory-Usage as Not Supported. This is expected behavior because iGPUs do not utilize dedicated framebuffer memory. | DGX Spark systems utilize a unified memory architecture (UMA) where the GPU shares system DRAM with the CPU.
+2026-10-14T11:46:49Z	nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:1113-1118	YES - Enable gpu caching if supported on this surface type.  For system memory this will not be coherent with direct CPU mappings. | host-written per-round tables (GEMM segments, row maps) and every verify buffer use omega_gpu_session_alloc (uncached). DOCS SILENT on SASS kernel numerics (own layer: omega src/omega_blackwell_codegen_dec.h, omega_blackwell_codegen_gemm.h)
+== sc-277
+2026-10-07T06:36:51Z	/usr/src/nvidia-580.173.02/nvidia/nv-vm.c:236-261 (driver 580.173.02)	unsigned int gfp_mask = NV_GFP_KERNEL; ... gfp_mask |= __GFP_RETRY_MAYFAIL; DOCS SILENT on GR context buffer contiguity
+== sc-fb1-cut6
+2026-10-04T10:45:59Z	docs.nvidia.com/dgx/dgx-spark/known-issues.html (Context7 /websites/nvidia_dgx_dgx-spark) + nvos.h:1114-1119 already recorded for omega this session	DGX Spark systems utilize a unified memory architecture (UMA) where the GPU shares system DRAM with the CPU. Cut 6 removes cudart/cudaMallocManaged from the host side; the KV pool is only read by the CPU (omega gathers on host and stages into its own GPU-uncached buffers), so plain host memory needs no CUDA allocator. DOCS SILENT on ATS access to plain malloc memory from our own kernels (not used by this cut).
+== sc-i369
+2026-10-10T02:51:05Z	physics/third_party/nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:471 (GPU engine run via omega pinned 6c6180cf, test release_golden_path_records_whether_gb10_ran)	} NVOS21_PARAMETERS;
+== sc-kv-admission
+2026-10-03T16:08:02Z	docs.nvidia.com/dgx/dgx-spark (Context7 /websites/nvidia_dgx_dgx-spark), GB10 spec; skill spark-hardware-manual s.1	Blackwell GPU (compute capability SM 12.1, which differs from datacenter Blackwell); 128 GB LPDDR5x unified memory
+== sc-np2
+2026-10-06T16:28:06Z	nvidia-open-580.173.02 src/common/sdk/nvidia/inc/nvos.h:1112-1123 (GPU_CACHEABLE comment block) + spark-hardware-manual skill	DOCS SILENT on CPU-only compose daemon: this build links the GPU STUB (aien-omega-gpu: no AIEN_OMEGA_DIR or AIEN_OMEGA_GPU_LIB, building the CPU stub); no chip, driver or allocation is touched; GPU runs will be under quietlock only
+== sc-np2v3
+2026-10-06T16:28:06Z	nvidia-open-580.173.02 src/common/sdk/nvidia/inc/nvos.h:1112-1123 (GPU_CACHEABLE comment block) + spark-hardware-manual skill	DOCS SILENT on CPU-only compose daemon: this build links the GPU STUB (aien-omega-gpu: no AIEN_OMEGA_DIR or AIEN_OMEGA_GPU_LIB, building the CPU stub); no chip, driver or allocation is touched; GPU runs will be under quietlock only
+== sc-own30b
+2026-10-13T17:43:59Z	physics/third_party/nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:1117	YES - Enable gpu caching if supported on this surface type. For system memory this will not be coherent with direct CPU mappings. | OWN-30B F: no new allocation flags; weights and KV use the existing resident/paged allocators
+== sc-own30b-a16b
+2026-10-14T04:59:24Z	nvos.h:1117	YES - Enable gpu caching if supported on this surface type.  For system memory this will not be coherent with direct CPU mappings. | DOCS SILENT on numerics; own layer omega codegen_pattn.h, codegen_attn.h
+== sc-own30b-lm
+2026-10-13T21:52:38Z	nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:1117	YES - Enable gpu caching if supported on this surface type. For system memory this will not be coherent with direct CPU mappings.
+== sc-own30b-rc3
+2026-10-14T05:23:54Z	physics-own30b nvos.h:1117	YES - Enable gpu caching if supported on this hardware. For system memory this will not be coherent with direct CPU mappings.
+2026-10-14T11:46:49Z	nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:1113-1118	YES - Enable gpu caching if supported on this surface type.  For system memory this will not be coherent with direct CPU mappings. | host-written per-round tables (GEMM segments, row maps) and every verify buffer use omega_gpu_session_alloc (uncached). DOCS SILENT on SASS kernel numerics (own layer: omega src/omega_blackwell_codegen_dec.h, omega_blackwell_codegen_gemm.h)
+== sc-own30b-resident
+2026-10-14T03:40:21Z	handoffs/own30b-L2h-report.md Gate + scripts/own30b-resident-gate.sh header (own layer); CUDA Programming Guide occupancy as recorded by W-L2i	Runs ONLY in a pause window: loads the 30 GB model four times (one at a time, under /tmp/aien-gb10.lock); it refuses when less than 70 GB is available. DOCS SILENT on full-model resident behaviour (no vendor doc for our resident kernel)
+== sc-own30b-spec-wp
+2026-10-14T03:40:21Z	handoffs/own30b-L4d-report.md Next (own layer)	DOCS SILENT on speculative verify on GB10 (own algorithm; no vendor doc)
+== sc-own30b-specbatch
+2026-10-14T11:46:49Z	nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:1113-1118	YES - Enable gpu caching if supported on this surface type.  For system memory this will not be coherent with direct CPU mappings. | host-written per-round tables (GEMM segments, row maps) and every verify buffer use omega_gpu_session_alloc (uncached). DOCS SILENT on SASS kernel numerics (own layer: omega src/omega_blackwell_codegen_dec.h, omega_blackwell_codegen_gemm.h)
+== sc-own30b-specwp
+2026-10-14T03:40:33Z	handoffs/own30b-L4d-report.md Next (own layer)	DOCS SILENT on speculative verify on GB10 (own algorithm; no vendor doc)
+2026-10-14T05:23:54Z	physics-own30b nvos.h:1117	YES - Enable gpu caching if supported on this hardware. For system memory this will not be coherent with direct CPU mappings.
+== sc-own30b-wp
+2026-10-14T00:55:35Z	nvidia-open-580.173.02 nvos.h:1113-1118 (NVOS32_ATTR2_GPU_CACHEABLE)	YES - Enable gpu caching if supported on this surface type. For system memory this will not be coherent with direct CPU mappings. | recorder reads device buffers only through a GPU-uncached HOST buffer (omega_gpu_pf_alloc_host)
+== sc-q3camp
+2026-10-07T06:46:13Z	/usr/src/nvidia-580.173.02/nvidia/nv-vm.c:236-261 (driver 580.173.02)	unsigned int gfp_mask = NV_GFP_KERNEL; ... gfp_mask |= __GFP_RETRY_MAYFAIL; DOCS SILENT on GR context buffer contiguity
+== sc-q3v2
+2026-10-07T12:09:47Z	/usr/src/nvidia-580.173.02/nvidia/nv-vm.c:236-261 (driver 580.173.02)	gfp_mask |= __GFP_RETRY_MAYFAIL; (page allocations may fail under memory pressure instead of retrying) | DOCS SILENT on GR context buffer contiguity (omega#327 trigger)
+== sc-qknorm
+2026-10-07T04:43:53Z	nvidia-open-580.173.02 nvstatuscodes.h:110 + DGX Spark user guide known issues (via spark-hardware-manual s1)	NV_ERR_NO_MEMORY 0x00000051 "Out of memory"; Spark: one unified LPDDR5x pool, cudaMemGetInfo may under-report free memory because the CPU can swap pages; DOCS SILENT on RM ctx-buffer reclaim policy
+== sc-r6
+2026-10-11T01:08:15Z	https://docs.nvidia.com/dgx/dgx-spark/known-issues.html (Context7 /websites/nvidia_dgx_dgx-spark), Guidance for reporting memory resources with UMA	DGX Spark systems utilize a unified memory architecture (UMA) where the GPU shares system DRAM with the CPU. Because the CPU can dynamically manage memory by swapping pages between DRAM and SWAP, the cudaMemGetInfo API may report less memory than is actually allocatable. | DOCS SILENT on per-process chip-call counters (R6 reads chip_calls only; no launcher or allocation change)
+== sc-requal-main
+2026-10-15T00:49:39Z	physics 6d7cf0d third_party/nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:1114-1118 + class/clc96f.h:72-73	YES - Enable gpu caching if supported on this surface type. For system memory this will not be coherent with direct CPU mappings. | clc96f.h:73 NVC96F_MEM_OP_D_OPERATION_L2_SYSMEM_NCOH_INVALIDATE 0x11 exists (no comment). DOCS SILENT on whether a host write to a GPU-cached sysmem buffer is seen by the next launch without an L2 invalidate (omega #457, measured here); DOCS SILENT on whether RM invalidates L2 on nvrm_free
+== sc-spin
+2026-10-07T07:25:57Z	omega src/omega_gpu_session.c:41-44 (our layer, marker wait)	With spin_us, the host first re-reads the uncached marker word back to back (with the ARM yield hint) so a launch that finishes inside the window is seen within about one read, instead of after a 50 us sleep that Linux timer slack stretches further.
+== sc-strict
+2026-10-03T16:23:52Z	docs.nvidia.com/dgx/dgx-spark (Context7 /websites/nvidia_dgx_dgx-spark), GB10 spec; same read as sc-kv-admission this session	Blackwell GPU (compute capability SM 12.1, which differs from datacenter Blackwell)
+== sc-v12
+2026-10-11T01:08:15Z	https://docs.nvidia.com/dgx/dgx-spark/known-issues.html (Context7 /websites/nvidia_dgx_dgx-spark), Guidance for reporting memory resources with UMA	DGX Spark systems utilize a unified memory architecture (UMA) where the GPU shares system DRAM with the CPU. Because the CPU can dynamically manage memory by swapping pages between DRAM and SWAP, the cudaMemGetInfo API may report less memory than is actually allocatable. | DOCS SILENT on per-process chip-call counters (R6 reads chip_calls only; no launcher or allocation change)
+== sc94
+2026-10-10T02:51:47Z	physics/third_party/nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:471 (GPU engine build+run via omega pinned 6c6180cf for sc#94 golden path)	} NVOS21_PARAMETERS;
+== smollm2-qualification
+2026-10-06T23:56:54Z	https://docs.nvidia.com/dgx/dgx-spark/known-issues.html (Guidance for reporting memory resources with unified memory architecture; Estimate available memory on UMA systems)	Because the CPU can dynamically manage memory by swapping pages between DRAM and SWAP, the cudaMemGetInfo API may report less memory than is actually allocatable ... parse /proc/meminfo (MemAvailable, SwapFree, HugePages_Total/Free, Hugepagesize); nvidia-smi Memory-Usage Not Supported is expected on iGPU
+== sovereign-core
+2026-10-04T01:39:27Z	skill spark-hardware-manual section 2 + nvos.h:1112	DOCS SILENT on release-workflow artifact bookkeeping (reading .github/workflows/release.yml and a Rust test name only, no chip or driver code is touched)
+2026-10-07T04:27:02Z	nvidia-open-580.173.02 src/common/sdk/nvidia/inc/nvstatuscodes.h:110	NV_STATUS_CODE(NV_ERR_NO_MEMORY, 0x00000051, "Out of memory")
+2026-10-07T16:32:50Z	nvos.h:1117 (nvidia-open-580.173.02)	YES - Enable gpu caching if supported on this surface type. For system memory this will not be coherent with direct CPU mappings. (We run only the existing uncached-flag launcher; no chip/driver edits)
+2026-10-08T22:06:25Z	https://docs.nvidia.com/dgx/dgx-spark/known-issues.html (Context7 /websites/nvidia_dgx_dgx-spark)	On iGPU platforms, nvidia-smi may report Memory-Usage as Not Supported. This is expected behavior because iGPUs do not utilize dedicated framebuffer memory. | DGX Spark systems utilize a unified memory architecture (UMA) where the GPU shares system DRAM with the CPU.
+== spin
+2026-10-07T07:25:57Z	omega src/omega_gpu_session.c:41-44 (our layer, marker wait)	With spin_us, the host first re-reads the uncached marker word back to back (with the ARM yield hint) so a launch that finishes inside the window is seen within about one read, instead of after a 50 us sleep that Linux timer slack stretches further.
+== t4
+2026-10-06T22:08:39Z	nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:1117	YES - Enable gpu caching if supported on this surface type.  For system memory this will not be coherent with direct CPU mappings.
+== v7
+2026-10-06T23:36:21Z	nvidia-open-580.173.02 src/common/sdk/nvidia/inc/nvos.h:1112-1118 (NVOS32_ATTR2_GPU_CACHEABLE); our layer physics 6d7cf0d nvrm/nvrm.c:473-474,631 (fifo + flags via nvrm_alloc_gpu_uncached)	GPU_CACHEABLE_YES: For system memory this will not be coherent with direct CPU mappings. v7 changes no chip/driver code; it runs the reviewed stack (omega c0369e6, physics 6d7cf0d) whose host-polled words use GPU_CACHEABLE_NO
+== v7check
+2026-10-06T22:08:39Z	nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:1117	YES - Enable gpu caching if supported on this surface type.  For system memory this will not be coherent with direct CPU mappings. (DOCS SILENT on per-token decode latency; read-only investigation of host decode loop)
+== workspace
+2026-10-03T17:16:08Z	nvidia-open-580.173.02 src/common/sdk/nvidia/inc/nvos.h ~1112	NVOS32_ATTR2_GPU_CACHEABLE_YES: For system memory this will not be coherent with direct CPU mappings.
+2026-10-05T18:46:26Z	https://docs.nvidia.com/cuda/cuda-programming-guide/03-advanced/advanced-kernel-programming.html (Independent Thread Scheduling) via Context7 /websites/nvidia_cuda_cuda-programming-guide	Independent thread scheduling, available on GPUs with compute capability 7.0 and later, maintains execution state per thread, including a program counter and call stack. | DOCS SILENT on SASS encodings and control-word (stall/scoreboard/yield) fields; own layer omega src/omega_gpu_elementwise_api.c:9-18
+== wt-305
+2026-10-05T20:11:10Z	physics/third_party/nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:1117-1118	YES - Enable gpu caching if supported on this surface type.  For system memory this will not be coherent with direct CPU mappings.
+== wt-C1-omega
+2026-10-05T04:29:00Z	physics/third_party/nvidia-open-580.173.02/src/common/sdk/nvidia/inc/nvos.h:1116	YES - Enable gpu caching if supported on this surface type. For system memory this will not be coherent with direct CPU mappings. | DOCS SILENT on Omega op shape limits; own layer: omega src/omega_gpu_elementwise_api.c:527 dim % OMEGA_GPU_EW_THREADS(128), omega_gpu_attention_api.c:603 head_dim != 64 -> TOO_LARGE
+== wt-C1e-arch-cand1
+2026-10-05T06:11:55Z	nvidia-open-580.173.02 src/common/sdk/nvidia/inc/nvos.h:	NVOS32_ATTR2_GPU_CACHEABLE_YES: For system memory this will not be coherent with direct CPU mappings. DOCS SILENT on aien-runtime e2e test assertions (test logic, not driver)
+2026-10-05T06:12:03Z	nvidia-open-580.173.02 src/common/sdk/nvidia/inc/nvos.h:1116-1118	DEFAULT: gpu uncached for system memory; YES: for system memory this will not be coherent with direct CPU mappings. DOCS SILENT on aien-runtime e2e test assertions
+== wt-r15d
+2026-10-05T19:57:18Z	nvidia-open-580.173.02 nvos.h:1113-1118 (NVOS32_ATTR2_GPU_CACHEABLE); clc96f.h:72 L2_FLUSH_DIRTY	YES - Enable gpu caching if supported on this surface type. For system memory this will not be coherent with direct CPU mappings. | DOCS SILENT on whether SEM_EXECUTE RELEASE_WFI flushes GPU L2 (clc96f.h:85 only names the WFI bit)
+== wt-sec2
+2026-10-05T19:57:18Z	nvidia-open-580.173.02 nvos.h:1113-1118 (NVOS32_ATTR2_GPU_CACHEABLE); clc96f.h:72 L2_FLUSH_DIRTY	YES - Enable gpu caching if supported on this surface type. For system memory this will not be coherent with direct CPU mappings. | DOCS SILENT on whether SEM_EXECUTE RELEASE_WFI flushes GPU L2 (clc96f.h:85 only names the WFI bit)

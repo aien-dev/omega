@@ -1,0 +1,1 @@
+cmd: flock /tmp/aien-gb10.lock env PFDBG=1 /tmp/wl1g-omega/gpu_qgemm_test --chip --shape gateup --tokens 3600 --reps 1 --rows 64 (build of ca29218e)

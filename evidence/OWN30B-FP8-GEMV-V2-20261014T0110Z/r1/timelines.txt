@@ -1,0 +1,6 @@
+fp8 knobs: variant 1 cta_budget 0 shape 0/0/0 cached 0
+TIMELINE (2 layers, pos 300): norm x1 6.2 us qkv x2 129.8 us attn x2 144.9 us o_proj x2 121.0 us res_add x2 10.1 us router x2 48.9 us gate_up x2 274.3 us swiglu x2 6.7 us down x2 190.3 us combine_norm x2 19.8 us lm_head x1 2892.0 us argmax x2 15.5 us
+fp8 knobs: variant 1 cta_budget 0 shape 0/0/0 cached 0
+TIMELINE (2 layers, pos 300): norm x1 32.0 us qkv x2 140.2 us attn x2 191.9 us o_proj x2 117.1 us res_add x2 9.8 us router x2 52.1 us gate_up x2 288.9 us swiglu x2 6.4 us down x2 179.6 us combine_norm x2 19.5 us lm_head x1 2854.7 us argmax x2 15.1 us
+fp8 knobs: variant 2 cta_budget 0 shape 0/0/0 cached 0
+fp8 knobs: variant 2 cta_budget 0 shape 0/0/0 cached 0

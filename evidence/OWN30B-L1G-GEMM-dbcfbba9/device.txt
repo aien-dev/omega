@@ -1,0 +1,6 @@
+start 2026-10-15T02:55:04Z omega=dbcfbba98d1ade05069e103cc96ac0be4ba3061e branch=fix/pfgemm-swiglu-mufu-ftz dirty=0 physics=/home/drakestapleton/workspace/pkv514-pins/physics physics_commit=6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf what=qmma pfgemm qgemm
+Linux spark-b87b 7.0.0-1019-nvidia #19~24.04.2-Ubuntu SMP PREEMPT_DYNAMIC Sun Sep  6 18:35:11 UTC 2 aarch64 aarch64 aarch64 GNU/Linux
+NVIDIA GB10, 580.173.02
+               total        used        free      shared  buff/cache   available
+Mem:             121          52          46           3          26          68
+end 2026-10-15T03:02:27Z

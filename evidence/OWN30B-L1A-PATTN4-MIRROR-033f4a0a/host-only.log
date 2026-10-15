@@ -1,0 +1,9 @@
+codegen warps 4 mode 0: 917 instructions, 120 registers (declared 128, 128 threads -> 16384 of 65536), 16 placeholders patched
+codegen warps 4 mode 1: 174 instructions, 56 registers (declared 64, 128 threads -> 8192 of 65536), 0 placeholders patched
+codegen warps 4 mode 2: 782 instructions, 124 registers (declared 128, 128 threads -> 16384 of 65536), 16 placeholders patched
+codegen warps 8 mode 0: 866 instructions, 120 registers (declared 128, 256 threads -> 32768 of 65536), 16 placeholders patched
+codegen warps 8 mode 1: 174 instructions, 56 registers (declared 64, 256 threads -> 16384 of 65536), 0 placeholders patched
+codegen warps 8 mode 2: 731 instructions, 124 registers (declared 128, 256 threads -> 32768 of 65536), 16 placeholders patched
+codegen warps 8 APPEND + mirror: 187 instructions, 56 registers
+gpu_prefill_attn_test: 69 checks, 0 failed: PASS
+exit 0
