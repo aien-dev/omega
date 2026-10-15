@@ -295,7 +295,7 @@ r3 does not mention stays as written above. No held-out generation was scored un
 | | Config A | Config B |
 |---|---|---|
 | model | Qwen3-30B-A3B-Instruct-2507, FP8 (weights and hashes as section 9) | Qwen3-8B, bf16 (weights and hashes as section 9) |
-| server | Omega's own `aien-serve-http`, `--engine omega`; the exact binary and its sha256 are frozen in `tools/exp445/PARAMS` by the commit that opens Stage 1 | our own dense 8B engine (OWN-8B); frozen by a later revision once its requalification passes. Until then config B cannot run. |
+| server | Omega's own `aien-serve-http`, `--engine omega`, on :18091. Frozen in `tools/exp445/PARAMS` by the commit that opens Stage 0 (2026-10-15), for Stage 0 and Stage 1: `/home/drakestapleton/handoffs/pin-bin-f881710a/aien-serve-http`, sha256 `663b85a506ec9bdffd09094cb2271d95efb46eeedfbfe017d31c2fe520c4b911`, built from aien-sovereign-core f881710a (Stage S merged: every reply reports mode, seed and p_repeat), omega 4799f9eb, `libomega_gpu.a` 0629ad9c | our own dense 8B engine (OWN-8B); frozen by a later revision once its requalification passes. Until then config B cannot run. |
 | request extra | none | frozen with the server |
 
 The experiment gate (13.6) is evaluated only when both configurations are scored. Config A alone

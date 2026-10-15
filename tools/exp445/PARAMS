@@ -29,7 +29,7 @@ g0_seeds=8
 config.A.model=qwen3-30b-a3b-instruct-2507
 config.A.base_url=http://127.0.0.1:18091/v1
 config.A.extra={}
-config.A.server=PLACEHOLDER: the aien-serve-http binary and its sha256 are frozen here by the commit that opens Stage 1
+config.A.server=/home/drakestapleton/handoffs/pin-bin-f881710a/aien-serve-http sha256=663b85a506ec9bdffd09094cb2271d95efb46eeedfbfe017d31c2fe520c4b911 (aien-sovereign-core f881710a, omega 4799f9eb; --engine omega on :18091)
 config.B.model=qwen3-8b
 config.B.unavailable=config B runs on our own dense 8B engine (OWN-8B), which has not requalified; a later protocol revision freezes its server, endpoint and request extra (protocol 13.3)
 # weights: the frozen sha256 list of each configuration's model files (protocol section 9), checked in

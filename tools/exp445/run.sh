@@ -97,7 +97,7 @@ cfg="$(echo "$CONFIG" | tr 'A-Z' 'a-z')"
 ids=(); while IFS= read -r t; do ids+=("$t"); done < <(ls "$TASKS/tasks/cases" | LC_ALL=C sort)
 HELD=0; if heldout "${ids[@]}"; then HELD=1; fi
 if [ "$HELD" = 1 ]; then
-  case "$SERVER" in PLACEHOLDER*) die "config $CONFIG server is still a placeholder in PARAMS: held-out generation waits for the commit that opens Stage 1 (protocol 13.3)" ;; esac
+  case "$SERVER" in PLACEHOLDER*) die "config $CONFIG server is still a placeholder in PARAMS: held-out generation waits for the commit that freezes it (protocol 13.3)" ;; esac
   [ "$MODE" = "$(kv heldout_prompt_mode)" ] || die "a held-out run uses the $(kv heldout_prompt_mode) prompt mode (protocol 13.4), not $MODE"
 fi
 B="$ROOT/build/omega_emit"

@@ -220,17 +220,26 @@ refuse() { # refuse <name> <reason grep> <command...>: the command exits non-zer
   if "$@" > "$T/rf.out" 2> "$T/rf.err"; then bad "$n: not refused"; return; fi
   grep -q -- "$why" "$T/rf.err" && ok "refused: $n" || bad "$n: $(tail -2 "$T/rf.err")"
 }
-# the real PARAMS: config B unavailable with its reason, config A's server a placeholder
+# the real PARAMS: config B unavailable with its reason, config A's server frozen (13.3)
 refuse "real PARAMS: run.sh config B (OWN-8B not requalified)" "config B is unavailable: config B runs on our own dense 8B engine (OWN-8B), which has not requalified" \
   env -u EXP445_PARAMS "$HERE/run.sh" --config B --tasks "$T/pub" --out "$T/realb"
 refuse "real PARAMS: g0.sh config B" "config B is unavailable: config B runs on our own dense 8B engine" env -u EXP445_PARAMS "$HERE/g0.sh" --config B --out "$T/realb"
 refuse "real PARAMS: score.sh --configs B" "config B is unavailable" env -u EXP445_PARAMS "$HERE/score.sh" --configs B "$T/pack/tasks.tar" "$T/pack/TASKS.sha256" "$T/pub"
-refuse "real PARAMS: a held-out run while config A's server is a placeholder" "config A server is still a placeholder in PARAMS: held-out generation waits" \
-  env -u EXP445_PARAMS "$HERE/run.sh" --config A --tasks "$T/hpub" --out "$T/realh"
+sed 's|^config\.A\.server=.*|config.A.server=PLACEHOLDER: not frozen|' "$HERE/PARAMS" > "$T/PARAMSPH"
+refuse "PARAMS with config A's server a placeholder: a held-out run" "config A server is still a placeholder in PARAMS: held-out generation waits" \
+  env EXP445_PARAMS="$T/PARAMSPH" "$HERE/run.sh" --config A --tasks "$T/hpub" --out "$T/realh"
 [ ! -e "$T/realb" ] && [ ! -e "$T/realh" ] && ok "  nothing written by the refused runs" || bad "refused runs wrote files"
 grep -qx 'arms=omegese,text' "$HERE/PARAMS" && grep -qx 'prompt_modes=many,one' "$HERE/PARAMS" && grep -qx 'heldout_prompt_mode=many' "$HERE/PARAMS" &&
-grep -q '^config\.A\.server=PLACEHOLDER' "$HERE/PARAMS" && grep -qx 'futility_max=30' "$HERE/PARAMS" && grep -qx 'heldout_tasks=60' "$HERE/PARAMS" &&
-  ok "PARAMS r3: arms omegese,text; prompt modes many,one (held-out: many); futility 30 of 60; config A server a placeholder" || bad "PARAMS r3 values"
+grep -qx 'futility_max=30' "$HERE/PARAMS" && grep -qx 'heldout_tasks=60' "$HERE/PARAMS" &&
+  ok "PARAMS r3: arms omegese,text; prompt modes many,one (held-out: many); futility 30 of 60" || bad "PARAMS r3 values"
+# config A's server: a binary path and its sha256, the same pair as the protocol table 13.3; the binary, when present here, has it
+SV="$(awk -F= '$1 == "config.A.server" { print substr($0, 17); exit }' "$HERE/PARAMS")"
+SVP="$(sed -n 's|^\(/[^ ]*/aien-serve-http\) sha256=[0-9a-f]\{64\} .*|\1|p' <<< "$SV")" SVH="$(sed -n 's|^/[^ ]* sha256=\([0-9a-f]\{64\}\) .*|\1|p' <<< "$SV")"
+if [ -n "$SVP" ] && [ -n "$SVH" ] && grep -F '| server |' "$ROOT/docs/one_layer/EXP445_PROTOCOL.md" | grep -qF "\`$SVP\`, sha256 \`$SVH\`"; then
+  ok "config A server frozen: $SVP, sha256 ${SVH:0:16}..., the same as protocol 13.3"
+  if [ -f "$SVP" ]; then [ "$(sha256sum < "$SVP" | cut -d' ' -f1)" = "$SVH" ] && ok "  and the binary here has that sha256" || bad "config A binary $SVP does not have the frozen sha256"
+  else echo "skip: $SVP not present here; the frozen pair is checked against the protocol only"; fi
+else bad "config A server is not a frozen path + sha256 matching protocol 13.3: $SV"; fi
 # frozen weight lists and the operator check
 pblock() { awk '/^Weight files, sha256/ { w = 1 } w && /^```$/ { n++; next } w && n == 1 { print }' "$1"; }
 [ "$(pblock "$ROOT/docs/one_layer/EXP445_PROTOCOL.md")" = "$(cat "$HERE/weights.A.sha256" "$HERE/weights.B.sha256")" ] &&
