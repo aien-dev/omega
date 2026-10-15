@@ -114,7 +114,11 @@ arm's from the hex reader or the decoder (a class name and its meaning), the `st
    finish reasons, wall seconds, check results, candidate sha256.
 
 Order: task, then arm, then attempt. A run can be resumed only with identical settings (the driver
-refuses otherwise); finished generations are never redone.
+refuses otherwise); finished generations are never redone. The commit may differ only when the tool
+files (`TOOL_PATHS` in `tools/exp445/reader.sh`, the same set score.sh compares) are identical between
+the run's commit and the resuming one and both trees are clean, as when the G0 ledger and the interim
+scores are committed between attempt 1 and the `--futility` resume (added 2026-10-15; before that the
+resume was refused at any other commit).
 
 ## 7. Sampling and cost
 

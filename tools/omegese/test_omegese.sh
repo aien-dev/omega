@@ -13,6 +13,8 @@
 #  5. next oracle: every word of every accepted program is legal where it is written;
 #  6. completeness: single-word mutants (OMEGESE_MUTANTS per program): emit accepts iff every word legal;
 #  7. soundness fuzz (OMEGESE_WALKS walks of OMEGESE_STEPS items) closed by omegese complete; then the
+#     checker2 residual (OMEGESE_RESIDUAL_WALKS walks from each of two starts, closed by complete, through
+#     omega_emit and checker2; at most OMEGESE_RESIDUAL_MAX, default 0, rejected there); then the
 #     truncation fuzz: every byte prefix through emit, next and next --machine answers, never crashes,
 #     allows the byte that follows, and is finished by complete.
 set -euo pipefail
@@ -283,14 +285,38 @@ nxcase 'fn f a uint to uint\nb = add a 1\ntrap 1\n' "REFUSED omegese: line 4: *'
 nxeq 'fn f a uint to uint\nb = add a 1\nret ' 'names: b\nwords: add sub mul div rem and or xor shl shr not uint u32 ('
 nxcase 'fn f a uint to uint\nb = gt a 1\nret ' "REFUSED omegese: *'b' is written but never read*" 'an unreadable bool before ret: not refused'
 nxeq 'fn h c bool to ulong\nret ulong 0\nend\nfn f a uint to uint\nb = gt a 1\nret add a ' 'words: add sub mul div rem and or xor shl shr not uint u32 ('
-nxeq 'fn f a uint to bool\nx = new bool 4 false\nret eq ' 'words: true false and or xor eq ne lt le gt ge not get bool ('
-nxeq 'fn f a uint to uint\nx = new uint 4 0\nif gt a 2\ny = add a 1\nret ' 'names: y\nwords: add sub mul div rem and or xor shl shr not get uint u32 ('
+nxeq 'fn f a uint v view bool 4 to bool\nx = view v\nret eq ' 'words: true false and or xor eq ne lt le gt ge not get bool ('
+nxeq 'fn f a uint v view uint 4 to uint\nx = view v\nif gt a 2\ny = add a 1\nret ' 'names: y\nwords: add sub mul div rem and or xor shl shr not get uint u32 ('
 # inside a word: the words that extend it, a name not in use, and what may end it
 nxeq 'fn f a uint to uint\nb = add a 1\nen' 'new-name: any name not in use\nwords: ( (space)'
 nxeq 'fn f a uint to uint\nb = add a 1\nre' 'new-name: any name not in use\nwords: ret ( (space)'
-nxeq 'fn f a uint to uint\nx = new uint 4 0\nx = new uint ' 'number: 4..4'
-nxeq 'fn f a uint to uint\nx = new uint 4 0\nx = new uint 4' 'number: 4..4\nwords: ( (space)'
-nxcase 'fn f a uint to uint\nx = new uint 4 0\nx = new uint 1' 'REFUSED omegese: line 3: *own uint 1 but the name holds own uint 4*' 'a length no number extends: not refused'
+nxeq 'fn f a uint to uint\nx = new uint 4 0\nfree x\nx = new uint ' 'number: 4..4'
+nxeq 'fn f a uint to uint\nx = new uint 4 0\nfree x\nx = new uint 4' 'number: 4..4\nwords: ( (space)'
+nxcase 'fn f a uint to uint\nx = new uint 4 0\nfree x\nx = new uint 1' 'REFUSED omegese: line 4: *own uint 1 but the name holds own uint 4*' 'a length no number extends: not refused'
+# ownership (checker2's C2-OWN rules, OMEGESE.md 6.4): no ret while an own array holds its array on
+# every path, no second free; at a line start ret is left out until the array is freed; after a loop
+# that frees and refills it the array still holds one on every path, so complete frees it
+nxcase 'fn f a own uint 4 to uint\nret ' "REFUSED omegese: line 2: no text after this prefix*'a' still holds its array*" 'ret while an own array holds its array: not refused'
+nxcase 'fn f a own uint 4 to uint\nfree a\nfree ' "REFUSED omegese: line 3: *freed or moved on every path*" 'a second free: not refused'
+nxk=$((nxk + 1)); got="$(printf 'fn f a own uint 4 to uint\n' > "$T/p"; "$G" next --machine "$T/p")"
+[ "$got" = "$(printf 'word if\nword while\nword for\nword put\nword free\nword trap\nword a\nnewname a f\nspace\nnewline')" ] || bad "next --machine with an own array that must be freed: got '$got'"
+nxk=$((nxk + 1)); got="$(printf 'fn f a own uint 4 n uint to uint\nwhile gt n 0\nfree a\na = new uint 4 n\nn = sub n 1\nend\n' > "$T/p"; "$G" complete "$T/p")"
+[ "$got" = "$(printf 'free a\nret 0\nend')" ] || bad "complete after a loop that refills an own array: got '$got'"
+# a loop's state at its head is known at its end line: a use of an array freed before the loop is
+# refused there unless the body gives it a new one, so end is left out and complete writes that line
+nxeq 'fn f a own uint 4 n uint to uint\nfree a\nwhile gt get a 0 n\nn = add n 1\n' 'assign: a n\nnew-name: any name not in use\nwords: if while for put free'
+nxcase 'fn f a own uint 4 n uint to uint\nfree a\nwhile gt get a 0 n\nn = add n 1\nend\n' "REFUSED omegese: line 5: 'a' holds no array at line 3 on every path, once this loop is closed*" 'end of a loop whose head uses a freed array: not refused'
+nxk=$((nxk + 1)); got="$(printf 'fn f a own uint 4 n uint to uint\nfree a\nwhile gt get a 0 n\nn = add n 1\n' > "$T/p"; "$G" complete "$T/p")"
+[ "$got" = "$(printf 'a = new uint 4 0\nend\nret 0\nend')" ] || bad "complete in a loop whose head uses a freed array: got '$got'"
+nxk=$((nxk + 1)); got="$(printf 'fn f n uint to void\nx = new uint 4 n\nwhile gt n 0\nx = new uint 4 n\n' > "$T/p"; "$G" complete "$T/p")"
+[ "$got" = "$(printf 'free x\nend\nend')" ] || bad "complete in a loop that gives an array a second one: got '$got'"
+# a loop opened at the nesting limit is refused before its head state is set up (no shift past bit 63)
+{ echo 'fn f n uint to uint'; for ((i = 0; i < 63; i++)); do echo "if gt n $i"; done; echo 'while gt n 0'; } > "$T/deep.omegese"
+nxk=$((nxk + 1)); got="$("$G" emit "$T/deep.omegese" "$T/x.json" 2>&1 || true)"
+case "$got" in "REFUSED omegese: line 65: more than 64 nested blocks"*) ;; *) bad "a loop at the nesting limit: got '$got'" ;; esac
+# 300 uses of one array inside a loop wait as one check (the same state): accepted, as checker2 does
+{ echo 'fn f a own uint 4 n uint to uint'; echo 'for i uint 3'; for ((i = 0; i < 300; i++)); do echo 'n = get a 0'; done; echo 'end'; echo 'free a'; echo 'ret n'; echo 'end'; } > "$T/many.omegese"
+nxk=$((nxk + 1)); accept "$T/many.omegese" many-uses-in-a-loop || true
 nxeq 'fn f a short to short\nret add a -' 'number: -32768..32767'
 nxeq 'fn f a short to short\nret add a -0' 'REFUSED omegese: line 2: no text after this prefix makes a program emit accepts ('"'"'-0'"'"' is not a number (digits, an optional minus sign, no leading zeros, no -0))'
 # the number ranges each slot allows: every scalar type, a minus sign where none fits, and the fixed
@@ -311,7 +337,7 @@ nxnum 'fn f a uint to uint\nwhile lt a 3 bound ' '1..1000000' 'loop bounds'
 nxnum 'fn f a uint to uint\nfor i uint ' '0..1000000' 'loop counts'
 # the machine form: one item per line
 nxm() { printf '%b' "$1" > "$T/p"; "$G" next --machine "$T/p" || true; }
-nxk=$((nxk + 1)); got="$(nxm 'fn f a uint to uint\nx = new uint 4 0\nre')"
+nxk=$((nxk + 1)); got="$(nxm 'fn f a uint to uint\nb = add a 1\nre')"
 [ "$got" = "$(printf 'word ret\nnewname\n(\nspace')" ] || bad "next --machine after 're': got '$got'"
 nxk=$((nxk + 1)); got="$(nxm 'fn f a uint b ulong to uint\nret a\nend\n')"
 [ "$got" = "$(printf 'word fn\nspace\nnewline\neof')" ] || bad "next --machine after a function: got '$got'"
@@ -324,7 +350,7 @@ nxk=$((nxk + 1)); got="$(nxm 'fn f ab uint b uint to uint\nfor abc uint 3\nx = a
 nxk=$((nxk + 1)); got="$(nxm 'fn f ab uint b uint to uint\nfor abc uint 3\na')"
 [ "$got" = "$(printf 'word ab\nnewname ab abc\n(\nspace')" ] || bad "next --machine, a new name that extends names in use: got '$got'"
 # complete: the witness text, which emit accepts after the prefix
-nxk=$((nxk + 1)); got="$(printf 'fn f a uint to uint\nx = new uint 4 0\nif gt a 2\ny = add a 1\nret ' > "$T/p"; "$G" complete "$T/p")"
+nxk=$((nxk + 1)); got="$(printf 'fn f a uint v view uint 4 to uint\nx = view v\nif gt a 2\ny = add a 1\nret ' > "$T/p"; "$G" complete "$T/p")"
 [ "$got" = "$(printf ' y\nend\nx = x\nret 0\nend')" ] || bad "complete inside an if: got '$got'"
 echo "next: $nxk prefixes give the expected words"
 
@@ -730,6 +756,208 @@ x = total w
 free w
 ret x
 end
+== still holds its array at this return on every path
+fn f a own uint 4 to uint
+ret 1
+end
+-- control
+fn f a own uint 4 to uint
+free a
+ret 1
+end
+== still holds its array at this return on every path
+fn f n uint to void
+x = new uint 4 n
+put x 0 n
+end
+-- control
+fn f n uint to void
+x = new uint 4 n
+put x 0 n
+free x
+end
+== was already freed or moved on every path
+fn f a own uint 4 to void
+free a
+free a
+end
+-- control
+fn f a own uint 4 n uint to void
+while gt n 0
+free a
+a = new uint 4 n
+n = sub n 1
+end
+free a
+end
+== was freed or moved on every path to this line
+fn g b own uint 4 to void
+free b
+end
+fn f a own uint 4 to uint
+g own a
+x = get a 0
+ret x
+end
+-- control
+fn g b own uint 4 to void
+free b
+end
+fn f a own uint 4 to uint
+x = get a 0
+g own a
+ret x
+end
+== still holds an array on every path to this line
+fn f n uint to uint
+x = new uint 4 n
+x = new uint 4 0
+y = get x 0
+free x
+ret y
+end
+-- control
+fn f n uint to uint
+x = new uint 4 n
+free x
+x = new uint 4 0
+y = get x 0
+free x
+ret y
+end
+== still holds its array at this return on every path
+fn f n uint to uint
+x = new uint 4 n
+if gt n 3
+ret 0
+end
+free x
+ret 1
+end
+-- control
+fn f n uint to uint
+x = new uint 4 n
+if gt n 3
+free x
+end
+free x
+ret 1
+end
+== out of scope here still holds its data on every path to this return
+fn f n uint to uint
+if gt n 3
+y = new uint 4 n
+put y 0 n
+else
+trap 1
+end
+ret 0
+end
+-- control
+fn f n uint to uint
+if gt n 3
+y = new uint 4 n
+put y 0 n
+end
+ret 0
+end
+== 'a' holds no array at line 3 on every path, once this loop is closed
+fn f a own uint 4 n uint to uint
+free a
+while gt get a 0 n
+n = add n 1
+end
+ret n
+end
+-- control
+fn f a own uint 4 n uint to uint
+free a
+while gt get a 0 n
+a = new uint 4 n
+n = add n 1
+end
+ret n
+end
+== 'a' holds no array at line 4 on every path, once this loop is closed
+fn f a own uint 4 n uint to void
+free a
+while gt n 0
+free a
+n = sub n 1
+end
+end
+-- control
+fn f a own uint 4 n uint to void
+free a
+while gt n 0
+free a
+a = new uint 4 n
+n = sub n 1
+end
+end
+== 'x' still holds an array at line 4 on every path, once this loop is closed
+fn f n uint to void
+x = new uint 4 n
+while gt n 0
+x = new uint 4 n
+n = sub n 1
+end
+free x
+end
+-- control
+fn f n uint to void
+x = new uint 4 n
+while gt n 0
+free x
+x = new uint 4 n
+n = sub n 1
+end
+free x
+end
+== 'x' still holds its array at the return on line 4 on every path, once this loop is closed
+fn f n uint to uint
+x = new uint 4 n
+while gt n 0
+ret n
+end
+free x
+ret 0
+end
+-- control
+fn f n uint to uint
+x = new uint 4 n
+while gt n 0
+free x
+ret n
+end
+free x
+ret 0
+end
+== 'a' holds no array at line 5 on every path, once this loop is closed
+fn f a own uint 4 n uint to void
+free a
+while gt n 0
+while gt n 1
+x = get a 0
+n = sub n x
+end
+n = sub n 1
+end
+end
+-- control
+fn f a own uint 4 n uint to void
+free a
+while gt n 0
+while gt n 1
+x = get a 0
+n = sub n x
+end
+free a
+a = new uint 4 n
+n = sub n 1
+end
+free a
+end
 EOF
 for want in "$T"/r*.want; do
   k="${want%.want}"
@@ -888,21 +1116,19 @@ echo "completeness: $nmut single-word mutants ($nacc accepted by emit): emit acc
 #    lines (at most the words of the prefix plus 3).
 RANDOM=4452
 nwalk=0 nstep=0
-for ((wk = 0; wk < ${OMEGESE_WALKS:-40}; wk++)); do
-  f="${progs[RANDOM % ${#progs[@]}]}"
-  s="$(cat "$f")"$'\n'
-  toks "$s"
-  P="${s:0:TO[RANDOM % ${#TO[@]}]}"
-  case "${P: -1}" in ""|" "|$'\n'|"("|")") ;; *) P+=" " ;; esac # start at a word boundary
-  ok=1
-  for ((st = 0; st < ${OMEGESE_STEPS:-25}; st++)); do
+# walk_items <steps>: extend P by up to <steps> random legal items (stops at eof); every set must be
+# nonempty and a word picked must stay legal after each of its first characters. Returns 1 (and counts a
+# failure) when not.
+walk_items() {
+  local st items it x lo hi v q d j c
+  for ((st = 0; st < $1; st++)); do
     items="$(mnext "$P")"
-    if [ -z "$items" ] || [[ $items == REFUSED* ]]; then bad "soundness: no legal item after $(printf '%s' "$P" | tail -c 70 | tr '\n' '|') ($items)"; ok=0; break; fi
+    if [ -z "$items" ] || [[ $items == REFUSED* ]]; then bad "soundness: no legal item after $(printf '%s' "$P" | tail -c 70 | tr '\n' '|') ($items)"; return 1; fi
     mapfile -t IT <<< "$items"
     it="${IT[RANDOM % ${#IT[@]}]}" x=""
     nstep=$((nstep + 1))
     case "$it" in
-      eof) break ;;
+      eof) return 0 ;;
       newline) P+=$'\n' ;;
       space) P+=" " ;;
       "("|")") P+="$it" ;;
@@ -921,26 +1147,77 @@ for ((wk = 0; wk < ${OMEGESE_WALKS:-40}; wk++)); do
                  done
                fi
                x="${c[RANDOM % ${#c[@]}]}" ;;
-      *) bad "soundness: unknown item '$it'"; ok=0; break ;;
+      *) bad "soundness: unknown item '$it'"; return 1 ;;
     esac
     [ -n "$x" ] || continue
     if [ ${#x} -ge 2 ]; then
       j=$((1 + RANDOM % (${#x} - 1)))
-      mallowed "$(mnext "$P${x:0:j}")" "$x" || { bad "soundness: '$x' legal, but not after its first $j characters: $(printf '%s' "$P" | tail -c 50 | tr '\n' '|')"; ok=0; break; }
+      mallowed "$(mnext "$P${x:0:j}")" "$x" || { bad "soundness: '$x' legal, but not after its first $j characters: $(printf '%s' "$P" | tail -c 50 | tr '\n' '|')"; return 1; }
     fi
     P+="$x "
   done
-  [ "$ok" = 1 ] || continue
+}
+# close_walk <out file>: `omegese complete` finishes P; the whole text goes to <out file>, which emit must
+# accept (returns 1 and counts a failure when complete refuses or emit refuses the result)
+close_walk() {
   printf '%s' "$P" > "$T/w.omegese"
-  if ! "$G" complete "$T/w.omegese" > "$T/w.tail" 2> "$T/w.err"; then bad "soundness: complete refused after a legal walk: $(cat "$T/w.tail" "$T/w.err" | head -2)"; continue; fi
+  if ! "$G" complete "$T/w.omegese" > "$T/w.tail" 2> "$T/w.err"; then bad "soundness: complete refused after a legal walk: $(cat "$T/w.tail" "$T/w.err" | head -2)"; return 1; fi
+  cat "$T/w.omegese" "$T/w.tail" > "$1"
+  "$G" emit "$1" "$T/w2.json" > "$T/w2.out" || { bad "soundness: walk + completion refused: $(cat "$T/w2.out")"; return 1; }
+}
+for ((wk = 0; wk < ${OMEGESE_WALKS:-40}; wk++)); do
+  f="${progs[RANDOM % ${#progs[@]}]}"
+  s="$(cat "$f")"$'\n'
+  toks "$s"
+  P="${s:0:TO[RANDOM % ${#TO[@]}]}"
+  case "${P: -1}" in ""|" "|$'\n'|"("|")") ;; *) P+=" " ;; esac # start at a word boundary
+  walk_items "${OMEGESE_STEPS:-25}" || continue
+  close_walk "$T/w2.omegese" || continue
   toks "$P"
   lines=$(grep -c '' "$T/w.tail" || true)
   [ "$lines" -le $((${#TW[@]} + 3)) ] || bad "soundness: completion of $lines lines for a prefix of ${#TW[@]} words"
-  cat "$T/w.omegese" "$T/w.tail" > "$T/w2.omegese"
-  "$G" emit "$T/w2.omegese" "$T/w2.json" > "$T/w2.out" || bad "soundness: walk + completion refused: $(cat "$T/w2.out")"
   nwalk=$((nwalk + 1))
 done
 echo "soundness fuzz: $nwalk/${OMEGESE_WALKS:-40} random walks ($nstep legal items picked) never met an empty set and closed into accepted programs"
+# 8. checker2 residual (OMEGESE.md 6.4): `omegese next` is exact relative to emit, not to omega_emit and
+#    checker2. Random walks from the empty prefix (whole programs) and from cut points of the suite's
+#    programs, each closed by `omegese complete` (so emit accepts it, checked), then omega_emit and
+#    checker2: every rejection after emit is counted by stage and reason. The suite's own programs are
+#    the zero line (all accepted, sections 1 and 1a). OMEGESE_RESIDUAL_WALKS sets the number of walks
+#    of each kind; OMEGESE_RESIDUAL_MAX the rejections allowed (default 0: none is known after the
+#    rules folded into the oracle; a measured rate is printed either way).
+declare -A RES=()
+chain_after_emit() { # <program> -> "" when omega_emit and checker2 accept, else "<stage> <reason>"
+  "$G" emit "$1" "$T/r.json" > "$T/r.out" 2>&1 || { echo "emit $(head -c 80 "$T/r.out")"; return; }
+  if ! "$OME" emit "$T/r.json" "$T/r.oscir" > "$T/r.out" 2>&1; then
+    echo "omega_emit $(head -n 1 "$T/r.out" | sed -E "s/'[^']*'/X/g; s/[0-9]+/N/g" | cut -c1-70)"; return
+  fi
+  local v; v="$("$C2" check "$T/r.oscir" 2>&1 | head -n 1 || true)"
+  case "$v" in checker2=ACCEPT*) ;; *) echo "checker2 $(grep -oE 'C2-[A-Z0-9-]+' <<< "$v" | head -n 1)" ;; esac
+}
+nres=0 nrej=0
+RANDOM=4453
+for ((wk = 0; wk < ${OMEGESE_RESIDUAL_WALKS:-40}; wk++)); do
+  for start in empty cut; do
+    if [ "$start" = empty ]; then P=""
+    else
+      f="${progs[RANDOM % ${#progs[@]}]}"; s="$(cat "$f")"$'\n'; toks "$s"
+      P="${s:0:TO[RANDOM % ${#TO[@]}]}"
+      case "${P: -1}" in ""|" "|$'\n'|"("|")") ;; *) P+=" " ;; esac
+    fi
+    walk_items "${OMEGESE_STEPS:-25}" || continue
+    close_walk "$T/res.omegese" || continue
+    nres=$((nres + 1))
+    why="$(chain_after_emit "$T/res.omegese")"
+    [ -n "$why" ] || continue
+    nrej=$((nrej + 1)); RES[$why]=$((${RES[$why]:-0} + 1))
+    [ -n "${OMEGESE_RESIDUAL_KEEP:-}" ] && cp "$T/res.omegese" "$OMEGESE_RESIDUAL_KEEP/rej-$nrej.omegese"
+  done
+done
+for k in "${!RES[@]}"; do echo "  residual: ${RES[$k]} x $k"; done | LC_ALL=C sort
+echo "checker2 residual: $nrej of $nres completed walks that emit accepts are rejected later (omega_emit or checker2)"
+[ "$nres" -gt 0 ] || bad "residual: no completed walk"
+[ "$nrej" -le "${OMEGESE_RESIDUAL_MAX:-0}" ] || bad "residual: $nrej walks pass emit and are rejected later (allowed ${OMEGESE_RESIDUAL_MAX:-0})"
 nf=0 nfs=0
 WC=$'[^ \t\r\n()]'
 for f in "$ROOT"/tests/one_layer/omegese/nested/*.omegese "$ROOT"/tests/one_layer/omegese/trial2/*.omegese "$T"/c*.omegese; do

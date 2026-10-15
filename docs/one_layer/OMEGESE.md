@@ -249,6 +249,39 @@ tries when several names of the right kind could be read, or a new name within a
 the 63-character limit (the class is decided by one representative name). None of these is reached
 by any program in the suite or the fuzz.
 
+**Ownership (checker2's C2-OWN rules), folded into `emit` on 2026-10-15.** checker2 follows every own
+array along every path (it holds an array, holds nothing yet, or was freed or moved) and rejects a use,
+a move or a free where it holds nothing on every path (C2-OWN-USE-DEAD, C2-OWN-DOUBLE-RELEASE), and a
+new array or a return where it still holds one on every path (C2-OWN-LEAK). `emit` keeps the same
+states along the lines it reads and refuses such a line where it is written, so `next` leaves out the
+word that leads there. Inside an open loop a state that includes the loop head is not known until the
+loop's `end` line (a later line of the body can change it); such a check waits and is decided at
+`end`. `complete` (and every witness) settles what it can: before a loop's `end` it gives a name the
+loop head needs an array (`x = new ...`) or frees one that would still hold its array there, and at the
+function's end it frees each array that still holds one on every path (or ends the path with `trap 1`
+when that array's name is out of scope).
+
+Measured with the residual walk in 6.5 (1000 walks from each of two starts, seed 4453): completed
+walks that `emit` accepts and omega_emit or checker2 then rejects.
+
+| build | rejected later | by rule |
+|---|---|---|
+| before (2026-10-15, `f6b44356`) | 154 of 2000 (7.7%) | 136 C2-OWN-LEAK, 15 C2-OWN-USE-DEAD, 3 C2-OWN-DOUBLE-RELEASE |
+| ownership states only, no loop checks | 2 of 2000 (0.1%) | 2 C2-OWN-USE-DEAD (a use in a loop head of an array freed before it) |
+| after | 0 of 2000 | none |
+
+Not folded, so a program `emit` accepts can still be rejected later:
+- C2-BORROW-OUTLIVES-OWNER: checker2 ties each view to the array it was taken from over the whole
+  function (a view filled from two arrays loses its origin); `emit` does not follow borrows (0 of
+  2000 walks met it);
+- more than 64 own arrays in one function: the ones past 64 are not tracked;
+- C2-OWN-ARENA-MOVE and C2-OWN-RELEASE-ARENA: Omegese has no arenas, so no program reaches them.
+
+The other way, `emit` refuses a function with more than 256 distinct ownership checks waiting for loops to end,
+which checker2 might accept. And where exact can miss: a waiting check whose name is out of scope (or
+hidden by a newer name) at the loop's `end` gets no settling line, so the word that led there is left
+out; a `ret` whose value moves the array into a call is not tried by the witness.
+
 ### 6.5 The checks
 
 - the 10 dev programs: omegese -> omega_emit -> checker2 ACCEPT;
@@ -257,24 +290,33 @@ by any program in the suite or the fuzz.
   with `line 3: le has 3 values after it; it takes 2` (it has one value too many);
 - 8 coverage programs (IR type names, break, nested loops, else-if, a for with a name or a value as count,
   arrays and calls, calls without values, a bool function as a condition, nested values);
-- 34 refusals, each with its expected reason, each with a fixed control that is accepted (arity, brackets,
-  two numbers in one op, extra words, `new` inside a value, lines after trap);
+- 46 refusals, each with its expected reason, each with a fixed control that is accepted (arity, brackets,
+  two numbers in one op, extra words, `new` inside a value, lines after trap, and 12 ownership cases: a
+  leak at a return or at a second `new`, a second free, a use after a move, an out-of-scope array at a
+  return, and five decided at a loop's `end`, one of them through a nested loop);
 - review fixes: a conversion of a typed number converts it (`ret long int 5`, `uchar int 300`); a for
   count in brackets lowers exactly as the bare count and has the same limit;
-- `omegese next` on 59 prefixes, red before green (the open-type list after a binary op, a typed second
+- `omegese next` on 69 prefixes and cases, red before green (the open-type list after a binary op, a typed second
   value, a bracket waiting for `)`, a `ret` that must read the names its path leaves unread, a cut
   inside a word, the exact number range of every scalar type and of trap codes, array lengths, loop
   bounds and counts, a minus sign where none fits, `-0`, the `--machine` lines including the 6.2
-  example and the new-name exclusion list, `complete`, refusals as soon as a prefix is wrong);
-- next oracle: at all 2199 word boundaries of the 63 accepted programs in the suite, the real next
+  example and the new-name exclusion list, `complete`, refusals as soon as a prefix is wrong, and
+  ownership: no `ret` or second free while it would be refused, `end` left out of a loop whose head
+  needs an array, `complete` settling a loop and freeing at the function's end, a loop opened at the
+  nesting limit refused, 300 uses of one array in a loop accepted);
+- next oracle: at all 2636 word boundaries of the 75 accepted programs in the suite, the real next
   word, and the end of input at the end, are legal;
-- completeness: 126 single-word mutants of those programs (a word dropped, doubled, or replaced by a
+- completeness: 150 single-word mutants of those programs (a word dropped, doubled, or replaced by a
   number, a name, a fresh name or a fixed word): `emit` accepts a mutant if and only if every word of
-  it was legal when it was written (2519 word boundaries);
+  it was legal when it was written (2906 word boundaries);
 - soundness fuzz: 40 random walks of up to 25 legal items from random cut points (a number item is
   tried at its ends and at a random value inside); the legal set is
   never empty, a word picked stays legal after each of its first characters, and `omegese complete`
   then finishes the walk into a program `emit` accepts within a bounded number of lines;
+- checker2 residual: 40 walks from each of two starts (an empty file and a cut point in a suite
+  program), each closed with `complete` and sent through omega_emit and checker2; at most
+  `OMEGESE_RESIDUAL_MAX` (default 0) may be rejected there (`OMEGESE_RESIDUAL_WALKS` sets the count,
+  `OMEGESE_RESIDUAL_KEEP` a folder that keeps the rejected programs; the table in 6.4 used 1000);
 - truncation fuzz: all 2799 byte prefixes of the nested, trial and coverage programs through `emit`,
   `next` and `next --machine`, which must answer (accept or refuse with a reason) and never crash; at
   the 2698 prefixes of accepted programs, `next` must also allow the byte that follows (the whole
@@ -312,6 +354,29 @@ program (1575 mutants) and 500 walks of up to 40 items (17386 items) found no fa
    forms (reader, back end, the sealed harness on its own inputs), that the word card is exactly
    `omegese words`, the one-token gate on every word of the examples, and that no example shares an
    entry name with a held-out task.
+4. Where the r3 Stage 1 answers failed, by reader stage (config A, attempt 1, 60 held-out tasks per
+   arm; aggregate counts and refusal categories from the score output only, no task text read):
+
+   | arm | round | passed the reader | refused | where refused, by category |
+   |---|---|---|---|---|
+   | Omegese | first answer | 35 | 25 | all at `omegese emit`: type 13, structure 6, arity 4, scope 1, range 1 |
+   | Omegese | repair round | 4 | 21 | all at `omegese emit`: type 11, structure 6, arity 3, scope 1 |
+   | text | first answer | 44 | 16 | the OSC compiler |
+   | text | repair round | 5 | 11 | the OSC compiler |
+
+   No Omegese answer was refused at omega_emit, at the signature check or by the back end. Final
+   verdicts: Omegese 23 ACCEPT, 21 no candidate, 16 wrong behaviour (7 unexpected trap, 8 wrong result,
+   1 wrong trap); text 34 ACCEPT, 11 compile refused, 15 wrong behaviour (6 missing trap, 8 unexpected
+   trap, 1 wrong result).
+   What a legal-word mask (`omegese next` in the engine) prevents: every one of those Omegese refusals,
+   since each was an `emit` refusal and the mask only lets through words that some accepted program
+   continues. With the ownership rules folded in, what the mask lets through also passes checker2's
+   ownership rules, within the limits in 6.4.
+   What it does not prevent: an answer whose function has the wrong name, parameters or return type is
+   still an accepted program, so only a forced signature header (the task's `fn` line written for the
+   model) prevents a signature mismatch; none was seen, but every Omegese refusal stopped at `emit`
+   before the signature check, so mismatches could be hidden behind them. Neither prevents the 16
+   wrong-behaviour answers. The 11 text refusals would need a mask for OSC text.
 
 ## 8. Prior art (quick search, not exhaustive)
 

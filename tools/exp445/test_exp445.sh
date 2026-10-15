@@ -627,6 +627,18 @@ H2="$T/gens/h-cont"; prep A "$H2"
 invalid "attempt 2 missing although the stop rule did not fire" "attempts 2..2 are missing but the stop rule did not fire (omegese attempt 1 3/4 > 2)" --configs A "${HPK[@]}" "$H2"
 if SC --interim --configs A "${HPK[@]}" "$H2" > /dev/null 2> "$T/hi2.err"; then
   FUT2="$(sed -n 's/^score.sh: results in //p' "$T/hi2.err")/futility.txt"
+  # the resume after attempt 1 happens at a later commit (the G0 ledger and the interim scores are committed
+  # between): the tools must be what decides, not the commit id. Negative control first: a run whose
+  # commit has other tools (the repository's first commit) is refused.
+  cp "$H2/meta.txt" "$T/h2meta"; MC="$(sed -n 's/^commit=//p' "$H2/meta.txt")"
+  sed -i "s/^commit=.*/commit=$(git -C "$ROOT" rev-list --max-parents=0 HEAD | tail -n 1)${MC#"${MC%-dirty}"}/" "$H2/meta.txt"
+  refuse "resume when the tools changed since the run's commit" "tool files differ" "$HERE/run.sh" --config A --tasks "$T/hpub" --out "$H2" --futility "$FUT2"
+  cp "$T/h2meta" "$H2/meta.txt"
+  if [ "$MC" = "${MC%-dirty}" ]; then
+    # a later commit with the very same tree, like the ledger commit (an object only; no ref moves)
+    LC="$(git -C "$ROOT" -c user.name=exp445-test -c user.email=exp445-test@invalid commit-tree "HEAD^{tree}" -p HEAD -m "exp445 test: a later commit, same tools")"
+    sed -i "s/^commit=.*/commit=$LC/" "$H2/meta.txt"
+  else echo "skip resume across commits (tree dirty; meta_resume unit tests cover it, CI runs it clean)"; fi
   grep -q "decision=CONTINUE$" "$FUT2" && "$HERE/run.sh" --config A --tasks "$T/hpub" --out "$H2" --futility "$FUT2" > /dev/null 2> "$T/h2b.err" &&
   [ "$(tail -n +2 "$H2/log.tsv" | wc -l)" = 16 ] &&
   [ "$(tail -n +2 "$H2/log.tsv" | cut -f1,2 | tr '\t' ' ' | paste -sd,)" = "$(for at in 1 2; do for t in h01 h02 h03 h04; do for a in omegese text; do printf 'a-%s-%s %s,' "$a" "$at" "$t"; done; done; done | sed 's/,$//')" ] &&
@@ -639,5 +651,20 @@ if SC --interim --configs A "${HPK[@]}" "$H2" > /dev/null 2> "$T/hi2.err"; then
   else bad "score.sh refused the continued held-out run: $(grep INVALID "$T/hc.err" | head -2)"; fi
 else bad "score.sh --interim (CONTINUE) failed"; fi
 unset EXP445_PARAMS
+# meta_resume on a scratch repository: the resume rule by itself, whatever state this checkout is in
+MR="$T/mr"; mkdir -p "$MR/tools" "$MR/evidence"; git -C "$MR" init -q
+gc_() { git -C "$MR" add -A && git -C "$MR" -c user.name=t -c user.email=t@t commit -q -m "$1" && git -C "$MR" rev-parse HEAD; }
+echo a > "$MR/tools/x"; C1="$(gc_ one)"; echo l > "$MR/evidence/ledger"; C2="$(gc_ ledger)"; echo b > "$MR/tools/x"; C3="$(gc_ tools)"
+mm() { printf 'config=A\nmodel=m\ncommit=%s\ntasks=4\n' "$1" > "$T/mr.$2"; }
+mrok() { mm "$2" a; mm "$3" b; [ -n "${4:-}" ] && sed -i 's/^tasks=4$/tasks=5/' "$T/mr.b"; meta_resume "$MR" "$T/mr.a" "$T/mr.b" > "$T/mr.why"; }
+mrok x "$C1" "$C1" && ok "meta_resume: identical meta.txt resumes" || bad "meta_resume identical"
+mrok x "$C1" "$C2" && ok "meta_resume: a later commit that touches only evidence resumes (the G0 ledger commit)" || bad "meta_resume ledger commit: $(cat "$T/mr.why")"
+mrok x "$C1" "$C3" && bad "meta_resume accepted changed tools" || { grep -q "tool files differ" "$T/mr.why" && ok "meta_resume: changed tool files refused (negative control)" || bad "meta_resume tools reason: $(cat "$T/mr.why")"; }
+mrok x "$C1" "$C2-dirty" && bad "meta_resume accepted a dirty tree across commits" || { grep -q "dirty" "$T/mr.why" && ok "meta_resume: a dirty tree across commits refused" || bad "meta_resume dirty reason"; }
+mrok x "$C1" "$C2" y && bad "meta_resume accepted another setting" || { grep -q "settings differ" "$T/mr.why" && ok "meta_resume: another setting refused even with the same tools" || bad "meta_resume settings reason"; }
+mrok x "$C1" "0000000000000000000000000000000000000000" && bad "meta_resume accepted an unknown commit" || ok "meta_resume: an unknown commit refused"
+if mrok x HEAD "$C2"; then bad "meta_resume accepted a revision name (commit=HEAD)"
+elif grep -q "not a full commit id" "$T/mr.why"; then ok "meta_resume: a revision name (commit=HEAD) refused"
+else bad "meta_resume revision name reason: $(cat "$T/mr.why")"; fi
 echo
 if [ "$fails" -eq 0 ]; then echo "test-exp445: PASS"; else echo "test-exp445: FAIL ($fails)"; exit 1; fi
