@@ -1,0 +1,4 @@
+Write a function power_mod that takes three unsigned 32-bit numbers b, e and m and returns b to the
+power e, modulo m (0 to the power 0 is 1). Work in unsigned 64-bit numbers: start with r = 1 mod m
+and x = b mod m, then while e > 0: if e is odd, r = r * x mod m; x = x * x mod m; e = e / 2. Use a
+helper function for "a * b mod m". When m is 0 the run stops with trap 2 (division by zero).

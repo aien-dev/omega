@@ -1,0 +1,1 @@
+provenance OK: 1 runs, 120 generations, configs A, prompt mode many, interim: attempt 1 only

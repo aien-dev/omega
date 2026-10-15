@@ -1,0 +1,9 @@
+{"functions": [
+  {"name": "bitrev8", "params": ["u8"], "ret": "u8", "locals": ["u8", "u8", "u32", "u32", "u32", "u32", "bool", "u8", "u8", "u8", "u32", "u32", "u8"],
+   "blocks": [
+    [{"op": "const", "dst": 1, "value": 0}, {"op": "const", "dst": 3, "value": 0}, {"op": "const", "dst": 4, "value": 8}, {"op": "const", "dst": 5, "value": 1}, {"op": "const", "dst": 9, "value": 1}, {"op": "const", "dst": 11, "value": 7}, {"op": "mov", "dst": 2, "a": 1}, {"op": "mov", "dst": 6, "a": 3}, {"op": "br", "to": 1}],
+    [{"op": "lt", "dst": 7, "a": 6, "b": 4}, {"op": "cbr", "cond": 7, "then": 2, "else": 3}],
+    [{"op": "shr", "dst": 8, "a": 0, "b": 6}, {"op": "and", "dst": 10, "a": 8, "b": 9}, {"op": "sub", "dst": 12, "a": 11, "b": 6}, {"op": "shl", "dst": 13, "a": 10, "b": 12}, {"op": "or", "dst": 2, "a": 2, "b": 13}, {"op": "add", "dst": 6, "a": 6, "b": 5}, {"op": "br", "to": 1}],
+    [{"op": "ret", "a": 2}]
+   ]}
+]}

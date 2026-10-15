@@ -1,0 +1,16 @@
+fn mod(a: u64, b: u64, m: u64) -> u64 {
+    return a * b % m;
+}
+
+fn power_mod(b: u32, e: u32, m: u32) -> u32 {
+    let mm: u64 = m as u64;
+    let mut r: u64 = 1 % mm;
+    let mut x: u64 = (b as u64) % mm;
+    let mut k: u32 = e;
+    while k > 0 bound 40 {
+        if k % 2 == 1 { r = mod(r, x, mm); }
+        x = mod(x, x, mm);
+        k = k / 2;
+    }
+    return r as u32;
+}

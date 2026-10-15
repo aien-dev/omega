@@ -1,0 +1,2 @@
+Write a function clamp_sub that takes two unsigned 32-bit numbers a and b and returns a - b when
+a >= b, else 0. It never traps.

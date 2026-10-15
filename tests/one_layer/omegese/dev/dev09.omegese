@@ -1,0 +1,10 @@
+fn bitrev8 x uchar to uchar
+r = uchar 0
+for i uint 8
+r = shl r 1
+b = and x 1
+r = or r b
+x = shr x 1
+end
+ret r
+end

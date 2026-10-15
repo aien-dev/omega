@@ -1,0 +1,7 @@
+fn bitrev8 x uchar to uchar
+r = uchar 0
+for i uchar 8
+r = or shl r 1 and shr x i 1
+end
+ret r
+end

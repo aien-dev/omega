@@ -1,0 +1,7 @@
+fn clamp_add(a: u8, b: u8) -> u8 {
+    let sum = a + b;
+    if sum > 255 {
+        return 255;
+    }
+    return sum;
+}

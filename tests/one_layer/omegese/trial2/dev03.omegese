@@ -1,0 +1,10 @@
+fn popcount x u64 to u8
+count = u8 0
+for i u8 64
+bit = and x (shl u64 1 i)
+if ne bit u64 0
+count = add count u8 1
+end
+end
+ret count
+end

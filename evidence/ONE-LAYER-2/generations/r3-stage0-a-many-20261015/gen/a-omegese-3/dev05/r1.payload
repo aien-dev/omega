@@ -1,0 +1,7 @@
+fn checked_mul a short b short to short
+p = mul a b
+if or lt p -32768 gt p 32767
+trap 1
+end
+ret p
+end

@@ -1,0 +1,1 @@
+REFUSED compiler: UNBOUNDED_LOOP at line 5: 'while' needs 'bound N' (static trip-count bound)

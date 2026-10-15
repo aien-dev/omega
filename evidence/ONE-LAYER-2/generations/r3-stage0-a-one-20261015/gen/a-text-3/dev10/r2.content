@@ -1,0 +1,9 @@
+```
+fn to_i8(x: i32) -> i8 {
+    if x < -128 || x > 127 {
+        // Conversion out of range: trap 5
+        return;
+    }
+    return x as i8;
+}
+```

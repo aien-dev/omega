@@ -1,0 +1,10 @@
+```
+fn gcd a uint b uint to uint
+while ne b 0 bound 64
+t = b
+b = rem a b
+a = t
+end
+ret a
+end
+```

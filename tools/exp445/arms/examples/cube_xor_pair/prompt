@@ -1,0 +1,4 @@
+Write a function cube_xor_pair that takes an unsigned 8-bit number n. Fill a table T of 16 unsigned
+16-bit entries with T[i] = i * i * i for i = 0 .. 15, and return T[n] xor T[n + 1], computing the
+index n + 1 in 32 bits. When an index is past the table (n of 15 or more) the lookup is out of bounds
+and the run stops with trap 3.

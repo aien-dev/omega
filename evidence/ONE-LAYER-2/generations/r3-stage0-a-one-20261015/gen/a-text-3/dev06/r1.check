@@ -1,0 +1,1 @@
+REFUSED compiler: TYPE_MISMATCH at line 4: 'return;' in a function returning u32

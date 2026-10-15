@@ -1,0 +1,16 @@
+fn mod a ulong b ulong m ulong to ulong
+ret rem mul a b m
+end
+fn power_mod b uint e uint m uint to uint
+mm = ulong m
+r = rem ulong 1 mm
+x = rem ulong b mm
+while gt e 0 bound 40
+if eq rem e 2 1
+r = mod r x mm
+end
+x = mod x x mm
+e = div e 2
+end
+ret uint r
+end

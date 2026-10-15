@@ -1,0 +1,1 @@
+run=/home/drakestapleton/workspace/hive-worktrees/omega-glyph/evidence/ONE-LAYER-2/generations/r3-stage1-a-20261015 config=A omegese_attempt1=23/60 futility_max=30 a1_rows_sha256=1f3ceb7cfd398fda003967385b6904927e82b471b6ea6ecabaf1a38bcf6f8281 decision=STOP

@@ -1,0 +1,13 @@
+fn isqrt x uint to uint
+if eq x 0
+ret 0
+end
+let r = uint 1
+while lt mul r r x
+let r = add r 1
+end
+if gt mul r r x
+let r = sub r 1
+end
+ret r
+end

@@ -1,0 +1,4 @@
+Write a function dot3 that takes six signed 16-bit numbers a, b, c, x, y, z and returns
+a*x + b*y + c*z computed in signed 64-bit arithmetic. Convert the six values to signed 64-bit
+numbers, store them in two arrays of three, and compute the sum with a helper function that reads
+both arrays. It never traps.

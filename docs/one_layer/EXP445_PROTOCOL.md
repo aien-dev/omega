@@ -2,7 +2,7 @@
 
 Issue: aien-spark/omega#445 (stage 2 of the one-layer plan,
 `~/workspace/omega-vision/OMEGA-ONE-LAYER-PLAN.md`). This file is committed BEFORE any generation of
-the experiment (revision r1), and revised (r2, section 12) before any held-out generation. Every setting below is frozen by that commit; a change needs a new protocol revision
+the experiment (revision r1), and revised (r2, section 12) before any held-out generation, and again (r3, section 13: Omegese against text, staged, own engines only). Every setting below is frozen by that commit; a change needs a new protocol revision
 committed before the generation it affects, and every run records the commit it used (`meta.txt`).
 
 ## 1. Question and gate
@@ -226,6 +226,18 @@ tools/exp445/run.sh --config B --tasks <pub> --out evidence/ONE-LAYER-2/generati
 tools/exp445/score.sh <tasks.tar> <TASKS.sha256> evidence/ONE-LAYER-2/generations/<run-a> evidence/ONE-LAYER-2/generations/<run-b>
 ```
 
+Revision r3 (section 13), per configuration and run directory:
+
+```
+tools/exp445/check_weights.sh A <run>
+tools/exp445/g0.sh --config A --out <run>                      # G0 (13.4); run.sh refuses without a PASS
+tools/exp445/run.sh --config A --tasks <pub> --out <run> [--prompt-mode many|one]   # Stage 0: both modes
+# Stage 1 (held-out): run.sh stops after attempt 1; then
+tools/exp445/score.sh --interim --configs A <tasks.tar> <TASKS.sha256> <run>        # writes futility.txt
+tools/exp445/run.sh --config A --tasks <pub> --out <run> --futility <score dir>/futility.txt
+tools/exp445/score.sh --configs A <tasks.tar> <TASKS.sha256> <run>
+```
+
 Dry-run tests of the driver and the validity check (fake local endpoint, no model): `make test-exp445`.
 
 ## 12. Revisions
@@ -239,3 +251,113 @@ Dry-run tests of the driver and the validity check (fake local endpoint, no mode
   as for call arguments), so the `mov` row of `tools/omega_emit/SCHEMA.md`, which is part of the
   structured arm's system prompt, changed; the structured prompt's sha256 changes with it. The
   config A dev smoke of r1 used the old prompt and is not comparable; no held-out generation used it.
+- **r3** (2026-10-15, before any r3 generation): section 13.
+
+## 13. Revision r3 (2026-10-15): Omegese against text, staged, on our own engines
+
+r3 is committed before any r3 generation. Where it differs from sections 1 to 11, r3 wins; anything
+r3 does not mention stays as written above. No held-out generation was scored under r1 or r2.
+
+### 13.1 Why the revision
+
+- Drake's decisions of 2026-10-15: compare only the machine-first language against plain text; drop
+  the JSON op list (`structured`) and hex (`bytes`) arms; run every configuration on our own engines,
+  never on a third-party engine.
+- The 302 config B generations made on MAX under r2 (`~/workspace/exp445-aside-20261014/generations/heldout-b`,
+  record `~/handoffs/exp445-b-resume.txt`) are kept as they are and are NOT evidence of r3. They are
+  never pooled, scored or quoted as a result.
+- On the dev tasks, the op list cost 6.37 times the tokens of text (section 7) and passed 0 of 10
+  (OMEGESE.md section 7); Omegese is the machine-first form now under test (`docs/one_layer/OMEGESE.md`).
+- The research note `aien-architecture/docs/research/omegese-and-gb10-decode.md` (merged 2026-10-15)
+  shows that 10-task, one-attempt trials cannot separate two arms (3 of 10 has a Wilson 95% interval
+  of about 11% to 60%), and that the model's prompt should carry many worked examples, not one.
+
+### 13.2 Arms and prompts
+
+| arm | the model writes | reader (candidate) | harness kind |
+|---|---|---|---|
+| `text` (control) | OSC text | the answer, compiled by `oscc` | `osc` |
+| `omegese` | Omegese (`docs/one_layer/OMEGESE.md`) | `omegese emit`, then `omega_emit emit`, then `x445 check` (`tools/exp445/reader.sh`) | `oscir` |
+
+- Both arms get `arms/common.md`, their arm document, and the SAME set of 12 to 16 worked examples,
+  each written in both forms (the program in the arm's own form; the task text identical). Every
+  example is verified in both forms by `make test-exp445`: the reader accepts it, the back end
+  accepts it, and its behaviour tests pass. The two forms of an example must compute the same
+  function on the example's tests.
+- Example tasks are dev-style tasks written by the builders. None may share an entry name with a
+  held-out task; `make test-exp445` checks this mechanically against the public view of the sealed
+  pack and prints only a count, so no builder reads a held-out task.
+  Disclosure (r3, 2026-10-15): the first example set shared 3 entry names with held-out tasks; the
+  builders saw those 3 names (no prompt text, requirement or test) and replaced the examples. No other
+  held-out information was seen.
+- One-shot prompts (the r2 single example) are used only in Stage 0 (13.4), on dev tasks.
+- Decode-time masking is OFF in r3. A masked arm needs its own revision once our engine applies the
+  `omegese next` mask.
+
+### 13.3 Configurations
+
+| | Config A | Config B |
+|---|---|---|
+| model | Qwen3-30B-A3B-Instruct-2507, FP8 (weights and hashes as section 9) | Qwen3-8B, bf16 (weights and hashes as section 9) |
+| server | Omega's own `aien-serve-http`, `--engine omega`, on :18091. Frozen in `tools/exp445/PARAMS` by the commit that opens Stage 0 (2026-10-15), for Stage 0 and Stage 1: `/home/drakestapleton/handoffs/pin-bin-f881710a/aien-serve-http`, sha256 `663b85a506ec9bdffd09094cb2271d95efb46eeedfbfe017d31c2fe520c4b911`, built from aien-sovereign-core f881710a (Stage S merged: every reply reports mode, seed and p_repeat), omega 4799f9eb, `libomega_gpu.a` 0629ad9c | our own dense 8B engine (OWN-8B); frozen by a later revision once its requalification passes. Until then config B cannot run. |
+| request extra | none | frozen with the server |
+
+The experiment gate (13.6) is evaluated only when both configurations are scored. Config A alone
+is reported as an interim result, labelled interim.
+
+### 13.4 Stages and pre-registered stop rules
+
+**G0, the sampling gate (before every stage, per configuration).** G0 runs the Stage S sampling gate
+(aien-sovereign-core `scripts/sampling-gate.sh`, merged f881710a; in Stage S its ignore-seed and
+force-greedy mutant builds were shown to FAIL it) against the frozen server, with its repro requests
+set to dev01 in the omegese arm at seeds s1..s8, plus one exp445 check: a repeat of s1. PASS when the
+sampling gate passes, the repeat is byte-identical, and every reply reports mode=sampled with its own
+seed. Identical replies across seeds pass only when the server's reported p_repeat makes them
+plausible (p_repeat^(k-1) >= 0.01, as in the Stage S gate). The distinct-answer count is recorded,
+not gated. The script and its output are saved in the run directory before any generation. On FAIL
+nothing in that configuration runs.
+
+**Stage 0, pilot on the 10 dev tasks (never evidence).** Config A, both arms, one-shot and
+many-shot prompts, 3 attempts each: 10 x 2 x 2 x 3 = 120 generations. GO to Stage 1 when all of:
+1. tooling is clean: every generation is logged, every candidate re-derives (section 10), the dev
+   harness run ends `RUN VALID`;
+2. many-shot `omegese` attempt 1 produces a candidate the back end accepts on at least 7 of the 10
+   tasks;
+3. many-shot does not do worse than one-shot in either arm on attempt-1 success, by more than
+   one task.
+If (1) fails, fix the tooling and rerun Stage 0. If (2) or (3) fails, builders may change the
+language, reader or examples using dev results only, then rerun Stage 0, at most twice. After a
+third Stage 0 that does not GO, stop and report to Drake; no held-out generation happens.
+
+**Stage 1, held-out (the evidence).** Config A, the 60 sealed tasks, both arms, many-shot prompts,
+3 attempts: 60 x 2 x 3 = 360 generations. Order: attempt, then task, then arm, so attempt 1 of every
+task in both arms finishes first. Stop rule: after attempt 1, if `omegese` attempt-1 success is at
+most 30 of 60, attempts 2 and 3 are not run (the build needs work; more samples would not change the
+decision), and the result is reported with the reason. Config B repeats Stage 1 once it can run.
+
+**Stage 2 (later, its own revision):** the masked arm, and the repair loop studied separately.
+
+### 13.5 Unchanged rules, stated for r3
+
+- Repair: exactly one repair round when round 1 is refused, as section 6 step 4. The primary
+  measure counts the final candidate; round-1-only success is reported beside it.
+- Budget, sampling values, seeds, transport retries, hashing and validity: sections 5, 7 and 10,
+  with the arms of 13.2.
+- Attempts 2 and 3 may repeat attempt 1 when the model is confident; this is measured (distinct
+  candidates per task are reported), not a fault.
+- `top_p` and the seed on config A are no longer UNVERIFIED once G0 passes; G0's output is the record.
+
+### 13.6 Decision
+
+- **Primary measure:** attempt-1 success per configuration and arm over the 60 held-out tasks, with
+  Wilson 95% intervals.
+- **Gate (each configuration):** PASS when `omegese` attempt-1 success is at least 48 of 60 (80%)
+  AND `text` attempt-1 success minus `omegese` attempt-1 success is at most 10 percentage points.
+  The experiment passes when both configurations pass.
+- **Cost, reported beside the gate:** mean completion tokens per generation, `omegese` / `text`,
+  and prompt tokens per generation (many-shot prompts are long; the engine reuses the shared
+  prefix).
+- **Paired view:** for each task, attempt-1 success in both arms; the counts of tasks where only
+  `omegese` succeeds and where only `text` succeeds, with an exact two-sided McNemar test.
+- **If the gate fails:** improve the language, reader and examples using aggregate results and
+  refusal classes only, and repeat Stage 1 once under a new revision.

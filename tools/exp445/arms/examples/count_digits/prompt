@@ -1,0 +1,2 @@
+Write a function count_digits that takes an unsigned 64-bit number n and returns the number of its
+decimal digits as an unsigned 8-bit number. 0 has one digit. It never traps.

@@ -1,0 +1,12 @@
+fn halve_or_dec_steps n uint to uint
+k = uint 0
+while gt n 1 bound 64
+if eq rem n 2 0
+n = div n 2
+else
+n = sub n 1
+end
+k = add k 1
+end
+ret k
+end

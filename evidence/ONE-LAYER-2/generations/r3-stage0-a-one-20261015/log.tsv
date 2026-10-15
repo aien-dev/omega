@@ -1,0 +1,61 @@
+set	task	rounds	prompt_tokens	completion_tokens_r1	completion_tokens_r2	finish_r1	finish_r2	wall_s	check_r1	check_r2	candidate_sha256
+a-omegese-1	dev01	1	2166	38	-	stop	-	2.326375	OK	-	06983a02d8bb0a938af844849403c1671597ac4f8205943bfb256e74fe401cc2
+a-text-1	dev01	2	3494	51	54	stop	stop	4.937247	REFUSED compiler: SYNTAX at line 2: expected :, found '='	OK	8f627cb6dfbd9459b5c7890f6e59cc5c8399a0673882f403a875ff7d32590a5d
+a-omegese-1	dev02	2	4500	48	48	stop	stop	4.840453	REFUSED omegese: line 2: 'diff' is not a name in scope here, nor an op, a type or a function	REFUSED omegese: line 2: 'diff' is not a name in scope here, nor an op, a type or a function	-
+a-text-1	dev02	1	1733	62	-	stop	-	3.115645	OK	-	15e3b3e322fb09135528df456cc3584bc51c7974d05b25e4e1fa5aec441d477d
+a-omegese-1	dev03	2	4430	64	64	stop	stop	6.045806	REFUSED omegese: line 2: 'count' is not a name in scope here, nor an op, a type or a function	REFUSED omegese: line 2: 'count' is not a name in scope here, nor an op, a type or a function	-
+a-text-1	dev03	1	1690	83	-	stop	-	3.905654	OK	-	7d8951d2e6a2a936f5605ae920e0db70515ce1060db6b48fd373cc1c13dcce35
+a-omegese-1	dev04	2	4448	44	44	stop	stop	4.530614	REFUSED omegese: line 3: 'r' is not a name in scope here, nor an op, a type or a function	REFUSED omegese: line 3: 'r' is not a name in scope here, nor an op, a type or a function	-
+a-text-1	dev04	2	3527	68	80	stop	stop	6.642241	REFUSED compiler: SYNTAX at line 2: expected :, found '='	REFUSED compiler: UNBOUNDED_LOOP at line 4: 'while' needs 'bound N' (static trip-count bound)	6b4d716ee7ca71f9c2b0dd1d7cc517cf2f22f31e72526b0f16e77fe621fc6a94
+a-omegese-1	dev05	2	4501	69	69	stop	stop	6.487563	REFUSED omegese: line 2: 'product' is not a name in scope here, nor an op, a type or a function	REFUSED omegese: line 2: 'product' is not a name in scope here, nor an op, a type or a function	-
+a-text-1	dev05	2	3608	121	3072	stop	length	133.114078	REFUSED compiler: SYNTAX at line 2: expected :, found '='	REFUSED compiler: SYNTAX at line 75: expected :, found '='	ad975b2987127f10950f044fe25c4daea9b350436e914edea49bd4f74472e616
+a-omegese-1	dev06	1	2163	32	-	stop	-	2.053321	OK	-	01e5675eb3167ebba275fc45cc6cd6a3c3f1a70a69ba809683522e8e2c71c89d
+a-text-1	dev06	1	1698	72	-	stop	-	3.455406	OK	-	958dac065964ed8582882a4d2be084b13eb7dd045b87b5718efb527e2a5a3b70
+a-omegese-1	dev07	2	4465	73	73	stop	stop	6.811532	REFUSED omegese: line 5: 'r' is not a name in scope here, nor an op, a type or a function	REFUSED omegese: line 5: 'r' is not a name in scope here, nor an op, a type or a function	-
+a-text-1	dev07	2	3588	129	133	stop	stop	11.084789	REFUSED compiler: UNBOUNDED_LOOP at line 5: 'while' needs 'bound N' (static trip-count bound)	OK	e10c3ca876b0733c294fad53f61d8a110a2fcb20543927c6f12dec9a24b52449
+a-omegese-1	dev08	1	2218	74	-	stop	-	3.795592	OK	-	af4045bbe08b648fa2713fdb15f8d9fd8f4a44d1dcb3d674863379f9b133c2d0
+a-text-1	dev08	2	3657	98	104	stop	stop	8.761926	REFUSED compiler: UNBOUNDED_LOOP at line 4: 'while' needs 'bound N' (static trip-count bound)	OK	619450f35e654e9ad175ed270e73b1d11aaa46c0081591dd493cda29c8b25899
+a-omegese-1	dev09	2	4479	81	81	stop	stop	7.453720	REFUSED omegese: line 2: 'result' is not a name in scope here, nor an op, a type or a function	REFUSED omegese: line 2: 'result' is not a name in scope here, nor an op, a type or a function	-
+a-text-1	dev09	2	3547	82	85	stop	stop	7.335284	REFUSED compiler: UNBOUNDED_LOOP at line 4: 'while' needs 'bound N' (static trip-count bound)	OK	39ae4474236de97d530c0ef3f8f213cd783a31ba95f303cbe67bb7948d6c4260
+a-omegese-1	dev10	1	2169	39	-	stop	-	2.381448	OK	-	e0cc96889d56dd2c85910f6771f83b14b3a0817c384a94a4d025210226406abd
+a-text-1	dev10	2	3508	48	48	stop	stop	4.541111	REFUSED compiler: SYNTAX at line 3: expected '=', '[' or '(' after a name at statement start, found '5'	REFUSED compiler: SYNTAX at line 3: expected '=', '[' or '(' after a name at statement start, found '5'	e726fe61ca500719d746e63c13f2c3959ea280f1d8d3847bbc7fcbb8f184992c
+a-omegese-2	dev01	1	2166	38	-	stop	-	2.337961	OK	-	06983a02d8bb0a938af844849403c1671597ac4f8205943bfb256e74fe401cc2
+a-text-2	dev01	2	3494	51	54	stop	stop	4.886008	REFUSED compiler: SYNTAX at line 2: expected :, found '='	OK	8f627cb6dfbd9459b5c7890f6e59cc5c8399a0673882f403a875ff7d32590a5d
+a-omegese-2	dev02	2	4499	47	47	stop	stop	4.718602	REFUSED omegese: line 2: 'diff' is not a name in scope here, nor an op, a type or a function	REFUSED omegese: line 2: 'diff' is not a name in scope here, nor an op, a type or a function	-
+a-text-2	dev02	1	1733	62	-	stop	-	3.095815	OK	-	15e3b3e322fb09135528df456cc3584bc51c7974d05b25e4e1fa5aec441d477d
+a-omegese-2	dev03	2	4425	59	59	stop	stop	5.661958	REFUSED omegese: line 2: 'count' is not a name in scope here, nor an op, a type or a function	REFUSED omegese: line 2: 'count' is not a name in scope here, nor an op, a type or a function	-
+a-text-2	dev03	2	3519	86	90	stop	stop	7.695301	REFUSED compiler: UNBOUNDED_LOOP at line 4: 'while' needs 'bound N' (static trip-count bound)	OK	95b8e18e8991784deb5f62787daaa96ccfd2ae2bf90b612ed34db5d0a9103241
+a-omegese-2	dev04	2	4427	32	55	stop	stop	4.475344	REFUSED omegese: line 5: gcd cannot call itself (calls go to earlier functions only)	REFUSED omegese: line 6: 'r' is not a name in scope here, nor an op, a type or a function	-
+a-text-2	dev04	2	3527	68	80	stop	stop	6.595069	REFUSED compiler: SYNTAX at line 2: expected :, found '='	REFUSED compiler: UNBOUNDED_LOOP at line 4: 'while' needs 'bound N' (static trip-count bound)	6b4d716ee7ca71f9c2b0dd1d7cc517cf2f22f31e72526b0f16e77fe621fc6a94
+a-omegese-2	dev05	2	4515	83	83	stop	stop	7.593041	REFUSED omegese: line 2: 'product' is not a name in scope here, nor an op, a type or a function	REFUSED omegese: line 2: 'product' is not a name in scope here, nor an op, a type or a function	-
+a-text-2	dev05	2	3550	63	67	stop	stop	5.902370	REFUSED compiler: SYNTAX at line 2: expected :, found '='	REFUSED compiler: SYNTAX at line 4: expected '=', '[' or '(' after a name at statement start, found '1'	1e9b49d9efc1f34c6427853d55698a148adf19e386747131ee769a4f5d46a4c0
+a-omegese-2	dev06	1	2163	32	-	stop	-	2.044920	OK	-	01e5675eb3167ebba275fc45cc6cd6a3c3f1a70a69ba809683522e8e2c71c89d
+a-text-2	dev06	1	1698	66	-	stop	-	3.200217	OK	-	9019104a01c33fd6685aac173f88ffd96cb49cab41f3fa1c1c3f5d724a4118d8
+a-omegese-2	dev07	2	4465	73	73	stop	stop	6.793579	REFUSED omegese: line 5: 'r' is not a name in scope here, nor an op, a type or a function	REFUSED omegese: line 5: 'r' is not a name in scope here, nor an op, a type or a function	-
+a-text-2	dev07	2	3574	115	119	stop	stop	9.983882	REFUSED compiler: UNBOUNDED_LOOP at line 5: 'while' needs 'bound N' (static trip-count bound)	OK	73f5cf16c7422ecf0d093031992dd59f55071fff6550ae97212bab7628def43d
+a-omegese-2	dev08	1	2218	74	-	stop	-	3.816679	OK	-	af4045bbe08b648fa2713fdb15f8d9fd8f4a44d1dcb3d674863379f9b133c2d0
+a-text-2	dev08	2	3657	98	104	stop	stop	8.714782	REFUSED compiler: UNBOUNDED_LOOP at line 4: 'while' needs 'bound N' (static trip-count bound)	OK	619450f35e654e9ad175ed270e73b1d11aaa46c0081591dd493cda29c8b25899
+a-omegese-2	dev09	2	4469	71	73	stop	stop	6.774894	REFUSED omegese: line 2: 'result' is not a name in scope here, nor an op, a type or a function	REFUSED omegese: line 2: 'result' is not a name in scope here, nor an op, a type or a function	-
+a-text-2	dev09	2	3547	82	85	stop	stop	7.385594	REFUSED compiler: UNBOUNDED_LOOP at line 4: 'while' needs 'bound N' (static trip-count bound)	OK	39ae4474236de97d530c0ef3f8f213cd783a31ba95f303cbe67bb7948d6c4260
+a-omegese-2	dev10	1	2169	39	-	stop	-	2.364805	OK	-	e0cc96889d56dd2c85910f6771f83b14b3a0817c384a94a4d025210226406abd
+a-text-2	dev10	2	3508	48	48	stop	stop	4.580126	REFUSED compiler: SYNTAX at line 3: expected '=', '[' or '(' after a name at statement start, found '5'	REFUSED compiler: SYNTAX at line 3: expected '=', '[' or '(' after a name at statement start, found '5'	e726fe61ca500719d746e63c13f2c3959ea280f1d8d3847bbc7fcbb8f184992c
+a-omegese-3	dev01	1	2166	38	-	stop	-	2.327443	OK	-	06983a02d8bb0a938af844849403c1671597ac4f8205943bfb256e74fe401cc2
+a-text-3	dev01	2	3494	51	54	stop	stop	4.907966	REFUSED compiler: SYNTAX at line 2: expected :, found '='	OK	8f627cb6dfbd9459b5c7890f6e59cc5c8399a0673882f403a875ff7d32590a5d
+a-omegese-3	dev02	2	4502	50	50	stop	stop	5.013975	REFUSED omegese: line 2: 'diff' is not a name in scope here, nor an op, a type or a function	REFUSED omegese: line 2: 'diff' is not a name in scope here, nor an op, a type or a function	-
+a-text-3	dev02	1	1733	62	-	stop	-	3.098716	OK	-	15e3b3e322fb09135528df456cc3584bc51c7974d05b25e4e1fa5aec441d477d
+a-omegese-3	dev03	2	4425	59	59	stop	stop	5.668467	REFUSED omegese: line 2: 'count' is not a name in scope here, nor an op, a type or a function	REFUSED omegese: line 2: 'count' is not a name in scope here, nor an op, a type or a function	-
+a-text-3	dev03	2	3519	86	90	stop	stop	7.713705	REFUSED compiler: UNBOUNDED_LOOP at line 4: 'while' needs 'bound N' (static trip-count bound)	OK	95b8e18e8991784deb5f62787daaa96ccfd2ae2bf90b612ed34db5d0a9103241
+a-omegese-3	dev04	2	4448	44	44	stop	stop	4.482938	REFUSED omegese: line 3: 'r' is not a name in scope here, nor an op, a type or a function	REFUSED omegese: line 3: 'r' is not a name in scope here, nor an op, a type or a function	-
+a-text-3	dev04	2	3527	68	80	stop	stop	6.561262	REFUSED compiler: SYNTAX at line 2: expected :, found '='	REFUSED compiler: UNBOUNDED_LOOP at line 4: 'while' needs 'bound N' (static trip-count bound)	6b4d716ee7ca71f9c2b0dd1d7cc517cf2f22f31e72526b0f16e77fe621fc6a94
+a-omegese-3	dev05	2	4501	69	69	stop	stop	6.488837	REFUSED omegese: line 2: 'product' is not a name in scope here, nor an op, a type or a function	REFUSED omegese: line 2: 'product' is not a name in scope here, nor an op, a type or a function	-
+a-text-3	dev05	2	3550	63	67	stop	stop	5.906966	REFUSED compiler: SYNTAX at line 2: expected :, found '='	REFUSED compiler: SYNTAX at line 4: expected '=', '[' or '(' after a name at statement start, found '1'	1e9b49d9efc1f34c6427853d55698a148adf19e386747131ee769a4f5d46a4c0
+a-omegese-3	dev06	1	2163	32	-	stop	-	2.113393	OK	-	01e5675eb3167ebba275fc45cc6cd6a3c3f1a70a69ba809683522e8e2c71c89d
+a-text-3	dev06	2	3496	52	69	stop	stop	5.556480	REFUSED compiler: TYPE_MISMATCH at line 4: 'return;' in a function returning u32	OK	50616bb92bcedfe0e2b3066b27af4fa9bfa5475a5856f175e635822465eb3e57
+a-omegese-3	dev07	2	4461	69	69	stop	stop	6.483758	REFUSED omegese: line 5: 'r' is not a name in scope here, nor an op, a type or a function	REFUSED omegese: line 5: 'r' is not a name in scope here, nor an op, a type or a function	-
+a-text-3	dev07	2	3582	123	106	stop	stop	9.792855	REFUSED compiler: UNBOUNDED_LOOP at line 4: 'while' needs 'bound N' (static trip-count bound)	OK	c3dea14c74b5b665eacb714eb7aa017f2634f282c01b4552ad58e1d7fc022a87
+a-omegese-3	dev08	1	2218	74	-	stop	-	3.768581	OK	-	af4045bbe08b648fa2713fdb15f8d9fd8f4a44d1dcb3d674863379f9b133c2d0
+a-text-3	dev08	2	3657	98	104	stop	stop	8.743192	REFUSED compiler: UNBOUNDED_LOOP at line 4: 'while' needs 'bound N' (static trip-count bound)	OK	619450f35e654e9ad175ed270e73b1d11aaa46c0081591dd493cda29c8b25899
+a-omegese-3	dev09	2	4488	90	90	stop	stop	8.201040	REFUSED omegese: line 2: 'result' is not a name in scope here, nor an op, a type or a function	REFUSED omegese: line 2: 'result' is not a name in scope here, nor an op, a type or a function	-
+a-text-3	dev09	2	3547	82	85	stop	stop	7.333688	REFUSED compiler: UNBOUNDED_LOOP at line 4: 'while' needs 'bound N' (static trip-count bound)	OK	39ae4474236de97d530c0ef3f8f213cd783a31ba95f303cbe67bb7948d6c4260
+a-omegese-3	dev10	1	2169	39	-	stop	-	2.381551	OK	-	e0cc96889d56dd2c85910f6771f83b14b3a0817c384a94a4d025210226406abd
+a-text-3	dev10	2	3512	57	57	stop	stop	5.233302	REFUSED compiler: TYPE_MISMATCH at line 4: 'return;' in a function returning i8	REFUSED compiler: TYPE_MISMATCH at line 4: 'return;' in a function returning i8	b8e9c6a8ab3fc56ffb74519c0a0b21a986114fcf424d2d244a482755496d1a1e

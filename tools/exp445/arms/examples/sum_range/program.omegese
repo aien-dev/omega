@@ -1,0 +1,9 @@
+fn sum_range lo int hi int to long
+s = long 0
+i = lo
+while le i hi bound 300000
+s = add s long i
+i = add i 1
+end
+ret s
+end

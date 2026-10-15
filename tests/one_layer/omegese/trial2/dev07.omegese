@@ -1,0 +1,7 @@
+fn isqrt x u32 to u32
+r = u32 0
+while le add mul r r 4 r x bound 32
+r = add r 1
+end
+ret sub r 1
+end

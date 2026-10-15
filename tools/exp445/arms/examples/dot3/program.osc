@@ -1,0 +1,19 @@
+fn dot(u: &[i64; 3], w: &[i64; 3]) -> i64 {
+    let mut s: i64 = 0;
+    for i in 0 .. 3 {
+        s = s + u[i] * w[i];
+    }
+    return s;
+}
+
+fn dot3(a: i16, b: i16, c: i16, x: i16, y: i16, z: i16) -> i64 {
+    let u: own [i64; 3] = alloc(0);
+    let w: own [i64; 3] = alloc(0);
+    u[0] = a as i64;
+    u[1] = b as i64;
+    u[2] = c as i64;
+    w[0] = x as i64;
+    w[1] = y as i64;
+    w[2] = z as i64;
+    return dot(&u, &w);
+}

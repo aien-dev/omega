@@ -1,0 +1,3 @@
+Write a function halve_or_dec_steps that takes an unsigned 32-bit number n and counts the steps that
+bring it down to 1 or less, where one step halves n when n is even and subtracts 1 when n is odd.
+Return the count as an unsigned 32-bit number (0 when n is 0 or 1). It never traps.

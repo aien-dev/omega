@@ -1,0 +1,9 @@
+fn bitrev8(x: u8) -> u8 {
+    let mut rev: u8 = 0;
+    let mut i: u8 = 0;
+    while i < 8 bound 8 {
+        rev = rev | ((x >> i) & 1) << (7 - i);
+        i = i + 1;
+    }
+    return rev;
+}

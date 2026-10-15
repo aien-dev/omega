@@ -1,0 +1,10 @@
+```
+fn popcount x ulong to uchar
+k = uchar 0
+while ne x 0 bound 64
+k = add k uchar rem x 2
+x = shr x 1
+end
+ret k
+end
+```

@@ -1,0 +1,3 @@
+fn hash_step h uint c uchar to uint
+ret add mul h 31 uint c
+end

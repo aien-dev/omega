@@ -1,0 +1,8 @@
+fn absdiff a i32 b i32 to i64
+diff = i64 a
+diff = sub diff (i64 b)
+if lt diff 0
+diff = neg diff
+end
+ret diff
+end

@@ -1,0 +1,12 @@
+fn isqrt(x: u32) -> u32 {
+    let mut r: u32 = 0;
+    let mut pow: u32 = 1 << 30;
+    while pow > 0 bound 32 {
+        let r_plus_pow: u32 = r + pow;
+        if r_plus_pow * r_plus_pow <= x {
+            r = r_plus_pow;
+        }
+        pow = pow >> 1;
+    }
+    return r;
+}

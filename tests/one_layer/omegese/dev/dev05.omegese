@@ -1,0 +1,3 @@
+fn checked_mul a short b short to short
+ret mul a b
+end

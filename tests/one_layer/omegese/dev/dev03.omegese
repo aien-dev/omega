@@ -1,0 +1,11 @@
+fn popcount x ulong to uchar
+n = uchar 0
+for i uint 64
+b = and x 1
+if eq b 1
+n = add n 1
+end
+x = shr x 1
+end
+ret n
+end

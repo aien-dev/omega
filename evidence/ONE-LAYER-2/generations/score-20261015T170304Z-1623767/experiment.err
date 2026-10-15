@@ -1,0 +1,172 @@
+ola.sh: run 20261015T170310Z-e27a33ee052d-1629957 tasks e27a33ee052d3aed58027d92ba14cac31f909b50dc562634224939cbe67fb346 sets 6
+pass A set references:
+  dev01                                    ACCEPT ok -
+  dev02                                    ACCEPT ok -
+  dev03                                    ACCEPT ok -
+  dev04                                    ACCEPT ok -
+  dev05                                    ACCEPT ok -
+  dev06                                    ACCEPT ok -
+  dev07                                    ACCEPT ok -
+  dev08                                    ACCEPT ok -
+  dev09                                    ACCEPT ok -
+  dev10                                    ACCEPT ok -
+pass A set a-omegese-1:
+  dev01                                    REJECT no_candidate -
+  dev02                                    REJECT unexpected_trap line_4,trap_1
+  dev03                                    ACCEPT ok -
+  dev04                                    ACCEPT ok -
+  dev05                                    ACCEPT ok -
+  dev06                                    ACCEPT ok -
+  dev07                                    REJECT no_candidate -
+  dev08                                    REJECT wrong_result line_8
+  dev09                                    ACCEPT ok -
+  dev10                                    ACCEPT ok -
+pass A set a-omegese-2:
+  dev01                                    REJECT no_candidate -
+  dev02                                    REJECT unexpected_trap line_4,trap_1
+  dev03                                    ACCEPT ok -
+  dev04                                    ACCEPT ok -
+  dev05                                    ACCEPT ok -
+  dev06                                    ACCEPT ok -
+  dev07                                    REJECT unexpected_trap line_8,trap_4
+  dev08                                    REJECT wrong_result line_8
+  dev09                                    ACCEPT ok -
+  dev10                                    ACCEPT ok -
+pass A set a-omegese-3:
+  dev01                                    REJECT no_candidate -
+  dev02                                    REJECT unexpected_trap line_4,trap_1
+  dev03                                    ACCEPT ok -
+  dev04                                    ACCEPT ok -
+  dev05                                    ACCEPT ok -
+  dev06                                    ACCEPT ok -
+  dev07                                    REJECT no_candidate -
+  dev08                                    REJECT wrong_result line_8
+  dev09                                    ACCEPT ok -
+  dev10                                    ACCEPT ok -
+pass A set a-text-1:
+  dev01                                    ACCEPT ok -
+  dev02                                    ACCEPT ok -
+  dev03                                    ACCEPT ok -
+  dev04                                    ACCEPT ok -
+  dev05                                    REJECT wrong_trap line_4,want_1,got_5
+  dev06                                    REJECT missing_trap line_3
+  dev07                                    REJECT unexpected_trap line_8,trap_4
+  dev08                                    ACCEPT ok -
+  dev09                                    ACCEPT ok -
+  dev10                                    ACCEPT ok -
+pass A set a-text-2:
+  dev01                                    ACCEPT ok -
+  dev02                                    ACCEPT ok -
+  dev03                                    ACCEPT ok -
+  dev04                                    ACCEPT ok -
+  dev05                                    REJECT compile_refused kind_SYNTAX,line_6
+  dev06                                    ACCEPT ok -
+  dev07                                    REJECT unexpected_trap line_8,trap_4
+  dev08                                    ACCEPT ok -
+  dev09                                    ACCEPT ok -
+  dev10                                    ACCEPT ok -
+pass A set a-text-3:
+  dev01                                    ACCEPT ok -
+  dev02                                    ACCEPT ok -
+  dev03                                    ACCEPT ok -
+  dev04                                    ACCEPT ok -
+  dev05                                    REJECT wrong_trap line_4,want_1,got_5
+  dev06                                    REJECT missing_trap line_3
+  dev07                                    REJECT unexpected_trap line_8,trap_4
+  dev08                                    ACCEPT ok -
+  dev09                                    ACCEPT ok -
+  dev10                                    ACCEPT ok -
+pass B set references:
+  dev01                                    ACCEPT ok -
+  dev02                                    ACCEPT ok -
+  dev03                                    ACCEPT ok -
+  dev04                                    ACCEPT ok -
+  dev05                                    ACCEPT ok -
+  dev06                                    ACCEPT ok -
+  dev07                                    ACCEPT ok -
+  dev08                                    ACCEPT ok -
+  dev09                                    ACCEPT ok -
+  dev10                                    ACCEPT ok -
+pass B set a-omegese-1:
+  dev01                                    REJECT no_candidate -
+  dev02                                    REJECT unexpected_trap line_4,trap_1
+  dev03                                    ACCEPT ok -
+  dev04                                    ACCEPT ok -
+  dev05                                    ACCEPT ok -
+  dev06                                    ACCEPT ok -
+  dev07                                    REJECT no_candidate -
+  dev08                                    REJECT wrong_result line_8
+  dev09                                    ACCEPT ok -
+  dev10                                    ACCEPT ok -
+pass B set a-omegese-2:
+  dev01                                    REJECT no_candidate -
+  dev02                                    REJECT unexpected_trap line_4,trap_1
+  dev03                                    ACCEPT ok -
+  dev04                                    ACCEPT ok -
+  dev05                                    ACCEPT ok -
+  dev06                                    ACCEPT ok -
+  dev07                                    REJECT unexpected_trap line_8,trap_4
+  dev08                                    REJECT wrong_result line_8
+  dev09                                    ACCEPT ok -
+  dev10                                    ACCEPT ok -
+pass B set a-omegese-3:
+  dev01                                    REJECT no_candidate -
+  dev02                                    REJECT unexpected_trap line_4,trap_1
+  dev03                                    ACCEPT ok -
+  dev04                                    ACCEPT ok -
+  dev05                                    ACCEPT ok -
+  dev06                                    ACCEPT ok -
+  dev07                                    REJECT no_candidate -
+  dev08                                    REJECT wrong_result line_8
+  dev09                                    ACCEPT ok -
+  dev10                                    ACCEPT ok -
+pass B set a-text-1:
+  dev01                                    ACCEPT ok -
+  dev02                                    ACCEPT ok -
+  dev03                                    ACCEPT ok -
+  dev04                                    ACCEPT ok -
+  dev05                                    REJECT wrong_trap line_4,want_1,got_5
+  dev06                                    REJECT missing_trap line_3
+  dev07                                    REJECT unexpected_trap line_8,trap_4
+  dev08                                    ACCEPT ok -
+  dev09                                    ACCEPT ok -
+  dev10                                    ACCEPT ok -
+pass B set a-text-2:
+  dev01                                    ACCEPT ok -
+  dev02                                    ACCEPT ok -
+  dev03                                    ACCEPT ok -
+  dev04                                    ACCEPT ok -
+  dev05                                    REJECT compile_refused kind_SYNTAX,line_6
+  dev06                                    ACCEPT ok -
+  dev07                                    REJECT unexpected_trap line_8,trap_4
+  dev08                                    ACCEPT ok -
+  dev09                                    ACCEPT ok -
+  dev10                                    ACCEPT ok -
+pass B set a-text-3:
+  dev01                                    ACCEPT ok -
+  dev02                                    ACCEPT ok -
+  dev03                                    ACCEPT ok -
+  dev04                                    ACCEPT ok -
+  dev05                                    REJECT wrong_trap line_4,want_1,got_5
+  dev06                                    REJECT missing_trap line_3
+  dev07                                    REJECT unexpected_trap line_8,trap_4
+  dev08                                    ACCEPT ok -
+  dev09                                    ACCEPT ok -
+  dev10                                    ACCEPT ok -
+isolation probes:
+  probe read_hidden_inputs     sandboxed=BLOCKED:errno=13                         control=ESCAPED:read                 PASS
+  probe read_expected          sandboxed=BLOCKED:errno=13                         control=ESCAPED:read                 PASS
+  probe read_labels            sandboxed=BLOCKED:errno=13                         control=ESCAPED:read                 PASS
+  probe read_corpus_tar        sandboxed=BLOCKED:errno=13                         control=ESCAPED:read                 PASS
+  probe read_key               sandboxed=BLOCKED:errno=13                         control=ESCAPED:read                 PASS
+  probe write_evidence         sandboxed=BLOCKED:errno=13                         control=ESCAPED:opened_for_write     PASS
+  probe write_scorer           sandboxed=BLOCKED:errno=13                         control=ESCAPED:opened_for_write     PASS
+  probe change_rules           sandboxed=BLOCKED:errno=13                         control=ESCAPED:opened_for_write     PASS
+  probe network                sandboxed=BLOCKED:seccomp_syscall=198              control=ESCAPED:connected            PASS
+  probe outlive_time           sandboxed=BLOCKED:time_limit                       control=ESCAPED:outlived             PASS
+  probe outlive_fork           sandboxed=BLOCKED:seccomp_syscall=220              control=ESCAPED:forked               PASS
+  probe exceed_memory          sandboxed=BLOCKED:errno=12                         control=ESCAPED:mapped               PASS
+  probe write_outside_scratch  sandboxed=BLOCKED:errno=13                         control=ESCAPED:created              PASS
+  probe replay_verdict         sandboxed=BLOCKED:stale_or_forged_transcript       control=ESCAPED:transcript_accepted  PASS
+  probe scratch_ok             sandboxed=ESCAPED:wrote_scratch                    control=ESCAPED:wrote_scratch        PASS
+ola.sh: evidence in evidence/ONE-LAYER-2/runs/20261015T170310Z-e27a33ee052d-1629957

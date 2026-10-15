@@ -1,0 +1,6 @@
+fn checked_mul(a: i16, b: i16) -> i16 {
+    let x: i64 = a as i64;
+    let y: i64 = b as i64;
+    let p: i64 = x * y;
+    return p as i16;
+}

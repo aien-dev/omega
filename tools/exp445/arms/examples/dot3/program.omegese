@@ -1,0 +1,21 @@
+fn dot u view long 3 w view long 3 to long
+s = long 0
+for i uint 3
+s = add s mul get u i get w i
+end
+ret s
+end
+fn dot3 a short b short c short x short y short z short to long
+u = new long 3 0
+w = new long 3 0
+put u 0 long a
+put u 1 long b
+put u 2 long c
+put w 0 long x
+put w 1 long y
+put w 2 long z
+s = dot view u view w
+free u
+free w
+ret s
+end

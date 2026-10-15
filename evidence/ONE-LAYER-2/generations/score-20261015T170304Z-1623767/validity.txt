@@ -1,0 +1,1 @@
+provenance OK: 1 runs, 60 generations, configs A, prompt mode many

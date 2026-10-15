@@ -1,0 +1,16 @@
+fn isqrt(x: u32) -> u32 {
+    let mut low: u32 = 0;
+    let mut high: u32 = x;
+    let mut r: u32 = 0;
+    while low <= high bound 32 {
+        let mid: u32 = (low + high) / 2;
+        let sq: u32 = mid * mid;
+        if sq <= x {
+            r = mid;
+            low = mid + 1;
+        } else {
+            high = mid - 1;
+        }
+    }
+    return r;
+}

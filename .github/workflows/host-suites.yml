@@ -28,6 +28,8 @@ name: Host suites
 #       selftest on the public sample corpus; omega #443),
 #       exp445-tools (test-omega-emit test-exp445: stage-2 driver, scorer and
 #       mutants on dev tasks with a fake server; omega #445),
+#       omegese-oracle (test-omegese: the Omegese legal-word oracle, soundness
+#       walks and mutants on the -O2 build and under ASan and UBSan; omega #464),
 #       chip-tool-selftests (test-m19r-qualify test-gate14-combine
 #       test-window-lane-guard test-unwritten-trap-host test-ldst-host: the
 #       host-only self-tests of chip tooling; omega #425)
@@ -320,6 +322,30 @@ jobs:
       - name: omega_emit and exp445 driver self-tests (dev tasks, fake server)
         if: steps.guard.outputs.run == 'true'
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-omega-emit test-exp445
+
+  omegese-oracle:
+    # Omegese (omega#464): the legal-word oracle `omegese next`, `complete` and `emit`, its soundness
+    # walks through omega_emit and checker2, and its mutants, on the -O2 build and on an ASan and
+    # UBSan build. Dev programs only (no model, no GPU, no held-out data).
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Changed-path guard (Omegese and its downstream checks)
+        id: guard
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          CHANGED=$(git diff --name-only HEAD^1 HEAD)
+          if echo "$CHANGED" | grep -Eq '^(tools/omegese/|tests/one_layer/omegese/|tools/omega_emit/|mk/omegese\.mk$|mk/checker2\.mk$|mk/omega-emit\.mk$|docs/one_layer/OMEGESE\.md$|src/compiler/|src/checker2/|src/sha256\.|\.github/workflows/host-suites\.yml$)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"; echo "no Omegese files changed; skipping"
+          fi
+      - name: Omegese oracle self-tests (-O2, then ASan and UBSan)
+        if: steps.guard.outputs.run == 'true'
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-omegese
 
   chip-tool-selftests:
     # Host-only self-tests of chip tooling that previously ran nowhere in CI

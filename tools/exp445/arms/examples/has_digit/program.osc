@@ -1,0 +1,10 @@
+fn has_digit(n: u32, d: u8) -> bool {
+    let t: u32 = d as u32;
+    let mut x: u32 = n;
+    let mut found: bool = x % 10 == t;
+    while x >= 10 bound 10 {
+        x = x / 10;
+        if x % 10 == t { found = true; }
+    }
+    return found;
+}

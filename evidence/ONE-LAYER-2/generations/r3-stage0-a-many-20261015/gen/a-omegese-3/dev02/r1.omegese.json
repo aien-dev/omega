@@ -1,0 +1,8 @@
+{"functions": [
+  {"name": "absdiff", "params": ["i32", "i32"], "ret": "i64", "locals": ["i32", "i32", "bool", "i64", "i64", "i64"],
+   "blocks": [
+    [{"op": "const", "dst": 3, "value": 0}, {"op": "sub", "dst": 2, "a": 0, "b": 1}, {"op": "lt", "dst": 4, "a": 2, "b": 3}, {"op": "cbr", "cond": 4, "then": 1, "else": 2}],
+    [{"op": "cast", "dst": 5, "a": 2}, {"op": "neg", "dst": 6, "a": 5}, {"op": "ret", "a": 6}],
+    [{"op": "cast", "dst": 7, "a": 2}, {"op": "ret", "a": 7}]
+   ]}
+]}

@@ -1,0 +1,11 @@
+{"functions": [
+  {"name": "popcount", "params": ["u64"], "ret": "u8", "locals": ["u8", "u8", "u64", "u64", "u64", "bool", "u64", "bool", "u64", "u64", "u8"],
+   "blocks": [
+    [{"op": "const", "dst": 1, "value": 0}, {"op": "const", "dst": 3, "value": 0}, {"op": "const", "dst": 4, "value": 1}, {"op": "const", "dst": 7, "value": 64}, {"op": "const", "dst": 9, "value": 2}, {"op": "mov", "dst": 2, "a": 1}, {"op": "mov", "dst": 5, "a": 3}, {"op": "br", "to": 1}],
+    [{"op": "ne", "dst": 6, "a": 0, "b": 3}, {"op": "cbr", "cond": 6, "then": 2, "else": 5}],
+    [{"op": "ge", "dst": 8, "a": 5, "b": 7}, {"op": "cbr", "cond": 8, "then": 3, "else": 4}],
+    [{"op": "trap", "code": 4}, {"op": "br", "to": 5}],
+    [{"op": "add", "dst": 5, "a": 5, "b": 4}, {"op": "rem", "dst": 10, "a": 0, "b": 9}, {"op": "cast", "dst": 11, "a": 10}, {"op": "add", "dst": 2, "a": 2, "b": 11}, {"op": "shr", "dst": 0, "a": 0, "b": 4}, {"op": "br", "to": 1}],
+    [{"op": "ret", "a": 2}]
+   ]}
+]}

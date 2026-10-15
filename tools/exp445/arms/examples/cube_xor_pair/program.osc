@@ -1,0 +1,9 @@
+fn cube_xor_pair(n: u8) -> u16 {
+    let t: own [u16; 16] = alloc(0);
+    for i in 0 .. 16 {
+        let v: u16 = i as u16;
+        t[i] = v * v * v;
+    }
+    let j: u32 = n as u32;
+    return t[j] ^ t[j + 1];
+}

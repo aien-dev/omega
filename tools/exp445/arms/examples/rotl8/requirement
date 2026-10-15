@@ -1,0 +1,5 @@
+# exp445 worked example (protocol r3 section 13.2), not a held-out task
+kind task
+entry rotl8
+params u8 u8
+ret u8

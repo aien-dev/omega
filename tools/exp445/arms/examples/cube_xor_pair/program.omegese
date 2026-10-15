@@ -1,0 +1,11 @@
+fn cube_xor_pair n uchar to ushort
+t = new ushort 16 0
+for i uint 16
+v = ushort i
+put t i mul mul v v v
+end
+j = uint n
+r = xor get t j get t add j 1
+free t
+ret r
+end

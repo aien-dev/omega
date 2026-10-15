@@ -1,0 +1,3 @@
+Write a function has_digit that takes an unsigned 32-bit number n and an unsigned 8-bit number d and
+returns true when one of the decimal digits of n is d, false otherwise. 0 has the single digit 0.
+When d is larger than 9 the answer is false. It never traps.

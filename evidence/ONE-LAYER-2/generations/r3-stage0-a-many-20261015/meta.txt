@@ -1,0 +1,25 @@
+revision=r3
+base_url=http://127.0.0.1:18091/v1
+model=qwen3-30b-a3b-instruct-2507
+config=A
+server=/home/drakestapleton/handoffs/pin-bin-f881710a/aien-serve-http sha256=663b85a506ec9bdffd09094cb2271d95efb46eeedfbfe017d31c2fe520c4b911 (aien-sovereign-core f881710a, omega 4799f9eb; --engine omega on :18091)
+request_extra={}
+arms=omegese,text
+prompt_mode=many
+attempts=3
+max_tokens_per_round=3072
+repair_rounds=1
+temperature=0.7
+top_p=0.8
+seed_base=445000
+timeout_s=900
+retries=2
+order=attempt,task,arm
+protocol=PARAMS
+commit=7d24a949a3f4990bde16897c2dfc6984544fd4bd
+params_sha256=a37136fb7fa81e9e0730c847b888d890ac8fd0cd79fdf41ee63cc5e762960aa1
+g0_sha256=af3d326c8dfc62b2850e09a8c42d147858ec35bdec12239965585fbe8e4f0965
+prompt_omegese_sha256=1180aa60a3a835d6eee7984da16804ac23c3967c76b17abe2837fbf2f1ed6db3
+prompt_text_sha256=789f3c383797ad78445e49b9d8273e3e3729f191c6d214dcff27fa68e9ab5b31
+tasks=10
+tasks_public_sha256=0602566543fb027a030518c0478f623324be9b6f0efab3e05f57b6cf32d0dfff

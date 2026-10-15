@@ -1,0 +1,9 @@
+```
+fn checked_mul(a: i16, b: i16) -> i16 {
+    let product = a * b;
+    if product > 32767 || product < -32768 {
+        trap 1;
+    }
+    return product;
+}
+```

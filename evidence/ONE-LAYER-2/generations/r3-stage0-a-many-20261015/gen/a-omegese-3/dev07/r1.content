@@ -1,0 +1,9 @@
+```
+fn isqrt x uint to uint
+r = uint 0
+while le add mul r r 2 r x bound 32
+r = add r 1
+end
+ret sub r 1
+end
+```

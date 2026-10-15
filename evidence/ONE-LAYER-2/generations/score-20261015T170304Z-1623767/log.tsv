@@ -1,0 +1,60 @@
+a-omegese-1	dev01	2	9019	36	36	stop	stop	3.934493	REFUSED omegese: line 3: clamp_add returns uchar: ret needs a value	REFUSED omegese: line 3: clamp_add returns uchar: ret needs a value	-
+a-omegese-1	dev02	1	4501	40	-	stop	-	3.598488	OK	-	fe0d8a6ccdb4a4525edc0175250d57eceddbca04f0321d8f1332bbdad49fda72
+a-omegese-1	dev03	1	4458	51	-	stop	-	3.950463	OK	-	0f253e461d65d4c0604bd13887d5781586f13f9075c526b60892b55626fec52d
+a-omegese-1	dev04	1	4477	43	-	stop	-	3.596975	OK	-	f4b409fb8e6f31545c6e1c8c0d8c5107f5da32f6562030e5a585b673f1222507
+a-omegese-1	dev05	1	4491	49	-	stop	-	3.827743	OK	-	5a0a815fac27b32748e38d874edb61be211c62f8df712cbbea0d60bb1849bb27
+a-omegese-1	dev06	1	4466	32	-	stop	-	3.162664	OK	-	01e5675eb3167ebba275fc45cc6cd6a3c3f1a70a69ba809683522e8e2c71c89d
+a-omegese-1	dev07	2	9039	49	49	stop	stop	6.143132	REFUSED omegese: line 3: le has 3 values after it; it takes 2	REFUSED omegese: line 3: le has 3 values after it; it takes 2	-
+a-omegese-1	dev08	1	4521	74	-	stop	-	4.958377	OK	-	7e5834fa3575c0633ed83c13f38299a94e6499a1ca221f72af93960e2d849295
+a-omegese-1	dev09	1	4474	51	-	stop	-	3.936279	OK	-	cc12a26ddce912474d938567186a247e87e62bb6964d0dd68bc2dfd99cb8007b
+a-omegese-1	dev10	1	4472	18	-	stop	-	2.513669	OK	-	8cf095a5af0a5eaa9134647fed2c35f558c3d080fd3080a98a2f084ac9ae9ec9
+a-omegese-2	dev01	2	9019	36	36	stop	stop	5.028610	REFUSED omegese: line 3: clamp_add returns uchar: ret needs a value	REFUSED omegese: line 3: clamp_add returns uchar: ret needs a value	-
+a-omegese-2	dev02	1	4501	40	-	stop	-	3.468517	OK	-	fe0d8a6ccdb4a4525edc0175250d57eceddbca04f0321d8f1332bbdad49fda72
+a-omegese-2	dev03	1	4458	51	-	stop	-	3.951683	OK	-	0f253e461d65d4c0604bd13887d5781586f13f9075c526b60892b55626fec52d
+a-omegese-2	dev04	1	4477	43	-	stop	-	3.594223	OK	-	f4b409fb8e6f31545c6e1c8c0d8c5107f5da32f6562030e5a585b673f1222507
+a-omegese-2	dev05	1	4491	49	-	stop	-	3.863101	OK	-	5a0a815fac27b32748e38d874edb61be211c62f8df712cbbea0d60bb1849bb27
+a-omegese-2	dev06	1	4466	32	-	stop	-	3.123935	OK	-	01e5675eb3167ebba275fc45cc6cd6a3c3f1a70a69ba809683522e8e2c71c89d
+a-omegese-2	dev07	1	4471	45	-	stop	-	3.829554	OK	-	e34b489657336e4fcc0dd2fd02f77bf0dd1d6f6409e1e7880afb99b2c54d72fc
+a-omegese-2	dev08	1	4521	74	-	stop	-	5.013115	OK	-	af4045bbe08b648fa2713fdb15f8d9fd8f4a44d1dcb3d674863379f9b133c2d0
+a-omegese-2	dev09	1	4474	51	-	stop	-	5.205042	OK	-	cc12a26ddce912474d938567186a247e87e62bb6964d0dd68bc2dfd99cb8007b
+a-omegese-2	dev10	1	4472	18	-	stop	-	2.505658	OK	-	8cf095a5af0a5eaa9134647fed2c35f558c3d080fd3080a98a2f084ac9ae9ec9
+a-omegese-3	dev01	2	9019	36	36	stop	stop	5.003445	REFUSED omegese: line 3: clamp_add returns uchar: ret needs a value	REFUSED omegese: line 3: clamp_add returns uchar: ret needs a value	-
+a-omegese-3	dev02	1	4501	40	-	stop	-	3.479755	OK	-	fe0d8a6ccdb4a4525edc0175250d57eceddbca04f0321d8f1332bbdad49fda72
+a-omegese-3	dev03	2	9024	50	51	stop	stop	6.315180	REFUSED omegese: line 4: add needs two values of one type: 'k' is uchar, 'rem x 2' is ulong	OK	0f253e461d65d4c0604bd13887d5781586f13f9075c526b60892b55626fec52d
+a-omegese-3	dev04	1	4477	43	-	stop	-	3.588623	OK	-	f4b409fb8e6f31545c6e1c8c0d8c5107f5da32f6562030e5a585b673f1222507
+a-omegese-3	dev05	1	4491	49	-	stop	-	3.859429	OK	-	5a0a815fac27b32748e38d874edb61be211c62f8df712cbbea0d60bb1849bb27
+a-omegese-3	dev06	1	4466	32	-	stop	-	3.127677	OK	-	01e5675eb3167ebba275fc45cc6cd6a3c3f1a70a69ba809683522e8e2c71c89d
+a-omegese-3	dev07	2	9039	49	49	stop	stop	6.165472	REFUSED omegese: line 3: le has 3 values after it; it takes 2	REFUSED omegese: line 3: le has 3 values after it; it takes 2	-
+a-omegese-3	dev08	1	4521	74	-	stop	-	4.963599	OK	-	af4045bbe08b648fa2713fdb15f8d9fd8f4a44d1dcb3d674863379f9b133c2d0
+a-omegese-3	dev09	1	4474	51	-	stop	-	3.925221	OK	-	cc12a26ddce912474d938567186a247e87e62bb6964d0dd68bc2dfd99cb8007b
+a-omegese-3	dev10	1	4472	18	-	stop	-	2.499313	OK	-	8cf095a5af0a5eaa9134647fed2c35f558c3d080fd3080a98a2f084ac9ae9ec9
+a-text-1	dev01	1	4481	67	-	stop	-	5.396856	OK	-	cbd1dcd9f61e35340af54da044ebf3e03aef0f4106c39a0b1ce4cdf9adcd4079
+a-text-1	dev02	1	4513	86	-	stop	-	5.644896	OK	-	553b6bdad0005416edf649484d9ebaa5a2d7b4a7bbc278629f66d097991991e3
+a-text-1	dev03	1	4470	79	-	stop	-	5.135399	OK	-	1cd589f0c30bf8e61c97c9459e466075815a984367e42fc9fe727b3fa8946a9d
+a-text-1	dev04	1	4489	84	-	stop	-	5.363301	OK	-	3bac17a647073c04e3c77d8b3acf761cbfd132a3480d726ac1c8807822de9361
+a-text-1	dev05	1	4503	72	-	stop	-	4.890799	OK	-	1affb7b80cfb588d5b92fd9454943e0de8b2dc12272658a1d3927c6bc6fb007d
+a-text-1	dev06	1	4478	65	-	stop	-	4.558206	OK	-	74e5c3e652cd18a4b8e8c9132ac069218838530700fea1097080d413cf959736
+a-text-1	dev07	1	4483	131	-	stop	-	7.451225	OK	-	a0e9fab09527c16459fec2f1482d1af5a9c8953e53b235be6429fe4ebca9df51
+a-text-1	dev08	1	4533	108	-	stop	-	6.438474	OK	-	76b36200f2a11ae5dac471c2191348bf907b7579759ab00e62a48f6256e03e68
+a-text-1	dev09	1	4486	83	-	stop	-	5.350032	OK	-	34db337e687b343c065ce1fca89843b3ba5512b90631ce8c1c4b8d56a5451907
+a-text-1	dev10	1	4484	25	-	stop	-	2.808950	OK	-	bba5447db3eabd35ecc69fc4a481a04bac77c22b1baa98d529e36e8ceaa6ad92
+a-text-2	dev01	1	4481	67	-	stop	-	4.644060	OK	-	cbd1dcd9f61e35340af54da044ebf3e03aef0f4106c39a0b1ce4cdf9adcd4079
+a-text-2	dev02	1	4513	86	-	stop	-	5.464301	OK	-	553b6bdad0005416edf649484d9ebaa5a2d7b4a7bbc278629f66d097991991e3
+a-text-2	dev03	1	4470	79	-	stop	-	5.122510	OK	-	1cd589f0c30bf8e61c97c9459e466075815a984367e42fc9fe727b3fa8946a9d
+a-text-2	dev04	1	4489	85	-	stop	-	5.410755	OK	-	4d637792e484b9bb325aa30ee0308a16d481044d832940ce26fd267c9f408221
+a-text-2	dev05	2	9157	99	99	stop	stop	10.605930	REFUSED compiler: SYNTAX at line 6: expected '=', '[' or '(' after a name at statement start, found '1'	REFUSED compiler: SYNTAX at line 6: expected '=', '[' or '(' after a name at statement start, found '1'	d91ad49d3185952cf7f4d11b124f8aa8ab5420f9bf667fe6b4d15133bd9c09fe
+a-text-2	dev06	1	4478	59	-	stop	-	4.323845	OK	-	d2bd1da48055828653c498f07c32597767bd88d979ae351bf36a76cb57478add
+a-text-2	dev07	1	4483	104	-	stop	-	6.246663	OK	-	e3f5be06c5f489d6cd936043be2cc6c685013954e9a30f0f84ca50d396b4147b
+a-text-2	dev08	1	4533	108	-	stop	-	7.670243	OK	-	76b36200f2a11ae5dac471c2191348bf907b7579759ab00e62a48f6256e03e68
+a-text-2	dev09	1	4486	83	-	stop	-	5.704527	OK	-	34db337e687b343c065ce1fca89843b3ba5512b90631ce8c1c4b8d56a5451907
+a-text-2	dev10	1	4484	25	-	stop	-	2.830809	OK	-	bba5447db3eabd35ecc69fc4a481a04bac77c22b1baa98d529e36e8ceaa6ad92
+a-text-3	dev01	1	4481	67	-	stop	-	4.654481	OK	-	cbd1dcd9f61e35340af54da044ebf3e03aef0f4106c39a0b1ce4cdf9adcd4079
+a-text-3	dev02	1	4513	86	-	stop	-	5.501147	OK	-	553b6bdad0005416edf649484d9ebaa5a2d7b4a7bbc278629f66d097991991e3
+a-text-3	dev03	1	4470	79	-	stop	-	5.162619	OK	-	1cd589f0c30bf8e61c97c9459e466075815a984367e42fc9fe727b3fa8946a9d
+a-text-3	dev04	1	4489	85	-	stop	-	5.438976	OK	-	4d637792e484b9bb325aa30ee0308a16d481044d832940ce26fd267c9f408221
+a-text-3	dev05	1	4503	72	-	stop	-	4.886069	OK	-	1affb7b80cfb588d5b92fd9454943e0de8b2dc12272658a1d3927c6bc6fb007d
+a-text-3	dev06	1	4478	65	-	stop	-	4.551219	OK	-	74e5c3e652cd18a4b8e8c9132ac069218838530700fea1097080d413cf959736
+a-text-3	dev07	1	4483	106	-	stop	-	6.358653	OK	-	cf8338fb5a32003ead0afd3df3859868e07d910c794e2288bd26184fd18db44a
+a-text-3	dev08	1	4533	108	-	stop	-	6.473345	OK	-	76b36200f2a11ae5dac471c2191348bf907b7579759ab00e62a48f6256e03e68
+a-text-3	dev09	1	4486	83	-	stop	-	5.327858	OK	-	34db337e687b343c065ce1fca89843b3ba5512b90631ce8c1c4b8d56a5451907
+a-text-3	dev10	1	4484	25	-	stop	-	2.841478	OK	-	bba5447db3eabd35ecc69fc4a481a04bac77c22b1baa98d529e36e8ceaa6ad92

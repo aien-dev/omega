@@ -1,0 +1,21 @@
+config=A
+model=qwen3-30b-a3b-instruct-2507
+base_url=http://127.0.0.1:18091/v1
+request_extra={}
+server=/home/drakestapleton/handoffs/pin-bin-f881710a/aien-serve-http sha256=663b85a506ec9bdffd09094cb2271d95efb46eeedfbfe017d31c2fe520c4b911 (aien-sovereign-core f881710a, omega 4799f9eb; --engine omega on :18091)
+params_sha256=a37136fb7fa81e9e0730c847b888d890ac8fd0cd79fdf41ee63cc5e762960aa1
+commit=7d24a949a3f4990bde16897c2dfc6984544fd4bd
+gate=aien-spark/aien-sovereign-core f881710a scripts/sampling-gate.sh
+gate_sha256=2934e348676e531f8c08584548f7d3e31e1320788c197da7304544ab1453f5cc
+gate_exit=0
+task=dev01
+arm=omegese
+prompt_mode=many
+prompt_sha256=1180aa60a3a835d6eee7984da16804ac23c3967c76b17abe2837fbf2f1ed6db3
+max_tokens=3072
+temperature=0.7
+top_p=0.8
+seeds=446001 447001 448001 449001 450001 451001 452001 453001 446001
+rule=PASS needs the sampling gate VERDICT PASS (its gate d on the 8 exp445 requests), the repeat (request 9) byte-identical to the reply to request 1, every reply mode=sampled with its own seed; distinct answers are recorded, not gated
+derived=gate=PASS distinct=1/8 repeat_identical=yes sampled_own_seed=9/9
+G0 PASS

@@ -1,0 +1,5 @@
+# exp445 worked example (protocol r3 section 13.2), not a held-out task
+kind task
+entry cube_xor_pair
+params u8
+ret u16

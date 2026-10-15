@@ -1,0 +1,13 @@
+fn collatz_steps n u32 to u32
+steps = u32 0
+while ne n 1 bound 1000
+even = eq (rem n 2) 0
+if even
+n = div n 2
+else
+n = add (mul (uint 3) n) 1
+end
+steps = add steps 1
+end
+ret steps
+end

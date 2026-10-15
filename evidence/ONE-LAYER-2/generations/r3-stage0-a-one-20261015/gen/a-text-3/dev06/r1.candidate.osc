@@ -1,0 +1,7 @@
+fn safe_div(a: u32, b: u32) -> u32 {
+    if b == 0 {
+        // Division by zero: trap 2
+        return;
+    }
+    return a / b;
+}

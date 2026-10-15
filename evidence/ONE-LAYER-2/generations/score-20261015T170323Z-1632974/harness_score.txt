@@ -1,0 +1,9 @@
+set=a-omegese-1 accepted=2/10 rejected=8 errors=0 no_candidate=6
+set=a-omegese-2 accepted=2/10 rejected=8 errors=0 no_candidate=6
+set=a-omegese-3 accepted=2/10 rejected=8 errors=0 no_candidate=6
+set=a-text-1 accepted=3/10 rejected=7 errors=0 no_candidate=0
+set=a-text-2 accepted=3/10 rejected=7 errors=0 no_candidate=0
+set=a-text-3 accepted=3/10 rejected=7 errors=0 no_candidate=0
+references_accepted=10/10
+replay_identical=yes probes=PASS clean_tree=yes
+RUN VALID

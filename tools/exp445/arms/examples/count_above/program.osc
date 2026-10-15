@@ -1,0 +1,16 @@
+fn above(v: &[i32; 4], t: i32) -> u8 {
+    let mut k: u8 = 0;
+    for i in 0 .. 4 {
+        if v[i] > t { k = k + 1; }
+    }
+    return k;
+}
+
+fn count_above(a: i32, b: i32, c: i32, d: i32, t: i32) -> u8 {
+    let v: own [i32; 4] = alloc(0);
+    v[0] = a;
+    v[1] = b;
+    v[2] = c;
+    v[3] = d;
+    return above(&v, t);
+}

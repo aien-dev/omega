@@ -1,0 +1,11 @@
+```
+fn checked_mul(a: i16, b: i16) -> i16 {
+    let x: i32 = a as i32;
+    let y: i32 = b as i32;
+    let p: i32 = x * y;
+    if p < -32768 || p > 32767 {
+        trap 1;
+    }
+    return p as i16;
+}
+```
