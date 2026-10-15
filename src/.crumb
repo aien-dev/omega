@@ -80,7 +80,7 @@
         },
         {
           "digest": "bdc017bf3baddb9034478651fb3f170f045ce8aa27187481d15ac5da7fbfd18c",
-          "last_commit": "1edf41a5",
+          "last_commit": "18531691",
           "name": "compiler",
           "purpose": "Directory src/compiler. Purpose not yet described by a human."
         },
@@ -140,19 +140,19 @@
         },
         {
           "digest": "4785d8df268c31047589c5dff4ebc1f9a12a0fa4d5c94ce6dee156a841cf9502",
-          "last_commit": "dd67f6bd",
+          "last_commit": "",
           "name": "reservoir",
           "purpose": "Ionic-droplet reservoir simulator (omega#440): binary32 fixed-step RK4 of the authors' droplet m"
         },
         {
           "digest": "9e27882accc1db2881793e3f389519f5dd37f83cd37c4d1a6e19f2aa2e84d217",
-          "last_commit": "5901baa5",
+          "last_commit": "501d555c",
           "name": "runtime",
           "purpose": "Directory src/runtime. Purpose not yet described by a human."
         },
         {
           "digest": "d7bb5fb627dfe92066f94fa556e86be5d025c0ff5e81d823ba177a56ea099d31",
-          "last_commit": "5901baa5",
+          "last_commit": "5ae192a4",
           "name": "searchtrace",
           "purpose": "Directory src/searchtrace. Purpose not yet described by a human."
         },
@@ -182,14 +182,14 @@
         }
       ],
       "children_root": "sha256:93f32e91c5b498226d6ef4a040e3fbd2873dfb1f8b2405c26ea63b3a63df5f22",
-      "compiled_at": "2026-10-14T18:36:27Z",
+      "compiled_at": "2026-10-14T21:46:29Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:3b6e68a896d400c0805cc613b9af28ef6709f372a993ba22d48664d550c2557d",
+      "digest": "sha256:d69b7371545db3c5920b5e035b3d1d8b8205664f393fedd7b9fc1bb582f23821",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 474,
-      "generated_at_commit": "4fa52370f177d268e4248955dc7adec53519e215",
-      "source_tree": "sha256:bef71447164a7d4e733a93ff8c4d1d0619feccead590b0f9c990cde6a1d756e3"
+      "files": 534,
+      "generated_at_commit": "2a6d6d7b9091bd2184b15dcde893035dbcca40d3",
+      "source_tree": "sha256:c8f51a54a529457e4d7f2a0280349ddb609d67ab3793b6aecabc9599de6fc88e"
     },
     "owner_lane": "",
     "provenance": {

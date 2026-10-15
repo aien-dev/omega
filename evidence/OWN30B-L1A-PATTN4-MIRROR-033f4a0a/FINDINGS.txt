@@ -1,0 +1,8 @@
+Cut 4 (GPU-cached K/V mirror for ATTEND), hardware GB10, integration 033f4a0a. Device entry with GPU-cached in/out buffers.
+A/B (one variable: --no-mirror), two rounds A B A B, 15 reps each, chip-time medians [OBSERVED ab*.log]:
+  2048 tokens from 0:      no mirror 3.207 / 3.104 ms   mirror 1.356 / 1.353 ms   (2.3x)
+  1500 tokens after 4096:  no mirror 9.094 / 9.227 ms   mirror 3.511 / 3.520 ms   (2.6x)
+  64 tokens after 4032 (host entry): 0.567 / 0.664 vs 0.569 / 0.573 ms (no gain: 8 history copy launches)
+Exactness [OBSERVED main-mirror.log, 164/0]: parity vs CPU reference, K/V rows bit-identical to m decode steps, device entry
+bit-identical to host entry, mutants 1-4 caught, all with the mirror on. Sim: mirror rows equal cache rows.
+Host entry timings stay noisy (uncached staging per 1024-token pass), INFERRED same cause as the cut-3 spread study.

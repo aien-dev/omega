@@ -1,0 +1,62 @@
+ok: m=1 barrier=wfi+inval_all: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=1  barrier=wfi+inval_all  span_us=158.5 per_launch_us=163.8 first_launch_us=158.5 elapsed_us=163.8 GB/s=204.9 fixed_per_extra_launch_us=0.00
+ok: m=2 barrier=wfi+inval_all: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=2  barrier=wfi+inval_all  span_us=173.7 per_launch_us=89.4 first_launch_us=81.8 elapsed_us=178.8 GB/s=187.7 fixed_per_extra_launch_us=15.02
+ok: m=4 barrier=wfi+inval_all: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=4  barrier=wfi+inval_all  span_us=292.9 per_launch_us=74.5 first_launch_us=56.1 elapsed_us=297.9 GB/s=112.7 fixed_per_extra_launch_us=44.71
+ok: m=8 barrier=wfi+inval_all: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=8  barrier=wfi+inval_all  span_us=342.1 per_launch_us=43.4 first_launch_us=42.5 elapsed_us=347.2 GB/s=96.7 fixed_per_extra_launch_us=26.20
+ok: m=16 barrier=wfi+inval_all: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=16 barrier=wfi+inval_all  span_us=578.9 per_launch_us=36.5 first_launch_us=40.2 elapsed_us=584.0 GB/s=57.5 fixed_per_extra_launch_us=28.02
+ok: m=1 barrier=wfi_only: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=1  barrier=wfi_only       span_us=182.5 per_launch_us=189.9 first_launch_us=182.5 elapsed_us=189.9 GB/s=176.7 fixed_per_extra_launch_us=0.00
+ok: m=2 barrier=wfi_only: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=2  barrier=wfi_only       span_us=186.7 per_launch_us=95.9 first_launch_us=81.5 elapsed_us=191.7 GB/s=175.1 fixed_per_extra_launch_us=1.82
+ok: m=4 barrier=wfi_only: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=4  barrier=wfi_only       span_us=244.2 per_launch_us=62.3 first_launch_us=50.6 elapsed_us=249.2 GB/s=134.7 fixed_per_extra_launch_us=19.78
+ok: m=8 barrier=wfi_only: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=8  barrier=wfi_only       span_us=338.7 per_launch_us=43.0 first_launch_us=44.0 elapsed_us=343.9 GB/s=97.6 fixed_per_extra_launch_us=22.00
+ok: m=16 barrier=wfi_only: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=16 barrier=wfi_only       span_us=559.8 per_launch_us=35.3 first_launch_us=39.2 elapsed_us=564.9 GB/s=59.4 fixed_per_extra_launch_us=25.00
+ok: m=1 barrier=wfi+inval_data: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=1  barrier=wfi+inval_data span_us=155.2 per_launch_us=160.1 first_launch_us=155.2 elapsed_us=160.1 GB/s=209.6 fixed_per_extra_launch_us=0.00
+ok: m=2 barrier=wfi+inval_data: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=2  barrier=wfi+inval_data span_us=178.3 per_launch_us=91.6 first_launch_us=91.1 elapsed_us=183.3 GB/s=183.1 fixed_per_extra_launch_us=23.18
+ok: m=4 barrier=wfi+inval_data: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=4  barrier=wfi+inval_data span_us=211.7 per_launch_us=54.2 first_launch_us=53.6 elapsed_us=216.7 GB/s=154.9 fixed_per_extra_launch_us=18.86
+ok: m=8 barrier=wfi+inval_data: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=8  barrier=wfi+inval_data span_us=337.1 per_launch_us=42.8 first_launch_us=40.8 elapsed_us=342.1 GB/s=98.1 fixed_per_extra_launch_us=26.00
+ok: m=16 barrier=wfi+inval_data: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=16 barrier=wfi+inval_data span_us=585.5 per_launch_us=36.9 first_launch_us=39.7 elapsed_us=590.6 GB/s=56.8 fixed_per_extra_launch_us=28.70
+ok: m=1 barrier=flush_data: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=1  barrier=flush_data     span_us=168.2 per_launch_us=173.3 first_launch_us=168.2 elapsed_us=173.3 GB/s=193.7 fixed_per_extra_launch_us=0.00
+ok: m=2 barrier=flush_data: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=2  barrier=flush_data     span_us=182.3 per_launch_us=93.7 first_launch_us=85.2 elapsed_us=187.4 GB/s=179.1 fixed_per_extra_launch_us=14.08
+ok: m=4 barrier=flush_data: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=4  barrier=flush_data     span_us=236.7 per_launch_us=60.4 first_launch_us=53.7 elapsed_us=241.7 GB/s=138.8 fixed_per_extra_launch_us=22.81
+ok: m=8 barrier=flush_data: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=8  barrier=flush_data     span_us=359.0 per_launch_us=45.5 first_launch_us=47.8 elapsed_us=364.0 GB/s=92.2 fixed_per_extra_launch_us=27.24
+ok: m=16 barrier=flush_data: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=16 barrier=flush_data     span_us=571.0 per_launch_us=36.0 first_launch_us=42.2 elapsed_us=576.1 GB/s=58.3 fixed_per_extra_launch_us=26.85
+ok: m=1 barrier=none: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=1  barrier=none           span_us=0.0 per_launch_us=167.5 first_launch_us=0.0 elapsed_us=167.5 GB/s=200.4 fixed_per_extra_launch_us=0.00
+ok: m=2 barrier=none: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=2  barrier=none           span_us=0.0 per_launch_us=76.1 first_launch_us=0.0 elapsed_us=152.3 GB/s=220.4 fixed_per_extra_launch_us=-15.20
+ok: m=4 barrier=none: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=4  barrier=none           span_us=0.0 per_launch_us=44.4 first_launch_us=0.0 elapsed_us=177.8 GB/s=188.8 fixed_per_extra_launch_us=3.43
+ok: m=8 barrier=none: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=8  barrier=none           span_us=0.0 per_launch_us=30.5 first_launch_us=0.0 elapsed_us=244.1 GB/s=137.5 fixed_per_extra_launch_us=10.94
+ok: m=16 barrier=none: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=16 barrier=none           span_us=0.0 per_launch_us=14.0 first_launch_us=0.0 elapsed_us=224.3 GB/s=149.6 fixed_per_extra_launch_us=3.79
+ok: m=1 barrier=wfi+inval_all: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=1  barrier=wfi+inval_all  span_us=157.0 per_launch_us=162.1 first_launch_us=157.0 elapsed_us=162.1 GB/s=207.1 fixed_per_extra_launch_us=0.00
+ok: m=2 barrier=wfi+inval_all: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=2  barrier=wfi+inval_all  span_us=179.9 per_launch_us=92.5 first_launch_us=89.5 elapsed_us=185.0 GB/s=181.5 fixed_per_extra_launch_us=22.90
+ok: m=4 barrier=wfi+inval_all: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=4  barrier=wfi+inval_all  span_us=233.5 per_launch_us=59.7 first_launch_us=50.3 elapsed_us=238.7 GB/s=140.6 fixed_per_extra_launch_us=25.54
+ok: m=8 barrier=wfi+inval_all: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=8  barrier=wfi+inval_all  span_us=323.7 per_launch_us=41.1 first_launch_us=42.6 elapsed_us=328.7 GB/s=102.1 fixed_per_extra_launch_us=23.80
+ok: m=16 barrier=wfi+inval_all: 20 reps ran, y bit-identical to the one-launch-at-a-time reference on every rep
+COST m=16 barrier=wfi+inval_all  span_us=574.9 per_launch_us=36.3 first_launch_us=39.5 elapsed_us=580.0 GB/s=57.9 fixed_per_extra_launch_us=27.86
+ok: negative control: dropped launch 1 named by submit (rc -1, first_missing 1)
+gpu_launch_cost_test: 31 checks, 0 failed: PASS

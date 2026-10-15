@@ -1,0 +1,13 @@
+lock wait start 2026-10-13T22:18:39Z
+lock taken 2026-10-13T22:20:40Z omega=6d2803ec8ad880353e8422645c286f388474a007
+chip gateup: 128 tokens, M 1024 rows, 128 segments, 128 tiles, grid 12 x 128, rt 4 ct 2 warps 8, declared 128 registers
+chip bit-identity: 0 of 393216 sampled outputs (256 rows) differ from the emulation (bit-identical)
+chip second call: identical
+chip mutant 1: caught (1572864 of 1572864 differ)
+chip mutant 2: caught (1572864 of 1572864 differ)
+chip mutant 3: caught (1560576 of 1572864 differ)
+chip mutant 4: caught (1572864 of 1572864 differ)
+TCGEMM gateup (medians of 5): chip 2856.1 us, call 4166.7 us; 2.26 TFLOPS; weights streamed 403 MB (141.0 GB/s), activations gathered 403 MB, output 6 MB; total 284.2 GB/s
+chip: PASS
+GPU_TCGEMM: PASS
+exit 0 2026-10-13T22:20:48Z

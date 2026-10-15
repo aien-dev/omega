@@ -1,0 +1,12 @@
+host-only model self-checks: PASS (0 failures)
+replaying chip words from /tmp/t3-runs/probe-words.bin
+plausibility: 0 poison, 0 of 262144 outputs farther than 1e-5 of the term magnitude from the exact sum
+negative control (C dropped): 163589 of 163589 outputs with significant C differ (caught)
+model group 16 extra 2 RZ nominal 0 csep 0: 245867 of 262144 match  (misses by class: narrow 0, wide 4715, mixed+cancel 5340, bigC 0, subnormal 0, medium 6222)
+model group 16 extra 2 RZ nominal 2 csep 0: 262144 of 262144 match  (misses by class: narrow 0, wide 0, mixed+cancel 0, bigC 0, subnormal 0, medium 0)
+model group 16 extra 2 RZ nominal 2 csep 1: 236289 of 262144 match  (misses by class: narrow 0, wide 3497, mixed+cancel 10248, bigC 12083, subnormal 0, medium 27)
+model group 16 extra 3 RZ nominal 0 csep 0: 237253 of 262144 match  (misses by class: narrow 0, wide 2717, mixed+cancel 11436, bigC 8077, subnormal 0, medium 2661)
+model group 16 extra 3 RZ nominal 1 csep 0: 245348 of 262144 match  (misses by class: narrow 0, wide 0, mixed+cancel 8693, bigC 8077, subnormal 0, medium 26)
+model group 16 extra 3 RZ nominal 1 csep 1: 236289 of 262144 match  (misses by class: narrow 0, wide 3497, mixed+cancel 10248, bigC 12083, subnormal 0, medium 27)
+best model: group 16 extra 2 RZ: 262144 of 262144
+TC_PROBE: model=group 16 extra 2 RZ nominal 2 csep 0 exact 262144/262144

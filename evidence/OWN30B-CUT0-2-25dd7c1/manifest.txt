@@ -1,0 +1,26 @@
+omega_sha=25dd7c10f144200e622e66c3d39c48d1c337d959
+omega_tree_dirty_lines=1
+physics_lock=6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf
+physics_dir=/home/drakestapleton/workspace/physics-own30b physics_sha=6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf
+binary_sha256 gpu_matmul_api_test bdc31c7e4ed3c664f55b1bc50922dc6bf182ee4bdeede4476592a9504beb13ea
+binary_sha256 gpu_attention_test a108cd6a15299cce31547355a13805ca0cf37e15c2a28c240f7b50c946ce2af1
+binary_sha256 gpu_moe_window_test 9b79465dd2eed0b7263d0c2fb66af0ab55bc4d47f4433664042db722a5348905
+binary_sha256 libomega_gpu.a ce1f1f914bf34f946bd8d7c4bc70456bbe04cc65338bf767c5d4585086c0e978
+settings spin_us=2000 cta_budget=1024 (the serving daemon defaults) shapes=1,2048,5120;1,4096,2048;1,2048,1536;1,768,2048;1,2048,12288;1,768,16384;1,2048,151936
+start=2026-10-13T17:18:29Z
+matmul-baseline-r1 rc=0 end=2026-10-13T17:18:41Z
+matmul-baseline-r2 rc=0 end=2026-10-13T17:18:53Z
+matmul-baseline-r3 rc=0 end=2026-10-13T17:19:04Z
+attention-hd128 rc=0 end=2026-10-13T17:19:05Z
+moe-window-r1 rc=0 end=2026-10-13T17:19:12Z
+moe-window-r2 rc=0 end=2026-10-13T17:19:19Z
+moe-window-r3 rc=0 end=2026-10-13T17:19:26Z
+end=2026-10-13T17:19:26Z
+v2 omega_sha=6fa6ccb1a174c80f279f52dee9b0de23fe0986af (test cases added, library unchanged)
+v2 binary_sha256 gpu_moe_window_test 85870586ab6951c8d829e857a11d9dcd4f26a89b0125790880058689b1b48d7f
+v2 libomega_gpu.a ce1f1f914bf34f946bd8d7c4bc70456bbe04cc65338bf767c5d4585086c0e978
+v2 start=2026-10-13T17:20:33Z
+moe-window-v2-r1 rc=0 end=2026-10-13T17:20:40Z
+moe-window-v2-r2 rc=0 end=2026-10-13T17:20:47Z
+moe-window-v2-r3 rc=0 end=2026-10-13T17:20:54Z
+v2 end=2026-10-13T17:20:54Z

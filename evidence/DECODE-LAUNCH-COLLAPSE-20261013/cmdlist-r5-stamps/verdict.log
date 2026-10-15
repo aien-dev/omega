@@ -1,0 +1,47 @@
+codegen axpy: 23 insns, peak 12 gprs, declared 16
+codegen res add|norm: 128 insns, peak 40 gprs, declared 48
+codegen res combine|norm: 264 insns, peak 49 gprs, declared 56
+codegen res add: 45 insns, peak 28 gprs, declared 32
+codegen swiglu: 29 insns, peak 16 gprs, declared 24
+codegen argmax: 165 insns, peak 32 gprs, declared 40
+codegen argmax indexed: 160 insns, peak 40 gprs, declared 48
+host-only: 20 checks, 0 failed: PASS
+sim res mode 5 scale 1 mutant 0: x identical, y 0/2048 outside tolerance
+sim res mode 5 scale 1 mutant 1: x identical, y 2047/2048 outside tolerance
+sim res mode 6 scale 1 mutant 0: x identical, y 0/2048 outside tolerance
+sim res mode 6 scale 1 mutant 1: x DIFFERS, y 2047/2048 outside tolerance
+sim res mode 5 scale 2^64 mutant 0: x identical, y 0/2048 outside tolerance
+sim res mode 5 scale 2^64 mutant 1: x identical, y 2047/2048 outside tolerance
+sim res mode 6 scale 2^64 mutant 0: x identical, y 0/2048 outside tolerance
+sim res mode 6 scale 2^64 mutant 1: x DIFFERS, y 2048/2048 outside tolerance
+sim swiglu mutant 0: 0/6144 outside tolerance
+sim swiglu mutant 1: 6144/6144 outside tolerance
+sim argmax tie 0 mutant 0: index 151625 value 49.9996 (ref 151625)
+sim argmax tie 0 mutant 1: index 151625 value 49.9996 (ref 151625)
+sim argmax tie 1 mutant 0: index 1007 value 60 (ref 1007)
+sim argmax tie 1 mutant 1: index 28784 value 49.9999 (ref 1007)
+sim: 39 checks, 0 failed: PASS
+L=64: baseline 103.1 us/launch (chip 103.1 us, wall 103.7 us per launch); PCAS ok 3.24 us/launch (wall 3.26, 1 submits); INLINE ok 4.87 us/launch (1 submits)
+L=289: baseline 103.2 us/launch (chip 103.2 us, wall 103.6 us per launch); PCAS ok 2.83 us/launch (wall 2.83, 1 submits); INLINE ok 3.91 us/launch (4 submits)
+L=1024: baseline 104.5 us/launch (chip 104.5 us, wall 105.0 us per launch); PCAS ok 2.72 us/launch (wall 2.73, 1 submits); INLINE ok 3.97 us/launch (13 submits)
+negative control skip_launch=33: rc -1 first_missing 32 sems_done 63/64 x x0+63a
+heavy chain (32 x 1M elements): WFI rc 0 0 differ 1561.7 us; BARRIER_NONE rc 0 14624 differ 1565.5 us (informational: grids overlapped without the barrier: the WFI is load-bearing)
+glue list tie 0: rc 0, 5 launches in 1 submit(s) 114.2 us chip; x identical, y 0 bad, act 0 bad, argmax 45508 (ref 45508)
+glue list tie 1: rc 0, 5 launches in 1 submit(s) 110.3 us chip; x identical, y 0 bad, act 0 bad, argmax 1007 (ref 1007)
+chip mutant 1: rc 0, x same, y 2048 bad, argmax 1007 (ref 1007): caught
+chip mutant 2: rc 0, x differs, y 2047 bad, argmax 1007 (ref 1007): caught
+chip mutant 3: rc 0, x same, y 0 bad, argmax 83730 (ref 1007): caught
+chip: 31 checks, 0 failed: PASS
+L=64: baseline 104.6 us/launch (chip 104.6 us, wall 105.1 us per launch); PCAS ok 3.24 us/launch (wall 3.26, 1 submits); INLINE ok 4.87 us/launch (1 submits)
+L=289: baseline 104.5 us/launch (chip 104.5 us, wall 105.1 us per launch); PCAS ok 2.86 us/launch (wall 2.87, 1 submits); INLINE ok 3.97 us/launch (4 submits)
+L=1024: baseline 104.0 us/launch (chip 104.0 us, wall 104.5 us per launch); PCAS ok 2.79 us/launch (wall 2.79, 1 submits); INLINE ok 3.90 us/launch (13 submits)
+negative control skip_launch=33: rc -1 first_missing 32 sems_done 63/64 x x0+63a
+heavy chain (32 x 1M elements): WFI rc 0 0 differ 1637.2 us; BARRIER_NONE rc 0 13408 differ 1430.2 us (informational: grids overlapped without the barrier: the WFI is load-bearing)
+glue list tie 0: rc 0, 5 launches in 1 submit(s) 105.1 us chip; x identical, y 0 bad, act 0 bad, argmax 45508 (ref 45508)
+glue list tie 1: rc 0, 5 launches in 1 submit(s) 103.2 us chip; x identical, y 0 bad, act 0 bad, argmax 1007 (ref 1007)
+chip mutant 1: rc 0, x same, y 2048 bad, argmax 1007 (ref 1007): caught
+chip mutant 2: rc 0, x differs, y 2047 bad, argmax 1007 (ref 1007): caught
+chip mutant 3: rc 0, x same, y 0 bad, argmax 83730 (ref 1007): caught
+chip: 31 checks, 0 failed: PASS
+spin-us 0 exit 0 (informational)
+GPU_CMDLIST_CHIP: PASS

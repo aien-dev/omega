@@ -1,0 +1,56 @@
+[v1-control] chip 8 experts gate+up shared x       variant=1 rc=OK        bad=0 worst_rel=3.010e-08 grid=6x8 lb=16 rows=1 warps=32 depth=0 bytes=25171968 upload=21.0ms chip_med=152.4us (165.2 GB/s) call_med=166.0us (151.7 GB/s) reps=20
+[v1-control] chip 8 experts down per-group x       variant=1 rc=OK        bad=0 worst_rel=4.885e-08 grid=6x8 lb=8 rows=1 warps=32 depth=0 bytes=12585984 upload=6.3ms chip_med=94.9us (132.6 GB/s) call_med=108.7us (115.7 GB/s) reps=20
+[v1-control] chip o_proj 2048x4096                 variant=1 rc=OK        bad=0 worst_rel=2.168e-08 grid=256x1 lb=16 rows=1 warps=8 depth=0 bytes=8390656 upload=7.1ms chip_med=65.2us (128.7 GB/s) call_med=70.0us (119.9 GB/s) reps=20
+[v1-control] chip qkv fused 5120x2048              variant=1 rc=OK        bad=0 worst_rel=3.281e-08 grid=256x1 lb=16 rows=1 warps=8 depth=0 bytes=10488320 upload=8.8ms chip_med=71.6us (146.5 GB/s) call_med=78.7us (133.2 GB/s) reps=20
+[v2-default] chip 8 experts gate+up shared x       variant=2 rc=OK        bad=0 worst_rel=3.010e-08 grid=12x8 lb=16 rows=1 warps=16 depth=4 bytes=25171968 upload=13.3ms chip_med=187.2us (134.4 GB/s) call_med=200.2us (125.7 GB/s) reps=20
+[v2-default] chip 8 experts down per-group x       variant=2 rc=OK        bad=0 worst_rel=4.885e-08 grid=12x8 lb=8 rows=1 warps=16 depth=3 bytes=12585984 upload=10.0ms chip_med=121.4us (103.6 GB/s) call_med=141.1us (89.2 GB/s) reps=20
+[v2-default] chip o_proj 2048x4096                 variant=2 rc=OK        bad=0 worst_rel=2.168e-08 grid=128x1 lb=16 rows=1 warps=16 depth=8 bytes=8390656 upload=4.1ms chip_med=78.4us (107.0 GB/s) call_med=83.3us (100.8 GB/s) reps=20
+[v2-default] chip qkv fused 5120x2048              variant=2 rc=OK        bad=0 worst_rel=3.281e-08 grid=256x1 lb=16 rows=1 warps=16 depth=4 bytes=10488320 upload=5.5ms chip_med=98.3us (106.7 GB/s) call_med=105.2us (99.7 GB/s) reps=20
+[v2-w8] chip 8 experts gate+up shared x       variant=2 rc=OK        bad=0 worst_rel=3.010e-08 grid=12x8 lb=16 rows=1 warps=8 depth=4 bytes=25171968 upload=19.7ms chip_med=152.0us (165.6 GB/s) call_med=165.1us (152.4 GB/s) reps=20
+[v2-w8] chip 8 experts down per-group x       variant=2 rc=OK        bad=0 worst_rel=4.885e-08 grid=12x8 lb=8 rows=1 warps=8 depth=3 bytes=12585984 upload=6.6ms chip_med=95.3us (132.0 GB/s) call_med=107.2us (117.5 GB/s) reps=20
+[v2-w8] chip o_proj 2048x4096                 variant=2 rc=OK        bad=0 worst_rel=2.168e-08 grid=256x1 lb=16 rows=1 warps=8 depth=8 bytes=8390656 upload=4.8ms chip_med=78.0us (107.6 GB/s) call_med=85.1us (98.6 GB/s) reps=20
+[v2-w8] chip qkv fused 5120x2048              variant=2 rc=OK        bad=0 worst_rel=3.281e-08 grid=256x1 lb=16 rows=1 warps=8 depth=4 bytes=10488320 upload=6.0ms chip_med=70.0us (149.9 GB/s) call_med=75.2us (139.5 GB/s) reps=20
+[v2-w8-b24] chip 8 experts gate+up shared x       variant=2 rc=OK        bad=0 worst_rel=3.010e-08 grid=24x8 lb=16 rows=1 warps=8 depth=4 bytes=25171968 upload=12.7ms chip_med=207.2us (121.5 GB/s) call_med=215.5us (116.8 GB/s) reps=20
+[v2-w8-b24] chip 8 experts down per-group x       variant=2 rc=OK        bad=0 worst_rel=4.885e-08 grid=24x8 lb=8 rows=1 warps=8 depth=3 bytes=12585984 upload=10.0ms chip_med=116.7us (107.8 GB/s) call_med=134.9us (93.3 GB/s) reps=20
+[v2-w8-b24] chip o_proj 2048x4096                 variant=2 rc=OK        bad=0 worst_rel=2.168e-08 grid=24x1 lb=16 rows=1 warps=8 depth=8 bytes=8390656 upload=7.0ms chip_med=74.8us (112.2 GB/s) call_med=79.6us (105.4 GB/s) reps=20
+[v2-w8-b24] chip qkv fused 5120x2048              variant=2 rc=OK        bad=0 worst_rel=3.281e-08 grid=24x1 lb=16 rows=1 warps=8 depth=4 bytes=10488320 upload=9.4ms chip_med=156.2us (67.1 GB/s) call_med=161.6us (64.9 GB/s) reps=20
+[v2-w8-b48] chip 8 experts gate+up shared x       variant=2 rc=OK        bad=0 worst_rel=3.010e-08 grid=48x8 lb=16 rows=1 warps=8 depth=4 bytes=25171968 upload=11.9ms chip_med=158.7us (158.6 GB/s) call_med=167.2us (150.5 GB/s) reps=20
+[v2-w8-b48] chip 8 experts down per-group x       variant=2 rc=OK        bad=0 worst_rel=4.885e-08 grid=48x8 lb=8 rows=1 warps=8 depth=3 bytes=12585984 upload=6.6ms chip_med=136.9us (91.9 GB/s) call_med=150.2us (83.8 GB/s) reps=20
+[v2-w8-b48] chip o_proj 2048x4096                 variant=2 rc=OK        bad=0 worst_rel=2.168e-08 grid=48x1 lb=16 rows=1 warps=8 depth=8 bytes=8390656 upload=4.1ms chip_med=82.4us (101.8 GB/s) call_med=86.9us (96.6 GB/s) reps=20
+[v2-w8-b48] chip qkv fused 5120x2048              variant=2 rc=OK        bad=0 worst_rel=3.281e-08 grid=48x1 lb=16 rows=1 warps=8 depth=4 bytes=10488320 upload=11.3ms chip_med=96.0us (109.3 GB/s) call_med=102.8us (102.1 GB/s) reps=20
+[v2-r2-w8] chip 8 experts gate+up shared x       variant=2 rc=OK        bad=0 worst_rel=3.010e-08 grid=12x8 lb=16 rows=2 warps=8 depth=4 bytes=25171968 upload=19.7ms chip_med=160.1us (157.2 GB/s) call_med=168.8us (149.1 GB/s) reps=20
+[v2-r2-w8] chip 8 experts down per-group x       variant=2 rc=OK        bad=0 worst_rel=4.885e-08 grid=12x8 lb=8 rows=2 warps=8 depth=3 bytes=12585984 upload=5.8ms chip_med=123.0us (102.3 GB/s) call_med=135.0us (93.3 GB/s) reps=20
+[v2-r2-w8] FAIL: chip o_proj 2048x4096: rc=CODEGEN_FAIL bad=0 worst_rel=1.000e+00 second-call-identical=0 (fp8 codegen refused the shape)
+[v2-r2-w8] chip o_proj 2048x4096                 variant=2 rc=CODEGEN_FAIL bad=0 worst_rel=1.000e+00 grid=0x0 lb=0 rows=0 warps=0 depth=0 bytes=0 upload=4.6ms chip_med=0.0us (0.0 GB/s) call_med=0.0us (0.0 GB/s) reps=0
+[v2-r2-w8] gpu_fp8_api_test: 2 checks, 1 failed: FAIL
+[v2-r2-w8] chip qkv fused 5120x2048              variant=2 rc=OK        bad=0 worst_rel=3.281e-08 grid=256x1 lb=16 rows=2 warps=8 depth=4 bytes=10488320 upload=5.1ms chip_med=76.7us (136.7 GB/s) call_med=82.3us (127.5 GB/s) reps=20
+[v2-r4-w8] FAIL: chip 8 experts gate+up shared x: rc=CODEGEN_FAIL bad=0 worst_rel=1.000e+00 second-call-identical=0 (fp8 codegen refused the shape)
+[v2-r4-w8] chip 8 experts gate+up shared x       variant=2 rc=CODEGEN_FAIL bad=0 worst_rel=1.000e+00 grid=0x0 lb=0 rows=0 warps=0 depth=0 bytes=0 upload=11.2ms chip_med=0.0us (0.0 GB/s) call_med=0.0us (0.0 GB/s) reps=0
+[v2-r4-w8] chip 8 experts down per-group x       variant=2 rc=OK        bad=0 worst_rel=4.885e-08 grid=12x8 lb=8 rows=4 warps=8 depth=3 bytes=12585984 upload=5.5ms chip_med=126.0us (99.9 GB/s) call_med=137.7us (91.4 GB/s) reps=20
+[v2-r4-w8] gpu_fp8_api_test: 3 checks, 1 failed: FAIL
+[v2-r4-w8] FAIL: chip o_proj 2048x4096: rc=CODEGEN_FAIL bad=0 worst_rel=1.000e+00 second-call-identical=0 (fp8 codegen refused the shape)
+[v2-r4-w8] chip o_proj 2048x4096                 variant=2 rc=CODEGEN_FAIL bad=0 worst_rel=1.000e+00 grid=0x0 lb=0 rows=0 warps=0 depth=0 bytes=0 upload=4.3ms chip_med=0.0us (0.0 GB/s) call_med=0.0us (0.0 GB/s) reps=0
+[v2-r4-w8] gpu_fp8_api_test: 2 checks, 1 failed: FAIL
+[v2-r4-w8] FAIL: chip qkv fused 5120x2048: rc=CODEGEN_FAIL bad=0 worst_rel=1.000e+00 second-call-identical=0 (fp8 codegen refused the shape)
+[v2-r4-w8] chip qkv fused 5120x2048              variant=2 rc=CODEGEN_FAIL bad=0 worst_rel=1.000e+00 grid=0x0 lb=0 rows=0 warps=0 depth=0 bytes=0 upload=5.1ms chip_med=0.0us (0.0 GB/s) call_med=0.0us (0.0 GB/s) reps=0
+[v2-r4-w8] gpu_fp8_api_test: 2 checks, 1 failed: FAIL
+[v1-r2] chip 8 experts gate+up shared x       variant=1 rc=OK        bad=0 worst_rel=3.010e-08 grid=6x8 lb=16 rows=2 warps=32 depth=0 bytes=25171968 upload=10.9ms chip_med=141.9us (177.3 GB/s) call_med=150.3us (167.5 GB/s) reps=20
+[v1-r2] chip 8 experts down per-group x       variant=1 rc=OK        bad=0 worst_rel=4.885e-08 grid=6x8 lb=8 rows=2 warps=32 depth=0 bytes=12585984 upload=5.3ms chip_med=116.7us (107.9 GB/s) call_med=128.9us (97.7 GB/s) reps=20
+[v1-r2] chip o_proj 2048x4096                 variant=1 rc=OK        bad=0 worst_rel=2.168e-08 grid=128x1 lb=16 rows=2 warps=8 depth=0 bytes=8390656 upload=3.8ms chip_med=93.4us (89.8 GB/s) call_med=98.4us (85.3 GB/s) reps=20
+[v1-r2] chip qkv fused 5120x2048              variant=1 rc=OK        bad=0 worst_rel=3.281e-08 grid=256x1 lb=16 rows=2 warps=8 depth=0 bytes=10488320 upload=5.0ms chip_med=80.4us (130.5 GB/s) call_med=85.9us (122.1 GB/s) reps=20
+[v1-r4] FAIL: chip 8 experts gate+up shared x: rc=TOO_LARGE bad=0 worst_rel=1.000e+00 second-call-identical=0 (fp8 kernel: 32 warps x 72 declared registers exceed the 65536-register file)
+[v1-r4] chip 8 experts gate+up shared x       variant=1 rc=TOO_LARGE bad=0 worst_rel=1.000e+00 grid=0x0 lb=0 rows=0 warps=0 depth=0 bytes=0 upload=11.6ms chip_med=0.0us (0.0 GB/s) call_med=0.0us (0.0 GB/s) reps=0
+[v1-r4] chip 8 experts down per-group x       variant=1 rc=OK        bad=0 worst_rel=4.885e-08 grid=6x8 lb=8 rows=4 warps=32 depth=0 bytes=12585984 upload=5.7ms chip_med=149.9us (84.0 GB/s) call_med=161.6us (77.9 GB/s) reps=20
+[v1-r4] gpu_fp8_api_test: 3 checks, 1 failed: FAIL
+[v1-r4] chip o_proj 2048x4096                 variant=1 rc=OK        bad=0 worst_rel=2.168e-08 grid=64x1 lb=16 rows=4 warps=8 depth=0 bytes=8390656 upload=4.1ms chip_med=98.6us (85.1 GB/s) call_med=102.1us (82.2 GB/s) reps=20
+[v1-r4] chip qkv fused 5120x2048              variant=1 rc=OK        bad=0 worst_rel=3.281e-08 grid=160x1 lb=16 rows=4 warps=8 depth=0 bytes=10488320 upload=5.0ms chip_med=109.0us (96.2 GB/s) call_med=114.2us (91.8 GB/s) reps=20
+[v1-w16] chip 8 experts gate+up shared x       variant=1 rc=OK        bad=0 worst_rel=3.010e-08 grid=6x8 lb=16 rows=1 warps=16 depth=0 bytes=25171968 upload=11.1ms chip_med=150.0us (167.8 GB/s) call_med=158.1us (159.2 GB/s) reps=20
+[v1-w16] chip 8 experts down per-group x       variant=1 rc=OK        bad=0 worst_rel=4.885e-08 grid=6x8 lb=8 rows=1 warps=16 depth=0 bytes=12585984 upload=5.2ms chip_med=95.4us (131.9 GB/s) call_med=107.2us (117.4 GB/s) reps=20
+[v1-w16] chip o_proj 2048x4096                 variant=1 rc=OK        bad=0 worst_rel=2.168e-08 grid=128x1 lb=16 rows=1 warps=16 depth=0 bytes=8390656 upload=3.9ms chip_med=71.1us (118.1 GB/s) call_med=76.5us (109.7 GB/s) reps=20
+[v1-w16] chip qkv fused 5120x2048              variant=1 rc=OK        bad=0 worst_rel=3.281e-08 grid=256x1 lb=16 rows=1 warps=16 depth=0 bytes=10488320 upload=4.6ms chip_med=94.5us (111.0 GB/s) call_med=100.8us (104.0 GB/s) reps=20
+[v1-control-2] chip 8 experts gate+up shared x       variant=1 rc=OK        bad=0 worst_rel=3.010e-08 grid=6x8 lb=16 rows=1 warps=32 depth=0 bytes=25171968 upload=11.7ms chip_med=134.8us (186.8 GB/s) call_med=144.0us (174.8 GB/s) reps=20
+[v1-control-2] chip 8 experts down per-group x       variant=1 rc=OK        bad=0 worst_rel=4.885e-08 grid=6x8 lb=8 rows=1 warps=32 depth=0 bytes=12585984 upload=5.5ms chip_med=90.4us (139.2 GB/s) call_med=102.4us (122.9 GB/s) reps=20
+[v1-control-2] chip o_proj 2048x4096                 variant=1 rc=OK        bad=0 worst_rel=2.168e-08 grid=256x1 lb=16 rows=1 warps=8 depth=0 bytes=8390656 upload=3.9ms chip_med=66.7us (125.9 GB/s) call_med=72.7us (115.4 GB/s) reps=20
+[v1-control-2] chip qkv fused 5120x2048              variant=1 rc=OK        bad=0 worst_rel=3.281e-08 grid=256x1 lb=16 rows=1 warps=8 depth=0 bytes=10488320 upload=4.9ms chip_med=67.5us (155.5 GB/s) call_med=73.0us (143.7 GB/s) reps=20
+GPU_FP8_V2_SWEEP: DONE
+EXIT 0
