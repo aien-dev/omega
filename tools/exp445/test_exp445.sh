@@ -288,14 +288,43 @@ G0N=0
 g0case "identical answers, p_repeat 0.5 (0.5^7 < 0.01): the seed looks ignored" - FAIL 'gate=FAIL distinct=1/8 repeat_identical=yes sampled_own_seed=9/9' 'gate d FAIL identical replies with p_repeat^7=0.0078125 < 0.01'
 g0case "identical answers, p_repeat 0.51 (0.51^7 = 0.00897 < 0.01), boundary" '{"p_repeat": 0.51}' FAIL 'gate=FAIL distinct=1/8 repeat_identical=yes sampled_own_seed=9/9' 'gate d FAIL identical'
 g0case "identical answers, p_repeat 0.52 (0.52^7 = 0.0103 >= 0.01): a confident model; distinct 1/8 recorded, not gated" '{"p_repeat": 0.52}' PASS 'gate=PASS distinct=1/8 repeat_identical=yes sampled_own_seed=9/9' 'gate d PASS identical replies explained by confidence'
-# the G0 ledger: a FAIL bars the configuration on that server and PARAMS in every run dir (13.4)
-[ "$(cut -f2,3,5 "$T/g0c1.ledger")" = "$(printf 'A\tfake445 test server A\tFAIL')" ] && [ "$(cut -f6 "$T/g0c1.ledger")" = "$T/g0c1/g0" ] &&
-  ok "G0 ledger: the FAIL appended (config, server, PARAMS sha, verdict, record dir, SHA256SUMS sha)" || bad "G0 ledger line: $(cat "$T/g0c1.ledger")"
-refuse "g0.sh in a new run dir after a G0 FAIL for the same config, server and PARAMS" "a G0 FAIL for config A on this server and PARAMS is in" \
-  env EXP445_G0_LEDGER="$T/g0c1.ledger" EXP445_PARAMS="$T/PARAMS2" "$HERE/g0.sh" --config A --out "$T/g0again"
-[ ! -e "$T/g0again" ] && ok "  nothing written by the refused G0" || bad "refused G0 wrote files"
-refuse "run.sh on a run dir with a G0 PASS while the ledger holds a FAIL for that config" "a G0 FAIL for config A on this server and PARAMS is in" \
-  env EXP445_G0_LEDGER="$T/g0c1.ledger" EXP445_PARAMS="$T/PARAMS2" "$HERE/run.sh" --config A --tasks "$T/pub" --out "$T/g0c3"
+# the G0 ledger: a FAIL bars the configuration's identity (server and settings) in every run dir (13.4)
+ID2="$(g0_ident "$T/PARAMS2" A)"
+[ "$(cut -f2-5 "$T/g0c1.ledger")" = "$(printf 'A\tfake445 test server A\t%s\tFAIL' "$ID2")" ] && [ "$(cut -f6 "$T/g0c1.ledger")" = "$T/g0c1/g0" ] &&
+[ "$(cut -f7 "$T/g0c1.ledger")" = "$(sha256sum < "$T/g0c1/g0/SHA256SUMS" | cut -d' ' -f1)" ] && [ "$(cut -f8 "$T/g0c1.ledger")" = "$(sha256sum < "$T/PARAMS2" | cut -d' ' -f1)" ] &&
+  ok "G0 ledger: the FAIL appended (config, server, identity, verdict, record dir, SHA256SUMS sha, PARAMS sha)" || bad "G0 ledger line: $(cat "$T/g0c1.ledger")"
+[ "$(cut -f2,4,5 "$T/g0c3.ledger")" = "$(printf 'A\t%s\tPASS' "$ID2")" ] && [ "$(cut -f7 "$T/g0c3.ledger")" = "$(sha256sum < "$T/g0c3/g0/SHA256SUMS" | cut -d' ' -f1)" ] &&
+  ok "G0 ledger: a PASS appended too, with its record's SHA256SUMS sha" || bad "G0 ledger PASS line: $(cat "$T/g0c3.ledger")"
+g0refuse() { # g0refuse <name> <ledger> <PARAMS>: g0.sh refused with exit 3 and the ledger reason, nothing written
+  local e=0; rm -rf "$T/g0again"; env EXP445_G0_LEDGER="$2" EXP445_PARAMS="$3" "$HERE/g0.sh" --config A --out "$T/g0again" > /dev/null 2> "$T/g0again.err" || e=$?
+  [ "$e" = 3 ] && grep -q "a G0 FAIL for config A on this server and settings is in" "$T/g0again.err" && [ ! -e "$T/g0again" ] &&
+    ok "refused (exit 3, nothing written): $1" || bad "$1: exit $e $(tail -1 "$T/g0again.err")"
+}
+g0refuse "g0.sh in a new run dir after a G0 FAIL for the same config, server and settings" "$T/g0c1.ledger" "$T/PARAMS2"
+# an edit elsewhere in PARAMS (a comment, the stop rule) does not lift the bar (the identity is not the PARAMS sha)
+{ cat "$T/PARAMS2"; echo "# a comment added later"; } | sed 's/^futility_max=.*/futility_max=29/' > "$T/PARAMS2e"
+if [ "$(g0_ident "$T/PARAMS2e" A)" = "$ID2" ]; then g0refuse "g0.sh after a FAIL, PARAMS edited outside the configuration's identity" "$T/g0c1.ledger" "$T/PARAMS2e"; else bad "an edit outside the identity changed g0_ident"; fi
+refuse "run.sh on a run dir with a G0 PASS while the ledger holds a FAIL for that config" "a G0 FAIL for config A on this server and settings is in" \
+  env EXP445_G0_LEDGER="$T/g0c1.ledger" EXP445_PARAMS="$T/PARAMS2e" "$HERE/run.sh" --config A --tasks "$T/pub" --out "$T/g0c3"
+# negative controls: a FAIL for another server, another setting or another config bars nothing
+sed 's|^config\.A\.server=.*|config.A.server=fake445 test server A2|' "$T/PARAMS2" > "$T/PARAMS2s"
+sed 's|^temperature=.*|temperature=0.6|' "$T/PARAMS2" > "$T/PARAMS2t"
+[ "$(EXP445_G0_LEDGER="$T/g0c1.ledger" g0_failed A "$ID2" | cut -f5)" = FAIL ] &&
+[ -z "$(EXP445_G0_LEDGER="$T/g0c1.ledger" g0_failed A "$(g0_ident "$T/PARAMS2s" A)")" ] &&
+[ -z "$(EXP445_G0_LEDGER="$T/g0c1.ledger" g0_failed A "$(g0_ident "$T/PARAMS2t" A)")" ] &&
+[ -z "$(EXP445_G0_LEDGER="$T/g0c1.ledger" g0_failed B "$ID2")" ] &&
+  ok "  negative controls: that FAIL does not bar another server, another temperature or config B" || bad "g0_failed matches too much"
+EXP445_G0_LEDGER="$T/ledger-elsewhere" g0_ledger | grep -qx "$T/ledger-elsewhere" && [ "$(env -u EXP445_PARAMS EXP445_G0_LEDGER="$T/x" bash -c "ROOT=$ROOT; . $HERE/reader.sh; g0_ledger")" = "$ROOT/evidence/ONE-LAYER-2/g0-ledger.tsv" ] &&
+  ok "  EXP445_G0_LEDGER is honoured only with EXP445_PARAMS (tests); otherwise the real ledger" || bad "g0_ledger override"
+# run.sh needs the record's PASS line on the ledger: a G0 PASS record that the ledger does not know is refused
+: > "$T/empty.ledger"
+refuse "run.sh on a G0 PASS record with no PASS line on the ledger" "has no PASS line in" \
+  env EXP445_G0_LEDGER="$T/empty.ledger" EXP445_PARAMS="$T/PARAMS2" "$HERE/run.sh" --config A --tasks "$T/pub" --out "$T/g0c3"
+awk -F"\t" -v OFS="\t" -v z="$(printf "%064d" 0)" '$5 == "PASS" { $7 = z } 1' "$T/g0c3.ledger" > "$T/other.ledger"
+refuse "run.sh when the ledger's PASS line names another record" "has no PASS line in" \
+  env EXP445_G0_LEDGER="$T/other.ledger" EXP445_PARAMS="$T/PARAMS2" "$HERE/run.sh" --config A --tasks "$T/pub" --out "$T/g0c3"
+printf 'config.A.server=fake445\twith a tab\n' > "$T/tab.params"; grep -v '^config\.A\.server=' "$T/PARAMS2" >> "$T/tab.params"
+refuse "g0.sh with a tab in the server name (a ledger column)" "must not contain a tab" env EXP445_PARAMS="$T/tab.params" "$HERE/g0.sh" --config A --out "$T/g0tab"
 g0case "a server that ignores the seed (reports seed 0, the stage S mutant)" '{"ignore_seed": true, "p_repeat": 0.9}' FAIL 'gate=FAIL distinct=1/8 repeat_identical=yes sampled_own_seed=0/9' 'gate d FAIL a reply was not sampled with its own seed'
 g0case "a server that forces greedy decoding (reports mode greedy, the stage S mutant)" '{"force_greedy": true, "p_repeat": 0.9}' FAIL 'gate=FAIL distinct=1/8 repeat_identical=yes sampled_own_seed=0/9' 'gate b 0/4 FAIL'
 g0case "the gate's own replays differ (gates a and c fail) while dev01's identical answers are confident (gate d passes)" '{"vary_untasked": true, "p_repeat": 0.9}' FAIL 'gate=FAIL distinct=1/8 repeat_identical=yes sampled_own_seed=9/9' '^gate a 0/4 FAIL'
@@ -380,8 +409,9 @@ grep -qx 'prompt_mode=one' "$FBO/meta.txt" && grep -qx 'protocol=PARAMS' "$FBO/m
 mut_make() { rm -rf "$T/mut"; mkdir -p "$T/mut"; cp "$HERE/run.sh" "$HERE/PARAMS" "$HERE/reader.sh" "$HERE/g0.sh" "$HERE/sampling-gate.sh" "$T/mut/"; cp -R "$HERE/arms" "$T/mut/arms"
   sed -i "s|^ROOT=.*|ROOT=\"$ROOT\"|" "$T/mut/run.sh" "$T/mut/g0.sh"; cp "$T/mut/$1" "$T/mut/$1.orig"; sed -i "$2" "$T/mut/$1"
   if cmp -s "$T/mut/$1.orig" "$T/mut/$1"; then bad "mutant: sed changed nothing in $1 ($2)"; return 1; fi; }
-mut_run() { mut_make "$2" "$3" || return 1; rm -rf "$T/mr"; cw "${4:-A}" "$T/mr"; EXP445_G0_LEDGER="$T/mut.ledger" "$T/mut/g0.sh" --config "${4:-A}" --out "$T/mr" > /dev/null 2>&1 || true
-  "$T/mut/run.sh" --config "${4:-A}" --tasks "$T/pub" --out "$T/mr" --only dev01,dev02,dev03 > /dev/null 2>&1 || true; }
+mut_run() { mut_make "$2" "$3" || return 1; rm -rf "$T/mr"; rm -f "$T/mut.ledger"; cw "${4:-A}" "$T/mr"   # one fresh ledger per mutant, for both scripts
+  EXP445_G0_LEDGER="$T/mut.ledger" "$T/mut/g0.sh" --config "${4:-A}" --out "$T/mr" > /dev/null 2>&1 || true
+  EXP445_G0_LEDGER="$T/mut.ledger" "$T/mut/run.sh" --config "${4:-A}" --tasks "$T/pub" --out "$T/mr" --only dev01,dev02,dev03 > /dev/null 2>&1 || true; }
 R0="$R"; R="$T/mr"
 M="no repair round"; mut_run norepair run.sh 's/if \[ "\$k1" != OK \] \&\& ask/if false \&\& ask/' && { [ "$(lg a-text-1 dev02 11)" = OK ] && bad "mutant survived: $M" || ok "  mutant caught: $M"; }
 M="budget not sent"; mut_run nobudget reader.sh 's/max_tokens: \$mt, //' && { same_budget 3072 && bad "mutant survived: $M" || ok "  mutant caught: $M"; }
@@ -532,6 +562,11 @@ invalid "a G0 made with another PARAMS" "G0 was made for another base_url" "${NA
 cpr; rm -rf "$T/neg/a/g0"; cp -R "$G0P/g0" "$T/neg/a/g0"; rehash "$T/neg/a"
 invalid "another G0 PASS swapped in after generation (re-hashed)" "the G0 record is not the one this run was generated under" "${NA[@]}"
 smut 's/|| inval "\$r: the G0 record is not the one/|| true "/' "the run's G0 record check" "${NA[@]}"
+# the G0 ledger at scoring: a FAIL for the config's identity, or no PASS line for the run's G0 record
+cpr; { cat "$T/g0-ledger.tsv"; printf '20261015T000000Z\tA\tfake445 test server A\t%s\tFAIL\telsewhere/g0\t%064d\t-\n' "$(g0_ident "$TP" A)" 0; } > "$T/fail.ledger"
+EXP445_G0_LEDGER="$T/fail.ledger" invalid "a G0 FAIL on the ledger for config A's server and settings" "a G0 FAIL for config A on this server and settings is in" "${NA[@]}"
+EXP445_G0_LEDGER="$T/fail.ledger" smut 's/\[ -z "\$fl" \] || inval "\$r: a G0 FAIL/true "/' "the ledger FAIL check" "${NA[@]}"
+EXP445_G0_LEDGER="$T/empty.ledger" invalid "the run's G0 PASS record has no PASS line on the ledger" "has no PASS line in" "${NA[@]}"
 rm -rf "$T/rsw"; cp -R "$FA" "$T/rsw"; rm -rf "$T/rsw/g0"; cp -R "$G0P/g0" "$T/rsw/g0"
 refuse "run.sh resuming a run whose G0 record was swapped" "resuming with different settings" "$HERE/run.sh" --config A --tasks "$T/pub" --out "$T/rsw"
 cpr; cp "$T/neg/a/gen/a-omegese-1/dev02/r1.req.json" "$T/neg/a/gen/a-omegese-1/dev02/r10.req.json"; rehash "$T/neg/a"

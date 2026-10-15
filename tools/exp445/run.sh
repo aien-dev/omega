@@ -25,7 +25,8 @@
 #     round's answer is final
 #   5 candidate copied to cands/<set_id>/<task>/candidate.osc|oscir, set_id = <config>-<arm>-<attempt>
 # Before generating, <out> must hold weights.check and server.json from check_weights.sh (all OK) and a G0
-# PASS (g0.sh) for this configuration, server and PARAMS.
+# PASS (g0.sh) for this configuration, server and PARAMS, with its PASS line on the G0 ledger; a G0 FAIL on the
+# ledger for this configuration's identity (reader.sh g0_ident) refuses the run, checked again before each attempt.
 # Stage 1 stop rule (13.4): on a held-out run, after attempt 1 the driver stops unless --futility names the
 # futility.txt that `score.sh --interim` wrote for this run's attempt-1 rows with decision=CONTINUE; with
 # decision=STOP it runs nothing more.
@@ -109,11 +110,16 @@ weights_ok "$OUT" "$WLIST" "$FMODEL" ||
 DEVC="$ROOT/tests/one_layer/exp445/dev/tasks/cases" G0T="$(kv g0_task)"
 W0="$(mktemp -d "${TMPDIR:-/tmp}/exp445-run.XXXXXXXX")"; trap 'rm -rf "$W0"' EXIT
 system_prompt "$HERE/arms" omegese "$(kv heldout_prompt_mode)" > "$W0/g0.system" || die "cannot build the omegese prompt"
-fl="$(g0_failed "$CONFIG" "$SERVER" "$(sha256sum "$PARAMS" | cut -d" " -f1)")"
-[ -z "$fl" ] || die "a G0 FAIL for config $CONFIG on this server and PARAMS is in $(g0_ledger) ($(cut -f1,5,6 <<< "$fl" | tr "\t" " ")): nothing in that configuration runs (protocol 13.4)"
+[[ "$SERVER" != *$'\t'* ]] || die "config.$CONFIG.server must not contain a tab (it is a G0 ledger column)"
+IDENT="$(g0_ident "$PARAMS" "$CONFIG")"
+g0_barred() { # dies when the G0 ledger holds a FAIL for this configuration's identity (checked at start and per attempt)
+  local fl; fl="$(g0_failed "$CONFIG" "$IDENT")"
+  [ -z "$fl" ] || die "a G0 FAIL for config $CONFIG on this server and settings is in $(g0_ledger) ($(cut -f1,5,6 <<< "$fl" | tr "\t" " ")): nothing in that configuration runs (protocol 13.4)"
+}
+g0_barred
 why="$(g0_check "$OUT/g0" "$CONFIG" "$FMODEL" "$FBASE" "$EXTRA" "$SERVER" "$(sha256sum "$PARAMS" | cut -d" " -f1)" "$(kv g0_gate_sha256)" "$W0/g0.system" \
   "$(user_msg "$DEVC/$G0T/requirement" "$DEVC/$G0T/prompt")" "$(kv max_tokens)" "$(kv temperature)" "$(kv top_p)" "$(kv seed_base)" \
-  "$(ls "$DEVC" | LC_ALL=C sort | awk -v t="$G0T" '$0 == t { print NR }')" "$(kv g0_seeds)")" ||
+  "$(ls "$DEVC" | LC_ALL=C sort | awk -v t="$G0T" '$0 == t { print NR }')" "$(kv g0_seeds)")" && why="$(g0_on_ledger "$OUT/g0" "$CONFIG" "$IDENT")" ||
   die "no G0 PASS for config $CONFIG and this server in $OUT/g0: $why (run tools/exp445/g0.sh --config $CONFIG --out $OUT; protocol 13.4)"
 mkdir -p "$OUT/prompts" "$OUT/gen" "$OUT/cands"
 OUT="$(realpath -e "$OUT")"
@@ -174,6 +180,7 @@ stop_gate() {
 }
 
 for at in $(seq 1 "$ATTEMPTS"); do
+  g0_barred   # a G0 FAIL recorded while this run is under way stops it before the next attempt
   if [ "$at" = 2 ] && [ "$HELD" = 1 ]; then stop_gate; fi
   for task in "${ids[@]}"; do
     req="$TASKS/tasks/cases/$task/requirement"

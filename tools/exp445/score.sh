@@ -12,7 +12,8 @@
 #       documents and worked examples give for that mode, the public view of these tasks, a clean
 #       generation commit whose tools equal the scoring commit's, weights.check all OK for the config's
 #       frozen hash list and server.json listing its model id, and a G0 PASS (g0/, reader.sh g0_check)
-#       for the config, server and PARAMS
+#       for the config, server and PARAMS, with its PASS line on the G0 ledger and no G0 FAIL there for the
+#       config's identity (reader.sh g0_on_ledger, g0_failed)
 #     - every run: SHA256SUMS verifies and lists exactly the raw files, prompts, g0/, meta.txt, log.tsv,
 #       weights.check and server.json
 #     - every generation, from its raw files only: each hashed request equals the one PARAMS, the config,
@@ -202,7 +203,9 @@ for r in "${runs[@]}"; do
   wl="$(kv "config.$c.weights")"; case "$wl" in /*|"") ;; *) wl="$ROOT/$wl" ;; esac
   weights_ok "$r" "$wl" "$FM" || inval "$r: weights.check / server.json missing or not all OK for config $c (tools/exp445/check_weights.sh)"
   why="$(g0_check "$r/g0" "$c" "$FM" "$(kv "config.$c.base_url")" "$FX" "$FS" "$params_sha" "$(kv g0_gate_sha256)" "$W/g0.system" "$G0U" "$MT" "$TT" "$TP" "$SB" "$G0I" \
-    "$(kv g0_seeds)")" || inval "$r: no G0 PASS for config $c and its server: $why"
+    "$(kv g0_seeds)")" && why="$(g0_on_ledger "$r/g0" "$c" "$(g0_ident "$PARAMS" "$c")")" || inval "$r: no G0 PASS for config $c and its server: $why"
+  fl="$(g0_failed "$c" "$(g0_ident "$PARAMS" "$c")")"
+  [ -z "$fl" ] || inval "$r: a G0 FAIL for config $c on this server and settings is in $(g0_ledger) ($(cut -f1,5,6 <<< "$fl" | tr "\t" " ")): nothing in that configuration counts (protocol 13.4)"
   [ -n "$(mv_ g0_sha256)" ] && [ "$(mv_ g0_sha256)" = "$(sha256sum < "$r/g0/SHA256SUMS" 2> /dev/null | cut -d" " -f1)" ] || inval "$r: the G0 record is not the one this run was generated under (meta.txt g0_sha256)"
   for arm in ${ARMS//,/ }; do
     [ "$(mv_ "prompt_${arm}_sha256")" = "$(sha256sum < "$W/prompt.$arm.$rm_" | cut -d' ' -f1)" ] &&

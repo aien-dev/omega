@@ -121,13 +121,36 @@ a1_rows_sha() { tail -n +2 "$1" | awk -F'\t' '$1 ~ /-1$/' | LC_ALL=C sort | sha2
 # prompt.system.txt, rK.req.json for K = 1 .. g0_seeds + 1 (the last repeats the seed of the first), gate/
 # (the stage S gate's output: gate.txt and every reply; d-rK.json is the reply to rK.req.json), the
 # repeat's rK.transport and rK.resp.json, verdict.txt and SHA256SUMS.
-# G0 ledger (13.4: on FAIL nothing in that configuration runs). g0.sh appends every verdict to one ledger
-# (EXP445_G0_LEDGER, default evidence/ONE-LAYER-2/g0-ledger.tsv, committed with the runs): UTC time, config,
-# server, params_sha256, PASS or FAIL, the record's directory, the sha256 of its SHA256SUMS. g0.sh and run.sh
-# refuse a configuration whose server and PARAMS have a FAIL there, whatever run directory holds it.
-g0_ledger() { echo "${EXP445_G0_LEDGER:-$ROOT/evidence/ONE-LAYER-2/g0-ledger.tsv}"; }
-# g0_failed <config> <server> <params sha256>: prints the first FAIL line for them (nothing when none)
-g0_failed() { local l; l="$(g0_ledger)"; if [ -f "$l" ]; then awk -F'\t' -v c="$1" -v s="$2" -v p="$3" '$2 == c && $3 == s && $4 == p && $5 == "FAIL" { print; exit }' "$l"; fi; }
+# G0 ledger (13.4: on FAIL nothing in that configuration runs). g0.sh appends every verdict to one ledger,
+# evidence/ONE-LAYER-2/g0-ledger.tsv (committed with the runs; commit it before score.sh, whose harness refuses
+# a dirty tree), BEFORE it moves the record into place, so a crash leaves a ledger line without a record (the
+# safe side). Columns: UTC time, config, server, the configuration identity (g0_ident), PASS or FAIL, the
+# record's directory (relative to the repo when inside it), the sha256 of its SHA256SUMS, the PARAMS sha256.
+# A FAIL is keyed on the identity, not on the whole PARAMS file, so an edit elsewhere in PARAMS (a comment,
+# the futility rule, the commit that opens a stage) does not lift it. g0.sh, run.sh and score.sh refuse a
+# configuration with a FAIL for its identity; run.sh and score.sh also need the ledger's PASS line for the run's
+# G0 record (g0_on_ledger). EXP445_G0_LEDGER names another ledger only when EXP445_PARAMS is set (tests only).
+# Limit: the ledger is a file in this tree, so a FAIL recorded in another worktree is seen once it is merged.
+g0_ledger() { if [ -n "${EXP445_PARAMS:-}" ] && [ -n "${EXP445_G0_LEDGER:-}" ]; then echo "$EXP445_G0_LEDGER"; else echo "$ROOT/evidence/ONE-LAYER-2/g0-ledger.tsv"; fi; }
+# g0_ident <PARAMS file> <config>: sha256 over the values that define what G0 tested: the configuration's
+# model, endpoint, request extra and server, the sampling settings, the G0 task, seeds, prompt mode and gate
+g0_ident() {
+  local k
+  for k in "config.$2.model" "config.$2.base_url" "config.$2.extra" "config.$2.server" max_tokens temperature top_p seed_base \
+           g0_task g0_seeds g0_gate_sha256 heldout_prompt_mode; do
+    printf '%s=%s\n' "$k" "$(K="$k" awk -F= '$1 == ENVIRON["K"] { print substr($0, length(ENVIRON["K"]) + 2); exit }' "$1")"
+  done | sha256sum | cut -d' ' -f1
+}
+# g0_failed <config> <identity>: prints the first FAIL line for them (nothing when none)
+g0_failed() { local l; l="$(g0_ledger)"; if [ -f "$l" ]; then C="$1" I="$2" awk -F'\t' '$2 == ENVIRON["C"] && $4 == ENVIRON["I"] && $5 == "FAIL" { print; exit }' "$l"; fi; }
+# g0_on_ledger <g0 dir> <config> <identity>: 0 when the ledger holds a PASS line for this configuration and
+# identity whose SHA256SUMS sha256 is the record's; prints the reason otherwise
+g0_on_ledger() {
+  local l s; l="$(g0_ledger)"; s="$(sha256sum < "$1/SHA256SUMS" 2> /dev/null | cut -d' ' -f1)"
+  [ -f "$l" ] || { echo "no G0 ledger $l"; return 1; }
+  [ -n "$(C="$2" I="$3" S="$s" awk -F'\t' '$2 == ENVIRON["C"] && $4 == ENVIRON["I"] && $5 == "PASS" && $7 == ENVIRON["S"] { print; exit }' "$l")" ] ||
+    { echo "the G0 record in $1 has no PASS line in $l for this configuration"; return 1; }
+}
 # g0_files <g0 dir>: the hashed files (gate/ included), sorted
 g0_files() { (cd "$1" && find . -type f ! -path ./SHA256SUMS -printf '%P\n' | LC_ALL=C sort); }
 # g0_seed <seed_base> <k> <task index>: the seed of G0 request k (request g0_seeds + 1 uses k = 1)

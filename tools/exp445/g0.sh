@@ -22,8 +22,9 @@
 # g0_check re-derives it). A G0 record is never overwritten: after a FAIL nothing runs in that run dir
 # (13.4). A transport failure (the gate exits 2 or runs out of time, or the repeat gets no response) writes
 # no record and exits 2: it says nothing about the sampler. Every verdict is appended to the G0 ledger (reader.sh
-# g0_ledger); with a FAIL there for this configuration, server and PARAMS, g0.sh and run.sh refuse in any
-# run dir. EXP445_PARAMS names another PARAMS file (tests only).
+# g0_ledger) before the record is moved into place; with a FAIL there for this configuration's identity (reader.sh
+# g0_ident: its model, endpoint, request extra, server, sampling settings and G0 settings), g0.sh refuses with exit 3
+# (not a transport failure: do not retry), and run.sh and score.sh refuse, in any run dir. EXP445_PARAMS names another PARAMS file (tests only).
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
@@ -47,6 +48,7 @@ un="$(kv "config.$CONFIG.unavailable")"
 [ -z "$un" ] || die "config $CONFIG is unavailable: $un"
 MODEL="$(kv "config.$CONFIG.model")" BASE="$(kv "config.$CONFIG.base_url")" EXTRA="$(kv "config.$CONFIG.extra")" SERVER="$(kv "config.$CONFIG.server")"
 [ -n "$MODEL" ] && [ -n "$BASE" ] && [ -n "$EXTRA" ] && [ -n "$SERVER" ] || die "config $CONFIG (model, base_url, extra, server) is not named in $PARAMS"
+[[ "$SERVER" != *$'\t'* ]] || die "config.$CONFIG.server must not contain a tab (it is a G0 ledger column)"
 EXTRA="$(jq -c . <<< "$EXTRA")" || die "config.$CONFIG.extra is not JSON"
 MAXT="$(kv max_tokens)" TEMP="$(kv temperature)" TOPP="$(kv top_p)" SB="$(kv seed_base)" TIMEOUT="$(kv timeout_s)" RETRIES="$(kv retries)"
 TASK="$(kv g0_task)" N="$(kv g0_seeds)" MODE="$(kv heldout_prompt_mode)" GSHA="$(kv g0_gate_sha256)"
@@ -58,9 +60,12 @@ DEV="$ROOT/tests/one_layer/exp445/dev/tasks/cases"
 [ -f "$DEV/$TASK/requirement" ] && [ -f "$DEV/$TASK/prompt" ] || die "no dev task $TASK"
 TI="$(ls "$DEV" | LC_ALL=C sort | awk -v t="$TASK" '$0 == t { print NR }')"
 . "$HERE/reader.sh"
-PSHA="$(sha256sum "$PARAMS" | cut -d" " -f1)"
-fl="$(g0_failed "$CONFIG" "$SERVER" "$PSHA")"
-[ -z "$fl" ] || die "a G0 FAIL for config $CONFIG on this server and PARAMS is in $(g0_ledger) ($(cut -f1,5,6 <<< "$fl" | tr "\t" " ")): nothing in that configuration runs (protocol 13.4)"
+PSHA="$(sha256sum "$PARAMS" | cut -d" " -f1)" IDENT="$(g0_ident "$PARAMS" "$CONFIG")"
+fl="$(g0_failed "$CONFIG" "$IDENT")"
+if [ -n "$fl" ]; then
+  echo "g0.sh: a G0 FAIL for config $CONFIG on this server and settings is in $(g0_ledger) ($(cut -f1,5,6 <<< "$fl" | tr "\t" " ")): nothing in that configuration runs (protocol 13.4)" >&2
+  exit 3
+fi
 mkdir -p "$OUT"; OUT="$(realpath -e "$OUT")"
 D="$OUT/g0"
 [ ! -e "$D" ] || die "$D exists: a G0 record is never overwritten; after a G0 FAIL nothing runs in this run dir (protocol 13.4)"
@@ -88,7 +93,7 @@ der="$(g0_derive "$W" "$N")"
 if g0_pass "$der" "$N"; then v=PASS; else v=FAIL; fi
 {
   echo "config=$CONFIG"; echo "model=$MODEL"; echo "base_url=$BASE"; echo "request_extra=$EXTRA"; echo "server=$SERVER"
-  echo "params_sha256=$(sha256sum "$PARAMS" | cut -d' ' -f1)"; echo "commit=$(git -C "$ROOT" rev-parse HEAD 2> /dev/null || echo none)"
+  echo "params_sha256=$PSHA";echo "commit=$(git -C "$ROOT" rev-parse HEAD 2> /dev/null || echo none)"
   echo "gate=$(kv g0_gate_source)"; echo "gate_sha256=$GSHA"; echo "gate_exit=$ge"
   echo "task=$TASK"; echo "arm=omegese"; echo "prompt_mode=$MODE"; echo "prompt_sha256=$(sha256sum < "$W/prompt.system.txt" | cut -d' ' -f1)"
   echo "max_tokens=$MAXT"; echo "temperature=$TEMP"; echo "top_p=$TOPP"; echo "seeds=$seeds"
@@ -97,8 +102,10 @@ if g0_pass "$der" "$N"; then v=PASS; else v=FAIL; fi
   echo "G0 $v"
 } > "$W/verdict.txt"
 (cd "$W" && g0_files . | tr '\n' '\0' | xargs -0 sha256sum) > "$W/SHA256SUMS"
-mv "$W" "$D"; trap - EXIT
+# the ledger line first (13.4): a crash after it leaves a FAIL barred without a record, never a record unbarred
 mkdir -p "$(dirname "$(g0_ledger)")"
-printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$(date -u +%Y%m%dT%H%M%SZ)" "$CONFIG" "$SERVER" "$PSHA" "$v" "$D" "$(sha256sum < "$D/SHA256SUMS" | cut -d" " -f1)" >> "$(g0_ledger)"
+printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$(date -u +%Y%m%dT%H%M%SZ)" "$CONFIG" "$SERVER" "$IDENT" "$v" "${D#"$ROOT/"}" \
+  "$(sha256sum < "$W/SHA256SUMS" | cut -d" " -f1)" "$PSHA" >> "$(g0_ledger)"
+mv "$W" "$D"; trap - EXIT
 echo "g0.sh: config $CONFIG: $der: G0 $v (record in $D)"
 [ "$v" = PASS ]
