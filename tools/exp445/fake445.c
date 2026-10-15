@@ -6,8 +6,10 @@
  * binds an ephemeral port and writes it to <port_file>. The answer for a request is the file
  *   <answers_dir>/<arm>/<entry>          first round
  *   <answers_dir>/<arm>/<entry>.repair   when the request already holds an assistant turn
- * where <arm> is taken from "REPRESENTATION: <arm>" in the request and <entry> from the first
- * "\nentry <name>" (JSON-escaped newline). Missing file: "I cannot do this." A file starting with
+ * where <arm> is taken from "REPRESENTATION: <arm>" in the request and <entry> from the last
+ * "\nentry <name>" (JSON-escaped newline). A first round with "seed": S answers <arm>/<entry>.seedS when
+ * that file exists, and <arm>/<entry>.seedS.again when the same request body was seen before (G0 tests).
+ * Missing file: "I cannot do this." A file starting with
  * "@@500" gives HTTP 500. Usage: prompt_tokens = request bytes / 4, completion_tokens = answer bytes
  * / 4 + 1; an answer longer than max_tokens * 4 bytes is cut there with finish_reason "length".
  * Every request body is appended to <answers_dir>/requests.log (one line each). GET .../models answers
@@ -110,18 +112,34 @@ int main(int argc, char **argv)
         }
         char logp[4096];
         snprintf(logp, sizeof logp, "%s/requests.log", argv[2]);
+        size_t ln = 0;
+        char *seen_log = slurp(logp, &ln);
+        int seen = seen_log && strstr(seen_log, body) != NULL;
+        free(seen_log);
         FILE *lf = fopen(logp, "a");
         if (lf) { fprintf(lf, "%s\n", body); fclose(lf); }
-        char arm[32], entry[80], mt[32];
+        char arm[32], entry[80], mt[32], seed[32];
         word_after(body, "REPRESENTATION: ", arm, sizeof arm);
-        word_after(body, "\\nentry ", entry, sizeof entry);
+        { /* the task's entry: the last "\nentry " (the worked examples in the system prompt come first) */
+            const char *p = body, *q, *last = NULL;
+            while ((q = strstr(p, "\\nentry "))) { last = q; p = q + 1; }
+            entry[0] = 0;
+            if (last) word_after(last, "\\nentry ", entry, sizeof entry);
+        }
         word_after(body, "\"max_tokens\":", mt, sizeof mt);
+        word_after(body, "\"seed\":", seed, sizeof seed);
         long maxt = mt[0] ? atol(mt) : 1 << 30;
         int repair = strstr(body, "\"role\":\"assistant\"") || strstr(body, "\"role\": \"assistant\"");
         char ap[4096];
         snprintf(ap, sizeof ap, "%s/%s/%s%s", argv[2], arm, entry, repair ? ".repair" : "");
         size_t an = 0;
-        char *ans = slurp(ap, &an);
+        char *ans = NULL;
+        if (!repair && seed[0]) { /* G0 tests: per-seed answers, and a different answer when a request repeats */
+            char sp[4200];
+            if (seen) { snprintf(sp, sizeof sp, "%s.seed%s.again", ap, seed); ans = slurp(sp, &an); }
+            if (!ans) { snprintf(sp, sizeof sp, "%s.seed%s", ap, seed); ans = slurp(sp, &an); }
+        }
+        if (!ans) ans = slurp(ap, &an);
         if (!ans) { ans = strdup("I cannot do this."); an = strlen(ans); }
         if (!strncmp(ans, "@@500", 5)) {
             const char *e = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\nContent-Length: 27\r\nConnection: close\r\n\r\n{\"error\":\"fake 500 error\"}\n";

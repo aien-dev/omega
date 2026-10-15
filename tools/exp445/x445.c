@@ -12,6 +12,7 @@
  *        exit 0 "OK"; exit 1 one line "REFUSED <stage>: <reason>", stage compiler | decoder |
  *        signature | backend. Signature = the requirement's entry, params, ret.
  *   x445 wilson <k> <n>                   "p lo hi": Wilson score 95% interval (z = 1.959964)
+ *   x445 mcnemar <b> <c>                  exact two-sided McNemar p on the discordant pairs (b, c)
  */
 #include <math.h>
 #include <stdio.h>
@@ -224,6 +225,23 @@ static int cmd_wilson(const char *ks, const char *ns)
     return 0;
 }
 
+/* exact two-sided McNemar test on the discordant pairs: b (only the first arm succeeds) and c (only the
+ * second): p = min(1, 2 * P(X <= min(b, c))), X ~ Binomial(b + c, 1/2); p = 1 when b + c = 0 */
+static int cmd_mcnemar(const char *bs, const char *cs)
+{
+    char *e1, *e2;
+    long b = strtol(bs, &e1, 10), c = strtol(cs, &e2, 10);
+    if (*e1 || *e2 || !*bs || !*cs || b < 0 || c < 0 || b + c > 1000000) { fprintf(stderr, "x445: mcnemar b c with 0 <= b, c and b + c <= 1000000\n"); return 2; }
+    long n = b + c, m = b < c ? b : c;
+    double s = 0;
+    for (long i = 0; i <= m && n > 0; i++)
+        s += exp(lgamma((double)n + 1) - lgamma((double)i + 1) - lgamma((double)(n - i) + 1) - (double)n * log(2.0));
+    double p = n == 0 ? 1.0 : 2 * s;
+    if (p > 1) p = 1;
+    printf("%.6f\n", p);
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     if (argc == 4 && !strcmp(argv[1], "extract")) return cmd_extract(argv[2], argv[3]);
@@ -231,6 +249,7 @@ int main(int argc, char **argv)
     if (argc == 3 && !strcmp(argv[1], "tohex")) return cmd_tohex(argv[2]);
     if (argc == 5 && !strcmp(argv[1], "check")) return cmd_check(argv[2], argv[3], argv[4]);
     if (argc == 4 && !strcmp(argv[1], "wilson")) return cmd_wilson(argv[2], argv[3]);
-    fprintf(stderr, "usage: x445 extract <content> <out> | hex <in> <out> | tohex <in> | check osc|oscir <file> <requirement> | wilson <k> <n>\n");
+    if (argc == 4 && !strcmp(argv[1], "mcnemar")) return cmd_mcnemar(argv[2], argv[3]);
+    fprintf(stderr, "usage: x445 extract <content> <out> | hex <in> <out> | tohex <in> | check osc|oscir <file> <requirement> | wilson <k> <n> | mcnemar <b> <c>\n");
     return 2;
 }
