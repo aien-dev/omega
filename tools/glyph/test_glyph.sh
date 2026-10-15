@@ -80,6 +80,14 @@ s = sum4 a
 free a
 ret s
 end
+== IR type names as written in the task signature
+fn clamp_add a u8 b u8 to u8
+s = add a b
+if lt s a
+ret u8 255
+end
+ret s
+end
 == calls without values, a bool function as a condition
 fn seven to uint
 ret 7

@@ -80,6 +80,7 @@ Values (one op each; operands are names or numbers):
 A condition is a bool name, `true`/`false`, or one op giving bool (`while ne b 0`).
 
 Types: `bool uchar ushort uint ulong byte short int long` = bool u8 u16 u32 u64 i8 i16 i32 i64
+(the IR names `u8` .. `i64` are accepted too, as the task signature writes them; they cost 2 or 3 tokens)
 (`u32` is three Qwen3 tokens; `uint` is one). Arrays: `own|edit|view <type> <len>`.
 
 Example (dev04):
@@ -138,7 +139,7 @@ rewrite. Whether models write Glyph reliably is not measured yet.
 ## 6. Checks (`make test-glyph`)
 
 - the 10 dev programs: glyph -> omega_emit -> checker2 ACCEPT;
-- 4 coverage programs (break, nested loops, else-if, a for with a name as count, arrays and calls,
+- 5 coverage programs (IR type names, break, nested loops, else-if, a for with a name as count, arrays and calls,
   calls without values, a bool function as a condition);
 - 21 refusals, each with its expected reason, each with a fixed control that is accepted;
 - `glyph next` on 6 prefixes (only `end` after ret; a binary op's second operand of the first's type;

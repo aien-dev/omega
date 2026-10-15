@@ -78,7 +78,8 @@ static int word_in(const char *w, const char *const *set, int n) {
         if (!strcmp(w, set[i])) return i;
     return -1;
 }
-static int scalar_word(const char *w) { return word_in(w, GW, T_NSCALAR); }
+/* a scalar type: the one-token Glyph word, or the IR name the task signature uses (u8 .. i64) */
+static int scalar_word(const char *w) { int s = word_in(w, GW, T_NSCALAR); return s >= 0 ? s : word_in(w, IRN, T_NSCALAR); }
 static int ref_word(const char *w) { int r = word_in(w, REFW + 1, 3); return r < 0 ? -1 : r + 1; }
 static int op_word(const char *w) { return word_in(w, OPW, OP_N); }
 static int reserved(const char *w) {
