@@ -1,0 +1,6 @@
+omega frozen candidate df9bd9c47b1f73df559e01e6f6e1d306acba41c3 (main), test binary built from it untouched (baseline); camera build = same tree + PFDBG dump in compare() after the mismatch
+physics 6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf (pinned, pkv514-pins)
+Linux spark-b87b 7.0.0-1019-nvidia #19~24.04.2-Ubuntu SMP PREEMPT_DYNAMIC Sun Sep  6 18:35:11 UTC 2 aarch64 aarch64 aarch64 GNU/Linux
+NVIDIA GB10, 580.173.02
+GPU shared with a MAX server on :18097 (36 GB) throughout; timings in these logs are not performance evidence
+attempt 1 refused with RM_ALLOC 0xcec0 status 0x51 (NV_ERR_NO_MEMORY, contiguous ctx buffer, MemFree 1.9 GB); clean page cache dropped (dropcache.txt), attempt 2 ran

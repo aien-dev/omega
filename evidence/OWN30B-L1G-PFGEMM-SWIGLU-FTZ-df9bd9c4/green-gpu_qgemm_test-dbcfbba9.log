@@ -1,0 +1,26 @@
+quantiser reference: PASS (amax/scale in (224, 448], error within half an e4m3 ulp)
+qgemm emulation vs double oracle (plain): worst error 2.31e-07 of the sum of |terms| PASS
+qgemm emulation vs double oracle (swiglu_nat): worst error 2.19e-07 of the sum of |terms| PASS
+sim quantiser k 2048 f32: ran, 0 differ
+sim quantiser k 768 bf16: ran, 0 differ
+sim quantiser k 4096 f32: ran, 0 differ
+sim quantiser k 128 bf16: ran, 0 differ
+sim quantiser mutant 1: caught
+sim quantiser mutant 2: caught
+sim qgemm case 0 (n 256 k 384 M 300 swiglu indexed rt 4 warps 8) order 0: ran, 0 differ
+sim qgemm case 0 (n 256 k 384 M 300 swiglu indexed rt 4 warps 8) order 1: ran, 0 differ
+sim qgemm case 0 mutant 1: caught
+sim qgemm case 0 mutant 2: caught
+sim qgemm case 0 mutant 3: caught
+sim qgemm case 0 mutant 4: caught
+sim qgemm case 1 (n 256 k 256 M 200 f32 direct rt 4 warps 8) order 0: ran, 0 differ
+sim qgemm case 1 (n 256 k 256 M 200 f32 direct rt 4 warps 8) order 1: ran, 0 differ
+sim qgemm case 1 mutant 1: caught
+sim qgemm case 1 mutant 2: caught
+sim qgemm case 1 mutant 3: caught
+sim qgemm case 1 mutant 4: caught
+sim qgemm case 2 (n 256 k 128 M 150 f32 indexed rt 4 warps 8) order 0: ran, 0 differ
+sim qgemm case 2 (n 256 k 128 M 150 f32 indexed rt 4 warps 8) order 1: ran, 0 differ
+sim qgemm case 3 (n 512 k 1024 M 140 swiglu direct rt 4 warps 8) order 0: ran, 0 differ
+sim qgemm case 3 (n 512 k 1024 M 140 swiglu direct rt 4 warps 8) order 1: ran, 0 differ
+GPU_QGEMM: PASS
