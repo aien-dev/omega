@@ -125,11 +125,15 @@ static void ws_wrs(WsLane *l, int v, unsigned sub, uint32_t x, const BlackwellIR
 static float ws_u2f(uint32_t u) { float f; memcpy(&f, &u, 4); return f; }
 static uint32_t ws_f2u(float f) { uint32_t u; memcpy(&u, &f, 4); return u; }
 static uint32_t ws_bf16_rn(uint32_t u) { if ((u & 0x7fffffffu) > 0x7f800000u) return 0x7fc0u; return (u + 0x7fffu + ((u >> 16) & 1u)) >> 16; } /* f32 bits -> bf16 bits, round to nearest even */
-/* MUFU (the SASS EX2 / RCP / RSQ unit) flushes subnormal inputs and results to a sign-preserving zero. PTX ISA 9.7.3.13 (rcp) and
- * 9.7.3.21 (ex2): "flushes subnormal inputs and results to sign-preserving zero" is the .ftz form, and the bare MUFU instruction we
- * emit is that form (the non-ftz PTX variants are ptxas sequences around MUFU). Chip-observed on GB10: the SwiGLU reciprocal
- * 1 / (2^t + 1) for t in (126, 128) came back as +-0 on all 101 of 101 differing elements (evidence OWN30B-L1G-PFGEMM-SWIGLU-FTZ,
- * gpu_pfgemm_test host red test). Every host reference of a MUFU result goes through this one helper. */
+/* MUFU (the SASS EX2 / RCP / RSQ unit) flushes a subnormal result to a sign-preserving zero. Chip-observed on GB10: the SwiGLU
+ * reciprocal 1 / (2^t + 1) for t in (126, 128) came back as +-0 on all 101 of 101 differing elements (evidence
+ * OWN30B-L1G-PFGEMM-SWIGLU-FTZ-df9bd9c4, gpu_pfgemm_test host red test). Doc-inferred, not separately chip-observed: the input flush
+ * and the EX2 / RSQ cases follow the same rule, PTX ISA 9.7.3.13 (rcp) and 9.7.3.21 (ex2) "flushes subnormal inputs and results to
+ * sign-preserving zero" for the .ftz form, which is what the bare MUFU we emit is (the non-ftz PTX variants are ptxas sequences around
+ * MUFU; NVIDIA publishes no SASS semantics). Limit: the chip's MUFU is approximate (RCP 1 ulp, EX2 2 ulp), the model flushes a correctly
+ * rounded IEEE result, so right at the subnormal boundary the two can disagree 0 versus nonzero. This simulator and the pfgemm reference
+ * go through this helper; bw_warp_sim.h, bw_warp_sim_k.h, bw_warp_sim_pa.h and gpu_attention_test.c still model MUFU as IEEE (issue filed
+ * with PR #461). omega_numeric.c has its own ftz() on the library side. */
 static float ws_mufu_ftz(float f) { uint32_t u = ws_f2u(f); if ((u & 0x7f800000u) == 0u) u &= 0x80000000u; return ws_u2f(u); }
 static uint32_t ws_lut3(uint32_t lut, uint32_t a, uint32_t b, uint32_t c) {
     uint32_t r = 0;
