@@ -47,8 +47,8 @@
           "purpose": "Directory calibration. Purpose not yet described by a human."
         },
         {
-          "digest": "5810f3fd1c5404913573cbbae4526206a2cdd0ae96e9ff89dd894c5c063be5c4",
-          "last_commit": "54b53602",
+          "digest": "1cff7c592a3519daa4fd37e8b7619d3bfd07e06221edd736d353a7c148433d48",
+          "last_commit": "20cc696f",
           "name": "docs",
           "purpose": "Directory docs. Purpose not yet described by a human."
         },
@@ -89,21 +89,21 @@
           "purpose": "Directory tests. Purpose not yet described by a human."
         },
         {
-          "digest": "327a2d83375cdda60d8e4d02e3d86b4bd7fd1050ccba22558d47b077577d548b",
-          "last_commit": "f6b44356",
+          "digest": "bf63ba964e014bd0228aa2b6065fe0f10d3df1064dee58d550a52d515bf2cfdf",
+          "last_commit": "735d7918",
           "name": "tools",
           "purpose": "Directory tools. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:e9c1a31cce605075240f8b65c5aebc82c5fd2df41c9b6f1197236e99317149ef",
-      "compiled_at": "2026-10-15T19:52:11Z",
+      "children_root": "sha256:0f41fee0a188590a9d440d11d59687010d3d00b41c9954506a9fcadc738a459d",
+      "compiled_at": "2026-10-15T20:55:19Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:75c399540d5275722dcde8610e59f4fe8c39fa1d8d4de8158ea34efa9520a2bb",
+      "digest": "sha256:73b6566beb97295a3c6490f57b00c292be6555b7bb6a0bc368e52cd86a893033",
       "evidence_files": 10951,
       "evidence_root": "sha256:91c96312a7759b8d4134c2f07857d925dd16c49155729f32d6091f9168640db7",
       "files": 13924,
-      "generated_at_commit": "f6b44356c575181b6cfadf8ee97aef6a94b45647",
-      "source_tree": "sha256:141123edf041577c5e8b62c8535ccea8c1aeed97f2a5d3c2ecb52201fca50224"
+      "generated_at_commit": "735d7918f29f2785b3bc7b4dbe0870b2d8719cfb",
+      "source_tree": "sha256:831e0aeee4d6394a6568f5cd1459f10c0028d43fee6bb1eb953b11318c8ad3df"
     },
     "owner_lane": "",
     "provenance": {
