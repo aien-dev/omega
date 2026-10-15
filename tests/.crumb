@@ -134,7 +134,7 @@
         },
         {
           "digest": "f041b7daf38c51e8db72834bb764cef7741637981223039d89731a30aa91e224",
-          "last_commit": "18531691",
+          "last_commit": "1edf41a5",
           "name": "compiler",
           "purpose": "Directory tests/compiler. Purpose not yet described by a human."
         },
@@ -212,7 +212,7 @@
         },
         {
           "digest": "024a746eff9cd1871d1e507c2f56ed6a1f7125cb457915904f9b1455140f8942",
-          "last_commit": "e59633e5",
+          "last_commit": "5901baa5",
           "name": "physics0",
           "purpose": "PD-0 gates: world self-test, oracle calibration, learner L0/L1/NULL, mutations, OSC differential"
         },
@@ -260,7 +260,7 @@
         },
         {
           "digest": "e505518cad5dd5bb87591ad6e105c0394161cebe5ac399ff0cde45d0dec59ee9",
-          "last_commit": "",
+          "last_commit": "dd67f6bd",
           "name": "reservoir",
           "purpose": "Reservoir tests (omega#440): Gate 1 simulator and readout checks against an independent binary64"
         },
@@ -296,14 +296,14 @@
         }
       ],
       "children_root": "sha256:007780788467b076e31455e97b09ed7fb861af2e96184fd750995606dac0dc60",
-      "compiled_at": "2026-10-14T21:46:29Z",
+      "compiled_at": "2026-10-15T00:25:19Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:792cfc471ce3778cf2a4f7c90d0cddeae9cbe5494b013045e4f81cc5f4a7daa4",
+      "digest": "sha256:8401c311b8d73c13a75937463ca173dba2af1a3e79fda3e126be4e1918f56436",
       "evidence_files": 16,
       "evidence_root": "sha256:96d08097822ad95f4e562c19e0ba5df5a035774c48632f1832912c40a27bd27a",
-      "files": 1173,
-      "generated_at_commit": "2a6d6d7b9091bd2184b15dcde893035dbcca40d3",
-      "source_tree": "sha256:373f62cb1aa94f1490d7fc8a071c38e0d1beb9856e661ff85ef628019f7a24e1"
+      "files": 1182,
+      "generated_at_commit": "6dd6b739360d4ac2f5f997a96b6f8b110951a0a1",
+      "source_tree": "sha256:d63ab817e1db8f8495a6745545d980db3e21e84764d6715978083babea6905cb"
     },
     "owner_lane": "",
     "provenance": {

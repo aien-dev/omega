@@ -197,10 +197,14 @@ class 1 receipt). Proofs are deterministic: the solver writes byte-identical pro
 
 - Translation validation of the executable against the program (plan section 3) is not done;
   evidence classes 1 and 2 say so in their definitions.
-- Production acceptance of an OWNER receipt is tested only in its refusals; a positive production
-  case needs one receipt signed on Drake's YubiKey (owner presence, decision D3). UNVERIFIED
-  until then.
-- The admission side (aienos#383) is separate work and must verify exactly these bytes.
+- Production acceptance of an OWNER receipt: VERIFIED for one positive case. Receipt a01 was signed
+  on Drake's YubiKey (serial 39017074, PIV slot 9c, owner root 578ada3c...9e76) on 2026-10-15T00:02:50Z;
+  `checker2 receipt verify --production` accepts it, openssl verifies the Ed25519 signature against the
+  ceremony public key, and six tampered controls are refused (`make test-checker2-owner-receipt`,
+  fixtures in tests/checker2/fixtures/owner-receipt). The aienos kernel verifier accepts it under an owner
+  policy; the shipped aienos release policy does not yet carry an owner receipt anchor, so it reports
+  UNTRUSTED_SIGNER there. Adding that anchor is aienos work and is UNVERIFIED.
+- The admission side (aienos#383, merged in aienos#384) verifies exactly these bytes.
 - Dependency receipts are not resolved in v1: the `dependencies` digest binds their ids, and a
   verifier can require the expected ids (`DEPENDENCIES_MISMATCH`), but no verifier fetches the
   dependency receipts or checks their validity, class or freshness. UNVERIFIED for any chain.
@@ -245,6 +249,11 @@ class 1 receipt). Proofs are deterministic: the solver writes byte-identical pro
   bits, else edge values and 3000 samples) checker2's CNF must agree with the compiled code on the
   trap and, through an `ensures result != c` probe, on the exact result value; 8 negative controls
   (the CNF of one operation against the code of another) must disagree;
+- `owner_receipt.sh`: the positive production case of section 11. The committed OWNER draft and its
+  65-byte message (`tests/checker2/fixtures/owner-receipt`, PROVENANCE.txt) are rebuilt and must be
+  byte-identical; the receipt signed once on Drake's YubiKey must verify `--production`, and a changed
+  signature byte, a changed program hash, a wrong target, an expired epoch, a revoked owner key and a
+  wrong executable must each be refused. It fails `OWNER-RECEIPT PENDING` until that signature is committed;
 - `mutants.sh`: each line tagged `GUARD:<name>` in the receipt code, decoder, acceptance rules,
   LRAT checker and bit-blaster is removed in turn; a test must fail every time (104 of 104); the script also refuses a tag count that differs
   from the mutant count.

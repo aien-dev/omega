@@ -1,0 +1,6 @@
+Owner-signed receipt check, 2026-10-15T00:02:50Z (~/bin/owner-sign-receipt-test.sh)
+signer: YubiKey serial 39017074, PIV slot 9c, owner_root_ed25519 578ada3cb0c2d154623ac089191023c8ad4bc5e63b8ccd1a38db2d679b8c9e76
+receipt_id: 1348e78b0f88a5054f2b78b0a8d7c998ba70d166c711a2341528824685776034
+omega 9e5c33c06c56f3fb21cba2000f0434f1b4037efd: checker2 receipt verify --production: VALID; changed signature byte: BAD_SIGNATURE
+openssl Ed25519 over the 65-byte message: verified
+aienos kernel verifier origin/main edd175183: VALID under the owner policy; UNTRUSTED_SIGNER under today's shipped release policy (no owner anchor yet)
