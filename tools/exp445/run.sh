@@ -70,9 +70,14 @@ if [ -z "$MODEL" ]; then MODEL="$FMODEL"; elif [ "$MODEL" != "$FMODEL" ]; then o
 WLIST="$(kv "config.$CONFIG.weights")"; case "$WLIST" in /*|"") ;; *) WLIST="$ROOT/$WLIST" ;; esac
 [[ "$MAXT" =~ ^[0-9]+$ ]] && [ "$MAXT" -gt 0 ] || die "max_tokens must be a positive integer (PARAMS or --max-tokens)"
 [[ "$ATTEMPTS" =~ ^[1-9]$ ]] || die "attempts 1..9"
+[[ "$RETRIES" =~ ^[0-9]$ ]] || die "retries must be 0..9 (PARAMS)"
+[[ "$TIMEOUT" =~ ^[1-9][0-9]*$ ]] || die "timeout_s must be a positive integer (PARAMS)"
+# pause before try K (K >= 1) of a round: K x BACKOFF seconds, so a brief server hiccup does not use up
+# every try at once (tests set EXP445_TEST_BACKOFF_S=0; timing only, nothing recorded depends on it)
+BACKOFF="${EXP445_TEST_BACKOFF_S:-5}"; [[ "$BACKOFF" =~ ^[0-9]+$ ]] || die "EXP445_TEST_BACKOFF_S must be an integer"
 cfg="$(echo "$CONFIG" | tr 'A-Z' 'a-z')"
 [ -d "$TASKS/tasks/cases" ] || die "$TASKS/tasks/cases missing (use ola.sh tasks-public)"
-find "$TASKS/tasks/cases" -path '*/hidden*' | grep -q . && die "$TASKS contains hidden files: the driver must see only requirement + prompt"
+[ -z "$(find "$TASKS/tasks/cases" -path "*/hidden*" -print -quit)" ] || die "$TASKS contains hidden files: the driver must see only requirement + prompt"
 B="$ROOT/build/omega_emit"
 make -s -C "$ROOT" PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 omega-emit >&2
 X="$B/x445" EMIT="$B/omega_emit"
@@ -81,6 +86,8 @@ weights_ok "$OUT" "$WLIST" "$FMODEL" ||
   die "$OUT/weights.check + server.json missing or not all OK: run tools/exp445/check_weights.sh $CONFIG $OUT first (protocol section 9)"
 mkdir -p "$OUT/prompts" "$OUT/gen" "$OUT/cands"
 OUT="$(realpath -e "$OUT")"
+# one driver per run dir: a second run.sh on the same --out would interleave tries and log rows
+exec 9> "$OUT/.lock"; flock -n 9 || die "another run.sh holds $OUT (lock $OUT/.lock)"
 
 # ---- system prompts, one per arm ----------------------------------------------------------------------
 for arm in ${ARMS//,/ }; do
@@ -123,7 +130,7 @@ dupk="$(tail -n +2 "$OUT/log.tsv" | cut -f1,2 | LC_ALL=C sort | uniq -d | head -
 ask() {
   local d="$1" r="$2" q="$3" p="$1/r$2" k e out code t t0 body lb msg
   if [ -f "$p.req.json" ]; then [ "$(cat "$p.req.json")" = "$q" ] || die "$p.req.json differs from the request this run sends: resume refused"
-  else printf '%s\n' "$q" > "$p.req.json.tmp"; mv "$p.req.json.tmp" "$p.req.json"; fi
+  else printf '%s\n' "$q" > "$p.req.json.tmp" || die "cannot write $p.req.json.tmp"; mv "$p.req.json.tmp" "$p.req.json" || die "cannot commit $p.req.json"; fi
   if [ ! -f "$p.transport" ]; then
     touch "$p.transport.tmp"
     lb="$(tail -n 1 "$p.transport.tmp" | sed -n 's/.* body=\([^ ]*\).*/\1/p')"
@@ -132,6 +139,7 @@ ask() {
     if [ "$lb" != "r$r.resp.json" ]; then
       k="$(wc -l < "$p.transport.tmp")"
       while [ "$k" -le "$RETRIES" ]; do
+        [ "$k" -eq 0 ] || sleep $((k * BACKOFF))
         t0="$EPOCHREALTIME"
         if out="$(curl -sS -m "$TIMEOUT" -o "$p.try" -w '%{http_code} %{time_total}' -H 'Content-Type: application/json' \
                    --data-binary @"$p.req.json" "$BASE/chat/completions" 2> "$p.curl.err")"; then e=0; else e=$?; fi
@@ -141,13 +149,13 @@ ask() {
         if [ "$e" = 0 ] && [ "$code" = 200 ] && resp_ok "$p.try"; then body="r$r.resp.json"
         elif [ -s "$p.try" ]; then body="r$r.err.$k.json"; else body=none; rm -f "$p.try"; fi
         msg="$(tr '\n\t' '  ' < "$p.curl.err")"; rm -f "$p.curl.err"
-        echo "try=$k http=$code curl_exit=$e time_s=$t body=$body msg=$msg" >> "$p.transport.tmp"
-        [ "$body" = none ] || mv "$p.try" "$d/$body"
+        echo "try=$k http=$code curl_exit=$e time_s=$t body=$body msg=$msg" >> "$p.transport.tmp" || die "cannot write $p.transport.tmp"
+        [ "$body" = none ] || mv "$p.try" "$d/$body" || die "cannot keep $d/$body"
         [ "$body" = "r$r.resp.json" ] && break
         k=$((k + 1))
       done
     fi
-    mv "$p.transport.tmp" "$p.transport"
+    mv "$p.transport.tmp" "$p.transport" || die "cannot commit $p.transport"
   fi
   round_ok "$p"
 }

@@ -86,7 +86,7 @@ sed -e "s|^config\.A\.base_url=.*|config.A.base_url=$URL|" -e "s|^config\.B\.bas
     -e "s|^models_root=.*|models_root=$T/models|" -e "s|^config\.\([AB]\)\.weights=.*|config.\1.weights=$T/wl.sha256|" "$HERE/PARAMS" > "$TP"
 grep -qx 'config.B.extra={"chat_template_kwargs":{"enable_thinking":false}}' "$TP" && grep -qx 'config.A.extra={}' "$TP" &&
   grep -qx "models_root=$T/models" "$TP" && grep -qx "config.B.weights=$T/wl.sha256" "$TP" || bad "PARAMS: config extras or weights not as frozen"
-export EXP445_PARAMS="$TP"
+export EXP445_PARAMS="$TP" EXP445_TEST_BACKOFF_S=0
 . "$HERE/reader.sh"
 cw() { "$HERE/check_weights.sh" "$1" "$2" > /dev/null; }
 rehash() { local d; for d in "$1"/gen/*/*/; do gen_sums "${d%/}"; done; run_sums "$1"; }
@@ -110,8 +110,16 @@ if "$HERE/run.sh" --config A --tasks "$T/pub" --out "$T/nowck" > /dev/null 2> "$
 else grep -q 'run tools/exp445/check_weights.sh A' "$T/nowck.err" && [ ! -e "$T/nowck/log.tsv" ] && ok "driver refuses a run dir with no weight check" || bad "no weight check reason"; fi
 if "$HERE/run.sh" --config A --tasks "$ROOT/tests/one_layer/exp445/dev" --out "$T/runbad" > /dev/null 2> "$T/hid.err"; then bad "driver accepted a tasks dir with hidden files"
 else grep -q "hidden files" "$T/hid.err" && ok "driver refuses a tasks dir that holds hidden files" || bad "hidden refusal reason"; fi
+# held-out size and beyond: `find | grep -q` under pipefail lost the refusal once find's output outgrew the
+# pipe (SIGPIPE); 300 synthetic empty tasks make that path list long enough to show it every time
+for i in $(seq -w 1 300); do mkdir -p "$T/manyhid/tasks/cases/t$i/hidden"; : > "$T/manyhid/tasks/cases/t$i/requirement"; : > "$T/manyhid/tasks/cases/t$i/hidden/x"; done
+if "$HERE/run.sh" --config A --tasks "$T/manyhid" --out "$T/runbad2" > /dev/null 2> "$T/hid2.err"; then bad "driver accepted 300 tasks with hidden files"
+else grep -q "hidden files" "$T/hid2.err" && ok "driver refuses a 300-task dir that holds hidden files (no SIGPIPE escape)" || bad "300-task hidden refusal reason: $(head -c 200 "$T/hid2.err")"; fi
 if "$HERE/run.sh" --config C --tasks "$T/pub" --out "$T/runc" > /dev/null 2> "$T/cfg.err"; then bad "driver ran a config not named in PARAMS"
 else grep -q "config C is not named in" "$T/cfg.err" && [ ! -e "$T/runc/log.tsv" ] && ok "driver refuses a config not named in PARAMS (protocol section 9)" || bad "config refusal reason"; fi
+cw A "$T/locked"; mkdir -p "$T/locked"
+if flock "$T/locked/.lock" "$HERE/run.sh" --config A --tasks "$T/pub" --out "$T/locked" --only dev01 > /dev/null 2> "$T/lock.err"; then bad "driver ran on a run dir another driver holds"
+else grep -q "another run.sh holds" "$T/lock.err" && [ ! -e "$T/locked/log.tsv" ] && ok "driver refuses a run dir another driver holds (flock)" || bad "lock refusal reason"; fi
 R="$T/gens/run-a"; cw A "$R"
 "$HERE/run.sh" --config A --tasks "$T/pub" --out "$R" --only dev01,dev02,dev03 > /dev/null 2> "$T/run.err" ||
   { bad "run.sh failed"; tail -5 "$T/run.err"; }
