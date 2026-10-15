@@ -11,9 +11,14 @@
  *
  *   omegese emit <in.omegese> <out.json>   exit 0 written; 1 refused (one line on stdout:
  *                                      "REFUSED omegese: line N: <reason>"); 2 usage / I/O
- *   omegese next <prefix.omegese>          the words that may come next after the prefix (the mask an
- *                                      engine applies while the model writes); exit 1 if the
- *                                      prefix is already invalid
+ *   omegese next <prefix.omegese>        what may come next after the prefix, exactly: every
+ *                                      continuation that can still end in a program emit accepts
+ *                                      (the mask an engine applies while the model writes); exit 1
+ *                                      (REFUSED) when no continuation can
+ *   omegese next --machine <prefix>      the same set, one item per line (OMEGESE.md section 6)
+ *   omegese complete <prefix.omegese>    a text that, written after the prefix, makes a program emit
+ *                                      accepts (finish the line, then close everything); exit 1 if
+ *                                      there is none
  *   omegese words                        every fixed word of the language, one per line (the
  *                                      tokenizer gate checks each is one token)
  *
@@ -98,7 +103,6 @@ static int reserved(const char *w) {
 }
 
 /* ---- refusal ---- */
-#define NEED (-2)    /* next: the prefix ended here; g_next holds the words that may follow */
 #define MISSING (-3) /* value: no value starts here (end of line, ')' or a keyword); the caller words it */
 static int g_line;
 static char g_err[512];
@@ -152,11 +156,46 @@ static int nblocks, norder, cur; /* cur: current block id, -1 when the path has 
 static Frame frames[MAX_FRAMES];
 static int nframes;
 
-/* the line being read: its words, the read position, and the next mode (partial: the line is an
- * unfinished prefix; reaching its end returns NEED with the allowed words in g_next) */
+/* the line being read: its words and the read position */
 static char **lw;
-static int ln, lp, partial, pdepth;
-static Buf g_next;
+static int ln, lp, pdepth;
+/* next and complete (OMEGESE.md section 6). g_fill: where the line runs out of words, write the
+ * words it still needs (a witness completion) instead of stopping. g_quiet: keep no op text (only
+ * acceptance matters). g_ret: the line is ret <value>; its value also reads the names the ended path
+ * would leave unread (unread, not fixed, depth >= g_rfloor). g_pick, g_nopt: the array chosen at the
+ * one array-name choice of the line, out of g_nopt. */
+static int g_fill, g_quiet, g_ret, g_rfloor, g_pick, g_nopt;
+/* the words a completion adds: lw is g_lw while a line is completed */
+#define MAX_FILL (8 * MAX_WORDS)
+static char *g_lw[MAX_FILL + 1];
+static char g_arena[1 << 16];
+static size_t g_an;
+static int g_gen; /* the first word the completion added, or -1 */
+static int fill_word(const char *w) {
+    size_t k = strlen(w) + 1;
+    if (ln >= MAX_FILL || g_an + k > sizeof g_arena) return fail("no completion fits in one line");
+    memcpy(g_arena + g_an, w, k);
+    if (g_gen < 0) g_gen = ln;
+    lw[ln++] = g_arena + g_an;
+    g_an += k;
+    return 0;
+}
+/* add the words of s (separated by single spaces) */
+static int fill_text(const char *s) {
+    char tmp[NAME_MAX_LEN + 1];
+    while (*s) {
+        size_t k = strcspn(s, " ");
+        if (k >= sizeof tmp) return fail("no completion fits in one line");
+        if (k) {
+            memcpy(tmp, s, k);
+            tmp[k] = 0;
+            TRY(fill_word(tmp));
+        }
+        s += k;
+        if (*s) s++;
+    }
+    return 0;
+}
 
 static int new_reg(Ty t) {
     if (nregs >= MAX_REGS) return fail("more than %d values in one function", MAX_REGS);
@@ -221,6 +260,7 @@ static int pop_scope(void) {
 /* ---- ops into the current block (block refs are written as @id@, numbered at the end) ---- */
 static int op(const char *fmt, ...) {
     if (cur < 0) return fail("this line can never run: the path already ended (ret, trap or break)");
+    if (g_quiet) return 0;
     Block *b = &blocks[cur];
     va_list ap;
     char tmp[512];
@@ -247,6 +287,7 @@ static int parse_lit(const char *w, int *neg, uint64_t *mag) {
         if (v > (UINT64_MAX - d) / 10) return 0;
         v = v * 10 + d;
     }
+    if (*neg && !v) return 0; /* -0 is written 0 */
     *mag = v;
     return 1;
 }
@@ -312,21 +353,26 @@ static int binds(Ty p, Ty a) {
 /* may own|edit|view (rf) be applied to an array of type a */
 static int ref_ok(int rf, Ty a) { return a.ref != R_NONE && (rf == R_SHARED || (rf == R_MUT && a.ref != R_SHARED) || a.ref == R_OWN); }
 
-/* parse a type at w[*i]: scalar word, or own|edit|view <scalar> <len> */
-static int parse_type(char **w, int n, int *i, Ty *t) {
-    if (*i >= n) return fail("a type is missing");
-    int s = scalar_word(w[*i]);
-    if (s >= 0) { *t = (Ty){R_NONE, s, 0}; (*i)++; return 0; }
-    int r = ref_word(w[*i]);
-    if (r < 0) return fail("'%s' is not a type (%s ..., or own/edit/view <type> <length>)", w[*i], GW[T_U32]);
-    if (*i + 2 >= n) return fail("an array type is %s <element type> <length>", REFW[r]);
-    s = scalar_word(w[*i + 1]);
-    if (s < 0) return fail("'%s' is not an element type", w[*i + 1]);
+/* parse a type at lw[lp]: scalar word, or own|edit|view <scalar> <len> (completing it in fill mode) */
+static int parse_type(Ty *t) {
+    if (lp >= ln) {
+        if (!g_fill) return fail("a type is missing");
+        TRY(fill_word(GW[T_U32]));
+    }
+    int s = scalar_word(lw[lp]);
+    if (s >= 0) { *t = (Ty){R_NONE, s, 0}; lp++; return 0; }
+    int r = ref_word(lw[lp]);
+    if (r < 0) return fail("'%s' is not a type (%s ..., or own/edit/view <type> <length>)", lw[lp], GW[T_U32]);
+    if (lp + 2 >= ln && !g_fill) return fail("an array type is %s <element type> <length>", REFW[r]);
+    if (lp + 1 >= ln) TRY(fill_word(GW[T_U32]));
+    s = scalar_word(lw[lp + 1]);
+    if (s < 0) return fail("'%s' is not an element type", lw[lp + 1]);
+    if (lp + 2 >= ln) TRY(fill_word("1"));
     int neg;
     uint64_t len;
-    if (!parse_lit(w[*i + 2], &neg, &len) || neg || len < 1 || len > 64) return fail("array length '%s' must be 1..64", w[*i + 2]);
+    if (!parse_lit(lw[lp + 2], &neg, &len) || neg || len < 1 || len > 64) return fail("array length '%s' must be 1..64", lw[lp + 2]);
     *t = (Ty){r, s, (int)len};
-    *i += 3;
+    lp += 3;
     return 0;
 }
 
@@ -403,76 +449,170 @@ static int skip_value(int p) {
     return -1;
 }
 
-/* ---- next: what may follow the prefix ---- */
-static int need_text(const char *fmt, ...) {
-    va_list ap;
-    char tmp[512];
-    va_start(ap, fmt);
-    vsnprintf(tmp, sizeof tmp, fmt, ap);
-    va_end(ap);
-    bput(&g_next, "%s", tmp);
-    return NEED;
+/* ---- completing a line: the words a value slot still needs (fill mode) ---- */
+/* a name no word of the line, no name in scope and no function uses */
+static const char *fresh_name(void) {
+    static char b[24];
+    for (int k = 0;; k++) {
+        snprintf(b, sizeof b, "w%d", k);
+        int used = find_name(b) || find_func(b) >= 0;
+        for (int i = 0; i < ln && !used; i++) used = !strcmp(lw[i], b);
+        if (!used) return b;
+    }
 }
-static unsigned array_elems(void) { /* element types of the visible arrays */
-    unsigned m = 0;
-    for (int i = 0; i < nnames; i++)
-        if (regs[names[i].reg].ref != R_NONE) m |= 1u << regs[names[i].reg].s;
-    return m;
-}
-/* a visible array name a with ref_ok(rf, a) (rf 0: the array itself) whose result fits w */
-static int array_fits(int rf, const Want *w) {
+/* R: a name the ended path would leave unread, so this ret line must read it */
+static char g_taken[MAX_NAMES]; /* names of R already written into the completion */
+static int in_r(int i) { return g_ret && !names[i].fixed && !names[i].read && names[i].depth >= g_rfloor && !g_taken[i]; }
+/* a visible array for a slot that takes the array w, one of R first (it is read there); -1 if none */
+static int pick_array(const Want *w) {
+    int best = -1;
     for (int i = 0; i < nnames; i++) {
         Ty t = regs[names[i].reg];
-        if (t.ref == R_NONE) continue;
-        if (rf == 0 ? want_ok(w, t) : ref_ok(rf, t) && want_ok(w, (Ty){rf, t.s, t.len})) return 1;
+        if (t.ref == R_NONE || !want_ok(w, t)) continue;
+        if (in_r(i)) return i;
+        if (best < 0) best = i;
     }
-    return 0;
+    return best;
 }
-static int callable_fits(int g, const Want *w) {
-    const Func *f = &funcs[g];
-    if (!f->has_ret || !want_ok(w, f->ret)) return 0;
-    for (int i = 0; i < f->np; i++) {
-        if (f->p[i].ref == R_NONE) continue;
-        Want pw = want_param(f->p[i]);
-        if (!array_fits(0, &pw) && !array_fits(R_OWN, &pw) && !array_fits(R_MUT, &pw) && !array_fits(R_SHARED, &pw)) return 0;
+/* may f be called here with every array parameter given a visible array */
+static int args_exist(const Func *f) {
+    for (int k = 0; k < f->np; k++) {
+        if (f->p[k].ref == R_NONE) continue;
+        Want pw = want_param(f->p[k]);
+        if (pick_array(&pw) < 0) return 0;
     }
     return 1;
 }
-static int op_fits(int o, const Want *w) {
-    if (o == OP_NEW) return w->top && (w->arr == A_ANY || (w->arr == A_EXACT && w->p.ref == R_OWN));
-    if (o == OP_GET) return (array_elems() & w->scal) != 0;
-    unsigned m = is_arith(o) || is_shift(o) ? S_INT : is_cmp(o) ? 1u : o == OP_NEG ? S_SIGNED : S_ALL;
-    return (m & w->scal) != 0;
+static int gives_int(int g) {
+    const Func *f = &funcs[g];
+    return find_callable(f->name) == g && f->has_ret && f->ret.ref == R_NONE && f->ret.s != T_BOOL && args_exist(f);
 }
-/* the value slot w: names, number and words that may start a value there */
-static int need_value(const Want *w, const char *extra) {
+/* a call of g as an int value of type s: bx (if set) goes to its first bool parameter; each array
+ * parameter takes an array of R that binds (else any that binds) */
+static void call_text(int g, int s, const char *bx, Buf *b) {
+    const Func *f = &funcs[g];
+    if (f->ret.s != s) bput(b, "%s ", GW[s]);
+    bput(b, "%s", f->name);
+    for (int k = 0; k < f->np; k++) {
+        Ty p = f->p[k];
+        if (p.ref == R_NONE) {
+            if (p.s == T_BOOL && bx) { bput(b, " %s", bx); bx = NULL; }
+            else bput(b, " %s", p.s == T_BOOL ? "true" : "0");
+            continue;
+        }
+        Want pw = want_param(p);
+        int i = pick_array(&pw);
+        g_taken[i] = 1;
+        bput(b, " %s", names[i].name);
+    }
+}
+static void join_terms(Buf *b, const char *opw, Buf *tl, int n, const char *base) {
+    if (!n) { bput(b, "%s", base); return; }
+    char *p = tl->p;
+    for (int k = 0; k < n; k++) {
+        char *e = strchr(p, '\n');
+        *e = 0;
+        if (k < n - 1) bput(b, "%s %s ", opw, p);
+        else bput(b, "%s", p);
+        p = e + 1;
+    }
+}
+/* a value of scalar type s that reads every name of R it can (base: the value when R is empty).
+ * bool reads everything: ints by eq r r, arrays by get. An int reads ints by conversion, arrays of
+ * ints by get, and bools only through a function that gives an int: its bool parameter, or an array
+ * parameter for an array of bools. */
+static void gen_scalar(int s, const char *base, Buf *b) {
+    Buf tl = {0};
+    int n = 0, needb = 0;
+    for (int i = 0; i < nnames; i++) {
+        if (!in_r(i)) continue;
+        Ty t = regs[names[i].reg];
+        const char *nm = names[i].name;
+        if (s == T_BOOL) {
+            if (t.ref == R_NONE && t.s == T_BOOL) bput(&tl, "%s\n", nm);
+            else if (t.ref == R_NONE) bput(&tl, "eq %s %s\n", nm, nm);
+            else if (t.s == T_BOOL) bput(&tl, "get %s 0\n", nm);
+            else bput(&tl, "eq get %s 0 0\n", nm);
+        } else if (t.s == T_BOOL) { needb = 1; continue; }
+        else if (t.ref == R_NONE) { if (t.s == s) bput(&tl, "%s\n", nm); else bput(&tl, "%s %s\n", GW[s], nm); }
+        else { if (t.s == s) bput(&tl, "get %s 0\n", nm); else bput(&tl, "%s get %s 0\n", GW[s], nm); }
+        g_taken[i] = 1;
+        n++;
+    }
+    if (needb) {
+        int h = -1;
+        for (int g = 0; g < nfuncs && h < 0; g++)
+            if (gives_int(g))
+                for (int k = 0; k < funcs[g].np; k++)
+                    if (funcs[g].p[k].ref == R_NONE && funcs[g].p[k].s == T_BOOL) { h = g; break; }
+        if (h >= 0) { /* every bool of R goes into h's bool parameter */
+            Buf bx = {0};
+            gen_scalar(T_BOOL, "true", &bx);
+            call_text(h, s, bx.p, &tl);
+            bput(&tl, "\n");
+            free(bx.p);
+            n++;
+        } else /* arrays of bools of R, each through an array parameter that binds it */
+            for (int i = 0; i < nnames; i++) {
+                if (!in_r(i) || regs[names[i].reg].ref == R_NONE) continue;
+                Ty t = regs[names[i].reg];
+                for (int g = 0; g < nfuncs && in_r(i); g++) {
+                    if (!gives_int(g)) continue;
+                    for (int k = 0; k < funcs[g].np; k++)
+                        if (funcs[g].p[k].ref != R_NONE && binds(funcs[g].p[k], t)) {
+                            call_text(g, s, NULL, &tl); /* takes one more array of R */
+                            bput(&tl, "\n");
+                            n++;
+                            g--; /* again, until i is read */
+                            break;
+                        }
+                }
+            }
+    }
+    join_terms(b, s == T_BOOL ? "and" : "add", &tl, n, base);
+    free(tl.p);
+}
+/* the words of one value for the slot w */
+static int gen_value(const Want *w) {
+    memset(g_taken, 0, sizeof g_taken);
     Buf b = {0};
-    int any = 0;
-    bput(&b, "names:");
-    for (int i = 0; i < nnames; i++)
-        if (want_ok(w, regs[names[i].reg])) { bput(&b, " %s", names[i].name); any = 1; }
-    bput(&b, "\n");
-    if (w->lit == L_TYPED && w->lt.s != T_BOOL) { bput(&b, "number: %s\n", GW[w->lt.s]); any = 1; }
-    if (w->lit == L_OPEN && (w->scal & S_INT)) { bput(&b, "number: any (it takes the type of the other value)\n"); any = 1; }
-    bput(&b, "words:");
-    if ((w->lit == L_TYPED && w->lt.s == T_BOOL) || (w->lit == L_OPEN && (w->scal & 1))) { bput(&b, " true false"); any = 1; }
-    for (int o = 0; o < OP_N; o++)
-        if (op_fits(o, w)) { bput(&b, " %s", OPW[o]); any = 1; }
-    for (int s = 0; s < T_NSCALAR; s++)
-        if (w->scal >> s & 1) { bput(&b, " %s", GW[s]); any = 1; }
-    for (int s = 1; s < T_NSCALAR; s++) /* the IR names are accepted too */
-        if (w->scal >> s & 1) bput(&b, " %s", IRN[s]);
-    for (int rf = R_OWN; rf <= R_SHARED; rf++)
-        if (array_fits(rf, w)) { bput(&b, " %s", REFW[rf]); any = 1; }
-    for (int g = 0; g < nfuncs; g++)
-        if (find_callable(funcs[g].name) == g && callable_fits(g, w)) { bput(&b, " %s", funcs[g].name); any = 1; }
-    if (any) bput(&b, " (");
-    if (extra) bput(&b, " %s", extra);
-    bput(&b, "\n");
-    if (!any) { free(b.p); return fail("no value of a fitting type can be written here"); }
-    bput(&g_next, "%s", b.p);
+    int r = 0;
+    if (!w->scal) { /* an array: a name, own/edit/view of a name, or new (on its own line) */
+        int i = pick_array(w);
+        if (i >= 0) bput(&b, "%s", names[i].name);
+        for (int rf = R_OWN; i < 0 && rf <= R_SHARED; rf++)
+            for (int k = 0; k < nnames && i < 0; k++) {
+                Ty t = regs[names[k].reg];
+                if (ref_ok(rf, t) && want_ok(w, (Ty){rf, t.s, t.len})) { i = k; bput(&b, "%s %s", REFW[rf], names[k].name); }
+            }
+        if (i < 0 && w->top && w->arr == A_EXACT && w->p.ref == R_OWN)
+            bput(&b, "new %s %d %s", GW[w->p.s], w->p.len, w->p.s == T_BOOL ? "false" : "0");
+        else if (i < 0) r = fail("no array of a fitting type is in scope here");
+    } else {
+        unsigned m = w->scal;
+        int s = -1, nr = 0;
+        for (int i = 0; i < nnames; i++) nr += in_r(i);
+        if (nr && (m & 1)) s = T_BOOL; /* bool reads every kind of name */
+        else if (w->lit == L_TYPED && (m >> w->lt.s & 1)) s = w->lt.s;
+        else if (m >> T_U32 & 1) s = T_U32;
+        else for (int k = 1; k < T_NSCALAR && s < 0; k++) if (m >> k & 1) s = k;
+        if (s < 0) s = T_BOOL;
+        const char *lit = s == T_BOOL ? "true" : "0";
+        char base[32];
+        if (w->lit == L_TYPED && w->lt.s == s) snprintf(base, sizeof base, "%s", lit);
+        else snprintf(base, sizeof base, "%s %s", GW[s], lit);
+        gen_scalar(s, base, &b);
+    }
+    if (r == 0) r = fill_text(b.p);
     free(b.p);
-    return NEED;
+    return r;
+}
+/* the depth from which the names must be read before a ret here: the innermost block, and the blocks
+ * around it while closing one leaves the path ended (an if whose both branches ended) */
+static int chain_floor(void) {
+    int k = nframes - 1;
+    while (k > 0 && frames[k].kind == F_IF && frames[k].has_else && frames[k].join < 0) k--;
+    return frames[k].depth;
 }
 
 /* ---- values ---- */
@@ -526,25 +666,26 @@ static int slot(const Want *w, int dst, Val *v, int head, int k, int arity) {
     return r;
 }
 enum { AN_GET, AN_PUT, AN_FREE, AN_REF };
-/* an array name after the word at head (arity: the values head takes); for next, the names that
- * fit: get (element type in want), put (own or edit), free (own), own|edit|view rf (result in want) */
+/* an array name after the word at head (arity: the values head takes) that fits: get (element type
+ * in want), put (own or edit), free (own), own|edit|view rf (result in want). In fill mode a missing
+ * name is chosen: one of R first; the first such choice of a line is the one g_pick walks through */
 static int array_name(int head, int arity, int kind, int rf, const Want *want, int *reg, Ty *t) {
     if (lp >= ln) {
-        if (!partial) return fail("%s has 0 values after it; it takes %d", lw[head], arity);
-        Buf b = {0};
-        int any = 0;
-        bput(&b, "names:");
-        for (int i = 0; i < nnames; i++) {
-            Ty a = regs[names[i].reg];
-            int ok = a.ref != R_NONE &&
-                     (kind == AN_GET ? (want->scal >> a.s & 1) : kind == AN_PUT ? a.ref != R_SHARED :
-                      kind == AN_FREE ? a.ref == R_OWN : ref_ok(rf, a) && want_ok(want, (Ty){rf, a.s, a.len}));
-            if (ok) { bput(&b, " %s", names[i].name); any = 1; }
-        }
-        bput(&b, "\n");
-        if (any) bput(&g_next, "%s", b.p);
-        free(b.p);
-        return any ? NEED : fail("no array of a fitting type is in scope here");
+        if (!g_fill) return fail("%s has 0 values after it; it takes %d", lw[head], arity);
+        int cand[MAX_NAMES], nc = 0;
+        memset(g_taken, 0, sizeof g_taken);
+        for (int pass = 0; pass < 2; pass++)
+            for (int i = 0; i < nnames; i++) {
+                Ty a = regs[names[i].reg];
+                int ok = a.ref != R_NONE &&
+                         (kind == AN_GET ? (want->scal >> a.s & 1) : kind == AN_PUT ? a.ref != R_SHARED :
+                          kind == AN_FREE ? a.ref == R_OWN : ref_ok(rf, a) && want_ok(want, (Ty){rf, a.s, a.len}));
+                if (ok && in_r(i) == !pass) cand[nc++] = i;
+            }
+        if (!nc) return fail("no array of a fitting type is in scope here");
+        int k = 0;
+        if (nc > 1 && !g_nopt) { g_nopt = nc; k = g_pick % nc; }
+        TRY(fill_word(names[cand[k]].name));
     }
     const char *w = lw[lp];
     Name *nm = find_name(w);
@@ -580,13 +721,17 @@ static int call_args(const Func *f, int head, Buf *a) {
  * right. dst >= 0: write it there (its type must match); dst == -1: a fresh register; dst == -2: a
  * bare name or number uses its own register (no copy), anything else a fresh hidden register.
  * want: what the slot accepts (a bare number is typed by want->lt when L_TYPED, else left untyped
- * for the caller). Returns 0, MISSING (no value starts here), NEED (next) or -1.
+ * for the caller). Returns 0, MISSING (no value starts here) or -1. In fill mode a value that is not
+ * written yet is completed (gen_value).
  */
 static int value(const Want *want, int dst, Val *v) {
     memset(v, 0, sizeof *v);
     v->head = v->word = v->reg = -1;
     v->a = lp;
-    if (lp >= ln) return partial ? need_value(want, NULL) : MISSING;
+    if (lp >= ln) {
+        if (!g_fill) return MISSING;
+        TRY(gen_value(want));
+    }
     const char *t = lw[lp];
     if (!strcmp(t, ")")) return pdepth ? MISSING : fail("')' has no matching '('");
     if (is_term(t)) return MISSING;
@@ -600,7 +745,10 @@ static int value(const Want *want, int dst, Val *v) {
             return fail("a value is missing after '('");
         }
         TRY(r);
-        if (lp >= ln) return partial ? need_text("words: )\n") : fail("'(' has no matching ')'");
+        if (lp >= ln) {
+            if (!g_fill) return fail("'(' has no matching ')'");
+            TRY(fill_word(")"));
+        }
         if (strcmp(lw[lp], ")")) return extra_fail(v, 1);
         lp++;
         v->paren = 1;
@@ -617,6 +765,8 @@ static int value(const Want *want, int dst, Val *v) {
         v->konst = 1;
         return leaf(v, r, want->lt, dst);
     }
+    if (isdigit((unsigned char)t[0]) || t[0] == '-')
+        return fail("'%s' is not a number (digits, an optional minus sign, no leading zeros, no -0)", t);
     Name *nm = find_name(t);
     if (nm) {
         lp++;
@@ -698,14 +848,16 @@ static int value(const Want *want, int dst, Val *v) {
         v->arity = 3;
         if (!want->top) return fail("new makes an array for a name: write it on its own line (x = new ...)");
         if (lp >= ln) {
-            if (!partial) return fail("new has 0 values after it; it takes 3");
-            return need_text("words: bool uchar ushort uint ulong byte short int long u8 u16 u32 u64 i8 i16 i32 i64\n");
+            if (!g_fill) return fail("new has 0 values after it; it takes 3");
+            TRY(fill_word(GW[want->arr == A_EXACT ? want->p.s : T_U32]));
         }
         if (scalar_word(lw[lp]) < 0) return fail("'%s' is not an element type", lw[lp]);
         Ty et = {R_NONE, scalar_word(lw[lp++]), 0};
         if (lp >= ln) {
-            if (!partial) return fail("new has 1 value after it; it takes 3");
-            return need_text("number: 1..64\n");
+            if (!g_fill) return fail("new has 1 value after it; it takes 3");
+            char lb[8];
+            snprintf(lb, sizeof lb, "%d", want->arr == A_EXACT ? want->p.len : 1);
+            TRY(fill_word(lb));
         }
         int neg;
         uint64_t len;
@@ -759,15 +911,15 @@ done:
     return 0;
 }
 
-/* the end of a statement: nothing more on the line (more: other words that may follow, for next) */
-static int line_end(const Val *v, const char *more) {
-    if (lp >= ln) return partial ? need_text("words: %s(newline)\n", more) : 0;
+/* the end of a statement: nothing more on the line */
+static int line_end(const Val *v) {
+    if (lp >= ln) return 0;
     return extra_fail(v, 0);
 }
 /* a statement word that stands alone (end, else, break) */
 static int alone(const char *w) {
     if (lp < ln) return fail("%s stands alone", w);
-    return partial ? need_text("words: (newline)\n") : 0;
+    return 0;
 }
 /* a condition: any value giving bool */
 static int cond(Val *c, const char *what) {
@@ -827,42 +979,48 @@ static void end_function(void) {
     bput(&out, "\n   ]}");
 }
 
-static int fn_line(char **w, int n) {
+static int fn_line(void) {
     if (in_fn) return fail("fn inside a function: close the function with end first");
     if (nfuncs >= MAX_FUNCS) return fail("more than %d functions", MAX_FUNCS);
-    if (n < 3) return fail("fn <name> <param> <type> ... to <type or void>");
-    if (!valid_ident(w[1]) || reserved(w[1])) return fail("'%s' cannot be a function name", w[1]);
-    if (find_func(w[1]) >= 0) return fail("function '%s' is already defined", w[1]);
+    if (ln < 3 && !g_fill) return fail("fn <name> <param> <type> ... to <type or void>");
+    if (ln < 2) TRY(fill_word(fresh_name()));
+    if (!valid_ident(lw[1]) || reserved(lw[1])) return fail("'%s' cannot be a function name", lw[1]);
+    if (find_func(lw[1]) >= 0) return fail("function '%s' is already defined", lw[1]);
     Func *f = &funcs[nfuncs];
     memset(f, 0, sizeof *f);
-    snprintf(f->name, sizeof f->name, "%s", w[1]);
+    snprintf(f->name, sizeof f->name, "%s", lw[1]);
     nregs = nnames = nconsts = nblocks = norder = nframes = 0;
     depth = 0;
     Frame *fr = push(F_FN);
     if (!fr) return -1;
-    int i = 2;
-    while (i < n && strcmp(w[i], "to")) {
+    lp = 2;
+    for (;;) {
+        if (lp >= ln) {
+            if (!g_fill) return fail("fn needs 'to <type>' or 'to void' at the end");
+            TRY(fill_word("to"));
+        }
+        if (!strcmp(lw[lp], "to")) break;
         if (f->np >= MAX_PARAMS) return fail("more than %d parameters", MAX_PARAMS);
-        const char *pn = w[i++];
+        const char *pn = lw[lp++];
         Ty t;
-        TRY(parse_type(w, n, &i, &t));
+        TRY(parse_type(&t));
         f->p[f->np++] = t;
         int r = new_reg(t);
         TRY(r);
         if (find_name(pn)) return fail("parameter '%s' is named twice", pn);
         TRY(bind(pn, r, 2));
     }
-    if (i >= n) return fail("fn needs 'to <type>' or 'to void' at the end");
-    i++;
-    if (i < n && !strcmp(w[i], "void")) { f->has_ret = 0; i++; }
+    lp++;
+    if (lp >= ln && g_fill) TRY(fill_word("void"));
+    if (lp < ln && !strcmp(lw[lp], "void")) { f->has_ret = 0; lp++; }
     else {
         Ty t;
-        TRY(parse_type(w, n, &i, &t));
+        TRY(parse_type(&t));
         if (t.ref != R_NONE) return fail("a function returns a number or bool, not an array");
         f->has_ret = 1;
         f->ret = t;
     }
-    if (i != n) return fail("'%s' after the return type", w[i]);
+    if (lp != ln) return fail("'%s' after the return type", lw[lp]);
     nparams = nregs;
     nfuncs++;
     in_fn = 1;
@@ -920,13 +1078,16 @@ static int guarded_loop(int is_for, int s, const Val *count, const char *forname
         c = cv.reg;
         if (lp < ln && !strcmp(lw[lp], "bound")) {
             lp++;
-            if (lp >= ln) return partial ? need_text("number: 1..1000000\n") : fail("bound needs a number 1..1000000");
+            if (lp >= ln) {
+                if (!g_fill) return fail("bound needs a number 1..1000000");
+                TRY(fill_word("1"));
+            }
             bound = lw[lp++];
             int neg;
             uint64_t bv;
             if (!parse_lit(bound, &neg, &bv) || neg || bv < 1 || bv > 1000000) return fail("bound '%s' must be 1..1000000", bound);
-            TRY(line_end(NULL, ""));
-        } else TRY(line_end(&cv, "bound "));
+            TRY(line_end(NULL));
+        } else TRY(line_end(&cv));
     }
     int lim = lit_reg(bound, u64);
     TRY(lim);
@@ -951,37 +1112,43 @@ static int guarded_loop(int is_for, int s, const Val *count, const char *forname
 }
 
 /* a for count that is a plain number, possibly in brackets: ( ( 8 ) ). Returns the number's word
- * index and sets *owed to the ')' still missing (above 0 only in next mode, when the prefix ends
- * inside the brackets); -1 when the count is any other value. */
-static int count_number(int *owed) {
+ * index (in fill mode closing the brackets left open), or -1 when the count is any other value. */
+static int count_number(void) {
     int i = lp, k = 0;
     while (i < ln && !strcmp(lw[i], "(")) { i++; k++; }
     if (i >= ln || !is_lit(lw[i])) return -1;
     int j = i + 1, c = 0;
     while (j < ln && c < k && !strcmp(lw[j], ")")) { j++; c++; }
-    if (j != ln || (c < k && !partial)) return -1;
-    *owed = k - c;
+    if (j == ln && g_fill)
+        for (; c < k; c++, j++)
+            if (fill_word(")") < 0) return -1;
+    if (j != ln || c < k) return -1;
     return i;
 }
 static int for_line(void) {
-    if (lp >= ln) return partial ? need_text("new-name: any name not in use\n") : fail("for <name> <type> <count>");
+    if (lp >= ln) {
+        if (!g_fill) return fail("for <name> <type> <count>");
+        TRY(fill_word(fresh_name()));
+    }
     const char *nm = lw[lp++];
     TRY(check_new_name(nm));
-    if (lp >= ln) return partial ? need_text("words: uchar ushort uint ulong byte short int long u8 u16 u32 u64 i8 i16 i32 i64\n") : fail("for <name> <type> <count>");
+    if (lp >= ln) {
+        if (!g_fill) return fail("for <name> <type> <count>");
+        TRY(fill_word(GW[T_U32]));
+    }
     int s = scalar_word(lw[lp]);
     if (s < 0 || s == T_BOOL) return fail("'%s' is not a whole-number type", lw[lp]);
     lp++;
     Ty t = {R_NONE, s, 0};
     if (cur < 0) return fail("this line can never run: the path already ended (ret, trap or break)");
-    int owed, ki = count_number(&owed);
+    int ki = count_number();
     if (ki >= 0) { /* for <name> <type> <count number>: name = 0, 1, ... count-1 (brackets change nothing) */
         const char *kw = lw[ki];
         int neg;
         uint64_t kv;
         if (!parse_lit(kw, &neg, &kv) || neg || kv > 1000000) return fail("count '%s' must be 0..1000000", kw);
-        if (owed) return need_text("words: )\n");
         lp = ln;
-        TRY(line_end(NULL, ""));
+        TRY(line_end(NULL));
         int zero = lit_reg("0", t);
         TRY(zero);
         int k = lit_reg(kw, t);
@@ -1016,12 +1183,12 @@ static int for_line(void) {
     if (r == MISSING) return fail("for <name> <type> <count>");
     TRY(r);
     if (!teq(c.t, t)) return fail("count '%s' is %s, not %s", span(c.a, c.b), tname(c.t), tname(t));
-    TRY(line_end(&c, ""));
+    TRY(line_end(&c));
     return guarded_loop(1, s, &c, nm);
 }
 
 static int stmt(void) {
-    if (!strcmp(lw[0], "fn")) return fn_line(lw, ln);
+    if (!strcmp(lw[0], "fn")) return fn_line();
     if (!in_fn) return fail("'%s' outside a function (start one with fn)", lw[0]);
     Func *f = &funcs[nfuncs - 1];
     const char *w0 = lw[0];
@@ -1059,7 +1226,7 @@ static int stmt(void) {
                 TRY(op("\"op\": \"ret\""));
                 cur = -1;
             }
-            end_function();
+            if (!g_quiet) end_function();
             in_fn = 0;
             break;
         }
@@ -1082,7 +1249,7 @@ static int stmt(void) {
     if (!strcmp(w0, "if")) {
         Val c;
         TRY(cond(&c, "if"));
-        TRY(line_end(&c, ""));
+        TRY(line_end(&c));
         int th = new_block(), el = new_block();
         TRY(th);
         TRY(el);
@@ -1108,30 +1275,32 @@ static int stmt(void) {
     if (!strcmp(w0, "ret")) {
         if (!f->has_ret) {
             if (lp < ln) return fail("%s returns nothing: ret stands alone", f->name);
-            if (partial) return need_text("words: (newline)\n");
             TRY(op("\"op\": \"ret\""));
             cur = -1;
             return 0;
         }
+        if (g_fill) { g_ret = 1; g_rfloor = chain_floor(); }
         Want w = want_type(f->ret);
         Val v;
         int r = value(&w, -2, &v);
         if (r == MISSING) return fail("%s returns %s: ret needs a value", f->name, tname(f->ret));
         TRY(r);
         if (!teq(v.t, f->ret)) return fail("this is %s; %s returns %s", tname(v.t), f->name, tname(f->ret));
-        TRY(line_end(&v, ""));
+        TRY(line_end(&v));
         TRY(op("\"op\": \"ret\", \"a\": %d", v.reg));
         cur = -1;
         return 0;
     }
     if (!strcmp(w0, "trap")) {
-        if (lp >= ln) return partial ? need_text("number: 1..14\n") : fail("trap <code 1..14>");
+        if (lp >= ln) {
+            if (!g_fill) return fail("trap <code 1..14>");
+            TRY(fill_word("1"));
+        }
         int neg;
         uint64_t c;
         if (!parse_lit(lw[lp], &neg, &c) || neg || c < 1 || c > 14) return fail("trap <code 1..14>");
         lp++;
         if (lp < ln) return fail("trap <code 1..14>");
-        if (partial) return need_text("words: (newline)\n");
         /* a trap ends the path, as ret does; the IR block still needs a terminator, so a ret that is
          * never reached follows (with a zero of the return type) */
         TRY(op("\"op\": \"trap\", \"code\": %" PRIu64, c));
@@ -1156,7 +1325,7 @@ static int stmt(void) {
         TRY(slot(&vw, -2, &v, 0, 2, 3));
         if (!teq(v.t, vw.lt)) return fail("'%s' is %s; the array holds %s", span(v.a, v.b), tname(v.t), tname(vw.lt));
         Val whole = {.head = 0, .arity = 3};
-        TRY(line_end(&whole, ""));
+        TRY(line_end(&whole));
         return op("\"op\": \"store\", \"arr\": %d, \"index\": %d, \"value\": %d", a, i.reg, v.reg);
     }
     if (!strcmp(w0, "free")) {
@@ -1166,7 +1335,7 @@ static int stmt(void) {
         TRY(array_name(0, 1, AN_FREE, 0, &none, &a, &ta));
         if (ta.ref != R_OWN) return fail("'%s' is not an own array", lw[lp - 1]);
         Val whole = {.head = 0, .arity = 1};
-        TRY(line_end(&whole, ""));
+        TRY(line_end(&whole));
         return op("\"op\": \"release\", \"arr\": %d", a);
     }
     if (find_func(w0) >= 0 && find_callable(w0) < 0) return fail("%s cannot call itself (calls go to earlier functions only)", w0);
@@ -1177,27 +1346,26 @@ static int stmt(void) {
         Buf a = {0};
         Val whole = {.head = 0, .arity = cf->np};
         int r = call_args(cf, 0, &a);
-        if (r >= 0) r = line_end(&whole, "");
+        if (r >= 0) r = line_end(&whole);
         if (r >= 0) r = op("\"op\": \"call\", \"func\": \"%s\", \"args\": [%s]", cf->name, a.p ? a.p : "");
         free(a.p);
         return r;
     }
     /* <name> = <value>, or <name> <value> (the short form, "=" left out) */
     Name *nm = find_name(w0);
-    if (ln == 1 && !partial)
+    if (ln == 1 && !g_fill)
         return fail("'%s' does not start a line (a name =, if, while, for, ret, put, free, trap, break, else, end, or a call)", w0);
     if (nm && nm->fixed == 1) return fail("'%s' is the loop counter; it cannot be assigned", w0);
     if (!nm && (find_func(w0) >= 0 || reserved(w0) || !valid_ident(w0))) return fail("'%s' cannot be a name", w0);
     Want w = {S_ALL, A_ANY, {0}, L_NO, {0}, 1};
     if (nm) { w = want_type(regs[nm->reg]); w.top = 1; }
     if (lp < ln && !strcmp(lw[lp], "=")) lp++;
-    else if (partial && lp >= ln) return need_value(&w, "=");
     Val v;
     int r = value(&w, nm ? nm->reg : -1, &v);
     if (r == MISSING) return fail("a value is missing after '%s'", span(0, lp));
     TRY(r);
     if (v.lit) return fail("'%s': the type of this number is unknown; write <type> %s", lw[v.word], lw[v.word]);
-    TRY(line_end(&v, ""));
+    TRY(line_end(&v));
     if (!nm) TRY(bind(w0, v.reg, 0));
     return 0;
 }
@@ -1247,7 +1415,7 @@ static int run(char *src, int keep_tail, char **tail) {
     char *p = src;
     g_line = 0;
     out.n = 0;
-    partial = 0;
+
     bput(&out, "{\"functions\": [");
     for (;;) {
         char *nl = strchr(p, '\n');
@@ -1274,100 +1442,408 @@ static int run(char *src, int keep_tail, char **tail) {
     return 0;
 }
 
-/* omegese next: which words may start or continue the unfinished line */
-static int next_words(char *src) {
-    char *tail = NULL;
-    if (run(src, 1, &tail) < 0) { printf("REFUSED omegese: %s\n", g_err); return 1; }
+/* ---- next and complete (OMEGESE.md section 6) ----
+ * The prefix is its complete lines (the head) and the unfinished line: its complete words W and the
+ * word U still being written (empty after a space, a bracket, or at a line start). An item (a word,
+ * a class of names or numbers, a bracket, a space, a newline, the end of input) is legal when some
+ * text through it completes the prefix into a program emit accepts. Each item is decided by a
+ * witness: the line is completed in fill mode (the words it still needs; a ret line also reads the
+ * names the ended path would leave unread), everything is closed (close_all), and the judge parses
+ * that line and those lines again, in normal mode, from the state after the head. The judge is the
+ * parser emit runs, so an item printed is always legal; an item is missed only where the witness
+ * finds no completion although one exists (the limits in OMEGESE.md section 6). */
+typedef __int128 i128;
+
+/* the state after the head; every witness starts from it */
+static struct { int nfuncs, in_fn, nregs, nparams, nnames, depth, nconsts, nblocks, norder, cur, nframes; } S0;
+static Func S0f[MAX_FUNCS];
+static Ty S0r[MAX_REGS];
+static Name S0n[MAX_NAMES];
+static Const S0k[MAX_CONSTS];
+static Block S0b[MAX_BLOCKS];
+static Frame S0fr[MAX_FRAMES];
+#define COPY(dst, src, n) memcpy(dst, src, sizeof (src)[0] * (size_t)(n))
+static void save(void) {
+    S0.nfuncs = nfuncs; S0.in_fn = in_fn; S0.nregs = nregs; S0.nparams = nparams; S0.nnames = nnames;
+    S0.depth = depth; S0.nconsts = nconsts; S0.nblocks = nblocks; S0.norder = norder; S0.cur = cur;
+    S0.nframes = nframes;
+    COPY(S0f, funcs, nfuncs); COPY(S0r, regs, nregs); COPY(S0n, names, nnames);
+    COPY(S0k, consts, nconsts); COPY(S0b, blocks, nblocks); COPY(S0fr, frames, nframes);
+}
+static void restore(void) {
+    nfuncs = S0.nfuncs; in_fn = S0.in_fn; nregs = S0.nregs; nparams = S0.nparams; nnames = S0.nnames;
+    depth = S0.depth; nconsts = S0.nconsts; nblocks = S0.nblocks; norder = S0.norder; cur = S0.cur;
+    nframes = S0.nframes;
+    COPY(funcs, S0f, nfuncs); COPY(regs, S0r, nregs); COPY(names, S0n, nnames);
+    COPY(consts, S0k, nconsts); COPY(blocks, S0b, nblocks); COPY(frames, S0fr, nframes);
+}
+
+static char *W[MAX_WORDS + 1]; /* the complete words of the unfinished line */
+static int nW, g_tline;        /* g_tline: its line number */
+static const char *U = "";     /* the word being written */
+static Buf g_close;            /* the closing lines of the last witness */
+static int g_fl, g_phase;      /* its line: g_lw[0..g_fl); g_phase: it failed after the completion began */
+
+/* one more line, parsed in normal mode (its words are kept until the next call) */
+static int run_line(const char *text) {
+    static char buf[256];
+    static char *w[MAX_WORDS + 1];
+    snprintf(buf, sizeof buf, "%s", text);
     g_line++;
-    char *w[MAX_WORDS + 1];
-    int n = split(tail, w);
-    if (n < 0) { printf("REFUSED omegese: %s\n", g_err); return 1; }
-    if (!in_fn) {
-        if (n > 0 && strcmp(w[0], "fn")) { printf("REFUSED omegese: a program starts with fn\n"); return 1; }
-        printf(n == 0 ? "words: fn\n" : "words: (finish the fn line)\n");
-        return 0;
-    }
-    if (n == 0 && cur < 0) { /* the path ended (ret, trap or break): only closing words may follow */
-        Frame *fr = &frames[nframes - 1];
-        printf("words:%s end\n", fr->kind == F_IF && !fr->has_else ? " else" : "");
-        return 0;
-    }
-    if (cur < 0 && strcmp(w[0], "end") && strcmp(w[0], "else")) { printf("REFUSED omegese: this line can never run: the path already ended (ret, trap or break)\n"); return 1; }
-    if (n == 0) {
-        printf("words: if while for ret put free trap");
-        int loop = 0;
-        for (int k = 0; k < nframes; k++) if (frames[k].kind == F_WHILE || frames[k].kind == F_FOR) loop = 1;
-        if (loop) printf(" break");
-        if (frames[nframes - 1].kind == F_IF && !frames[nframes - 1].has_else) printf(" else");
-        if (!(frames[nframes - 1].kind == F_FN && funcs[nfuncs - 1].has_ret)) printf(" end");
-        for (int i = 0; i < nfuncs - 1; i++) if (!funcs[i].has_ret) printf(" %s", funcs[i].name);
-        printf("\n");
-        printf("assign:");
-        for (int i = 0; i < nnames; i++) if (names[i].fixed != 1) printf(" %s", names[i].name);
-        printf("\nnew-name: any name not in use\n");
-        return 0;
-    }
-    /* the unfinished line, read in next mode: it stops where the prefix ends */
+    int n = split(buf, w);
+    if (n <= 0) return n;
     lw = w;
     ln = n;
     lp = 0;
     pdepth = 0;
-    partial = 1;
-    g_next.n = 0;
-    int r = stmt();
-    if (r == NEED) { fputs(g_next.p, stdout); return 0; }
-    if (r < 0) { printf("REFUSED omegese: %s\n", g_err); return 1; }
-    printf("words: (newline)\n"); /* a line complete without a newline (fn) */
+    return stmt();
+}
+/* close everything from a line start: each unread name is read (x = x), a function that owes a
+ * value returns one, every block ends, and a function is written if there is none */
+static int close_all(Buf *txt) {
+    for (int guard = 0; guard < 2 * (MAX_NAMES + MAX_FRAMES) + 2; guard++) {
+        char line[160];
+        if (!in_fn) {
+            if (nfuncs > 0) break;
+            snprintf(line, sizeof line, "fn %s to void", fresh_name());
+        } else if (cur >= 0) {
+            int u = -1;
+            for (int i = 0; i < nnames && u < 0; i++)
+                if (!names[i].fixed && !names[i].read && names[i].depth >= depth) u = i;
+            if (u >= 0) snprintf(line, sizeof line, "%s = %s", names[u].name, names[u].name);
+            else if (frames[nframes - 1].kind == F_FN && funcs[nfuncs - 1].has_ret)
+                snprintf(line, sizeof line, "ret %s", funcs[nfuncs - 1].ret.s == T_BOOL ? "false" : "0");
+            else snprintf(line, sizeof line, "end");
+        } else snprintf(line, sizeof line, "end");
+        TRY(run_line(line));
+        bput(txt, "%s\n", line);
+    }
+    return 0;
+}
+/* the judge: the completed line (g_lw[0..nw)) and the closing lines, parsed in normal mode from the
+ * state after the head, then the checks at the end of input */
+static int judge(int nw, const char *closing) {
+    restore();
+    lw = g_lw;
+    ln = nw;
+    lp = 0;
+    pdepth = 0;
+    g_fill = 0;
+    g_line = g_tline;
+    if (ln > MAX_WORDS) return fail("more than %d words on one line", MAX_WORDS);
+    if (ln > 0) TRY(stmt());
+    for (const char *p = closing; *p;) {
+        const char *e = strchr(p, '\n');
+        char line[160];
+        snprintf(line, sizeof line, "%.*s", (int)(e - p), p);
+        TRY(run_line(line));
+        p = e + 1;
+    }
+    g_line++;
+    if (in_fn) return fail("the input ends inside function '%s' (missing end)", funcs[nfuncs - 1].name);
+    if (nfuncs == 0) return fail("no function");
+    return 0;
+}
+/* a witness for the line g_lw[0..nw): completed (fill) or as it is, then closed and judged; the one
+ * array-name choice of the line is tried in turn (g_pick) */
+static int witness(int nw, int fill) {
+    int r = -1;
+    for (g_pick = 0; g_pick < 64; g_pick++) {
+        restore();
+        g_an = 0;
+        g_gen = -1;
+        g_nopt = 0;
+        g_ret = 0;
+        lw = g_lw;
+        ln = nw;
+        lp = 0;
+        pdepth = 0;
+        g_fill = fill;
+        g_line = g_tline;
+        r = ln > 0 ? stmt() : 0;
+        g_fill = 0;
+        g_ret = 0;
+        g_phase = g_gen >= 0;
+        g_fl = ln;
+        g_close.n = 0;
+        if (g_close.p) g_close.p[0] = 0;
+        if (r == 0) {
+            g_phase = 1;
+            r = close_all(&g_close);
+        }
+        if (r == 0) r = judge(g_fl, g_close.p ? g_close.p : "");
+        if (r == 0 || g_pick + 1 >= g_nopt) break;
+    }
+    return r;
+}
+/* is the line W, then a, then b (each may be NULL) legal: completed (fill) or ending there */
+static int legal(const char *a, const char *b, int fill) {
+    int n = 0;
+    for (; n < nW; n++) g_lw[n] = W[n];
+    if (a) g_lw[n++] = (char *)a;
+    if (b) g_lw[n++] = (char *)b;
+    return witness(n, fill) == 0;
+}
+/* may the input end here: the line as it is, then the checks at the end of input */
+static int legal_eof(void) {
+    restore();
+    int n = 0;
+    for (; n < nW; n++) g_lw[n] = W[n];
+    if (*U) g_lw[n++] = (char *)U;
+    lw = g_lw;
+    ln = n;
+    lp = 0;
+    pdepth = 0;
+    g_line = g_tline;
+    if (ln > 0 && stmt() < 0) return 0;
+    return !in_fn && nfuncs > 0;
+}
+
+/* the fixed words, in the order they are printed */
+static const char *const KWORDER[] = {"fn", "if", "while", "for", "ret", "put", "free", "trap", "break", "else",
+                                      "end", "to", "void", "bound", "=", "true", "false"};
+#define NKWO ((int)(sizeof KWORDER / sizeof KWORDER[0]))
+#define NFIXED (NKWO + OP_N + T_NSCALAR + T_NSCALAR - 1 + 3)
+static const char *fixed_word(int k) {
+    if (k < NKWO) return KWORDER[k];
+    k -= NKWO;
+    if (k < OP_N) return OPW[k];
+    k -= OP_N;
+    if (k < T_NSCALAR) return GW[k];
+    k -= T_NSCALAR;
+    if (k < T_NSCALAR - 1) return IRN[k + 1];
+    return REFW[k - (T_NSCALAR - 1) + 1];
+}
+
+/* the names that are decided one by one: names in scope, functions, and the names on the line. Every
+ * other name behaves as a name not in use (the parser only compares names for equality), so one
+ * representative decides them all. kind: 0 a name, 1 a function, 2 a name only on this line */
+typedef struct { char name[NAME_MAX_LEN + 1]; int kind, legal; } Id;
+static Id *ids;
+static int nids;
+static int find_id(const char *w) {
+    for (int i = 0; i < nids; i++)
+        if (!strcmp(ids[i].name, w)) return i;
+    return -1;
+}
+static void add_id(const char *w, int kind) {
+    if (!valid_ident(w) || reserved(w) || find_id(w) >= 0) return;
+    Id *p = realloc(ids, sizeof *ids * (size_t)(nids + 1));
+    if (!p) { fputs("omegese: out of memory\n", stderr); exit(2); }
+    ids = p;
+    snprintf(ids[nids].name, sizeof ids[nids].name, "%s", w);
+    ids[nids].kind = kind;
+    ids[nids].legal = 0;
+    nids++;
+}
+static int extends(const char *w, const char *u) { return !strncmp(w, u, strlen(u)); }
+/* a name not in use that extends u: u itself, or u with _ and a number after it */
+static int representative(const char *u, char *rep) {
+    if (*u && !valid_ident(u)) return 0;
+    for (int k = -2; k < 1000; k++) {
+        if (k == -2) { if (!*u) continue; snprintf(rep, NAME_MAX_LEN + 2, "%s", u); }
+        else if (k == -1) snprintf(rep, NAME_MAX_LEN + 2, "%s_", *u ? u : "n");
+        else snprintf(rep, NAME_MAX_LEN + 2, "%s_%d", *u ? u : "n", k);
+        if (strlen(rep) > NAME_MAX_LEN) return 0;
+        if (!reserved(rep) && find_id(rep) < 0) return 1;
+    }
     return 0;
 }
 
-/* first cut of --machine: today's coarse sets, one item per line (to be replaced by the exact oracle) */
-static const char *const LO[T_NSCALAR] = {"0", "0", "0", "0", "0", "-128", "-32768", "-2147483648", "-9223372036854775808"};
-static const char *const HI[T_NSCALAR] = {"1", "255", "65535", "4294967295", "18446744073709551615", "127", "32767", "2147483647", "9223372036854775807"};
-static void machine_print(char *txt, int eof) {
-    if (!strncmp(txt, "REFUSED", 7)) { fputs(txt, stdout); return; }
-    for (char *line = strtok(txt, "\n"); line; line = strtok(NULL, "\n")) {
-        char *c = strchr(line, ':');
-        if (!c) continue;
-        *c = 0;
-        char *rest = c + 1;
-        if (!strcmp(line, "new-name")) { printf("newname\n"); continue; }
-        if (!strcmp(line, "number")) {
-            while (*rest == ' ') rest++;
-            char numw[64]; snprintf(numw, sizeof numw, "%s", rest); numw[strcspn(numw, " ")] = 0;
-            int s = scalar_word(numw);
-            if (s > 0) printf("number %s %s\n", LO[s], HI[s]);
-            else if (!strncmp(rest, "any", 3)) printf("number -9223372036854775808 18446744073709551615\n");
-            else { char *dd = strstr(rest, ".."); if (dd) { *dd = 0; printf("number %s %s\n", rest, dd + 2); } }
-            continue;
-        }
-        for (char *save = NULL, *w = strtok_r(rest, " ", &save); w; w = strtok_r(NULL, " ", &save)) {
-            if (!strcmp(w, "(newline)")) printf("newline\n");
-            else if (!strcmp(w, "(") || !strcmp(w, ")")) printf("%s\n", w);
-            else if (w[0] == '(') { printf("newname\nword to\nword void\n"); for (int s = 0; s < T_NSCALAR; s++) printf("word %s\n", GW[s]); break; }
-            else printf("word %s\n", w);
-        }
+/* numbers: the parser treats a number by comparisons with fixed bounds (type ranges, lengths 1..64,
+ * trap 1..14, bound 1..1000000, count 0..1000000) and with the lengths of the arrays in scope, so
+ * every number strictly between two neighbouring breakpoints behaves alike */
+static const char *const BREAKS[] = {"-18446744073709551615", "-9223372036854775808", "-2147483648", "-32768", "-128",
+                                     "0", "1", "14", "64", "127", "255", "32767", "65535", "1000000", "2147483647",
+                                     "4294967295", "9223372036854775807", "18446744073709551615"};
+#define NBREAKS ((int)(sizeof BREAKS / sizeof BREAKS[0]))
+static i128 i128_of(const char *s) {
+    int neg = *s == '-';
+    i128 v = 0;
+    for (s += neg; *s; s++) v = v * 10 + (*s - '0');
+    return neg ? -v : v;
+}
+static const char *str_of(i128 v, char *b) {
+    char t[48];
+    int k = 0, neg = v < 0;
+    unsigned __int128 m = neg ? -(unsigned __int128)v : (unsigned __int128)v;
+    do { t[k++] = (char)('0' + (int)(m % 10)); m /= 10; } while (m);
+    int j = 0;
+    if (neg) b[j++] = '-';
+    while (k) b[j++] = t[--k];
+    b[j] = 0;
+    return b;
+}
+static int cmp128(const void *a, const void *b) {
+    i128 x = *(const i128 *)a, y = *(const i128 *)b;
+    return x < y ? -1 : x > y;
+}
+/* is there a number written as Omegese writes it (no leading zeros, no -0) in lo..hi whose text
+ * extends u; *val: one, the shortest */
+static int number_extends(const char *u, i128 lo, i128 hi, i128 *val) {
+    if (lo > hi) return 0;
+    int neg = *u == '-';
+    const char *d = u + neg;
+    if (!*u) { *val = lo > 0 ? lo : hi < 0 ? hi : 0; return 1; }
+    if (!*d) { if (lo > -1) return 0; *val = hi < -1 ? hi : -1; return 1; }
+    if (strlen(d) > 20) return 0;
+    for (const char *c = d; *c; c++) if (!isdigit((unsigned char)*c)) return 0;
+    if (d[0] == '0') { if (d[1] || neg || lo > 0 || hi < 0) return 0; *val = 0; return 1; }
+    i128 D = i128_of(d), p = 1;
+    for (int k = 0; k <= 20 && D <= (i128)UINT64_MAX / p; k++, p *= 10) {
+        i128 a = D * p, b = a + p - 1, x = neg ? -b : a, y = neg ? -a : b;
+        i128 l = x > lo ? x : lo, h = y < hi ? y : hi;
+        if (l <= h) { *val = neg ? h : l; return 1; }
     }
-    printf("space\n");
-    if (eof) printf("eof\n");
+    return 0;
+}
+
+enum { M_HUMAN, M_MACHINE, M_COMPLETE };
+static int refuse(void) {
+    if (!g_phase) { printf("REFUSED omegese: %s\n", g_err); return 1; }
+    const char *m = g_err;
+    if (!strncmp(m, "line ", 5) && strstr(m, ": ")) m = strstr(m, ": ") + 2;
+    printf("REFUSED omegese: line %d: no text after this prefix makes a program emit accepts (%s)\n", g_tline, m);
+    return 1;
+}
+static void human_line(const char *label, Buf *b) {
+    if (b->n) printf("%s:%s\n", label, b->p);
+    b->n = 0;
+    if (b->p) b->p[0] = 0;
+}
+static int oracle(char *src, int mode) {
+    g_quiet = 1;
+    char *nl = strrchr(src, '\n'), *tail = nl ? nl + 1 : src;
+    size_t tl = strlen(tail);
+    int mid = tl > 0 && !strchr(" \t\r()", tail[tl - 1]);
+    char *tb = strdup(tail), *rest = NULL;
+    if (!tb) exit(2);
+    *tail = 0;
+    int rc = 0;
+    g_phase = 0;
+    if (run(src, 1, &rest) < 0) { rc = refuse(); goto out; }
+    g_tline = g_line + 1;
+    g_line = g_tline;
+    nW = split(tb, W);
+    if (nW < 0) { rc = refuse(); goto out; }
+    U = mid ? W[--nW] : "";
+    save();
+    for (int i = 0; i < nnames; i++) add_id(names[i].name, 0);
+    for (int g = 0; g < nfuncs; g++) add_id(funcs[g].name, 1);
+    for (int i = 0; i < nW; i++) add_id(W[i], 2);
+
+    /* the items */
+    char fx[NFIXED] = {0}, rep[NAME_MAX_LEN + 2];
+    int any = 0;
+    for (int k = 0; k < NFIXED; k++)
+        if (extends(fixed_word(k), U)) any |= fx[k] = (char)legal(fixed_word(k), NULL, 1);
+    for (int i = 0; i < nids; i++)
+        if (extends(ids[i].name, U)) any |= ids[i].legal = legal(ids[i].name, NULL, 1);
+    int nn = representative(U, rep) && legal(rep, NULL, 1);
+    any |= nn;
+    i128 lo[2 * NBREAKS + 2 * 64], hi[2 * NBREAKS + 2 * 64], bp[NBREAKS + 64];
+    int niv = 0, nb = 0;
+    if (!*U || U[0] == '-' || isdigit((unsigned char)U[0])) {
+        for (int k = 0; k < NBREAKS; k++) bp[nb++] = i128_of(BREAKS[k]);
+        unsigned long long lens = 0; /* bit L-1: an array of length L is in scope */
+        for (int i = 0; i < S0.nnames; i++) { Ty t = regs[names[i].reg]; if (t.ref != R_NONE) lens |= 1ull << (t.len - 1); }
+        for (int L = 1; L <= 64; L++) if (lens >> (L - 1) & 1) bp[nb++] = L;
+        qsort(bp, (size_t)nb, sizeof bp[0], cmp128);
+        int m = 0;
+        for (int k = 0; k < nb; k++) if (!m || bp[k] != bp[m - 1]) bp[m++] = bp[k];
+        nb = m;
+        int open = 0; /* the last interval is still growing */
+        for (int k = 0; k < nb; k++)
+            for (int gap = 0; gap < 2; gap++) {
+                i128 a = gap ? bp[k] + 1 : bp[k], b = gap ? (k + 1 < nb ? bp[k + 1] - 1 : bp[k]) : bp[k];
+                if (gap && a > b) continue;
+                char num[48];
+                if (legal(str_of(a, num), NULL, 1)) {
+                    if (open) hi[niv - 1] = b;
+                    else { lo[niv] = a; hi[niv] = b; niv++; open = 1; }
+                } else open = 0;
+            }
+        m = 0;
+        for (int k = 0; k < niv; k++) {
+            i128 v;
+            if (number_extends(U, lo[k], hi[k], &v)) { lo[m] = lo[k]; hi[m] = hi[k]; m++; }
+        }
+        niv = m;
+        any |= niv > 0;
+    }
+    int lpar = *U ? legal(U, "(", 1) : legal("(", NULL, 1);
+    int rpar = *U ? legal(U, ")", 1) : legal(")", NULL, 1);
+    int newl = *U ? legal(U, NULL, 0) : legal(NULL, NULL, 0);
+    int eof = legal_eof();
+    any |= lpar | rpar | newl | eof;
+    int sp = *U ? legal(U, NULL, 1) : any;
+    any |= sp;
+    if (!any) {
+        if (*U) legal(U, NULL, 1);
+        else legal(NULL, NULL, 1);
+        rc = refuse();
+        goto out;
+    }
+
+    char num[48], num2[48];
+    if (mode == M_MACHINE) {
+        for (int k = 0; k < NFIXED; k++) if (fx[k]) printf("word %s\n", fixed_word(k));
+        for (int i = 0; i < nids; i++) if (ids[i].legal) printf("word %s\n", ids[i].name);
+        if (nn) {
+            printf("newname");
+            for (int i = 0; i < nids; i++) if (extends(ids[i].name, U)) printf(" %s", ids[i].name);
+            printf("\n");
+        }
+        for (int k = 0; k < niv; k++) printf("number %s %s\n", str_of(lo[k], num), str_of(hi[k], num2));
+        if (lpar) printf("(\n");
+        if (rpar) printf(")\n");
+        if (sp) printf("space\n");
+        if (newl) printf("newline\n");
+        if (eof) printf("eof\n");
+    } else if (mode == M_HUMAN) {
+        Buf b = {0};
+        int start = !nW && !*U;
+        for (int i = 0; i < nids; i++) if (ids[i].legal && ids[i].kind != 1) bput(&b, " %s", ids[i].name);
+        human_line(start ? "assign" : "names", &b);
+        for (int k = 0; k < niv; k++) bput(&b, "%s %s..%s", k ? "," : "", str_of(lo[k], num), str_of(hi[k], num2));
+        human_line("number", &b);
+        if (nn) bput(&b, " any name not in use");
+        human_line("new-name", &b);
+        for (int k = 0; k < NFIXED; k++) if (fx[k]) bput(&b, " %s", fixed_word(k));
+        for (int i = 0; i < nids; i++) if (ids[i].legal && ids[i].kind == 1) bput(&b, " %s", ids[i].name);
+        if (lpar) bput(&b, " (");
+        if (rpar) bput(&b, " )");
+        if (sp && *U) bput(&b, " (space)");
+        if (newl && !start) bput(&b, " (newline)");
+        if (eof) bput(&b, " (end of input)");
+        human_line("words", &b);
+        free(b.p);
+    } else { /* complete: a word that finishes U, then the witness for it */
+        if (eof) goto out;
+        const char *first = NULL;
+        if (*U) {
+            if (sp) first = U;
+            for (int k = 0; k < NFIXED && !first; k++) if (fx[k]) first = fixed_word(k);
+            for (int i = 0; i < nids && !first; i++) if (ids[i].legal) first = ids[i].name;
+            if (!first && nn) first = rep;
+            for (int k = 0; k < niv && !first; k++) { i128 v; if (number_extends(U, lo[k], hi[k], &v)) first = str_of(v, num); }
+            if (!first) { legal(U, NULL, 1); rc = refuse(); goto out; }
+        }
+        if (!legal(first, NULL, 1)) { rc = refuse(); goto out; }
+        if (first) printf("%s", first + strlen(U));
+        for (int k = nW + (first ? 1 : 0); k < g_fl; k++) printf(" %s", g_lw[k]);
+        if (g_fl > 0) printf("\n");
+        printf("%s", g_close.p ? g_close.p : "");
+    }
+out:
+    free(tb);
+    free(ids);
+    ids = NULL;
+    nids = 0;
+    return rc;
 }
 
 int main(int argc, char **argv) {
-    if (argc == 4 && !strcmp(argv[1], "next") && !strcmp(argv[2], "--machine")) {
-        size_t len, mlen;
-        char *src = slurp(argv[3], &len), *mbuf = NULL;
-        FILE *real = stdout, *mem = open_memstream(&mbuf, &mlen);
-        if (!mem) return 2;
-        stdout = mem;
-        int rc = next_words(src);
-        fclose(mem);
-        stdout = real;
-        int eof = !in_fn && nfuncs > 0 && rc == 0 && mbuf && !strcmp(mbuf, "words: fn\n");
-        machine_print(mbuf ? mbuf : (char *)"", eof);
-        free(mbuf);
-        free(src);
-        return rc;
-    }
     if (argc == 2 && !strcmp(argv[1], "words")) {
         for (size_t i = 0; i < NKW; i++) if (strcmp(KW[i], "=")) printf("%s\n", KW[i]);
         for (int i = 0; i < OP_N; i++) printf("%s\n", OPW[i]);
@@ -1375,11 +1851,13 @@ int main(int argc, char **argv) {
         for (int i = 1; i <= 3; i++) printf("%s\n", REFW[i]);
         return 0;
     }
-    if (argc == 3 && !strcmp(argv[1], "next")) {
+    int machine = argc == 4 && !strcmp(argv[1], "next") && !strcmp(argv[2], "--machine");
+    if ((argc == 3 && (!strcmp(argv[1], "next") || !strcmp(argv[1], "complete"))) || machine) {
         size_t len;
-        char *src = slurp(argv[2], &len);
-        int rc = next_words(src);
+        char *src = slurp(argv[argc - 1], &len);
+        int rc = oracle(src, machine ? M_MACHINE : !strcmp(argv[1], "next") ? M_HUMAN : M_COMPLETE);
         free(src);
+        free(g_close.p);
         return rc;
     }
     if (argc == 4 && !strcmp(argv[1], "emit")) {
@@ -1391,6 +1869,6 @@ int main(int argc, char **argv) {
         if (!fp || fwrite(out.p, 1, out.n, fp) != out.n || fclose(fp)) { perror(argv[3]); return 2; }
         return 0;
     }
-    fprintf(stderr, "usage: omegese emit <in.omegese> <out.json> | omegese next <prefix.omegese> | omegese words\n");
+    fprintf(stderr, "usage: omegese emit <in.omegese> <out.json> | omegese next [--machine] <prefix.omegese> | omegese complete <prefix.omegese> | omegese words\n");
     return 2;
 }

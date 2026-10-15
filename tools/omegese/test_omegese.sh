@@ -200,9 +200,11 @@ for f in "$T"/c*.omegese; do
 done
 echo "coverage: $cov/$(ls "$T"/c*.omegese | wc -l) accepted"
 
-# 1c. omegese next: the allowed words after a prefix. A value slot lists "names:" (names of a type
-#     that fits), "number:" (when a bare number may stand there, and its type) and "words:" (true
-#     false, ops, types, own/edit/view, functions that can give a fitting value, and "(").
+# 1c. omegese next: what may come next after a prefix, exactly (docs/one_layer/OMEGESE.md section 6).
+#     At a line start: "words:" (statement words and functions to call), "assign:" (names that may
+#     be assigned), "new-name:"; elsewhere: "names:", "number: lo..hi" (the numbers that may stand
+#     there), "new-name:" and "words:" (fixed words, functions, brackets, "(space)" inside a word,
+#     "(newline)", "(end of input)"). Only what can still end in a program emit accepts is offered.
 nx() { printf '%b' "$1" > "$T/p"; "$G" next "$T/p" || true; }
 nxk=0
 nxeq() { # <prefix> <expected output>
@@ -217,19 +219,19 @@ nxcase() { # <prefix> <glob the output must match> <what>
   case "$got" in $2) ;; *) bad "next $3: got '$got'" ;; esac
 }
 nxeq 'fn f a uint to uint\nret a\n' 'words: end'
-nxeq 'fn f a uint b ulong to uint\nx = add a ' 'names: a\nnumber: uint\nwords: add sub mul div rem and or xor shl shr not uint u32 ('
-nxcase 'fn f a uint to uint\nfor i uint 4\n' 'words: if while for ret put free trap break end*' 'in a loop'
-nxcase 'fn f a uint to uint\nret a\nret ' 'REFUSED omegese: *' 'after a dead line: not refused'
-nxcase 'x = add ' 'REFUSED omegese: *' 'before fn: not refused'
-nxeq 'fn odd a uint to bool\nret true\nend\nfn f a uint fl view bool 4 to uint\nif ' 'names:\nwords: true false and or xor eq ne lt le gt ge not get bool odd ('
+nxeq 'fn f a uint b ulong to uint\nx = add a ' 'names: a\nnumber: 0..4294967295\nwords: add sub mul div rem and or xor shl shr not uint u32 ('
+nxeq 'fn f a uint to uint\nfor i uint 4\n' 'assign: a\nnew-name: any name not in use\nwords: if while for ret trap break end'
+nxcase 'fn f a uint to uint\nret a\nret ' 'REFUSED omegese: *path already ended*' 'after a dead line: not refused'
+nxcase 'x = add ' 'REFUSED omegese: *outside a function*' 'before fn: not refused'
+nxeq 'fn odd a uint to bool\nret true\nend\nfn f a uint fl view bool 4 to uint\nif ' 'words: true false and or xor eq ne lt le gt ge not get bool odd ('
 # nesting: a stack of open operand slots, each with the type it needs
-nxeq 'fn f r uint q ulong c bool to uint\nx = add mul r ' 'names: r\nnumber: uint\nwords: add sub mul div rem and or xor shl shr not uint u32 ('
-nxeq 'fn f r uint q ulong c bool to uint\nx = add mul r r ' 'names: r\nnumber: uint\nwords: add sub mul div rem and or xor shl shr not uint u32 ('
-nxeq 'fn f r uint q ulong c bool to uint\nret sub ' 'names: r\nnumber: any (it takes the type of the other value)\nwords: add sub mul div rem and or xor shl shr not uint u32 ('
-nxeq 'fn f p short to short\nif lt p short ' 'names: p\nnumber: short\nwords: add sub mul div rem and or xor shl shr neg not uchar ushort uint ulong byte short int long u8 u16 u32 u64 i8 i16 i32 i64 ('
-# the type is still open: every whole-number name (bool and arrays excluded for add); after a bare
-# number, no second bare number, and only names the number fits
-nxeq 'fn f r uint q ulong c bool to uint\nx = add ' 'names: r q\nnumber: any (it takes the type of the other value)\nwords: add sub mul div rem and or xor shl shr neg not uchar ushort uint ulong byte short int long u8 u16 u32 u64 i8 i16 i32 i64 ('
+nxeq 'fn f r uint q ulong c bool to uint\nx = add mul r ' 'names: r\nnumber: 0..4294967295\nwords: add sub mul div rem and or xor shl shr not uint u32 ('
+nxeq 'fn f r uint q ulong c bool to uint\nx = add mul r r ' 'names: r\nnumber: 0..4294967295\nwords: add sub mul div rem and or xor shl shr not uint u32 ('
+nxeq 'fn f r uint q ulong c bool to uint\nret sub ' 'names: r\nnumber: 0..4294967295\nwords: add sub mul div rem and or xor shl shr not uint u32 ('
+nxeq 'fn f p short to short\nif lt p short ' 'names: p\nnumber: -32768..32767\nwords: add sub mul div rem and or xor shl shr neg not uchar ushort uint ulong byte short int long u8 u16 u32 u64 i8 i16 i32 i64 ('
+# the type is still open: every whole-number name (bool and arrays excluded for add) and any number
+# some whole-number type holds; after a bare number, no second bare number, and only names it fits
+nxeq 'fn f r uint q ulong c bool to uint\nx = add ' 'names: r q\nnumber: -9223372036854775808..18446744073709551615\nwords: add sub mul div rem and or xor shl shr neg not uchar ushort uint ulong byte short int long u8 u16 u32 u64 i8 i16 i32 i64 ('
 nxeq 'fn f r uint q ulong c bool to uint\nx = add 1 ' 'names: r q\nwords: add sub mul div rem and or xor shl shr neg not uchar ushort uint ulong byte short int long u8 u16 u32 u64 i8 i16 i32 i64 ('
 nxeq 'fn f a uchar b uint to uint\nx = add 300 ' 'names: b\nwords: add sub mul div rem and or xor shl shr neg not ushort uint ulong short int long u16 u32 u64 i16 i32 i64 ('
 # brackets, the end of a value, arrays, trap
@@ -242,11 +244,40 @@ nxeq 'fn f p short c bool to short\nif c\ntrap 1\n' 'words: else end'
 nxcase 'fn f r uint to uint\nx = add r r r ' 'REFUSED omegese: line 2: add has 3 values after it; it takes 2' 'after an extra value: not refused'
 nxcase 'fn f r uint to uint\nx = add 1 2 ' 'REFUSED omegese: *two numbers*' 'after two numbers: not refused'
 nxcase 'fn f r uint to uint\nx = add r ) ' 'REFUSED omegese: *no matching*' 'after a stray ): not refused'
-# never offer a closing word that emit would refuse
-nxeq 'fn f a uint to uint\nb = add a 1\n' 'words: if while for ret put free trap\nassign: a b\nnew-name: any name not in use'
-nxcase 'fn f a uint to uint\nb = add a 1\nend' 'REFUSED omegese: *without ret*' 'end before ret: not refused'
-nxcase 'fn f a uint to uint\nelse' 'REFUSED omegese: line 2: else without an open if' 'stray else: not refused'
-nxcase 'fn f a uint to uint\nbreak' 'REFUSED omegese: line 2: break outside a loop' 'stray break: not refused'
+# never offer a word that leads to a dead end: no end before ret, no trap while b is unread, no put
+# or free without an array
+nxeq 'fn f a uint to uint\nb = add a 1\n' 'assign: a b\nnew-name: any name not in use\nwords: if while for ret'
+nxcase 'fn f a uint to uint\nb = add a 1\nend\n' 'REFUSED omegese: *without ret*' 'end before ret: not refused'
+nxcase 'fn f a uint to uint\nelse\n' 'REFUSED omegese: line 2: else without an open if' 'stray else: not refused'
+nxcase 'fn f a uint to uint\nbreak\n' 'REFUSED omegese: line 2: break outside a loop' 'stray break: not refused'
+nxcase 'fn f a uint to uint\nb = add a 1\ntrap 1\n' "REFUSED omegese: line 4: *'b' is written but never read*" 'a trap that leaves b unread: not refused'
+# ret must read every name the ended path leaves unread: b only (no bare number, no a alone); a bool
+# with no function to turn it into a number cannot be read by a number; inside an if, only the
+# names of the if
+nxeq 'fn f a uint to uint\nb = add a 1\nret ' 'names: b\nwords: add sub mul div rem and or xor shl shr not uint u32 ('
+nxcase 'fn f a uint to uint\nb = gt a 1\nret ' "REFUSED omegese: *'b' is written but never read*" 'an unreadable bool before ret: not refused'
+nxeq 'fn h c bool to ulong\nret ulong 0\nend\nfn f a uint to uint\nb = gt a 1\nret add a ' 'words: add sub mul div rem and or xor shl shr not uint u32 ('
+nxeq 'fn f a uint to bool\nx = new bool 4 false\nret eq ' 'words: true false and or xor eq ne lt le gt ge not get bool ('
+nxeq 'fn f a uint to uint\nx = new uint 4 0\nif gt a 2\ny = add a 1\nret ' 'names: y\nwords: add sub mul div rem and or xor shl shr not get uint u32 ('
+# inside a word: the words that extend it, a name not in use, and what may end it
+nxeq 'fn f a uint to uint\nb = add a 1\nen' 'new-name: any name not in use\nwords: ( (space)'
+nxeq 'fn f a uint to uint\nb = add a 1\nre' 'new-name: any name not in use\nwords: ret ( (space)'
+nxeq 'fn f a uint to uint\nx = new uint 4 0\nx = new uint ' 'number: 4..4'
+nxeq 'fn f a uint to uint\nx = new uint 4 0\nx = new uint 4' 'number: 4..4\nwords: ( (space)'
+nxcase 'fn f a uint to uint\nx = new uint 4 0\nx = new uint 1' 'REFUSED omegese: line 3: *own uint 1 but the name holds own uint 4*' 'a length no number extends: not refused'
+nxeq 'fn f a short to short\nret add a -' 'number: -32768..32767'
+nxeq 'fn f a short to short\nret add a -0' 'REFUSED omegese: line 2: '"'"'-0'"'"' is not a number (digits, an optional minus sign, no leading zeros, no -0)'
+# the machine form: one item per line
+nxm() { printf '%b' "$1" > "$T/p"; "$G" next --machine "$T/p" || true; }
+nxk=$((nxk + 1)); got="$(nxm 'fn f a uint to uint\nx = new uint 4 0\nre')"
+[ "$got" = "$(printf 'word ret\nnewname\n(\nspace')" ] || bad "next --machine after 're': got '$got'"
+nxk=$((nxk + 1)); got="$(nxm 'fn f a uint b ulong to uint\nret a\nend\n')"
+[ "$got" = "$(printf 'word fn\nspace\nnewline\neof')" ] || bad "next --machine after a function: got '$got'"
+nxk=$((nxk + 1)); got="$(nxm 'fn f a uint b ulong to uint\nx = add a')"
+[ "$got" = "$(printf 'word add\nword and\nword a\n(\nspace')" ] || bad "next --machine inside a name: got '$got'"
+# complete: the witness text, which emit accepts after the prefix
+nxk=$((nxk + 1)); got="$(printf 'fn f a uint to uint\nx = new uint 4 0\nif gt a 2\ny = add a 1\nret ' > "$T/p"; "$G" complete "$T/p")"
+[ "$got" = "$(printf ' y\nend\nx = x\nret 0\nend')" ] || bad "complete inside an if: got '$got'"
 echo "next: $nxk prefixes give the expected words"
 
 # 2. refusals: "== <expected reason substring>", the bad program, "-- control", the fixed program
@@ -813,6 +844,7 @@ for ((wk = 0; wk < ${OMEGESE_WALKS:-40}; wk++)); do
   s="$(cat "$f")"$'\n'
   toks "$s"
   P="${s:0:TO[RANDOM % ${#TO[@]}]}"
+  case "${P: -1}" in ""|" "|$'\n'|"("|")") ;; *) P+=" " ;; esac # start at a word boundary
   ok=1
   for ((st = 0; st < ${OMEGESE_STEPS:-25}; st++)); do
     items="$(mnext "$P")"
