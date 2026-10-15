@@ -146,13 +146,18 @@ meta="$OUT/meta.txt"
   echo "max_tokens_per_round=$MAXT"; echo "repair_rounds=1"; echo "temperature=$TEMP"; echo "top_p=$TOPP"; echo "seed_base=$SEED"
   echo "timeout_s=$TIMEOUT"; echo "retries=$RETRIES"; echo "order=attempt,task,arm"
   echo "protocol=$([ -z "$over" ] && echo PARAMS || echo "OVERRIDDEN:$over")"
-  echo "commit=$(git -C "$ROOT" rev-parse HEAD)$(st="$(git -C "$ROOT" status --porcelain -- tools tests/one_layer docs/one_layer src/compiler src/sha256.c mk/omega-emit.mk mk/omegese.mk Makefile)" && [ -z "$st" ] || echo -dirty)"
+  echo "commit=$(git -C "$ROOT" rev-parse HEAD)$(st="$(git -C "$ROOT" status --porcelain -- "${TOOL_PATHS[@]}")" && [ -z "$st" ] || echo -dirty)"
   echo "params_sha256=$(sha256sum "$PARAMS" | cut -d" " -f1)"; echo "g0_sha256=$(sha256sum < "$OUT/g0/SHA256SUMS" | cut -d" " -f1)"
   for arm in ${ARMS//,/ }; do echo "prompt_${arm}_sha256=$(sha256sum "$OUT/prompts/$arm.system.txt" | cut -d' ' -f1)"; done
   echo "tasks=${#ids[@]}"
   echo "tasks_public_sha256=$(cd "$TASKS" && find tasks -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)"
 } > "$meta.new"
-if [ -f "$meta" ]; then cmp -s "$meta" "$meta.new" || { diff "$meta" "$meta.new" >&2 || true; die "resuming with different settings"; }; rm "$meta.new"
+if [ -f "$meta" ]; then
+  # the run's meta.txt is kept as written at its start; a later commit that leaves TOOL_PATHS unchanged (the G0
+  # ledger, the interim scores) may resume it (reader.sh meta_resume; score.sh applies the same tools rule)
+  why="$(meta_resume "$ROOT" "$meta" "$meta.new")" || { diff "$meta" "$meta.new" >&2 || true; die "resuming with different settings: $why"; }
+  cmp -s "$meta" "$meta.new" || echo "run.sh: resuming at $(sed -n 's/^commit=//p' "$meta.new"), tools identical to the run's commit $(sed -n 's/^commit=//p' "$meta")" >&2
+  rm "$meta.new"
 else mv "$meta.new" "$meta"; fi
 [ -f "$OUT/log.tsv" ] || printf 'set\ttask\trounds\tprompt_tokens\tcompletion_tokens_r1\tcompletion_tokens_r2\tfinish_r1\tfinish_r2\twall_s\tcheck_r1\tcheck_r2\tcandidate_sha256\n' > "$OUT/log.tsv"
 dupk="$(tail -n +2 "$OUT/log.tsv" | cut -f1,2 | LC_ALL=C sort | uniq -d | head -n 1 | tr '\t' ' ')"

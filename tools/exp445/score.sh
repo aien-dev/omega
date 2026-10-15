@@ -215,7 +215,7 @@ for r in "${runs[@]}"; do
   gc="$(mv_ commit)"
   if [ "$TEST" != 1 ]; then
     case "$gc" in *-dirty) inval "$r: generated from a dirty tree ($gc)" ;; esac
-    git -C "$ROOT" diff --quiet "${gc%-dirty}" "$head_commit" -- tools tests/one_layer docs/one_layer src/compiler src/sha256.c mk/omega-emit.mk mk/omegese.mk Makefile 2> /dev/null ||
+    git -C "$ROOT" diff --quiet "${gc%-dirty}" "$head_commit" -- "${TOOL_PATHS[@]}" 2> /dev/null ||
       inval "$r: tools at generation commit ${gc%-dirty} differ from the scoring commit"
   fi
   (cd "$r" && sha256sum -c --quiet --strict SHA256SUMS > /dev/null 2>&1) || inval "$r: SHA256SUMS does not verify (a raw file, prompt, G0 record, meta.txt or log.tsv changed)"

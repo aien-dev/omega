@@ -110,6 +110,25 @@ system_prompt() {
       "$(cat "$A/examples/$e/prompt")" "$(cat "$A/examples/$e/program.$ext")"
   done < "$list"
 }
+# TOOL_PATHS: the files a run's results depend on. meta.txt records the commit (plus -dirty when any of these
+# differ from it); score.sh requires them unchanged between the generation commit and the scoring commit.
+TOOL_PATHS=(tools tests/one_layer docs/one_layer src/compiler src/sha256.c mk/omega-emit.mk mk/omegese.mk Makefile)
+# meta_resume <repo root> <run's meta.txt> <meta.txt this invocation would write>: may this run resume?
+# Yes when the two are identical, or when only commit= differs, neither side is -dirty and TOOL_PATHS are the
+# same at both commits: a commit that adds evidence only (the G0 ledger, the Stage 1 interim scores) lands
+# between attempt 1 and the --futility resume, and must not strand the run. Prints the reason when not.
+meta_resume() {
+  local root="$1" a="$2" b="$3" ca cb
+  cmp -s "$a" "$b" && return 0
+  if ! diff -q <(grep -v '^commit=' "$a") <(grep -v '^commit=' "$b") > /dev/null; then
+    echo "settings differ: $(diff <(grep -v '^commit=' "$a") <(grep -v '^commit=' "$b") | grep '^[<>]' | head -n 4 | tr '\n' ' ')"; return 1
+  fi
+  ca="$(sed -n 's/^commit=//p' "$a")" cb="$(sed -n 's/^commit=//p' "$b")"
+  git -C "$root" cat-file -e "${ca%-dirty}^{commit}" 2> /dev/null || { echo "the run's commit ${ca%-dirty} is not in this repository"; return 1; }
+  git -C "$root" diff --quiet "${ca%-dirty}" "${cb%-dirty}" -- "${TOOL_PATHS[@]}" 2> /dev/null ||
+    { echo "tool files differ between the run's commit ${ca%-dirty} and ${cb%-dirty}"; return 1; }
+  case "$ca $cb" in *-dirty*) echo "commit changed (${ca} -> ${cb}) and a tree is dirty: the tools cannot be compared"; return 1 ;; esac
+}
 # heldout <task id>...: true when any task id is not a dev task (the held-out pack; protocol section 3)
 heldout() { local t; for t in "$@"; do case "$t" in dev*) ;; *) return 0 ;; esac; done; return 1; }
 # gate_config <omegese attempt-1 successes> <text attempt-1 successes> <tasks>: protocol 13.6 for one config,
