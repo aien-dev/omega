@@ -277,7 +277,7 @@ Not folded, so a program `emit` accepts can still be rejected later:
 - more than 64 own arrays in one function: the ones past 64 are not tracked;
 - C2-OWN-ARENA-MOVE and C2-OWN-RELEASE-ARENA: Omegese has no arenas, so no program reaches them.
 
-The other way, `emit` refuses a function with more than 256 ownership checks waiting for loops to end,
+The other way, `emit` refuses a function with more than 256 distinct ownership checks waiting for loops to end,
 which checker2 might accept. And where exact can miss: a waiting check whose name is out of scope (or
 hidden by a newer name) at the loop's `end` gets no settling line, so the word that led there is left
 out; a `ret` whose value moves the array into a call is not tried by the witness.
