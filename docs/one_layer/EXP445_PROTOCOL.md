@@ -283,6 +283,9 @@ r3 does not mention stays as written above. No held-out generation was scored un
 - Example tasks are dev-style tasks written by the builders. None may share an entry name with a
   held-out task; `make test-exp445` checks this mechanically against the public view of the sealed
   pack and prints only a count, so no builder reads a held-out task.
+  Disclosure (r3, 2026-10-15): the first example set shared 3 entry names with held-out tasks; the
+  builders saw those 3 names (no prompt text, requirement or test) and replaced the examples. No other
+  held-out information was seen.
 - One-shot prompts (the r2 single example) are used only in Stage 0 (13.4), on dev tasks.
 - Decode-time masking is OFF in r3. A masked arm needs its own revision once our engine applies the
   `omegese next` mask.
@@ -300,14 +303,15 @@ is reported as an interim result, labelled interim.
 
 ### 13.4 Stages and pre-registered stop rules
 
-**G0, the sampling gate (before every stage, per configuration).** G0 runs aien-sovereign-core
-`scripts/sampling-gate.sh` (the Stage S gate, merged f881710a, with its ignore-seed and force-greedy
-mutant controls) against the frozen server, plus one exp445 check: dev01 in the omegese arm at seeds
-s1..s8 plus a repeat of s1. PASS when the sampling gate passes, the repeat is byte-identical, and
-every reply reports mode=sampled with its own seed. Identical replies across seeds pass only when the
-server's reported p_repeat makes them plausible (p_repeat^(k-1) >= 0.01, as in the Stage S gate). The
-distinct-answer count is recorded, not gated. The script and its output are saved in the run
-directory before any generation. On FAIL nothing in that configuration runs.
+**G0, the sampling gate (before every stage, per configuration).** G0 runs the Stage S sampling gate
+(aien-sovereign-core `scripts/sampling-gate.sh`, merged f881710a; in Stage S its ignore-seed and
+force-greedy mutant builds were shown to FAIL it) against the frozen server, with its repro requests
+set to dev01 in the omegese arm at seeds s1..s8, plus one exp445 check: a repeat of s1. PASS when the
+sampling gate passes, the repeat is byte-identical, and every reply reports mode=sampled with its own
+seed. Identical replies across seeds pass only when the server's reported p_repeat makes them
+plausible (p_repeat^(k-1) >= 0.01, as in the Stage S gate). The distinct-answer count is recorded,
+not gated. The script and its output are saved in the run directory before any generation. On FAIL
+nothing in that configuration runs.
 
 **Stage 0, pilot on the 10 dev tasks (never evidence).** Config A, both arms, one-shot and
 many-shot prompts, 3 attempts each: 10 x 2 x 2 x 3 = 120 generations. GO to Stage 1 when all of:
