@@ -3,7 +3,7 @@
  * Order: C gcc -O2 (MA-3's own objects, unchanged), C gcc -O3 native flavor
  * (MA-3 sources rebuilt by mk/polyglot.mk into separate objects whose public
  * symbols are renamed oma_rz_* -> omx_o3_*), then the lane tables: hand
- * assembly (B1), own encoder (B2), Mojo (B3).
+ * assembly (B1), own encoder (B2).
  *
  * Lanes that are not linked leave the weak empty tables below in place.
  * The -O3 objects are optional too (weak references): a binary linked
@@ -19,8 +19,6 @@ __attribute__((weak)) const omx_candidate omx_lane_asm[1] = {{0}};
 __attribute__((weak)) const size_t omx_lane_asm_count = 0;
 __attribute__((weak)) const omx_candidate omx_lane_encoder[1] = {{0}};
 __attribute__((weak)) const size_t omx_lane_encoder_count = 0;
-__attribute__((weak)) const omx_candidate omx_lane_mojo[1] = {{0}};
-__attribute__((weak)) const size_t omx_lane_mojo_count = 0;
 
 /* ---- -O3 flavor objects (renamed symbols; see mk/polyglot.mk) ---- */
 extern const oma_rz_impl omx_o3_r1_plain __attribute__((weak));
@@ -101,7 +99,7 @@ static size_t cnt(const size_t *p) { return *(const volatile size_t *)p; }
 
 size_t omx_candidate_count(void) {
     init();
-    return g_nc + cnt(&omx_lane_asm_count) + cnt(&omx_lane_encoder_count) + cnt(&omx_lane_mojo_count);
+    return g_nc + cnt(&omx_lane_asm_count) + cnt(&omx_lane_encoder_count);
 }
 
 /* The weak tables above are declared with one element in this file, so an
@@ -114,11 +112,9 @@ const omx_candidate *omx_candidate_get(size_t i) {
     init();
     if (i < g_nc) return &g_c[i];
     i -= g_nc;
-    size_t a = cnt(&omx_lane_asm_count), e = cnt(&omx_lane_encoder_count), m = cnt(&omx_lane_mojo_count);
+    size_t a = cnt(&omx_lane_asm_count), e = cnt(&omx_lane_encoder_count);
     if (i < a) return tab(omx_lane_asm) + i;
     i -= a;
     if (i < e) return tab(omx_lane_encoder) + i;
-    i -= e;
-    if (i < m) return tab(omx_lane_mojo) + i;
     return NULL;
 }

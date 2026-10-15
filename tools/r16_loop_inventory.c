@@ -10,7 +10,7 @@
  * SKIPPED), 2 usage or I/O error.
  *
  * Deterministic: files come from `git ls-files` (sorted, tracked files only),
- * no network, no clock, no randomness. C and Rust only (asm, shell, Mojo are
+ * no network, no clock, no randomness. C and Rust only (asm and shell are
  * outside the gate's file-type scope; the map says so).
  *
  * What counts as a site (see --patterns):
