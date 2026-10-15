@@ -108,6 +108,21 @@ on:
       - 'tests/checker2/**'
       - 'mk/checker2.mk'
       - 'spec/one-layer-receipts.md'
+      # one-layer acceptance, exp445-tools and omegese-oracle: each job's changed-path guard below
+      # lists its files; without them here a pull request that touches only those files ran none
+      - 'tests/one_layer/**'
+      - 'mk/one-layer-acceptance.mk'
+      - 'evidence/ONE-LAYER-1/**'
+      - 'src/omega_program*'
+      - 'src/omega_exec*'
+      - 'src/omega_realize*'
+      - 'tools/omega_emit/**'
+      - 'tools/exp445/**'
+      - 'tools/omegese/**'
+      - 'mk/omega-emit.mk'
+      - 'mk/omegese.mk'
+      - 'docs/one_layer/EXP445_PROTOCOL.md'
+      - 'docs/one_layer/OMEGESE.md'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
