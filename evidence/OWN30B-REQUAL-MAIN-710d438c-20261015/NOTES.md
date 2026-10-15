@@ -63,3 +63,7 @@ ANSWER: YES. Sealed investigation folder (plan.md Result, SHA256SUMS; the two re
   the fix (PASS 20/20). fp8, decode_graph cached and cmdlist gates PASS on the fix.
 - Production today writes cached weights once before any GPU read (`AIEN_OMEGA_FP8_WEIGHT_CACHE=1` only), so no live
   corruption was observed; any future host rewrite of a cached buffer would be read stale without the fix.
+
+### #457 fix after review (omega457-gate-fix-r2/)
+The fix branch was revised after review (pending flag cleared on device close, distinct refusal for the prefix copy). The
+regression gate was rerun on that revision: GPU_L2_STALE_CHIP PASS, 20/20 FRESH.
