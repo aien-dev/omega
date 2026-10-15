@@ -2462,6 +2462,12 @@ test-gpu-fp8: $(GPU_FP8_TEST)
 	./$(GPU_FP8_TEST) --host-only
 	./$(GPU_FP8_TEST) --sim
 
+# omega #457 (2026-10-15): host rewrite of a GPU-cached buffer must be visible to the next launch. Chip only; the gate
+# is tools/run_gpu_l2_stale_chip.sh.
+GPU_L2_STALE_TEST = $(OUT_DIR)/gpu_l2_stale_test
+$(GPU_L2_STALE_TEST): tests/gpu_l2_stale_test.c src/omega_gpu_fp8_api.h src/omega_gpu_session.h $(OUT_DIR)/libomega_gpu.a
+	$(CC) $(CFLAGS) -ffp-contract=off -o $@ tests/gpu_l2_stale_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+
 # OWN-30B cut 8 (2026-10-13): one-launch decode attention (omega_gpu_decode_attn_api.h). test-gpu-decode-attn is
 # host-only + simulator; the chip gate is tools/run_gpu_decode_attn_chip.sh.
 .PHONY: test-gpu-decode-attn
