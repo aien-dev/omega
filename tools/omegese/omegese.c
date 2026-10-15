@@ -1321,7 +1321,53 @@ static int next_words(char *src) {
     return 0;
 }
 
+/* first cut of --machine: today's coarse sets, one item per line (to be replaced by the exact oracle) */
+static const char *const LO[T_NSCALAR] = {"0", "0", "0", "0", "0", "-128", "-32768", "-2147483648", "-9223372036854775808"};
+static const char *const HI[T_NSCALAR] = {"1", "255", "65535", "4294967295", "18446744073709551615", "127", "32767", "2147483647", "9223372036854775807"};
+static void machine_print(char *txt, int eof) {
+    if (!strncmp(txt, "REFUSED", 7)) { fputs(txt, stdout); return; }
+    for (char *line = strtok(txt, "\n"); line; line = strtok(NULL, "\n")) {
+        char *c = strchr(line, ':');
+        if (!c) continue;
+        *c = 0;
+        char *rest = c + 1;
+        if (!strcmp(line, "new-name")) { printf("newname\n"); continue; }
+        if (!strcmp(line, "number")) {
+            while (*rest == ' ') rest++;
+            char numw[64]; snprintf(numw, sizeof numw, "%s", rest); numw[strcspn(numw, " ")] = 0;
+            int s = scalar_word(numw);
+            if (s > 0) printf("number %s %s\n", LO[s], HI[s]);
+            else if (!strncmp(rest, "any", 3)) printf("number -9223372036854775808 18446744073709551615\n");
+            else { char *dd = strstr(rest, ".."); if (dd) { *dd = 0; printf("number %s %s\n", rest, dd + 2); } }
+            continue;
+        }
+        for (char *save = NULL, *w = strtok_r(rest, " ", &save); w; w = strtok_r(NULL, " ", &save)) {
+            if (!strcmp(w, "(newline)")) printf("newline\n");
+            else if (!strcmp(w, "(") || !strcmp(w, ")")) printf("%s\n", w);
+            else if (w[0] == '(') { printf("newname\nword to\nword void\n"); for (int s = 0; s < T_NSCALAR; s++) printf("word %s\n", GW[s]); break; }
+            else printf("word %s\n", w);
+        }
+    }
+    printf("space\n");
+    if (eof) printf("eof\n");
+}
+
 int main(int argc, char **argv) {
+    if (argc == 4 && !strcmp(argv[1], "next") && !strcmp(argv[2], "--machine")) {
+        size_t len, mlen;
+        char *src = slurp(argv[3], &len), *mbuf = NULL;
+        FILE *real = stdout, *mem = open_memstream(&mbuf, &mlen);
+        if (!mem) return 2;
+        stdout = mem;
+        int rc = next_words(src);
+        fclose(mem);
+        stdout = real;
+        int eof = !in_fn && nfuncs > 0 && rc == 0 && mbuf && !strcmp(mbuf, "words: fn\n");
+        machine_print(mbuf ? mbuf : (char *)"", eof);
+        free(mbuf);
+        free(src);
+        return rc;
+    }
     if (argc == 2 && !strcmp(argv[1], "words")) {
         for (size_t i = 0; i < NKW; i++) if (strcmp(KW[i], "=")) printf("%s\n", KW[i]);
         for (int i = 0; i < OP_N; i++) printf("%s\n", OPW[i]);

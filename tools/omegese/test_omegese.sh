@@ -685,40 +685,171 @@ else
 fi
 
 
-# 5. next agrees with emit. Oracle: at every word boundary of every accepted program (dev, nested,
-#    trial-2, coverage, refusal controls), the word that actually follows is among the words next
-#    allows, so a mask built from next never blocks a valid program. Truncation fuzz: every byte
-#    prefix of the nested, trial-2 and coverage programs goes through emit and next and ends with
-#    exit 0 or 1 (no crash; run the suite on an ASan/UBSan build to check memory).
-allowed() { # <next output> <word>: does the output allow the word
-  local out="$1" w="$2" line x
-  case "$out" in "REFUSED"*) return 1 ;; *"new-name:"*|*"(finish the fn line)"*) return 0 ;; esac
-  if [ "$w" = NL ]; then case "$out" in *"(newline)"*) return 0 ;; *) return 1 ;; esac; fi
-  if [[ "$w" =~ ^-?[0-9]+$ ]]; then case "$out" in *"number:"*) return 0 ;; esac; fi
-  while IFS= read -r line; do
-    for x in ${line#*:}; do [ "$x" = "$w" ] && return 0; done
-  done <<< "$out"
+# 5. next is exact (docs/one_layer/OMEGESE.md section 6). `next --machine` prints the legal items, one
+#    per line: word <w>, newname <excluded>..., number <lo> <hi>, (, ), space, newline, eof.
+#    Oracle: at every word boundary of every accepted program (dev, nested, trial-2, coverage, refusal
+#    controls) the word that follows is legal, and eof is legal at the end. Truncation fuzz: every
+#    byte prefix of the nested, trial-2 and coverage programs goes through emit and next and ends with
+#    exit 0 or 1 (no crash; the suite also runs on an ASan/UBSan build).
+FIXEDW=" $("$G" words | tr '\n' ' ')u8 u16 u32 u64 i8 i16 i32 i64 "
+dec_le() { # <a> <b>: a <= b, for canonical decimal integers of any size
+  local a="$1" b="$2" x y
+  if [[ $a == -* ]]; then
+    [[ $b == -* ]] || return 0
+    x="${a#-}" y="${b#-}"
+    [ ${#x} -ne ${#y} ] && { [ ${#x} -gt ${#y} ]; return; }
+    [[ ! $x < $y ]]; return
+  fi
+  [[ $b == -* ]] && return 1
+  [ ${#a} -ne ${#b} ] && { [ ${#a} -lt ${#b} ]; return; }
+  [[ ! $a > $b ]]
+}
+mallowed() { # <items> <word>: do the items allow the whole word (NL a newline, EOF the end of input)
+  local items="$1" w="$2" k lo hi rest
+  local it=$'\n'"$items"$'\n'
+  case "$items" in REFUSED*|"") return 1 ;; esac
+  case "$w" in
+    NL) [[ $it == *$'\nnewline\n'* ]]; return ;;
+    EOF) [[ $it == *$'\neof\n'* ]]; return ;;
+    "("|")") [[ $it == *$'\n'"$w"$'\n'* ]]; return ;;
+  esac
+  [[ $it == *$'\n'"word $w"$'\n'* ]] && return 0
+  if [[ $w =~ ^(0|-?[1-9][0-9]*)$ ]]; then
+    while read -r k lo hi; do [ "$k" = number ] && dec_le "$lo" "$w" && dec_le "$w" "$hi" && return 0; done <<< "$items"
+    return 1
+  fi
+  [[ $w =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] && [ ${#w} -le 63 ] && [[ $FIXEDW != *" $w "* ]] || return 1
+  while read -r k rest; do
+    [ "$k" = newname ] || continue
+    [[ " $rest " == *" $w "* ]] && return 1
+    return 0
+  done <<< "$items"
   return 1
+}
+toks() { # <text>: TO[] the byte offset and TW[] the text of every word (NL for a newline)
+  local s="$1" i=0 n=${#1} j c
+  TO=() TW=()
+  while ((i < n)); do
+    c="${s:i:1}"
+    case "$c" in
+      " "|$'\t'|$'\r') i=$((i + 1)) ;;
+      $'\n') TO+=("$i"); TW+=(NL); i=$((i + 1)) ;;
+      "("|")") TO+=("$i"); TW+=("$c"); i=$((i + 1)) ;;
+      *) j=$i
+         while ((j < n)); do case "${s:j:1}" in " "|$'\t'|$'\r'|$'\n'|"("|")") break ;; esac; j=$((j + 1)); done
+         TO+=("$i"); TW+=("${s:i:j-i}"); i=$j ;;
+    esac
+  done
+}
+mnext() { printf '%s' "$1" > "$T/p"; "$G" next --machine "$T/p" 2>&1 || true; }
+NB=0
+walk_in() { # <text>: every word is legal at its position and eof at the end; else WHERE says where not
+  local s="$1" k items
+  toks "$s"
+  for ((k = 0; k < ${#TW[@]}; k++)); do
+    items="$(mnext "${s:0:TO[k]}")"
+    NB=$((NB + 1))
+    mallowed "$items" "${TW[k]}" || { WHERE="'${TW[k]}' at byte ${TO[k]}: $(head -3 <<< "$items" | tr '\n' '|')"; return 1; }
+  done
+  items="$(mnext "$s")"
+  mallowed "$items" EOF || { WHERE="the end of input: $(head -3 <<< "$items" | tr '\n' '|')"; return 1; }
 }
 progs=("$ROOT"/tests/one_layer/omegese/dev/*.omegese "$ROOT"/tests/one_layer/omegese/nested/*.omegese "$T"/c*.omegese "$T"/r*.ok)
 for f in "$ROOT"/tests/one_layer/omegese/trial2/*.omegese; do [ "$(basename "$f")" = dev07.omegese ] || progs+=("$f"); done
-nb=0
 for f in "${progs[@]}"; do
   s="$(cat "$f")"$'\n'
-  for ((i = 0; i < ${#s}; i++)); do
-    c="${s:i:1}" p="${s:i-1:1}"
-    [ "$c" = " " ] && continue
-    if [ "$i" -gt 0 ] && [ "$p" != " " ] && [ "$p" != $'\n' ] && [ "$p" != "(" ] && [ "$c" != ")" ] && [ "$c" != $'\n' ]; then continue; fi
-    if [ "$c" = $'\n' ]; then w=NL
-    elif [ "$c" = "(" ] || [ "$c" = ")" ]; then w="$c"
-    else w="${s:i}"; w="${w%%[ ()$'\n']*}"; fi
-    printf '%s' "${s:0:i}" > "$T/p"
-    out="$("$G" next "$T/p" 2>&1 || true)"
-    nb=$((nb + 1))
-    allowed "$out" "$w" || { bad "next blocks '$w' after byte $i of $(basename "$f"): $(printf '%s' "$out" | head -3 | tr '\n' '|')"; break; }
+  walk_in "$s" || bad "next blocks $WHERE of $(basename "$f")"
+done
+echo "next oracle: every word and the end of input legal at all $NB word boundaries of ${#progs[@]} accepted programs"
+
+# 6. completeness and soundness against emit: single-word mutants of every accepted program (a word
+#    deleted, doubled or replaced by a fixed word, a name of the program, a number or a fresh name).
+#    emit accepts a mutant iff every word of it was legal at its position and eof at its end.
+RANDOM=445
+NUMS=(0 1 -1 7 14 15 64 65 127 128 255 256 -128 -129 1000000 1000001 4294967295 4294967296 -0 007)
+read -ra FIXA <<< "$FIXEDW"
+nmut=0 nacc=0 NB=0
+for f in "${progs[@]}"; do
+  s="$(cat "$f")"$'\n'
+  toks "$s"
+  ow=("${TW[@]}")
+  ids=()
+  for w in "${ow[@]}"; do [[ $w =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] && [[ $FIXEDW != *" $w "* ]] && ids+=("$w"); done
+  for ((m = 0; m < ${OMEGESE_MUTANTS:-2}; m++)); do
+    n=${#ow[@]} k=$((RANDOM % ${#ow[@]})) how=$((RANDOM % 6))
+    case $how in
+      0) rep=() ;;
+      1) rep=("${ow[k]}" "${ow[k]}") ;;
+      2) rep=("${NUMS[RANDOM % ${#NUMS[@]}]}") ;;
+      3) rep=("${ids[RANDOM % ${#ids[@]}]}") ;;
+      4) rep=("zq$m") ;;
+      *) rep=("${FIXA[RANDOM % ${#FIXA[@]}]}") ;;
+    esac
+    out="" prev=NL
+    for ((q = 0; q < n; q++)); do
+      if ((q == k)); then set -- "${rep[@]}"; else set -- "${ow[q]}"; fi
+      for w in "$@"; do
+        if [ "$w" = NL ]; then out+=$'\n'; else [ "$prev" = NL ] || out+=" "; out+="$w"; fi
+        prev="$w"
+      done
+    done
+    printf '%s' "$out" > "$T/mut.omegese"
+    acc=0; "$G" emit "$T/mut.omegese" "$T/mut.json" > /dev/null 2>&1 && acc=1
+    in=0; walk_in "$out" && in=1
+    nmut=$((nmut + 1)) nacc=$((nacc + acc))
+    [ "$acc" = "$in" ] || bad "mutant of $(basename "$f") (word $k -> '${rep[*]}'): emit accepts=$acc, every word legal=$in (${WHERE:-})"
   done
 done
-echo "next oracle: the following word allowed at all $nb word boundaries of ${#progs[@]} accepted programs"
+echo "completeness: $nmut single-word mutants ($nacc accepted by emit): emit accepts iff every word was legal ($NB word boundaries)"
+
+# 7. soundness fuzz: from random accepted prefixes, pick random legal items and extend; the legal set is
+#    never empty, a word picked is still legal after any of its first characters, and `omegese
+#    complete` (close everything) finishes the walk into a program emit accepts, in a bounded number of
+#    lines (at most the words of the prefix plus 3).
+RANDOM=4452
+nwalk=0 nstep=0
+for ((wk = 0; wk < ${OMEGESE_WALKS:-40}; wk++)); do
+  f="${progs[RANDOM % ${#progs[@]}]}"
+  s="$(cat "$f")"$'\n'
+  toks "$s"
+  P="${s:0:TO[RANDOM % ${#TO[@]}]}"
+  ok=1
+  for ((st = 0; st < ${OMEGESE_STEPS:-25}; st++)); do
+    items="$(mnext "$P")"
+    if [ -z "$items" ] || [[ $items == REFUSED* ]]; then bad "soundness: no legal item after $(printf '%s' "$P" | tail -c 70 | tr '\n' '|') ($items)"; ok=0; break; fi
+    mapfile -t IT <<< "$items"
+    it="${IT[RANDOM % ${#IT[@]}]}" x=""
+    nstep=$((nstep + 1))
+    case "$it" in
+      eof) break ;;
+      newline) P+=$'\n' ;;
+      space) P+=" " ;;
+      "("|")") P+="$it" ;;
+      "word "*) x="${it#word }" ;;
+      newname*) for ((q = 0; q < 9; q++)); do x="n$RANDOM"; mallowed "$items" "$x" && break; done ;;
+      number*) read -r _ lo hi <<< "$it"; c=()
+               for v in "$lo" "$hi" 0 1 -1 9 100; do dec_le "$lo" "$v" && dec_le "$v" "$hi" && c+=("$v"); done
+               x="${c[RANDOM % ${#c[@]}]}" ;;
+      *) bad "soundness: unknown item '$it'"; ok=0; break ;;
+    esac
+    [ -n "$x" ] || continue
+    if [ ${#x} -ge 2 ]; then
+      j=$((1 + RANDOM % (${#x} - 1)))
+      mallowed "$(mnext "$P${x:0:j}")" "$x" || { bad "soundness: '$x' legal, but not after its first $j characters: $(printf '%s' "$P" | tail -c 50 | tr '\n' '|')"; ok=0; break; }
+    fi
+    P+="$x "
+  done
+  [ "$ok" = 1 ] || continue
+  printf '%s' "$P" > "$T/w.omegese"
+  if ! "$G" complete "$T/w.omegese" > "$T/w.tail" 2> "$T/w.err"; then bad "soundness: complete refused after a legal walk: $(cat "$T/w.tail" "$T/w.err" | head -2)"; continue; fi
+  toks "$P"
+  lines=$(grep -c '' "$T/w.tail" || true)
+  [ "$lines" -le $((${#TW[@]} + 3)) ] || bad "soundness: completion of $lines lines for a prefix of ${#TW[@]} words"
+  cat "$T/w.omegese" "$T/w.tail" > "$T/w2.omegese"
+  "$G" emit "$T/w2.omegese" "$T/w2.json" > "$T/w2.out" || bad "soundness: walk + completion refused: $(cat "$T/w2.out")"
+  nwalk=$((nwalk + 1))
+done
+echo "soundness fuzz: $nwalk/${OMEGESE_WALKS:-40} random walks ($nstep legal items picked) never met an empty set and closed into accepted programs"
 nf=0
 for f in "$ROOT"/tests/one_layer/omegese/nested/*.omegese "$ROOT"/tests/one_layer/omegese/trial2/*.omegese "$T"/c*.omegese; do
   s="$(cat "$f")"$'\n'
@@ -728,9 +859,11 @@ for f in "$ROOT"/tests/one_layer/omegese/nested/*.omegese "$ROOT"/tests/one_laye
     [ "$rc" -le 1 ] || { bad "emit exit $rc on byte prefix $i of $(basename "$f")"; break; }
     rc=0; "$G" next "$T/p" > /dev/null 2>&1 || rc=$?
     [ "$rc" -le 1 ] || { bad "next exit $rc on byte prefix $i of $(basename "$f")"; break; }
+    rc=0; "$G" next --machine "$T/p" > /dev/null 2>&1 || rc=$?
+    [ "$rc" -le 1 ] || { bad "next --machine exit $rc on byte prefix $i of $(basename "$f")"; break; }
     nf=$((nf + 1))
   done
 done
-echo "truncation fuzz: $nf byte prefixes through emit and next, exit 0 or 1"
+echo "truncation fuzz: $nf byte prefixes through emit, next and next --machine, exit 0 or 1"
 [ "$fails" -eq 0 ] || { echo "test-omegese: $fails failure(s)"; exit 1; }
 echo "test-omegese: PASS"
