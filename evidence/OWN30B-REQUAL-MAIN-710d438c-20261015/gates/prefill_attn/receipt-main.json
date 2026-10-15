@@ -1,0 +1,16 @@
+{"test": "gpu_prefill_attn", "points": [
+  {"pos0": 0, "m": 1, "gate2_rows_k_diff": 0, "gate2_rows_v_diff": 0, "gate2_out_worst": 0.0000, "decode_loop_chip_ms": 0.1061, "decode_loop_call_ms": 0.3451},
+  {"pos0": 37, "m": 19, "gate2_rows_k_diff": 0, "gate2_rows_v_diff": 0, "gate2_out_worst": 0.1339, "decode_loop_chip_ms": 1.9390, "decode_loop_call_ms": 2.0234},
+  {"pos0": 0, "m": 64, "prefill_chip_ms_median": 0.2077, "prefill_call_ms_median": 0.3968, "useful_tflops": 0.164},
+  {"pos0": 0, "m": 64, "gate2_rows_k_diff": 0, "gate2_rows_v_diff": 0, "gate2_out_worst": 0.2307, "decode_loop_chip_ms": 6.6691, "decode_loop_call_ms": 6.8220},
+  {"pos0": 100, "m": 70, "gate2_rows_k_diff": 0, "gate2_rows_v_diff": 0, "gate2_out_worst": 0.0862, "decode_loop_chip_ms": 7.2462, "decode_loop_call_ms": 7.4017},
+  {"pos0": 200, "m": 64, "gate2_rows_k_diff": 0, "gate2_rows_v_diff": 0, "gate2_out_worst": 0.0613, "decode_loop_chip_ms": 6.6940, "decode_loop_call_ms": 6.8322},
+  {"pos0": 0, "m": 512, "prefill_chip_ms_median": 0.4152, "prefill_call_ms_median": 2.1528, "useful_tflops": 5.183},
+  {"pos0": 0, "m": 512, "gate2_rows_k_diff": 0, "gate2_rows_v_diff": 0, "gate2_out_worst": 0.2374, "decode_loop_chip_ms": 52.9995, "decode_loop_call_ms": 56.1794},
+  {"pos0": 4032, "m": 64, "prefill_chip_ms_median": 0.4118, "prefill_call_ms_median": 0.6026, "useful_tflops": 10.348},
+  {"pos0": 4032, "m": 64, "gate2_rows_k_diff": 0, "gate2_rows_v_diff": 0, "gate2_out_worst": 0.0109, "decode_loop_chip_ms": 13.2487, "decode_loop_call_ms": 13.4726},
+  {"pos0": 0, "m": 2048, "prefill_chip_ms_median": 2.1517, "prefill_call_ms_median": 9.7517, "useful_tflops": 15.976},
+  {"dev": 1, "pos0": 0, "m": 2048, "chip_ms_median": 1.9430, "chip_ms_min": 1.9358, "call_ms_median": 1.9440, "out_diff": 0, "rows_diff": 0},
+  {"dev": 1, "pos0": 4096, "m": 1500, "chip_ms_median": 3.5298, "chip_ms_min": 3.4530, "call_ms_median": 3.5307, "out_diff": 0, "rows_diff": 0},
+  {}
+], "checks": 164, "failed": 0}

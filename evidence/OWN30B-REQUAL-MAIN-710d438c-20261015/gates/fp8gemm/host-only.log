@@ -1,0 +1,14 @@
+host-only: emulation, permutation, budgets
+emulation vs oracle: worst relative error 2.00e-08 of the term scale
+codegen k 2048 lane 16 mt  8 warps 16: 797 instructions, 107 registers (declared 112, register file 57344 of 65536), shared 16384 B
+codegen k 4096 lane 16 mt  8 warps 16: 797 instructions, 107 registers (declared 112, register file 57344 of 65536), shared 16384 B
+codegen k 1024 lane 16 mt  8 warps 16: 788 instructions, 104 registers (declared 112, register file 57344 of 65536), shared 16384 B
+codegen k  768 lane  8 mt  8 warps 16: 683 instructions, 103 registers (declared 104, register file 53248 of 65536), shared 8192 B
+codegen k  768 lane  8 mt  8 warps  8: 731 instructions, 103 registers (declared 104, register file 26624 of 65536), shared 8192 B
+codegen k 2048 lane  8 mt  8 warps 16: 541 instructions, 103 registers (declared 104, register file 53248 of 65536), shared 8192 B
+codegen k 2048 lane 16 mt  4 warps 16: 509 instructions, 99 registers (declared 104, register file 53248 of 65536), shared 8192 B
+codegen k 2048 lane 16 mt  8 warps 32: 765 instructions, 107 registers (declared 112, register file 114688 of 65536) DOES NOT FIT, shared 16384 B
+codegen k 2048 lane 16 mt  8 warps  8: 861 instructions, 107 registers (declared 112, register file 28672 of 65536), shared 16384 B
+codegen k 2048 lane 16 mt  4 warps  8: 541 instructions, 99 registers (declared 104, register file 26624 of 65536), shared 8192 B
+codegen k 4096 lane 16 mt  4 warps  8: 541 instructions, 99 registers (declared 104, register file 26624 of 65536), shared 8192 B
+gpu_fp8gemm_test: 53 checks, 0 failed: PASS

@@ -1,0 +1,14 @@
+sim context 1                                          depth 1: ok bad=0 worst=0.000 rows: ok (0 one-ulp k flips)
+sim context 7                                          depth 2: ok bad=0 worst=0.000 rows: ok (0 one-ulp k flips)
+sim context 7, sharp q (x4)                            depth 4: ok bad=0 worst=0.000 rows: ok (0 one-ulp k flips)
+sim context 256 (full chunk, 1 split)                  depth 4: ok bad=0 worst=0.000 rows: ok (0 one-ulp k flips)
+sim context 257 (2 splits, last holds one position)    depth 4: ok bad=0 worst=0.000 rows: ok (0 one-ulp k flips)
+sim context 301 (2 splits)                             depth 3: ok bad=0 worst=0.000 rows: ok (0 one-ulp k flips)
+sim context 701 (3 splits)                             depth 4: ok bad=0 worst=0.000 rows: ok (0 one-ulp k flips)
+sim context 701 (per_split 512: 2 chunks per CTA)      depth 2: ok bad=0 worst=0.000 rows: ok (0 one-ulp k flips)
+sim mutant 1 at context 301: caught (bad=4601 worst=24.241 rows: k[0] chip bf76 ref becc)
+sim mutant 2 at context 301: caught (bad=3756 worst=37.139 rows: ok (0 one-ulp k flips))
+sim mutant 3 at context 301: caught (bad=2114 worst=16.257 rows: v[0] chip 0000 ref bf4c)
+sim mutant 4 at context 301: caught (bad=2233 worst=21.965 rows: ok (0 one-ulp k flips))
+sim: 6925320 warp issues in total
+gpu_decode_attn_test: 12 checks, 0 failed: PASS

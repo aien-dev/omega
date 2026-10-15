@@ -1,0 +1,12 @@
+dgraph prefetch 0 (red 0)
+fp8 knobs: variant 1 barrier 0 (wfi+inval_all) cta_budget 0 shape 0/0/0 cached 0
+model built in 1.4 s (layers 2, vocab 151936, pos 300)
+ok: A (baseline, host glue) 3 reps ran
+ok: A deterministic over 3 reps (token 62700)
+A: token 62700 logit 5.820572, runner-up 107672 logit 5.779164 (gap 0.0414)
+ok: C (one list per token) 3 reps ran: 22 launches in 1 submission(s)
+ok: C deterministic over 3 reps (token 70886)
+A vs C: token 62700 vs 70886, logits max |d| 2.55 (scale 6.03, rel 0.423, tol 1e-04), x max rel 0.54, hidden max rel 0.508
+FAIL: argmax token identical: A 62700, C 70886
+FAIL: logits A vs C within 1e-04 of max|logit| (max |d| 2.55, scale 6.03)
+chip-red: 6 checks, 2 failed: FAIL
