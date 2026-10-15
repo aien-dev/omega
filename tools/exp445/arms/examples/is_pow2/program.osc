@@ -1,3 +1,0 @@
-fn is_pow2(x: u64) -> bool {
-    return x != 0 && (x & (x - 1)) == 0;
-}

@@ -1,2 +1,0 @@
-Write a function is_pow2 that takes an unsigned 64-bit number x and returns true when x is a power
-of two (1, 2, 4, 8, ...) and false otherwise. 0 is not a power of two. It never traps.

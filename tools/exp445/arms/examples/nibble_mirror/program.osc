@@ -1,0 +1,7 @@
+fn nibble_mirror(x: u16) -> bool {
+    let a: u16 = x & 15;
+    let b: u16 = (x >> 4) & 15;
+    let c: u16 = (x >> 8) & 15;
+    let d: u16 = x >> 12;
+    return a == d && b == c;
+}

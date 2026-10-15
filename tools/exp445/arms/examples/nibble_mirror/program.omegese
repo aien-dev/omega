@@ -1,0 +1,7 @@
+fn nibble_mirror x ushort to bool
+a = and x 15
+b = and shr x 4 15
+c = and shr x 8 15
+d = shr x 12
+ret and eq a d eq b c
+end

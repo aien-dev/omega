@@ -46,14 +46,10 @@ int main(int argc, char **argv)
             if (!fits(a, 16) || !fits(b, 16) || !fits(c, 16) || !fits(a + b, 16) || !fits(a + b + c, 16)) printf("TRAP 1\n");
             else printf("%" PRId64 "\n", a + b + c);
         }
-    } else if (!strcmp(t, "is_pow2")) {
-        while (row(1, s, u)) { int p = 0; for (int i = 0; i < 64; i++) if (u[0] == (UINT64_C(1) << i)) p = 1; printf("%d\n", p); }
-    } else if (!strcmp(t, "is_prime")) {
-        while (row(1, s, u)) {
-            int p = u[0] >= 2;
-            for (uint64_t d = 2; p && d * d <= u[0]; d++) if (u[0] % d == 0) p = 0;
-            printf("%d\n", p);
-        }
+    } else if (!strcmp(t, "nibble_mirror")) {
+        while (row(1, s, u)) { unsigned x = (unsigned)u[0] & 0xffffu; printf("%d\n", (x & 15u) == (x >> 12) && ((x >> 4) & 15u) == ((x >> 8) & 15u)); }
+    } else if (!strcmp(t, "halve_or_dec_steps")) {
+        while (row(1, s, u)) { uint32_t x = (uint32_t)u[0], k = 0; while (x > 1) { x = x % 2 ? x - 1 : x / 2; k++; } printf("%" PRIu32 "\n", k); }
     } else if (!strcmp(t, "count_digits")) {
         while (row(1, s, u)) { char b[32]; printf("%d\n", snprintf(b, sizeof b, "%" PRIu64, u[0])); }
     } else if (!strcmp(t, "sum_range")) {
@@ -62,12 +58,11 @@ int main(int argc, char **argv)
             if (lo <= hi) sum = (lo + hi) * (hi - lo + 1) / 2;
             printf("%" PRId64 "\n", sum);
         }
-    } else if (!strcmp(t, "fib_mod")) {
+    } else if (!strcmp(t, "cube_xor_pair")) {
         while (row(1, s, u)) {
-            if (u[0] > 63) { printf("TRAP 3\n"); continue; }
-            uint32_t a = 0, b = 1;
-            for (uint64_t i = 0; i < u[0]; i++) { uint32_t c = a + b; a = b; b = c; }
-            printf("%" PRIu32 "\n", a);
+            if (u[0] >= 15) { printf("TRAP 3\n"); continue; }
+            uint32_t a = (uint32_t)(u[0] * u[0] * u[0]), b = (uint32_t)((u[0] + 1) * (u[0] + 1) * (u[0] + 1));
+            printf("%" PRIu32 "\n", (a ^ b) & 0xffffu);
         }
     } else if (!strcmp(t, "count_above")) {
         while (row(5, s, u)) { int k = 0; for (int i = 0; i < 4; i++) k += s[i] > s[4]; printf("%d\n", k); }

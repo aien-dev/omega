@@ -1,14 +1,14 @@
 hash_step
 sum_squares3
 narrow_sum
-is_pow2
+nibble_mirror
 rotl8
 count_digits
 has_digit
-is_prime
+halve_or_dec_steps
 sum_range
 tri_kind
 power_mod
-fib_mod
+cube_xor_pair
 count_above
 dot3

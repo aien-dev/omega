@@ -1,3 +1,0 @@
-fn is_pow2 x ulong to bool
-ret and ne x 0 eq and x sub x 1 0
-end

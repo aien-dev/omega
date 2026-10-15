@@ -1,5 +1,5 @@
 # exp445 worked example (protocol r3 section 13.2), not a held-out task
 kind task
-entry is_pow2
-params u64
+entry nibble_mirror
+params u16
 ret bool

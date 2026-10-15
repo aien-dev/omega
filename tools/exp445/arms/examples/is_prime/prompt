@@ -1,3 +1,0 @@
-Write a function is_prime that takes an unsigned 32-bit number n and returns true when n is a prime
-number, false otherwise. 0 and 1 are not prime. Test divisors d = 2, 3, 4, ... while d * d <= n,
-computing d * d in 64 bits so it cannot wrap. It never traps.
