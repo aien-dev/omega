@@ -231,7 +231,7 @@ static int cmd_mcnemar(const char *bs, const char *cs)
 {
     char *e1, *e2;
     long b = strtol(bs, &e1, 10), c = strtol(cs, &e2, 10);
-    if (*e1 || *e2 || !*bs || !*cs || b < 0 || c < 0 || b + c > 1000000) { fprintf(stderr, "x445: mcnemar b c with 0 <= b, c and b + c <= 1000000\n"); return 2; }
+    if (*e1 || *e2 || !*bs || !*cs || b < 0 || c < 0 || b > 1000000 || c > 1000000 || b + c > 1000000) { fprintf(stderr, "x445: mcnemar b c with 0 <= b, c and b + c <= 1000000\n"); return 2; }
     long n = b + c, m = b < c ? b : c;
     double s = 0;
     for (long i = 0; i <= m && n > 0; i++)

@@ -121,17 +121,29 @@ a1_rows_sha() { tail -n +2 "$1" | awk -F'\t' '$1 ~ /-1$/' | LC_ALL=C sort | sha2
 # prompt.system.txt, rK.req.json for K = 1 .. g0_seeds + 1 (the last repeats the seed of the first), gate/
 # (the stage S gate's output: gate.txt and every reply; d-rK.json is the reply to rK.req.json), the
 # repeat's rK.transport and rK.resp.json, verdict.txt and SHA256SUMS.
-# G0 ledger (13.4: on FAIL nothing in that configuration runs). g0.sh appends every verdict to one ledger,
-# evidence/ONE-LAYER-2/g0-ledger.tsv (committed with the runs; commit it before score.sh, whose harness refuses
-# a dirty tree), BEFORE it moves the record into place, so a crash leaves a ledger line without a record (the
-# safe side). Columns: UTC time, config, server, the configuration identity (g0_ident), PASS or FAIL, the
-# record's directory (relative to the repo when inside it), the sha256 of its SHA256SUMS, the PARAMS sha256.
+# G0 ledger (13.4: on FAIL nothing in that configuration runs). g0.sh writes every verdict as one new file in
+# the ledger directory evidence/ONE-LAYER-2/g0-ledger/ (<UTC time>-<config>-<first 16 hex of the record's
+# SHA256SUMS sha256>.tsv, one line), BEFORE it moves the record into place, so a crash leaves a ledger entry
+# without a record (the safe side). One file per verdict, never an edited file: evidence is append-only
+# (.github/workflows/evidence-immutable.yml refuses a change to an existing evidence file), so a later PR can
+# add a verdict and no PR can drop a FAIL. Commit new entries before score.sh, whose harness refuses a dirty
+# tree. Columns: UTC time, config, server, the configuration identity (g0_ident), PASS or FAIL, the record's
+# directory (relative to the repo when inside it), the sha256 of its SHA256SUMS, the PARAMS sha256.
 # A FAIL is keyed on the identity, not on the whole PARAMS file, so an edit elsewhere in PARAMS (a comment,
 # the futility rule, the commit that opens a stage) does not lift it. g0.sh, run.sh and score.sh refuse a
 # configuration with a FAIL for its identity; run.sh and score.sh also need the ledger's PASS line for the run's
-# G0 record (g0_on_ledger). EXP445_G0_LEDGER names another ledger only when EXP445_PARAMS is set (tests only).
-# Limit: the ledger is a file in this tree, so a FAIL recorded in another worktree is seen once it is merged.
-g0_ledger() { if [ -n "${EXP445_PARAMS:-}" ] && [ -n "${EXP445_G0_LEDGER:-}" ]; then echo "$EXP445_G0_LEDGER"; else echo "$ROOT/evidence/ONE-LAYER-2/g0-ledger.tsv"; fi; }
+# G0 record (g0_on_ledger). EXP445_G0_LEDGER names another ledger directory only when EXP445_PARAMS is set
+# (tests only). Limit: the ledger is in this tree, so a FAIL recorded in another worktree is seen once merged.
+g0_ledger() { if [ -n "${EXP445_PARAMS:-}" ] && [ -n "${EXP445_G0_LEDGER:-}" ]; then echo "$EXP445_G0_LEDGER"; else echo "$ROOT/evidence/ONE-LAYER-2/g0-ledger"; fi; }
+# g0_lines: every ledger entry, oldest first (nothing when the directory is missing or empty)
+g0_lines() { local l; l="$(g0_ledger)"; if [ -d "$l" ]; then find "$l" -maxdepth 1 -type f -name '*.tsv' -print0 | LC_ALL=C sort -z | xargs -0 -r cat; fi; }
+# g0_append <line>: one new ledger file for one verdict; refuses to overwrite an entry
+g0_append() {
+  local l f; l="$(g0_ledger)"; mkdir -p "$l" || return 1
+  f="$l/$(cut -f1 <<< "$1")-$(cut -f2 <<< "$1")-$(cut -f7 <<< "$1" | cut -c1-16).tsv"
+  [ ! -e "$f" ] || { echo "G0 ledger entry $f exists already" >&2; return 1; }
+  printf '%s\n' "$1" > "$f.tmp" && mv -n "$f.tmp" "$f" && [ ! -e "$f.tmp" ]
+}
 # g0_ident <PARAMS file> <config>: sha256 over the values that define what G0 tested: the configuration's
 # model, endpoint, request extra and server, the sampling settings, the G0 task, seeds, prompt mode and gate
 g0_ident() {
@@ -142,13 +154,13 @@ g0_ident() {
   done | sha256sum | cut -d' ' -f1
 }
 # g0_failed <config> <identity>: prints the first FAIL line for them (nothing when none)
-g0_failed() { local l; l="$(g0_ledger)"; if [ -f "$l" ]; then C="$1" I="$2" awk -F'\t' '$2 == ENVIRON["C"] && $4 == ENVIRON["I"] && $5 == "FAIL" { print; exit }' "$l"; fi; }
+g0_failed() { g0_lines | C="$1" I="$2" awk -F'\t' '!f && $2 == ENVIRON["C"] && $4 == ENVIRON["I"] && $5 == "FAIL" { print; f = 1 }'; }  # reads all input: no SIGPIPE under pipefail
 # g0_on_ledger <g0 dir> <config> <identity>: 0 when the ledger holds a PASS line for this configuration and
 # identity whose SHA256SUMS sha256 is the record's; prints the reason otherwise
 g0_on_ledger() {
   local l s; l="$(g0_ledger)"; s="$(sha256sum < "$1/SHA256SUMS" 2> /dev/null | cut -d' ' -f1)"
-  [ -f "$l" ] || { echo "no G0 ledger $l"; return 1; }
-  [ -n "$(C="$2" I="$3" S="$s" awk -F'\t' '$2 == ENVIRON["C"] && $4 == ENVIRON["I"] && $5 == "PASS" && $7 == ENVIRON["S"] { print; exit }' "$l")" ] ||
+  [ -d "$l" ] || { echo "no G0 ledger $l"; return 1; }
+  [ -n "$(g0_lines | C="$2" I="$3" S="$s" awk -F'\t' '!f && $2 == ENVIRON["C"] && $4 == ENVIRON["I"] && $5 == "PASS" && $7 == ENVIRON["S"] { print; f = 1 }')" ] ||
     { echo "the G0 record in $1 has no PASS line in $l for this configuration"; return 1; }
 }
 # g0_files <g0 dir>: the hashed files (gate/ included), sorted
@@ -253,9 +265,9 @@ ask() {
   if [ -f "$p.req.json" ]; then [ "$(cat "$p.req.json")" = "$q" ] || die "$p.req.json differs from the request this run sends: resume refused"
   else printf '%s\n' "$q" > "$p.req.json.tmp" || die "cannot write $p.req.json.tmp"; mv "$p.req.json.tmp" "$p.req.json" || die "cannot commit $p.req.json"; fi
   if [ ! -f "$p.transport" ]; then
-    touch "$p.transport.tmp"
+    touch "$p.transport.tmp" || die "cannot write $p.transport.tmp"
     lb="$(tail -n 1 "$p.transport.tmp" | sed -n 's/.* body=\([^ ]*\).*/\1/p')"
-    if [ -n "$lb" ] && [ "$lb" != none ] && [ ! -f "$d/$lb" ] && [ -f "$p.try" ]; then mv "$p.try" "$d/$lb"; fi
+    if [ -n "$lb" ] && [ "$lb" != none ] && [ ! -f "$d/$lb" ] && [ -f "$p.try" ]; then mv "$p.try" "$d/$lb" || die "cannot keep $d/$lb"; fi
     rm -f "$p.try"
     if [ "$lb" != "r$r.resp.json" ]; then
       k="$(wc -l < "$p.transport.tmp")"

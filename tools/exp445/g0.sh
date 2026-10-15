@@ -21,7 +21,7 @@
 # score.sh refuses a run, without a G0 PASS for the same configuration, server and PARAMS (reader.sh
 # g0_check re-derives it). A G0 record is never overwritten: after a FAIL nothing runs in that run dir
 # (13.4). A transport failure (the gate exits 2 or runs out of time, or the repeat gets no response) writes
-# no record and exits 2: it says nothing about the sampler. Every verdict is appended to the G0 ledger (reader.sh
+# no record and exits 2: it says nothing about the sampler. Every verdict is added to the G0 ledger, one new file each (reader.sh
 # g0_ledger) before the record is moved into place; with a FAIL there for this configuration's identity (reader.sh
 # g0_ident: its model, endpoint, request extra, server, sampling settings and G0 settings), g0.sh refuses with exit 3
 # (not a transport failure: do not retry), and run.sh and score.sh refuse, in any run dir. EXP445_PARAMS names another PARAMS file (tests only).
@@ -103,9 +103,8 @@ if g0_pass "$der" "$N"; then v=PASS; else v=FAIL; fi
 } > "$W/verdict.txt"
 (cd "$W" && g0_files . | tr '\n' '\0' | xargs -0 sha256sum) > "$W/SHA256SUMS"
 # the ledger line first (13.4): a crash after it leaves a FAIL barred without a record, never a record unbarred
-mkdir -p "$(dirname "$(g0_ledger)")"
-printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$(date -u +%Y%m%dT%H%M%SZ)" "$CONFIG" "$SERVER" "$IDENT" "$v" "${D#"$ROOT/"}" \
-  "$(sha256sum < "$W/SHA256SUMS" | cut -d" " -f1)" "$PSHA" >> "$(g0_ledger)"
+g0_append "$(printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s" "$(date -u +%Y%m%dT%H%M%SZ)" "$CONFIG" "$SERVER" "$IDENT" "$v" "${D#"$ROOT/"}" \
+  "$(sha256sum < "$W/SHA256SUMS" | cut -d" " -f1)" "$PSHA")" || die "cannot write the G0 ledger entry in $(g0_ledger)"
 mv "$W" "$D"; trap - EXIT
 echo "g0.sh: config $CONFIG: $der: G0 $v (record in $D)"
 [ "$v" = PASS ]

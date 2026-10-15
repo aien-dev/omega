@@ -209,7 +209,8 @@ sed "s|^config\.A\.base_url=.*|config.A.base_url=$URL2|" "$TP" > "$T/PARAMS2"
 sed -e 's/^attempts=.*/attempts=2/' -e 's/^heldout_tasks=.*/heldout_tasks=4/' -e 's/^futility_max=.*/futility_max=3/' "$TP" > "$T/PARAMSH"
 sed 's/^futility_max=.*/futility_max=2/' "$T/PARAMSH" > "$T/PARAMSC"
 export EXP445_PARAMS="$TP" EXP445_TEST_BACKOFF_S=0
-export EXP445_G0_LEDGER="$T/g0-ledger.tsv"   # the tests never write the real ledger
+export EXP445_G0_LEDGER="$T/g0-ledger"   # the tests never write the real ledger
+lcat() { find "$1" -maxdepth 1 -type f -name "*.tsv" -print0 2> /dev/null | LC_ALL=C sort -z | xargs -0 -r cat; }   # a ledger directory, oldest entry first
 cw() { "$HERE/check_weights.sh" "$1" "$2" > /dev/null; }
 g0() { "$HERE/g0.sh" --config "$1" --out "$2" > /dev/null 2>&1; }
 prep() { cw "$1" "$2" && g0 "$1" "$2"; }
@@ -299,11 +300,15 @@ g0case "identical answers, p_repeat 0.51 (0.51^7 = 0.00897 < 0.01), boundary" '{
 g0case "identical answers, p_repeat 0.52 (0.52^7 = 0.0103 >= 0.01): a confident model; distinct 1/8 recorded, not gated" '{"p_repeat": 0.52}' PASS 'gate=PASS distinct=1/8 repeat_identical=yes sampled_own_seed=9/9' 'gate d PASS identical replies explained by confidence'
 # the G0 ledger: a FAIL bars the configuration's identity (server and settings) in every run dir (13.4)
 ID2="$(g0_ident "$T/PARAMS2" A)"
-[ "$(cut -f2-5 "$T/g0c1.ledger")" = "$(printf 'A\tfake445 test server A\t%s\tFAIL' "$ID2")" ] && [ "$(cut -f6 "$T/g0c1.ledger")" = "$T/g0c1/g0" ] &&
-[ "$(cut -f7 "$T/g0c1.ledger")" = "$(sha256sum < "$T/g0c1/g0/SHA256SUMS" | cut -d' ' -f1)" ] && [ "$(cut -f8 "$T/g0c1.ledger")" = "$(sha256sum < "$T/PARAMS2" | cut -d' ' -f1)" ] &&
-  ok "G0 ledger: the FAIL appended (config, server, identity, verdict, record dir, SHA256SUMS sha, PARAMS sha)" || bad "G0 ledger line: $(cat "$T/g0c1.ledger")"
-[ "$(cut -f2,4,5 "$T/g0c3.ledger")" = "$(printf 'A\t%s\tPASS' "$ID2")" ] && [ "$(cut -f7 "$T/g0c3.ledger")" = "$(sha256sum < "$T/g0c3/g0/SHA256SUMS" | cut -d' ' -f1)" ] &&
-  ok "G0 ledger: a PASS appended too, with its record's SHA256SUMS sha" || bad "G0 ledger PASS line: $(cat "$T/g0c3.ledger")"
+[ "$(lcat "$T/g0c1.ledger" | cut -f2-5)" = "$(printf 'A\tfake445 test server A\t%s\tFAIL' "$ID2")" ] && [ "$(lcat "$T/g0c1.ledger" | cut -f6)" = "$T/g0c1/g0" ] &&
+[ "$(lcat "$T/g0c1.ledger" | cut -f7)" = "$(sha256sum < "$T/g0c1/g0/SHA256SUMS" | cut -d' ' -f1)" ] && [ "$(lcat "$T/g0c1.ledger" | cut -f8)" = "$(sha256sum < "$T/PARAMS2" | cut -d' ' -f1)" ] &&
+  ok "G0 ledger: the FAIL appended (config, server, identity, verdict, record dir, SHA256SUMS sha, PARAMS sha)" || bad "G0 ledger line: $(lcat "$T/g0c1.ledger")"
+[ "$(lcat "$T/g0c3.ledger" | cut -f2,4,5)" = "$(printf 'A\t%s\tPASS' "$ID2")" ] && [ "$(lcat "$T/g0c3.ledger" | cut -f7)" = "$(sha256sum < "$T/g0c3/g0/SHA256SUMS" | cut -d' ' -f1)" ] &&
+  ok "G0 ledger: a PASS appended too, with its record's SHA256SUMS sha" || bad "G0 ledger PASS line: $(lcat "$T/g0c3.ledger")"
+[ "$(find "$T/g0c1.ledger" -type f | wc -l)" = 1 ] && [ "$(find "$T/g0c3.ledger" -type f | wc -l)" = 1 ] && h1="$(lcat "$T/g0c1.ledger" | sha256sum)" &&
+  not env EXP445_G0_LEDGER="$T/g0c1.ledger" bash -c ". '$HERE/reader.sh'; g0_append \"\$1\"" _ "$(lcat "$T/g0c1.ledger" | sed 's/FAIL/PASS/')" 2> /dev/null &&
+  [ "$(lcat "$T/g0c1.ledger" | sha256sum)" = "$h1" ] && [ "$(find "$T/g0c1.ledger" -type f | wc -l)" = 1 ] &&
+  ok "G0 ledger: one new file per verdict (evidence stays append-only); an entry with the same name is never overwritten (a FAIL cannot become a PASS)" || bad "G0 ledger files"
 g0refuse() { # g0refuse <name> <ledger> <PARAMS>: g0.sh refused with exit 3 and the ledger reason, nothing written
   local e=0; rm -rf "$T/g0again"; env EXP445_G0_LEDGER="$2" EXP445_PARAMS="$3" "$HERE/g0.sh" --config A --out "$T/g0again" > /dev/null 2> "$T/g0again.err" || e=$?
   [ "$e" = 3 ] && grep -q "a G0 FAIL for config A on this server and settings is in" "$T/g0again.err" && [ ! -e "$T/g0again" ] &&
@@ -323,13 +328,13 @@ sed 's|^temperature=.*|temperature=0.6|' "$T/PARAMS2" > "$T/PARAMS2t"
 [ -z "$(EXP445_G0_LEDGER="$T/g0c1.ledger" g0_failed A "$(g0_ident "$T/PARAMS2t" A)")" ] &&
 [ -z "$(EXP445_G0_LEDGER="$T/g0c1.ledger" g0_failed B "$ID2")" ] &&
   ok "  negative controls: that FAIL does not bar another server, another temperature or config B" || bad "g0_failed matches too much"
-EXP445_G0_LEDGER="$T/ledger-elsewhere" g0_ledger | grep -qx "$T/ledger-elsewhere" && [ "$(env -u EXP445_PARAMS EXP445_G0_LEDGER="$T/x" bash -c "ROOT=$ROOT; . $HERE/reader.sh; g0_ledger")" = "$ROOT/evidence/ONE-LAYER-2/g0-ledger.tsv" ] &&
+EXP445_G0_LEDGER="$T/ledger-elsewhere" g0_ledger | grep -qx "$T/ledger-elsewhere" && [ "$(env -u EXP445_PARAMS EXP445_G0_LEDGER="$T/x" bash -c "ROOT=$ROOT; . $HERE/reader.sh; g0_ledger")" = "$ROOT/evidence/ONE-LAYER-2/g0-ledger" ] &&
   ok "  EXP445_G0_LEDGER is honoured only with EXP445_PARAMS (tests); otherwise the real ledger" || bad "g0_ledger override"
 # run.sh needs the record's PASS line on the ledger: a G0 PASS record that the ledger does not know is refused
-: > "$T/empty.ledger"
+mkdir -p "$T/empty.ledger"
 refuse "run.sh on a G0 PASS record with no PASS line on the ledger" "has no PASS line in" \
   env EXP445_G0_LEDGER="$T/empty.ledger" EXP445_PARAMS="$T/PARAMS2" "$HERE/run.sh" --config A --tasks "$T/pub" --out "$T/g0c3"
-awk -F"\t" -v OFS="\t" -v z="$(printf "%064d" 0)" '$5 == "PASS" { $7 = z } 1' "$T/g0c3.ledger" > "$T/other.ledger"
+mkdir -p "$T/other.ledger"; lcat "$T/g0c3.ledger" | awk -F"\t" -v OFS="\t" -v z="$(printf "%064d" 0)" '$5 == "PASS" { $7 = z } 1' > "$T/other.ledger/x.tsv"
 refuse "run.sh when the ledger's PASS line names another record" "has no PASS line in" \
   env EXP445_G0_LEDGER="$T/other.ledger" EXP445_PARAMS="$T/PARAMS2" "$HERE/run.sh" --config A --tasks "$T/pub" --out "$T/g0c3"
 printf 'config.A.server=fake445\twith a tab\n' > "$T/tab.params"; grep -v '^config\.A\.server=' "$T/PARAMS2" >> "$T/tab.params"
@@ -575,7 +580,7 @@ cpr; rm -rf "$T/neg/a/g0"; cp -R "$G0P/g0" "$T/neg/a/g0"; rehash "$T/neg/a"
 invalid "another G0 PASS swapped in after generation (re-hashed)" "the G0 record is not the one this run was generated under" "${NA[@]}"
 smut 's/|| inval "\$r: the G0 record is not the one/|| true "/' "the run's G0 record check" "${NA[@]}"
 # the G0 ledger at scoring: a FAIL for the config's identity, or no PASS line for the run's G0 record
-cpr; { cat "$T/g0-ledger.tsv"; printf '20261015T000000Z\tA\tfake445 test server A\t%s\tFAIL\telsewhere/g0\t%064d\t-\n' "$(g0_ident "$TP" A)" 0; } > "$T/fail.ledger"
+cpr; mkdir -p "$T/fail.ledger"; { lcat "$T/g0-ledger"; printf '20261015T000000Z\tA\tfake445 test server A\t%s\tFAIL\telsewhere/g0\t%064d\t-\n' "$(g0_ident "$TP" A)" 0; } > "$T/fail.ledger/all.tsv"
 EXP445_G0_LEDGER="$T/fail.ledger" invalid "a G0 FAIL on the ledger for config A's server and settings" "a G0 FAIL for config A on this server and settings is in" "${NA[@]}"
 EXP445_G0_LEDGER="$T/fail.ledger" smut 's/\[ -z "\$fl" \] || inval "\$r: a G0 FAIL/true "/' "the ledger FAIL check" "${NA[@]}"
 EXP445_G0_LEDGER="$T/empty.ledger" invalid "the run's G0 PASS record has no PASS line on the ledger" "has no PASS line in" "${NA[@]}"
@@ -622,10 +627,10 @@ H2="$T/gens/h-cont"; prep A "$H2"
 invalid "attempt 2 missing although the stop rule did not fire" "attempts 2..2 are missing but the stop rule did not fire (omegese attempt 1 3/4 > 2)" --configs A "${HPK[@]}" "$H2"
 if SC --interim --configs A "${HPK[@]}" "$H2" > /dev/null 2> "$T/hi2.err"; then
   FUT2="$(sed -n 's/^score.sh: results in //p' "$T/hi2.err")/futility.txt"
-  grep -q "decision=CONTINUE$" "$FUT2" && "$HERE/run.sh" --config A --tasks "$T/hpub" --out "$H2" --futility "$FUT2" > /dev/null 2>&1 &&
+  grep -q "decision=CONTINUE$" "$FUT2" && "$HERE/run.sh" --config A --tasks "$T/hpub" --out "$H2" --futility "$FUT2" > /dev/null 2> "$T/h2b.err" &&
   [ "$(tail -n +2 "$H2/log.tsv" | wc -l)" = 16 ] &&
   [ "$(tail -n +2 "$H2/log.tsv" | cut -f1,2 | tr '\t' ' ' | paste -sd,)" = "$(for at in 1 2; do for t in h01 h02 h03 h04; do for a in omegese text; do printf 'a-%s-%s %s,' "$a" "$at" "$t"; done; done; done | sed 's/,$//')" ] &&
-    ok "decision CONTINUE: attempt 2 run; 16 generations in the order attempt, then task, then arm" || bad "CONTINUE run: $(tail -n +2 "$H2/log.tsv" | cut -f1,2 | paste -sd, | head -c 300)"
+    ok "decision CONTINUE: attempt 2 run; 16 generations in the order attempt, then task, then arm" || bad "CONTINUE run: $(tail -n +2 "$H2/log.tsv" | cut -f1,2 | paste -sd, | head -c 300) / $(tail -n 3 "$T/h2b.err" 2> /dev/null | tr "\n" " ")"
   if SC --configs A "${HPK[@]}" "$H2" > "$T/hc.out" 2> "$T/hc.err"; then
     grep -qx 'stop rule config a (omegese attempt 1 <= 2): CONTINUE' "$T/hc.out" && ok "final score of the continued run: valid, stop rule CONTINUE" || { bad "continued run results"; cat "$T/hc.out"; }
     grep -qx 'distinct candidates config a arm omegese: 1.00 per task over 2.00 attempts; every attempt identical on 4 of 4 tasks with 2+ attempts' "$T/hc.out" &&
