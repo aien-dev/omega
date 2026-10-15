@@ -163,6 +163,7 @@ static int ref_device_close(void *ctx, OmegaGpuDeviceHandle dev) {
     }
     (void)omega_gpu_handles_close(&r->t, dev.index, dev.generation, OMEGA_GPU_HANDLE_DEVICE);
     memset(&r->dev, 0, sizeof r->dev);
+    r->l2_inval_pending = 0; /* omega #457: nothing pending survives the device */
     memset(&r->queue, 0, sizeof r->queue);
     (void)m16_native_close(&r->m16);
     ref_unlock(r);
@@ -309,13 +310,14 @@ static int ref_queue_submit(void *ctx, OmegaGpuQueueHandle q, const uint32_t *wo
     /* omega #457: a host sync into a GPU-cached buffer is pending, so this submission starts with
      * MEM_OP_A..D = 0, 0, 0, OPERATION L2_SYSMEM_NCOH_INVALIDATE 0x11 in D bits 31:27 (clc96f.h:30-73), the same
      * method form as the C3 tail's L2_FLUSH_DIRTY. No dirty line is dropped: every earlier submission ended with
-     * L2_FLUSH_DIRTY and the host waited for it. */
+     * L2_FLUSH_DIRTY and the host waited for it. DOCS SILENT on ordering between this MEM_OP and the launch that
+     * follows (no WFI is inserted); the chip gate tools/run_gpu_l2_stale_chip.sh (20/20 FRESH) is the only proof. */
     const uint32_t pre = r->l2_inval_pending ? 5u : 0u;
     if (rc == OMEGA_GPU_PLAT_OK && ((uint64_t)nwords + pre) * 4u > r->m16.pb_mem.size) rc = OMEGA_GPU_PLAT_REFUSED_BAD_LENGTH;
-    uint32_t *buf = NULL;
+    uint32_t *buf = NULL; const char *stage = "submit_methods";
     if (rc == OMEGA_GPU_PLAT_OK && pre) {
         buf = malloc(((size_t)nwords + pre) * 4u);
-        if (!buf) rc = OMEGA_GPU_PLAT_REFUSED_ARGS;
+        if (!buf) { rc = OMEGA_GPU_PLAT_REFUSED_LIMIT; stage = "submit_methods (host copy for the #457 L2 invalidate prefix)"; }
         else {
             buf[0] = (2u << 28) | (4u << 16) | (0x0028u >> 2); buf[1] = 0; buf[2] = 0; buf[3] = 0; buf[4] = 0x11u << 27;
             memcpy(buf + pre, words, (size_t)nwords * 4u);
@@ -324,7 +326,7 @@ static int ref_queue_submit(void *ctx, OmegaGpuQueueHandle q, const uint32_t *wo
     if (rc == OMEGA_GPU_PLAT_OK && m16_native_submit_methods(&r->m16, buf ? buf : words, nwords + pre) != 0) rc = OMEGA_GPU_PLAT_REFUSED_DEVICE;
     if (rc == OMEGA_GPU_PLAT_OK && pre) r->l2_inval_pending = 0;
     free(buf);
-    if (rc != OMEGA_GPU_PLAT_OK) rc = refuse(r, rc, "submit_methods");
+    if (rc != OMEGA_GPU_PLAT_OK) rc = refuse(r, rc, stage);
     ref_unlock(r);
     return rc;
 }
