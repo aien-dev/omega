@@ -1,0 +1,8 @@
+PASS normal 16x2048x151936 mt=1 nt=18992 rule_rt=1 rule_ct=1 rc=OK err="" launches=1 rows_per_call=16 grid=64x1 chip_ns=9178762 call_ms=592.7 wall_ms=2930.4 rc2=OK hit2=1 repeat_mismatch=0 ref_bad=0 ref_max_rel=3.46e-07 poison_left=0 negctl_bad=1 negctl_rel=0.00194 ref_ms=622
+FAIL normal 32x2048x151936 mt=2 nt=18992 rule_rt=2 rule_ct=4 rc=CODEGEN_FAIL err="" launches=0 rows_per_call=32 grid=64x1 chip_ns=0 call_ms=519.3 wall_ms=2827.6 rc2=CODEGEN_FAIL hit2=0 repeat_mismatch=0 ref_bad=0 ref_max_rel=-1 poison_left=0 negctl_bad=0 negctl_rel=0 ref_ms=0
+FAIL normal 64x2048x151936 mt=4 nt=18992 rule_rt=4 rule_ct=4 rc=CODEGEN_FAIL err="" launches=0 rows_per_call=64 grid=64x1 chip_ns=0 call_ms=540.7 wall_ms=2921.4 rc2=CODEGEN_FAIL hit2=0 repeat_mismatch=0 ref_bad=0 ref_max_rel=-1 poison_left=0 negctl_bad=0 negctl_rel=0 ref_ms=0
+FAIL normal 128x2048x151936 mt=8 nt=18992 rule_rt=4 rule_ct=4 rc=CODEGEN_FAIL err="" launches=0 rows_per_call=128 grid=32x2 chip_ns=0 call_ms=546.3 wall_ms=2970.0 rc2=CODEGEN_FAIL hit2=0 repeat_mismatch=0 ref_bad=0 ref_max_rel=-1 poison_left=0 negctl_bad=0 negctl_rel=0 ref_ms=0
+FAIL normal 128x2048x65536 mt=8 nt=8192 rule_rt=4 rule_ct=4 rc=CODEGEN_FAIL err="" launches=0 rows_per_call=128 grid=32x2 chip_ns=0 call_ms=200.8 wall_ms=1247.6 rc2=CODEGEN_FAIL hit2=0 repeat_mismatch=0 ref_bad=0 ref_max_rel=-1 poison_left=0 negctl_bad=0 negctl_rel=0 ref_ms=0
+FAIL normal 2048x2048x151936 mt=128 nt=18992 rule_rt=4 rule_ct=4 rc=CODEGEN_FAIL err="" launches=0 rows_per_call=2048 grid=2x32 chip_ns=0 call_ms=768.7 wall_ms=3042.7 rc2=CODEGEN_FAIL hit2=0 repeat_mismatch=0 ref_bad=0 ref_max_rel=-1 poison_left=0 negctl_bad=0 negctl_rel=0 ref_ms=0
+WIDEPF_REPRO: FAIL (failed 5)
+exit=1
