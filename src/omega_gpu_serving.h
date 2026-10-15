@@ -30,7 +30,7 @@ typedef struct {
     uint32_t max_k;          /* widest weight input dimension */
     uint32_t max_n;          /* widest weight output dimension for calls of up to max_rows rows */
     uint32_t max_n_one_row;  /* widest output dimension for calls of at most 16 rows (lm_head); 0 = max_n */
-    uint32_t kernel_slots;   /* matmul kernel cache slots; 0 = leave at 8; at most 128. Qwen3-4B, rows 1..256: 95 distinct shapes (grid_x varies with rows) */
+    uint32_t kernel_slots;   /* matmul kernel cache slots; 0 = leave at 8; at most 128. Qwen3-4B, rows 1..256: 83 distinct kernels (grid_x and the row/column block vary with rows) */
 } OmegaGpuServingBounds;
 
 /* Opens the device if needed. 0 on success, else the first failing OMEGA_GPU_MATMUL_* / ATTN_* code
