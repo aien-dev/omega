@@ -1,6 +1,6 @@
 # Omegese: a program language built for the AI writer
 
-Status: v1 (nested values, 2026-10-15). Phase 1 done (language, translator, checks, token measurement);
+Status: v1 (nested values, exact next oracle, 2026-10-15). Phase 1 done (language, translator, checks, token measurement);
 phase 2 started (section 7).
 Tool: `tools/omegese/omegese.c`; tests: `make test-omegese`. Named Glyph until 2026-10-15 (the name was
 taken); evidence recorded before then says glyph. Home: omegese.com (owned by Drake since 2026-10-15).
@@ -174,7 +174,82 @@ Limits: the Omegese programs were written by the designer, not by a model, and i
 shortest form (writing to parameters instead of copies), so the text column is not an equal-effort
 rewrite. Whether models write Omegese reliably is not measured yet.
 
-## 6. Checks (`make test-omegese`)
+## 6. The next oracle and the checks (`make test-omegese`)
+
+### 6.1 What `omegese next` promises
+
+`omegese next <prefix>` reads a prefix of a program (any text, cut anywhere, even inside a word) and
+prints what may come next. It is **exact**: an item is printed if and only if some text that starts
+with it turns the prefix into a program `omegese emit` accepts. Nothing that can still lead to an
+accepted program is missing (within the limits in 6.4), and nothing printed leads to a dead end. When no text can, it prints one
+`REFUSED omegese: ...` line and exits 1: a defect already in the prefix gets the reason `emit` would
+give; otherwise the line says `no text after this prefix makes a program emit accepts` with the reason the
+nearest attempt failed.
+
+How it decides. The prefix is split into its complete lines, the complete words of the last line, and
+the word still being written (empty after a space, a bracket or at a line start). For each candidate
+item a witness is built: the line is finished with the words it still needs (a `ret` line also reads
+the names the ending path would otherwise leave unread), every open block is closed (`x = x` for each
+unread name, a `ret` of a zero where a value is owed, `end`), and the real parser that `emit` runs
+re-reads that line and the closing lines from the state after the complete lines, with every
+end-of-input check. An item is printed only when its witness is accepted, so every printed item is
+legal by construction. Completeness rests on the witness finder; the test fuzz below checks it.
+
+Names stay open at the character level. When a line binds a new name, any identifier is legal except
+a reserved word (`omegese words` and the IR type names `u8` .. `i64`) or one equal to a visible
+name; that is printed as one class item. When a line reads a name, the names printed are the
+visible names (and earlier functions) of the right type and kind.
+Numbers come as intervals: the parser only compares a number with fixed bounds (type ranges, array
+lengths 1..64, trap codes 1..14, loop bounds and counts up to 1000000) and with the lengths of the
+arrays in scope, so one test per breakpoint and per gap between breakpoints decides every number, and
+neighbouring legal pieces merge. Numbers are written as decimal digits with an optional minus sign and
+no leading zeros; `-0` is refused by `emit` as well (it is not a number).
+
+### 6.2 `omegese next --machine`: the fixed grammar
+
+One item per line, in this order, nothing else on stdout. Exit 0 with at least one item, or exit 1
+with exactly one line starting `REFUSED omegese: `. Let U be the word still being written.
+
+| line | meaning |
+|---|---|
+| `word X` | finish the current word as X (X starts with U): a fixed word, a visible name, or a function |
+| `newname E1 E2 ...` | finish the current word as any new name: a letter or `_`, then letters, digits or `_`, at most 63 characters, starting with U, not a reserved word, and not one of E1 E2 ... (the names in use that start with U; the list may be empty) |
+| `number LO HI` | finish the current word as a number v with LO <= v <= HI whose decimal text starts with U |
+| `(` | an opening bracket (it also ends the current word) |
+| `)` | a closing bracket (it also ends the current word) |
+| `space` | a space or tab: ends the current word, or adds blank space between words |
+| `newline` | ends the current word and the line |
+| `eof` | the input may end here: the prefix is already an accepted program |
+
+A writer (an engine's mask) may append text s to the current word exactly when U followed by s is
+still the start of some `word`, `newname` or `number` item; the soundness fuzz checks that a word
+stays legal after each of its first characters.
+
+Example, after `fn f a uint to uint` and a newline: `word if`, `word while`, `word for`, `word ret`,
+`word trap`, `word a`, `newname a f`, `space`, `newline`.
+
+### 6.3 Human output and `omegese complete`
+
+`omegese next` without `--machine` prints the same set for a person, one labelled line per kind,
+empty lines left out: `assign:` (at a line start, the names that may be assigned) or `names:`,
+`number: LO..HI, ...`, `new-name: any name not in use`, and `words:` (fixed words, functions, `(`,
+`)`, `(space)` inside a word, `(newline)`, `(end of input)`).
+
+`omegese complete <prefix>` prints one text that, appended to the prefix, gives a program `emit`
+accepts (finish the word and the line, then close everything); nothing when the prefix is already a
+program; exit 1 (`REFUSED`) when there is none.
+
+### 6.4 Limits (where exact can miss)
+
+There is no over-approximation: every printed item was accepted by the real parser. An item can be
+missed only when the witness finder fails although a completion exists, which needs one of these
+limits: a line longer than 96 words (a witness can be longer than the shortest completion), more than
+480 registers, 256 distinct constants or the block and frame limits in one program, more than 64
+tries when several names of the right kind could be read, or a new name within a few characters of
+the 63-character limit (the class is decided by one representative name). None of these is reached
+by any program in the suite or the fuzz.
+
+### 6.5 The checks
 
 - the 10 dev programs: omegese -> omega_emit -> checker2 ACCEPT;
 - nested values: 6 dev programs rewritten with nested values (`tests/one_layer/omegese/nested`) and 5
@@ -186,20 +261,30 @@ rewrite. Whether models write Omegese reliably is not measured yet.
   two numbers in one op, extra words, `new` inside a value, lines after trap);
 - review fixes: a conversion of a typed number converts it (`ret long int 5`, `uchar int 300`); a for
   count in brackets lowers exactly as the bare count and has the same limit;
-- `omegese next` on 26 prefixes (the open-type list after a binary op, a typed second value, a bracket
-  waiting for `)`, `end` withheld while a value function can still reach its end, refusals as soon as
-  a prefix is wrong);
-- next oracle: at every word boundary of every accepted program in the suite, the real next word is
-  in the list `omegese next` gives;
-- truncation fuzz: every byte prefix of the nested, trial and coverage programs through `emit` and `next`, which
-  must answer (accept or refuse with a reason) and never crash;
+- `omegese next` on 43 prefixes, red before green (the open-type list after a binary op, a typed second
+  value, a bracket waiting for `)`, a `ret` that must read the names its path leaves unread, a cut
+  inside a word, number intervals, `-0`, the `--machine` lines, `complete`, refusals as soon as a
+  prefix is wrong);
+- next oracle: at all 2199 word boundaries of the 63 accepted programs in the suite, the real next
+  word, and the end of input at the end, are legal;
+- completeness: 126 single-word mutants of those programs (a word dropped, doubled, or replaced by a
+  number, a name, a fresh name or a fixed word): `emit` accepts a mutant if and only if every word of
+  it was legal when it was written (2519 word boundaries);
+- soundness fuzz: 40 random walks of up to 25 legal items from random cut points; the legal set is
+  never empty, a word picked stays legal after each of its first characters, and `omegese complete`
+  then finishes the walk into a program `emit` accepts within a bounded number of lines;
+- truncation fuzz: all 2799 byte prefixes of the nested, trial and coverage programs through `emit`,
+  `next` and `next --machine`, which must answer (accept or refuse with a reason) and never crash;
 - loop guard negative control: the dev04 op list without the hidden counter increment passes
   omega_emit and is REJECTED by checker2 (`C2-LOOP-UNBOUNDED`);
 - tokenizer gate, when `OMEGESE_TOKCOUNT` (a counter: `<tool> <tokenizer.json> words <word>...`
   printing the token count of " word" first) and `OMEGESE_TOKENIZER` are set.
 
-The same suite also runs against a build with AddressSanitizer and UndefinedBehaviorSanitizer
-(memory and undefined-behaviour checks): clean.
+The same suite then runs again on a build with AddressSanitizer and UndefinedBehaviorSanitizer
+(memory and undefined-behaviour checks), with 10 walks and one mutant per program; every sanitizer
+finding fails the run. Its negative control: two canary builds (`-DOMEGESE_CANARY=1`, a read after
+free; `=2`, a signed overflow) must each be caught first. Clean. A stress run with 25 mutants per
+program (1575 mutants) and 500 walks of up to 40 items (17386 items) found no failure.
 
 ## 7. Phase 2
 
