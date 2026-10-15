@@ -49,7 +49,7 @@ class N (not a central loop): data/control-flow idiom; reason must name allowed 
 
 Notes:
 - Only C and Rust files are in the gate's file-type scope. Assembly (physics `m3/*.s`,
-  the historical capability/effect-broker oracle) and shell are not scanned;
+  the historical capability/effect-broker oracle), shell and Mojo are not scanned;
   none of them is on the omega production path.
 - `vendor/` and `third_party/` are copies of outside libraries (aienos `vendor/`
   holds syn, serde, uefi, etc.), not our code. `tests/r16_inventory/` in omega holds

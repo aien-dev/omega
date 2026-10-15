@@ -4,6 +4,8 @@ Update 2026-09-30: R16 is CLOSED (omega#112, `3dd5eaa`, all gates G1 to G8 PASS)
 
 Correction 2026-10-01 (recorded now, not at merge time): omega#112 (merge `3dd5eaa`) merged while the evidence-immutable check was FAILED (run 36799862685, head `6831117`), because `evidence/R16/inventory.json` was edited in place by commits `1edb56b` and `6831117`. The exception was not recorded at the time. The R16 receipt `evidence/R16/22d7a79a985514ac38139d39c71c9638d9b6b0a6e05425b6810bdb4833d1ea64.json` is QUALIFIED at candidate `850fc545` only. All R13 to R16 candidate-bound receipts predate omega#126 (`4f8485b`), so the current living build is IMPLEMENTED / NOT QUALIFIED and re-qualification is owed.
 
+Update 2026-10-15: lane B3 / Mojo removed (Drake's rule: no Modular/MAX/Mojo). The Mojo launcher tip below describes the machine on 2026-09-29; there is no Mojo toolchain or Mojo code any more.
+
 Date 2026-09-29. Read-only: nothing built, run or edited. Ground truth = code. README/roadmaps = navigation only.
 
 ## 0. Pins
@@ -121,7 +123,7 @@ Missing for a Field V0 record: (1) a semantic id for the operation inside the id
 - OSC-0B (omega PR #76, OPEN draft) is the hard gate before identity/compiler changes (`OMEGA_SYSTEMS_CORE_CODE_AUDIT.md:19`); it flags layout-dependent hashing (`:95-99`, e.g. `omega_program.c:276`) and live handles in durable identity (`:93`, `:385` "identity break ... needs version bump and Drake-visible plan"). Turing (d) content addressing of contracts/realization specs and any Field semantic id **conflict** until OSC-0B is decided. A Field V0 keyed by existing digests only (no new SemanticId domain) avoids it.
 - Runtime edit freeze "until R16 closes" (`CURRENT_EXECUTION_PLAN.md:540`, per polyglot audit #2) vs arch `8ec9b1d` "record R16 closure" and `CURRENT_EXECUTION_PLAN.md:45` still "IN PROGRESS": **CONFLICTING**; wiring Field into `rx_costmodel` or Shadow into `src/runtime/` needs an explicit ruling.
 - No Rust: aienos Cortex, AEGIS broker (Effect Broker), evidence crate, Store v1, TRUST-1 `BuildIdentityV1` (Cargo.lock) are Rust; Turing must not extend them. ARGUS, capability authority, all of omega are C: fine.
-- No Python: omega CI `.github/workflows/rx-host.yml` has 3 inline python blocks; physics gate scripts call 5 `.py` (polyglot audit §18). Any Turing receipt checking must not reuse them.
+- No Python: omega CI `.github/workflows/rx-host.yml` has 3 inline python blocks; physics gate scripts call 5 `.py` (polyglot audit §18). Any Turing receipt checking must not reuse them. Mojo launcher on PATH is Python (use `~/.pixi/bin/mojo`).
 - Fabric "models" participants: LLM/model participants imply outside runtimes (MAX/CUDA) that Drake is leaving; no in-house model message path exists.
 - No systemd / no outside deps: nothing found that conflicts; ARGUS consumer is an in-process thread.
 - ARGUS perf budget: ADR 0017 2% target is not met (+3.9% shipped). Adding Shadow traffic to the same rings makes that worse unless new kinds are count-on-use.
