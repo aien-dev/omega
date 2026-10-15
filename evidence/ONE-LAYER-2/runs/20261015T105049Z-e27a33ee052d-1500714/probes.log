@@ -1,0 +1,16 @@
+probe=read_hidden_inputs expect=BLOCKED sandboxed=BLOCKED:errno=13 control=ESCAPED:read result=PASS
+probe=read_expected expect=BLOCKED sandboxed=BLOCKED:errno=13 control=ESCAPED:read result=PASS
+probe=read_labels expect=BLOCKED sandboxed=BLOCKED:errno=13 control=ESCAPED:read result=PASS
+probe=read_corpus_tar expect=BLOCKED sandboxed=BLOCKED:errno=13 control=ESCAPED:read result=PASS
+probe=read_key expect=BLOCKED sandboxed=BLOCKED:errno=13 control=ESCAPED:read result=PASS
+probe=write_evidence expect=BLOCKED sandboxed=BLOCKED:errno=13 control=ESCAPED:opened_for_write result=PASS
+probe=write_scorer expect=BLOCKED sandboxed=BLOCKED:errno=13 control=ESCAPED:opened_for_write result=PASS
+probe=change_rules expect=BLOCKED sandboxed=BLOCKED:errno=13 control=ESCAPED:opened_for_write result=PASS
+probe=network expect=BLOCKED sandboxed=BLOCKED:seccomp_syscall=198 control=ESCAPED:connected result=PASS
+probe=outlive_time expect=BLOCKED sandboxed=BLOCKED:time_limit control=ESCAPED:outlived result=PASS
+probe=outlive_fork expect=BLOCKED sandboxed=BLOCKED:seccomp_syscall=220 control=ESCAPED:forked result=PASS
+probe=exceed_memory expect=BLOCKED sandboxed=BLOCKED:errno=12 control=ESCAPED:mapped result=PASS
+probe=write_outside_scratch expect=BLOCKED sandboxed=BLOCKED:errno=13 control=ESCAPED:created result=PASS
+probe=replay_verdict expect=BLOCKED sandboxed=BLOCKED:stale_or_forged_transcript control=ESCAPED:transcript_accepted result=PASS
+probe=scratch_ok expect=ALLOWED sandboxed=ESCAPED:wrote_scratch control=ESCAPED:wrote_scratch result=PASS
+PROBES PASS count=15
