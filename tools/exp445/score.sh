@@ -154,7 +154,7 @@ gcheck() {
   fi
   if [ "$r2" = no ]; then for f in "$d"/r2.req.json "$d"/r2.transport "$d"/r2.resp.json "$d"/r2.err.*.json; do
     if [ -e "$f" ]; then inval "$GL has a round 2 without a round-1 refusal"; break; fi; done; fi
-  for f in "$d"/r[03-9]*.req.json "$d"/r[03-9]*.transport "$d"/r[03-9]*.resp.json; do if [ -e "$f" ]; then inval "$GL has a round other than 1 and 2"; break; fi; done
+  for f in "$d"/r[0-9]*.req.json "$d"/r[0-9]*.transport "$d"/r[0-9]*.resp.json; do b="${f##*/r}"; if [ -e "$f" ] && [ "${b%%.*}" != 1 ] && [ "${b%%.*}" != 2 ]; then inval "$GL has a round other than 1 and 2"; break; fi; done
   gen_row "$sid" "$task" "$d" "$v"
   # token counts come from the untrusted server response: each must be a non-negative integer (or "-"
   # for an absent round 2); reader.sh usage_of prints BAD otherwise
@@ -179,7 +179,7 @@ for r in "${runs[@]}"; do
   [[ ",$CONFIGS," == *",$c,"* ]] || inval "$r: config '$c' is not one of the configs scored ($CONFIGS)"
   [ -n "$(kv "config.$c.model")" ] || inval "$r: config '$c' is not named in PARAMS"
   [ -z "$(kv "config.$c.unavailable")" ] || inval "$r: config '$c' is unavailable in PARAMS"
-  FM="$(kv "config.$c.model")" FX="$(kv "config.$c.extra" | jq -c . 2>/dev/null || echo '{}')" FS="$(kv "config.$c.server")"
+  FM="$(kv "config.$c.model")" FX="$(kv "config.$c.extra" | jq -c . 2>/dev/null || echo "MALFORMED (not JSON)")" FS="$(kv "config.$c.server")"
   [ "$(mv_ model)" = "$FM" ] || inval "$r: model $(mv_ model) is not config $c's frozen model"
   [ "$(mv_ base_url)" = "$(kv "config.$c.base_url")" ] || inval "$r: endpoint $(mv_ base_url) is not config $c's frozen endpoint"
   [ "$(mv_ request_extra)" = "$FX" ] || inval "$r: request extra differs from config $c's frozen extra"
@@ -203,6 +203,7 @@ for r in "${runs[@]}"; do
   weights_ok "$r" "$wl" "$FM" || inval "$r: weights.check / server.json missing or not all OK for config $c (tools/exp445/check_weights.sh)"
   why="$(g0_check "$r/g0" "$c" "$FM" "$(kv "config.$c.base_url")" "$FX" "$FS" "$params_sha" "$(kv g0_gate_sha256)" "$W/g0.system" "$G0U" "$MT" "$TT" "$TP" "$SB" "$G0I" \
     "$(kv g0_seeds)")" || inval "$r: no G0 PASS for config $c and its server: $why"
+  [ "$(mv_ g0_sha256)" = "$(sha256sum < "$r/g0/SHA256SUMS" 2> /dev/null | cut -d" " -f1)" ] || inval "$r: the G0 record is not the one this run was generated under (meta.txt g0_sha256)"
   for arm in ${ARMS//,/ }; do
     [ "$(mv_ "prompt_${arm}_sha256")" = "$(sha256sum < "$W/prompt.$arm.$rm_" | cut -d' ' -f1)" ] &&
       cmp -s "$r/prompts/$arm.system.txt" "$W/prompt.$arm.$rm_" || inval "$r: arm $arm prompt differs from the current arm documents and $rm_ examples"
@@ -343,19 +344,17 @@ fi
 # PARAMS is scored (config A alone is interim, 13.3)
 allcfg="$(echo "$NAMED" | tr 'A-Z,' 'a-z\n' | LC_ALL=C sort | paste -sd,)"
 scored="$(echo "$CONFIGS" | tr 'A-Z,' 'a-z\n' | LC_ALL=C sort | paste -sd,)"
-gate="$(awk -F'\t' -v all="$allcfg" -v scored="$scored" -v interim="$INTERIM" 'NR == 1 { next }
-  { split($4, q, "/"); k[$1, $2] = q[1]; n[$1, $2] = q[2]; cfg[$1] = 1 }
-  END {
-    g = 1
-    for (c in cfg) {
-      o = k[c, "omegese"]; t = k[c, "text"]; N = n[c, "omegese"]
-      p = (100 * o >= 80 * N) && (100 * (t - o) <= 10 * N)
-      printf "gate config %s: omegese %d/%d, text %d/%d: %s (needs omegese >= 80%% and at most 10 points below text)\n", c, o, N, t, n[c, "text"], p ? "PASS" : "FAIL"
-      g = g && p }
-    if (interim) { print "GATE NOT EVALUATED: interim score of attempt 1 (Stage 1 stop rule)"; exit }
-    if (scored != all) { printf "GATE NOT EVALUATED: configs scored %s, the protocol needs %s; INTERIM result (protocol 13.3)\n", scored, all; exit }
-    printf "GATE %s (omegese passes in every config)\n", g ? "PASS" : "FAIL"
-  }' "$OUT/results.tsv")"
+gl="" g=1
+for c in $(awk -F'\t' 'NR > 1 { print $1 }' "$OUT/results.tsv" | LC_ALL=C sort -u); do
+  read -r o n < <(awk -F'\t' -v c="$c" '$1 == c && $2 == "omegese" { split($4, q, "/"); print q[1], q[2] }' "$OUT/results.tsv")
+  read -r t nt < <(awk -F'\t' -v c="$c" '$1 == c && $2 == "text" { split($4, q, "/"); print q[1], q[2] }' "$OUT/results.tsv")
+  if gate_config "${o:-0}" "${t:-0}" "${n:-0}"; then p=PASS; else p=FAIL g=0; fi
+  gl="${gl}gate config $c: omegese ${o:-0}/${n:-0}, text ${t:-0}/${nt:-0}: $p (needs omegese >= 80% and at most 10 points below text)"$'\n'
+done
+if [ "$INTERIM" = 1 ]; then gl="${gl}GATE NOT EVALUATED: interim score of attempt 1 (Stage 1 stop rule)"
+elif [ "$scored" != "$allcfg" ]; then gl="${gl}GATE NOT EVALUATED: configs scored $scored, the protocol needs $allcfg; INTERIM result (protocol 13.3)"
+else gl="${gl}GATE $([ "$g" = 1 ] && echo PASS || echo FAIL) (omegese passes in every config)"; fi
+gate="$gl"
 {
   echo "${mode}exp445 r3 results$([ "$INTERIM" = 1 ] && echo ', INTERIM: attempt 1 only') (harness: $valid; $(sed -n 's/^references_accepted=/references accepted /p' "$ev/score.txt"); provenance OK; prompt mode $MODE)"
   echo "success = harness ACCEPT on hidden inputs of the final candidate; attempt 1 is the pre-registered primary measure; round 1 = accepted without the repair round; 95% Wilson intervals"

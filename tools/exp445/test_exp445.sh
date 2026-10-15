@@ -8,7 +8,7 @@
 #   3 G0 (g0.sh) and a dry run of run.sh against fake445 (a local stand-in endpoint) on the public dev tasks
 #   4 score.sh: provenance, results, McNemar, cost, interim score and the Stage 1 stop rule
 # Every check has a negative control or a mutant that must fail it.
-# OMEGESE_TOKCOUNT + OMEGESE_TOKENIZER (optional): run the one-token gate on the examples' Omegese words.
+# OMEGESE_TOKCOUNT + OMEGESE_TOKENIZER: run the one-token gate on the examples' Omegese words (default: the Spark paths when both exist; skipped otherwise).
 # EXP445_HELDOUT_TAR + EXP445_HELDOUT_SUMS (optional; default: the sealed pack on the Spark): the held-out
 # entry-name collision check; skipped when the pack is absent (CI). It prints only a count.
 set -euo pipefail
@@ -135,6 +135,10 @@ card() { awk '/^Word card/ { w = 1; next } w && /^    [a-z]/ { print $1 }' "$1" 
 grep -v '^    bound ' "$HERE/arms/omegese.md" > "$T/card.md"
 [ "$(card "$T/card.md")" != "$("$G" words | LC_ALL=C sort)" ] && ok "  (negative control: a card missing 'bound' is caught)" || bad "word card control"
 # one-token gate on every word of the Omegese examples (numbers, = and the task's own entry name excluded)
+# the Spark default paths when the variables are unset and both exist (the gate then runs in a plain make call)
+if [ -z "${OMEGESE_TOKCOUNT:-}" ] && [ -z "${OMEGESE_TOKENIZER:-}" ] && [ -x "$HOME/workspace/glyph-tok/target/release/tokcount" ] &&
+   [ -f "$HOME/models/qwen3-30b-a3b-instruct-2507-fp8/tokenizer.json" ]; then
+  OMEGESE_TOKCOUNT="$HOME/workspace/glyph-tok/target/release/tokcount" OMEGESE_TOKENIZER="$HOME/models/qwen3-30b-a3b-instruct-2507-fp8/tokenizer.json"; fi
 if [ -n "${OMEGESE_TOKCOUNT:-}" ] && [ -n "${OMEGESE_TOKENIZER:-}" ]; then
   for e in "${EXS[@]}"; do tr -s ' \t' '\n\n' < "$EXD/$e/program.omegese" | grep -v -E '^-?[0-9]+$|^=$|^$' | grep -vx "$e" || true; done | LC_ALL=C sort -u > "$T/words"
   multi="$("$OMEGESE_TOKCOUNT" "$OMEGESE_TOKENIZER" words $(cat "$T/words") | awk '$1 != 1 { print $3 }')"
@@ -240,6 +244,10 @@ refuse "driver with a FAILED weight check" 'weights.check + server.json missing 
 printf 'w2\n' > "$T/models/m/b.bin"
 refuse "driver with no weight check" 'run tools/exp445/check_weights.sh A' "$HERE/run.sh" --config A --tasks "$T/pub" --out "$T/nowck"
 refuse "driver on a tasks dir with hidden files" "hidden files" "$HERE/run.sh" --config A --tasks "$ROOT/tests/one_layer/exp445/dev" --out "$T/runbad"
+# a 60-task dir with many hidden files (more find output than a pipe holds: a guard that pipes find into grep -q
+# fails open under pipefail when find is killed by SIGPIPE)
+for i in $(seq -w 1 60); do mkdir -p "$T/hid/tasks/cases/t$i/hidden"; for j in $(seq -w 1 40); do : > "$T/hid/tasks/cases/t$i/hidden/a_long_hidden_file_name_for_the_pipe_test_$j"; done; done
+refuse "driver on a 60-task dir with 2400 hidden files" "hidden files" "$HERE/run.sh" --config A --tasks "$T/hid" --out "$T/runhid"
 refuse "driver on a config not named in PARAMS" "config C is not named in" "$HERE/run.sh" --config C --tasks "$T/pub" --out "$T/runc"
 refuse "the bytes arm (dropped by r3)" "arm bytes is dropped by protocol r3" "$HERE/run.sh" --config A --tasks "$T/pub" --out "$T/runc" --arms omegese,bytes
 refuse "an unknown prompt mode" "prompt mode 'few' is not one of PARAMS prompt_modes" "$HERE/run.sh" --config A --tasks "$T/pub" --out "$T/runc" --prompt-mode few
@@ -395,6 +403,10 @@ mut_make run.sh 's/if \[ -z "\$have" \]; then/if true; then/' &&
   { kill_seq "$T/mut/run.sh" "$T/mk" > /dev/null || true; [ "$(tail -n +2 "$T/mk/log.tsv" | wc -l)" = 20 ] && bad "mutant survived: $M" || ok "  mutant caught: $M"; }
 
 # ---- 4. score.sh: provenance first, then the sealed harness, then the results ------------------------
+# the gate of 13.6 at its boundaries (omegese attempt-1, text attempt-1, tasks -> expected)
+gres=""; for gc in "8 9 10 PASS" "8 10 10 FAIL" "7 7 10 FAIL" "48 54 60 PASS" "48 55 60 FAIL" "47 47 60 FAIL" "50 40 60 PASS" "60 60 60 PASS" "0 0 0 FAIL"; do
+  set -- $gc; if gate_config "$1" "$2" "$3"; then r=PASS; else r=FAIL; fi; [ "$r" = "$4" ] || gres="$gres $1/$3 vs $2/$3 gave $r;"; done
+[ -z "$gres" ] && ok "gate 13.6 boundaries: 8 vs 9 of 10 PASS, 8 vs 10 FAIL, 7 FAIL; 48 vs 54 of 60 PASS (exactly 10 points), 48 vs 55 FAIL, 47 FAIL" || bad "gate 13.6:$gres"
 SC() { EXP445_TEST=1 OLA_ALLOW_DIRTY=1 OLA_EVIDENCE_ROOT="$T/evid" "$HERE/score.sh" "$@"; }
 PK=("$T/pack/tasks.tar" "$T/pack/TASKS.sha256"); HPK=("$T/hp/tasks.tar" "$T/hp/TASKS.sha256")
 if SC "${PK[@]}" "$FA" "$FB" > "$T/score.out" 2> "$T/score.err"; then
@@ -491,11 +503,18 @@ rm -rf "$T/neg"; mkdir -p "$T/neg"; cp -R "$FBO" "$T/neg/b"; sed -i 's/^prompt_m
 invalid "a one-shot run relabelled many (re-hashed)" "arm omegese prompt differs from the current arm documents and many examples" "${NB[@]}"
 cpr; rm -rf "$T/neg/a/g0"; rehash "$T/neg/a"
 invalid "no G0 record (re-hashed)" "no G0 PASS for config A and its server: no G0 record" "${NA[@]}"
-smut 's/|| inval "\$r: no G0 PASS/|| true "/' "the G0 check" "${NA[@]}"
+smut 's/|| inval "\$r: no G0 PASS/|| true "/; s/|| inval "\$r: the G0 record is not the one/|| true "/' "the G0 checks (PASS and run binding)" "${NA[@]}"
 cpr; sed -i 's/Answer/answer/' "$T/neg/a/g0/gate/d-r4.json"; rehash "$T/neg/a"
 invalid "a G0 response edited (run re-hashed, G0 not)" "G0 SHA256SUMS does not verify" "${NA[@]}"
 cpr; rm -rf "$T/neg/a/g0"; cp -R "$G0R/g0" "$T/neg/a/g0"; rehash "$T/neg/a"
 invalid "a G0 made with another PARAMS" "G0 was made for another base_url" "${NA[@]}"
+cpr; rm -rf "$T/neg/a/g0"; cp -R "$G0P/g0" "$T/neg/a/g0"; rehash "$T/neg/a"
+invalid "another G0 PASS swapped in after generation (re-hashed)" "the G0 record is not the one this run was generated under" "${NA[@]}"
+smut 's/|| inval "\$r: the G0 record is not the one/|| true "/' "the run's G0 record check" "${NA[@]}"
+rm -rf "$T/rsw"; cp -R "$FA" "$T/rsw"; rm -rf "$T/rsw/g0"; cp -R "$G0P/g0" "$T/rsw/g0"
+refuse "run.sh resuming a run whose G0 record was swapped" "resuming with different settings" "$HERE/run.sh" --config A --tasks "$T/pub" --out "$T/rsw"
+cpr; cp "$T/neg/a/gen/a-omegese-1/dev02/r1.req.json" "$T/neg/a/gen/a-omegese-1/dev02/r10.req.json"; rehash "$T/neg/a"
+invalid "a round 10 request in a generation (re-hashed)" "has a round other than 1 and 2" "${NA[@]}"
 if SC "${PK[@]}" "$K" "$FB" > /dev/null 2> "$T/ks.err"; then
   grep -q '^provenance OK: 2 runs, 40 generations' "$(sed -n 's/^score.sh: output in //p' "$T/ks.err")/validity.txt" &&
     ok "score.sh: the killed-and-resumed run is valid (provenance OK, no duplicate)" || bad "killed run validity line"

@@ -112,6 +112,9 @@ system_prompt() {
 }
 # heldout <task id>...: true when any task id is not a dev task (the held-out pack; protocol section 3)
 heldout() { local t; for t in "$@"; do case "$t" in dev*) ;; *) return 0 ;; esac; done; return 1; }
+# gate_config <omegese attempt-1 successes> <text attempt-1 successes> <tasks>: protocol 13.6 for one config,
+# omegese at least 80% and at most 10 points below text (integer arithmetic, boundaries included)
+gate_config() { [ "$3" -gt 0 ] && [ $((100 * $1)) -ge $((80 * $3)) ] && [ $((100 * ($2 - $1))) -le $((10 * $3)) ]; }
 # a1_rows_sha <log.tsv>: the attempt-1 rows of a run, sorted, hashed (ties the Stage 1 stop decision to them)
 a1_rows_sha() { tail -n +2 "$1" | awk -F'\t' '$1 ~ /-1$/' | LC_ALL=C sort | sha256sum | cut -d' ' -f1; }
 # G0, the sampling gate (13.4). <run dir>/g0/ holds g0.sh and sampling-gate.sh (the scripts that made it),

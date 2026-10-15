@@ -92,7 +92,7 @@ WLIST="$(kv "config.$CONFIG.weights")"; case "$WLIST" in /*|"") ;; *) WLIST="$RO
 [[ "$ATTEMPTS" =~ ^[1-9]$ ]] || die "attempts 1..9"
 cfg="$(echo "$CONFIG" | tr 'A-Z' 'a-z')"
 [ -d "$TASKS/tasks/cases" ] || die "$TASKS/tasks/cases missing (use ola.sh tasks-public)"
-find "$TASKS/tasks/cases" -path '*/hidden*' | grep -q . && die "$TASKS contains hidden files: the driver must see only requirement + prompt"
+[ -z "$(find "$TASKS/tasks/cases" -path "*/hidden*" -print -quit)" ] || die "$TASKS contains hidden files: the driver must see only requirement + prompt"
 ids=(); while IFS= read -r t; do ids+=("$t"); done < <(ls "$TASKS/tasks/cases" | LC_ALL=C sort)
 HELD=0; if heldout "${ids[@]}"; then HELD=1; fi
 if [ "$HELD" = 1 ]; then
@@ -133,8 +133,8 @@ meta="$OUT/meta.txt"
   echo "max_tokens_per_round=$MAXT"; echo "repair_rounds=1"; echo "temperature=$TEMP"; echo "top_p=$TOPP"; echo "seed_base=$SEED"
   echo "timeout_s=$TIMEOUT"; echo "retries=$RETRIES"; echo "order=attempt,task,arm"
   echo "protocol=$([ -z "$over" ] && echo PARAMS || echo "OVERRIDDEN:$over")"
-  echo "commit=$(git -C "$ROOT" rev-parse HEAD)$(git -C "$ROOT" diff --quiet HEAD -- tools tests/one_layer docs/one_layer src/compiler src/sha256.c mk/omega-emit.mk mk/omegese.mk Makefile || echo -dirty)"
-  echo "params_sha256=$(sha256sum "$PARAMS" | cut -d' ' -f1)"
+  echo "commit=$(git -C "$ROOT" rev-parse HEAD)$([ -z "$(git -C "$ROOT" status --porcelain -- tools tests/one_layer docs/one_layer src/compiler src/sha256.c mk/omega-emit.mk mk/omegese.mk Makefile)" ] || echo -dirty)"
+  echo "params_sha256=$(sha256sum "$PARAMS" | cut -d" " -f1)"; echo "g0_sha256=$(sha256sum < "$OUT/g0/SHA256SUMS" | cut -d" " -f1)"
   for arm in ${ARMS//,/ }; do echo "prompt_${arm}_sha256=$(sha256sum "$OUT/prompts/$arm.system.txt" | cut -d' ' -f1)"; done
   echo "tasks=${#ids[@]}"
   echo "tasks_public_sha256=$(cd "$TASKS" && find tasks -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)"
@@ -160,7 +160,7 @@ stop_gate() {
     exit 0
   fi
   [ -f "$FUT" ] || die "no futility file $FUT"
-  line="$(awk -v r="run=$OUT" '$1 == r' "$FUT")"
+  line="$(awk -v r="run=$OUT config=" "index(\$0, r) == 1" "$FUT")"
   [ -n "$line" ] || die "$FUT has no decision for run $OUT"
   [[ " $line " == *" a1_rows_sha256=$sha "* ]] || die "$FUT was made from other attempt-1 rows than this run's log.tsv: refused"
   d="$(sed -n 's/.* decision=\([A-Z]*\).*/\1/p' <<< "$line")"
