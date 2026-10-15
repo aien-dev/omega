@@ -1,7 +1,7 @@
 REPRESENTATION: omegese
 
-Write the program in Omegese: one statement per line, words separated by single spaces. No brackets,
-no commas, no semicolons, no indentation, no comments. A checker reads it line by line and refuses
+Write the program in Omegese: one statement per line, words separated by single spaces. No commas,
+no semicolons, no indentation, no comments. A checker reads it line by line and refuses
 the first invalid line with a reason; a valid program becomes the program.
 
 Types (Omegese name = type): bool = bool, uchar = u8, ushort = u16, uint = u32, ulong = u64,
@@ -13,32 +13,35 @@ Statements:
     <name> = <value>          write a value: a new name, or an existing name of the same type
     if <cond>  ...  else  ...  end           (else is optional)
     while <cond> bound <N>  ...  end         N in 1..1000000; more than N iterations is trap 4
-    for <i> <type> <count>  ...  end         i = 0, 1, ..., count-1 (count is a number or a name)
+    for <i> <type> <count>  ...  end         i = 0, 1, ..., count-1 (count is a number or a value)
     break                     leave the innermost while or for
     ret <value>               (ret alone in a void function)
     put <array> <index> <value>
     free <array>
-    trap <code>
+    trap <code>               code 1..14; like ret, it ends the path
     <function> <args>         call a void function
 
-Values (exactly one operation per line; operands are names or plain numbers, never nested):
+Values (each op takes a fixed number of values; each value may itself be an op):
 
     <name>  or  <number>
     add sub mul div rem and or xor shl shr  <a> <b>
     eq ne lt le gt ge  <a> <b>                (gives bool)
     neg <a>  (signed)     not <a>  (bool: logical; number: bitwise)
     <type> <number>       a typed number, e.g. uint 0
-    <type> <name>         convert, e.g. ulong x (trap 5 if the value does not fit)
+    <type> <value>        convert, e.g. ulong x (trap 5 if the value does not fit)
     get <array> <index>
-    new <type> <len> <init>
+    new <type> <len> <init>   only as a whole line: <name> = new ...
     own <array>  edit <array>  view <array>
     <function> <args>     call a function written earlier in the program
 
+Values nest in prefix order: `add mul a a 1` is (a*a)+1, `eq rem n 2 0` is n%2 == 0. Brackets are
+optional and change nothing: `add (mul a a) 1`. A ( must hold exactly one value.
+
 Rules:
 - Types are inferred: a new name takes the type of its value. A plain number takes the type of the
-  other operand (`add x 1`); where there is none, write the type (`s = uint 0`). Both operands of an
-  op have one type; convert explicitly.
-- A condition is a bool name, true, false, or one comparison (`while ne b 0 bound 64`).
+  other value of its op (`add x 1`); where there is none, write the type (`s = uint 0`). Both values
+  of an op have one type; convert explicitly. Two plain numbers in one op are refused.
+- A condition is any value giving bool (`while ne b 0 bound 64`, `if or lt p 0 gt p 9`).
 - A name first written inside if/else/while/for exists only until that block's end. To use a value
   after the block, write it before the block, then overwrite it inside.
 - Every name you write must be read later. Parameters may be overwritten. A for counter may not.
@@ -48,13 +51,13 @@ Rules:
 Example:
 
 ```
-fn digits x uint to uint
-n = uint 1
-while ge x 10 bound 10
+fn digitsq x uint to uint
+s = uint 0
+while ne x 0 bound 10
+s = add s mul rem x 10 rem x 10
 x = div x 10
-n = add n 1
 end
-ret n
+ret s
 end
 ```
 

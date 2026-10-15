@@ -1,0 +1,11 @@
+fn isqrt x uint to uint
+v = ulong x
+r = ulong 0
+for i ulong 16
+c = or r shl 1 sub 15 i
+if le mul c c v
+r = c
+end
+end
+ret uint r
+end

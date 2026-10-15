@@ -1,0 +1,13 @@
+fn collatz_steps n uint to uint
+x = ulong n
+steps = uint 0
+while ne x 1 bound 1000
+if eq rem x 2 0
+x = div x 2
+else
+x = add mul x 3 1
+end
+steps = add steps 1
+end
+ret steps
+end

@@ -3,7 +3,11 @@
  * Spec: docs/one_layer/OMEGESE.md. Omegese lowers to the omega_emit op list (tools/omega_emit/SCHEMA.md),
  * which omega_emit turns into canonical OSC binary IR; the IR, checker2 and the signed receipt chain
  * are unchanged. Omegese only removes the bookkeeping the writer had to do: no register numbers, no
- * block numbers, no declared locals (every type is inferred), no punctuation.
+ * block numbers, no declared locals (every type is inferred), no punctuation besides optional ( ).
+ *
+ * Values are prefix expressions: every op has a fixed number of values after it, so `add mul r r 4`
+ * is add(mul(r, r), 4) with no brackets. They lower into fresh hidden registers, innermost first, left
+ * to right.
  *
  *   omegese emit <in.omegese> <out.json>   exit 0 written; 1 refused (one line on stdout:
  *                                      "REFUSED omegese: line N: <reason>"); 2 usage / I/O
@@ -23,7 +27,7 @@
 #include <string.h>
 
 #define MAX_IN (1u << 20)
-#define MAX_WORDS 24
+#define MAX_WORDS 96
 #define MAX_REGS 480
 #define MAX_BLOCKS 512
 #define MAX_FUNCS 32
@@ -41,6 +45,10 @@ static const char *const IRN[T_NSCALAR] = {"bool", "u8", "u16", "u32", "u64", "i
 static const int BITS[T_NSCALAR] = {1, 8, 16, 32, 64, 8, 16, 32, 64};
 static const char *const REFW[] = {"", "own", "edit", "view"};
 static const char *const REFIR[] = {"", "own", "mut", "shared"};
+/* sets of scalar types, one bit per type */
+#define S_ALL 0x1FFu
+#define S_INT 0x1FEu
+#define S_SIGNED 0x1E0u
 
 typedef struct { int ref; int s; int len; } Ty; /* ref R_NONE: scalar s; else array of s, len */
 
@@ -72,6 +80,9 @@ static const char *const OPW[OP_N] = {"add", "sub", "mul", "div", "rem", "and", 
 static const char *const KW[] = {"fn", "to", "void", "end", "else", "if", "while", "for", "break", "ret",
                                  "trap", "put", "free", "true", "false", "bound", "="};
 #define NKW (sizeof KW / sizeof KW[0])
+static int is_shift(int o) { return o == OP_SHL || o == OP_SHR; }
+static int is_cmp(int o) { return o >= OP_EQ && o <= OP_GE; }
+static int is_arith(int o) { return o <= OP_REM; } /* whole numbers only */
 
 static int word_in(const char *w, const char *const *set, int n) {
     for (int i = 0; i < n; i++)
@@ -87,6 +98,8 @@ static int reserved(const char *w) {
 }
 
 /* ---- refusal ---- */
+#define NEED (-2)    /* next: the prefix ended here; g_next holds the words that may follow */
+#define MISSING (-3) /* value: no value starts here (end of line, ')' or a keyword); the caller words it */
 static int g_line;
 static char g_err[512];
 static int fail(const char *fmt, ...) {
@@ -97,7 +110,7 @@ static int fail(const char *fmt, ...) {
     va_end(ap);
     return -1;
 }
-#define TRY(x) do { if ((x) < 0) return -1; } while (0)
+#define TRY(x) do { int try_ = (x); if (try_ < 0) return try_; } while (0)
 
 /* ---- growable text ---- */
 typedef struct { char *p; size_t n, cap; } Buf;
@@ -139,6 +152,12 @@ static int nblocks, norder, cur; /* cur: current block id, -1 when the path has 
 static Frame frames[MAX_FRAMES];
 static int nframes;
 
+/* the line being read: its words, the read position, and the next mode (partial: the line is an
+ * unfinished prefix; reaching its end returns NEED with the allowed words in g_next) */
+static char **lw;
+static int ln, lp, partial, pdepth;
+static Buf g_next;
+
 static int new_reg(Ty t) {
     if (nregs >= MAX_REGS) return fail("more than %d values in one function", MAX_REGS);
     regs[nregs] = t;
@@ -172,11 +191,16 @@ static int valid_ident(const char *w) {
         if (!(isalnum((unsigned char)*c) || *c == '_')) return 0;
     return 1;
 }
-static int bind(const char *w, int reg, int fixed) {
+/* may w become a new name here */
+static int check_new_name(const char *w) {
     if (!valid_ident(w)) return fail("'%s' is not a name (a letter or _, then letters, digits or _)", w);
     if (reserved(w)) return fail("'%s' is a word of the language, not a name", w);
     if (find_func(w) >= 0) return fail("'%s' is a function name", w);
     if (find_name(w)) return fail("'%s' is already a name here; pick a new name", w);
+    return 0;
+}
+static int bind(const char *w, int reg, int fixed) {
+    TRY(check_new_name(w));
     if (nnames >= MAX_NAMES) return fail("more than %d names", MAX_NAMES);
     snprintf(names[nnames].name, sizeof names[nnames].name, "%s", w);
     names[nnames].reg = reg;
@@ -196,7 +220,7 @@ static int pop_scope(void) {
 
 /* ---- ops into the current block (block refs are written as @id@, numbered at the end) ---- */
 static int op(const char *fmt, ...) {
-    if (cur < 0) return fail("this line can never run: the path already ended (ret or break)");
+    if (cur < 0) return fail("this line can never run: the path already ended (ret, trap or break)");
     Block *b = &blocks[cur];
     va_list ap;
     char tmp[512];
@@ -231,21 +255,43 @@ static int is_lit(const char *w) {
     uint64_t m;
     return !strcmp(w, "true") || !strcmp(w, "false") || parse_lit(w, &n, &m);
 }
+/* literal w as scalar type s: 0 and its value, or why not (1 not a bool, 2 not a whole number,
+ * 3 negative for an unsigned type, 4 does not fit) */
+static int lit_conv(const char *w, int s, int *neg, uint64_t *mag) {
+    *neg = 0;
+    *mag = 0;
+    if (s == T_BOOL) {
+        if (strcmp(w, "true") && strcmp(w, "false")) return 1;
+        *mag = !strcmp(w, "true");
+        return 0;
+    }
+    if (!parse_lit(w, neg, mag)) return 2;
+    if (*neg && !is_signed(s) && *mag) return 3;
+    int b = BITS[s] - (is_signed(s) ? 1 : 0);
+    uint64_t lim = b == 64 ? UINT64_MAX : ((uint64_t)1 << b) - 1;
+    if (*neg ? (*mag > lim + 1) : (*mag > lim)) return 4;
+    if (*neg && !*mag) *neg = 0;
+    return 0;
+}
+/* the scalar types literal w fits, out of the set m */
+static unsigned lit_fits(const char *w, unsigned m) {
+    unsigned r = 0;
+    int neg;
+    uint64_t mag;
+    for (int s = 0; s < T_NSCALAR; s++)
+        if ((m >> s & 1) && !lit_conv(w, s, &neg, &mag)) r |= 1u << s;
+    return r;
+}
 /* the register holding literal w of type t (hoisted to the entry block, shared per value) */
 static int lit_reg(const char *w, Ty t) {
     int neg = 0;
     uint64_t mag = 0;
     if (t.ref != R_NONE) return fail("'%s': a number cannot be an array", w);
-    if (t.s == T_BOOL) {
-        if (strcmp(w, "true") && strcmp(w, "false")) return fail("'%s' is not a bool (true or false)", w);
-        mag = !strcmp(w, "true");
-    } else {
-        if (!parse_lit(w, &neg, &mag)) return fail("'%s' is not a whole number for %s", w, GW[t.s]);
-        if (neg && !is_signed(t.s) && mag) return fail("%s cannot be negative (%s)", GW[t.s], w);
-        int b = BITS[t.s] - (is_signed(t.s) ? 1 : 0);
-        uint64_t lim = b == 64 ? UINT64_MAX : ((uint64_t)1 << b) - 1;
-        if (neg ? (mag > lim + 1) : (mag > lim)) return fail("%s does not fit %s", w, GW[t.s]);
-        if (neg && !mag) neg = 0;
+    switch (lit_conv(w, t.s, &neg, &mag)) {
+    case 1: return fail("'%s' is not a bool (true or false)", w);
+    case 2: return fail("'%s' is not a whole number for %s", w, GW[t.s]);
+    case 3: return fail("%s cannot be negative (%s)", GW[t.s], w);
+    case 4: return fail("%s does not fit %s", w, GW[t.s]);
     }
     for (int i = 0; i < nconsts; i++)
         if (teq(consts[i].t, t) && consts[i].neg == neg && consts[i].mag == mag) return consts[i].reg;
@@ -256,25 +302,6 @@ static int lit_reg(const char *w, Ty t) {
     return r;
 }
 
-/* an operand: a visible name, or a literal of type want (want NULL: a name is required) */
-static int operand(const char *w, const Ty *want, Ty *got) {
-    if (is_lit(w)) {
-        if (!want) return fail("'%s': two numbers in one op; give one of them a name first", w);
-        int r = lit_reg(w, *want);
-        TRY(r);
-        if (got) *got = *want;
-        return r;
-    }
-    Name *n = find_name(w);
-    if (!n) {
-        if (find_func(w) >= 0) return fail("'%s' is a function; call it on its own line", w);
-        return fail("'%s' is not a name in scope here", w);
-    }
-    n->read = 1;
-    if (got) *got = regs[n->reg];
-    return n->reg;
-}
-
 /* may a value of type a be passed for a parameter of type p (the IR's reference binding rule:
  * own from own, edit from own or edit, view from any array of the same element type and length) */
 static int binds(Ty p, Ty a) {
@@ -282,28 +309,8 @@ static int binds(Ty p, Ty a) {
     if (p.s != a.s || p.len != a.len) return 0;
     return p.ref == R_SHARED || (p.ref == R_MUT && a.ref != R_SHARED) || (p.ref == R_OWN && a.ref == R_OWN);
 }
-/* the argument registers of a call to f, checked against its parameters, as "r, r, ..." */
-static int call_args(const Func *f, char **w, int n, Buf *a) {
-    if (n != f->np) return fail("%s takes %d values, got %d", f->name, f->np, n);
-    for (int i = 0; i < f->np; i++) {
-        Ty ta;
-        int r = operand(w[i], f->p[i].ref == R_NONE ? &f->p[i] : NULL, &ta);
-        TRY(r);
-        if (!binds(f->p[i], ta)) return fail("'%s' is %s; %s takes %s there", w[i], tname(ta), f->name, tname(f->p[i]));
-        bput(a, "%s%d", i ? ", " : "", r);
-    }
-    return 0;
-}
-
-/* the type of the first name among operands (for typing literals) */
-static int peer_type(char **w, int n, Ty *t) {
-    for (int i = 0; i < n; i++) {
-        if (is_lit(w[i])) continue;
-        Name *nm = find_name(w[i]);
-        if (nm) { *t = regs[nm->reg]; return 1; }
-    }
-    return 0;
-}
+/* may own|edit|view (rf) be applied to an array of type a */
+static int ref_ok(int rf, Ty a) { return a.ref != R_NONE && (rf == R_SHARED || (rf == R_MUT && a.ref != R_SHARED) || a.ref == R_OWN); }
 
 /* parse a type at w[*i]: scalar word, or own|edit|view <scalar> <len> */
 static int parse_type(char **w, int n, int *i, Ty *t) {
@@ -326,171 +333,450 @@ static int parse_type(char **w, int n, int *i, Ty *t) {
 static const char *IROP[OP_N] = {"add", "sub", "mul", "div", "rem", "and", "or", "xor", "shl", "shr",
                                  "eq", "ne", "lt", "le", "gt", "ge", "neg", "?", "load", "alloc"};
 
-/*
- * expr: w[0..n) is one value. dst >= 0: write it there (its type must match); dst == -1: a fresh
- * register; dst == -2: if the value is a bare name or literal, use that register (no copy).
- * hint: the type wanted when the value is a bare literal (NULL if unknown). Returns the register.
- */
-static int expr(char **w, int n, const Ty *hint, int dst, Ty *out_t) {
-    Ty t, ta, tb;
-    if (n == 0) return fail("a value is missing");
-    int o = op_word(w[0]), s = scalar_word(w[0]), rf = ref_word(w[0]), g = find_callable(w[0]);
-    if (g < 0 && find_func(w[0]) >= 0) return fail("%s cannot call itself (calls go to earlier functions only)", w[0]);
-#define DST(ty) do {                                                                              \
-        if (dst >= 0) { if (!teq(regs[dst], (ty))) return fail("this writes %s but the name holds %s", tname(ty), tname(regs[dst])); } \
-        else { dst = new_reg(ty); TRY(dst); }                                                     \
-        if (out_t) *out_t = (ty);                                                                 \
-    } while (0)
-    if (n == 1 && !(find_callable(w[0]) >= 0 && funcs[find_callable(w[0])].np == 0)) { /* a bare name or literal */
-        if (is_lit(w[0])) {
-            if (!hint) return fail("'%s': the type of this number is unknown; write <type> %s", w[0], w[0]);
-            int r = lit_reg(w[0], *hint);
-            TRY(r);
-            if (dst == -2) { if (out_t) *out_t = *hint; return r; }
-            DST(*hint);
-            TRY(op("\"op\": \"mov\", \"dst\": %d, \"a\": %d", dst, r));
-            return dst;
-        }
-        int r = operand(w[0], NULL, &t);
-        TRY(r);
-        if (dst == -2) { if (out_t) *out_t = t; return r; }
-        if (t.ref == R_OWN && dst == -1) {} /* moving an own array into a new name */
-        DST(t);
-        TRY(op("\"op\": \"mov\", \"dst\": %d, \"a\": %d", dst, r));
-        return dst;
-    }
-    if (dst == -2) dst = -1;
-    if (s >= 0) { /* <type> <literal>: a number;  <type> <name>: a conversion */
-        if (n != 2) return fail("%s takes one value", GW[s]);
-        t = (Ty){R_NONE, s, 0};
-        if (is_lit(w[1])) {
-            int r = lit_reg(w[1], t);
-            TRY(r);
-            DST(t);
-            TRY(op("\"op\": \"mov\", \"dst\": %d, \"a\": %d", dst, r));
-            return dst;
-        }
-        int a = operand(w[1], NULL, &ta);
-        TRY(a);
-        if (ta.ref != R_NONE) return fail("'%s' is an array; only numbers convert", w[1]);
-        if (s == T_BOOL || ta.s == T_BOOL) {
-            if (s != ta.s) return fail("bool does not convert to or from numbers; compare instead (ne x 0)");
-            DST(t);
-            TRY(op("\"op\": \"mov\", \"dst\": %d, \"a\": %d", dst, a));
-            return dst;
-        }
-        DST(t);
-        TRY(op("\"op\": \"%s\", \"dst\": %d, \"a\": %d", s == ta.s ? "mov" : "cast", dst, a));
-        return dst;
-    }
-    if (rf >= 0) { /* own|edit|view <array name>: move or borrow */
-        if (n != 2) return fail("%s takes one array name", REFW[rf]);
-        int a = operand(w[1], NULL, &ta);
-        TRY(a);
-        if (ta.ref == R_NONE) return fail("'%s' is not an array", w[1]);
-        if (rf == R_OWN && ta.ref != R_OWN) return fail("own moves an own array; '%s' is %s", w[1], tname(ta));
-        if (rf == R_MUT && ta.ref == R_SHARED) return fail("edit needs an own or edit array; '%s' is view only", w[1]);
-        t = (Ty){rf, ta.s, ta.len};
-        DST(t);
-        TRY(op("\"op\": \"mov\", \"dst\": %d, \"a\": %d", dst, a));
-        return dst;
-    }
-    if (g >= 0) { /* a call */
-        Func *f = &funcs[g];
-        if (!f->has_ret) return fail("%s returns nothing; call it on its own line", f->name);
-        Buf a = {0};
-        if (call_args(f, w + 1, n - 1, &a) < 0) { free(a.p); return -1; }
-        DST(f->ret);
-        int rc = op("\"op\": \"call\", \"func\": \"%s\", \"args\": [%s], \"dst\": %d", f->name, a.p ? a.p : "", dst);
-        free(a.p);
-        TRY(rc);
-        return dst;
-    }
-    if (o < 0) return fail("'%s' is not an op, a type or a function", w[0]);
-    if (o == OP_NEG || o == OP_NOT) {
-        if (n != 2) return fail("%s takes one value", OPW[o]);
-        int a = operand(w[1], NULL, &ta);
-        TRY(a);
-        if (ta.ref != R_NONE) return fail("%s needs a number or bool", OPW[o]);
-        if (o == OP_NEG && (ta.s == T_BOOL || !is_signed(ta.s))) return fail("neg needs a signed number; '%s' is %s", w[1], tname(ta));
-        DST(ta);
-        TRY(op("\"op\": \"%s\", \"dst\": %d, \"a\": %d", o == OP_NEG ? "neg" : (ta.s == T_BOOL ? "not" : "bnot"), dst, a));
-        return dst;
-    }
-    if (o == OP_GET) { /* get <array> <index> */
-        if (n != 3) return fail("get takes an array and an index");
-        int a = operand(w[1], NULL, &ta);
-        TRY(a);
-        if (ta.ref == R_NONE) return fail("'%s' is not an array", w[1]);
-        Ty it = {R_NONE, T_U32, 0};
-        int i = operand(w[2], &it, &tb);
-        TRY(i);
-        if (!is_int(tb)) return fail("index '%s' is not a whole number", w[2]);
-        t = (Ty){R_NONE, ta.s, 0};
-        DST(t);
-        TRY(op("\"op\": \"load\", \"dst\": %d, \"arr\": %d, \"index\": %d", dst, a, i));
-        return dst;
-    }
-    if (o == OP_NEW) { /* new <type> <length> <init> */
-        int i = 1;
-        Ty et;
-        if (n != 4) return fail("new takes a type, a length and a starting value");
-        if (scalar_word(w[1]) < 0) return fail("'%s' is not an element type", w[1]);
-        et = (Ty){R_NONE, scalar_word(w[1]), 0};
-        i = 2;
-        int neg;
-        uint64_t len;
-        if (!parse_lit(w[i], &neg, &len) || neg || len < 1 || len > 64) return fail("array length '%s' must be 1..64", w[i]);
-        int init = operand(w[3], &et, &tb);
-        TRY(init);
-        if (!teq(tb, et)) return fail("starting value '%s' is %s, not %s", w[3], tname(tb), tname(et));
-        t = (Ty){R_OWN, et.s, (int)len};
-        DST(t);
-        TRY(op("\"op\": \"alloc\", \"dst\": %d, \"init\": %d", dst, init));
-        return dst;
-    }
-    /* binary ops */
-    if (n != 3) return fail("%s takes two values", OPW[o]);
-    Ty peer;
-    int have = peer_type(w + 1, 2, &peer);
-    if (!have) return fail("%s %s %s: two numbers; give one of them a name first", OPW[o], w[1], w[2]);
-    int a, b;
-    if (o == OP_SHL || o == OP_SHR) { /* a number takes the type of the other value, as in every op */
-        Ty at;
-        a = operand(w[1], &peer, &at);
-        TRY(a);
-        b = operand(w[2], &at, &tb);
-        TRY(b);
-        if (!is_int(at) || !is_int(tb)) return fail("shifts need whole numbers");
-        DST(at);
-        TRY(op("\"op\": \"%s\", \"dst\": %d, \"a\": %d, \"b\": %d", IROP[o], dst, a, b));
-        return dst;
-    }
-    a = operand(w[1], &peer, &ta);
-    TRY(a);
-    b = operand(w[2], &peer, &tb);
-    TRY(b);
-    if (!teq(ta, tb)) return fail("%s needs two values of one type: '%s' is %s, '%s' is %s", OPW[o], w[1], tname(ta), w[2], tname(tb));
-    if (ta.ref != R_NONE) return fail("%s works on numbers, not arrays", OPW[o]);
-    if (o >= OP_EQ && o <= OP_GE) {
-        t = (Ty){R_NONE, T_BOOL, 0};
-        DST(t);
-    } else {
-        if (o <= OP_REM && ta.s == T_BOOL) return fail("%s needs whole numbers, not bool", OPW[o]);
-        DST(ta);
-    }
-    TRY(op("\"op\": \"%s\", \"dst\": %d, \"a\": %d, \"b\": %d", IROP[o], dst, a, b));
-    return dst;
-#undef DST
+/* ---- what a value slot accepts (used to type a bare number and for `omegese next`) ---- */
+enum { L_NO, L_TYPED, L_OPEN };      /* bare number: refused; typed lt; typed later by the other value */
+enum { A_NONE, A_ANY, A_EXACT, A_BIND }; /* arrays: none; any; exactly p; any that binds to parameter p */
+typedef struct { unsigned scal; int arr; Ty p; int lit; Ty lt; int top; } Want; /* top: new allowed */
+
+static Want want_type(Ty t) {
+    Want w = {0};
+    if (t.ref == R_NONE) { w.scal = 1u << t.s; w.lit = L_TYPED; w.lt = t; }
+    else { w.arr = A_EXACT; w.p = t; }
+    return w;
+}
+static Want want_param(Ty p) {
+    if (p.ref == R_NONE) return want_type(p);
+    Want w = {0};
+    w.arr = A_BIND;
+    w.p = p;
+    return w;
+}
+static int want_ok(const Want *w, Ty t) {
+    if (t.ref == R_NONE) return w->scal >> t.s & 1;
+    return w->arr == A_ANY || (w->arr == A_EXACT && teq(w->p, t)) || (w->arr == A_BIND && binds(w->p, t));
 }
 
-/* a condition: a bool name, true/false, or one op that gives a bool */
-static int cond(char **w, int n) {
-    Ty b = {R_NONE, T_BOOL, 0}, t;
-    int r = expr(w, n, &b, -2, &t);
+/* ---- the words of a line ---- */
+/* a word that ends a value: ')' or a keyword (true and false are values) */
+static int is_term(const char *t) {
+    return !strcmp(t, ")") || (word_in(t, KW, (int)NKW) >= 0 && strcmp(t, "true") && strcmp(t, "false"));
+}
+/* words a..b of the line, joined by spaces (for messages) */
+static const char *span(int a, int b) {
+    static char buf[4][80];
+    static int k;
+    char *s = buf[k++ & 3];
+    size_t n = 0;
+    s[0] = 0;
+    for (int i = a; i < b && i < ln && n < sizeof buf[0] - 1; i++) {
+        int sp = i > a && strcmp(lw[i - 1], "(") && strcmp(lw[i], ")"); /* written as (a b), not ( a b ) */
+        int m = snprintf(s + n, sizeof buf[0] - n, "%s%s", sp ? " " : "", lw[i]);
+        if (m < 0) break;
+        n += (size_t)m;
+        if (n >= sizeof buf[0] - 1) { n = sizeof buf[0] - 1; memcpy(s + n - 3, "...", 4); }
+    }
+    return s;
+}
+/* the end of the one value that starts at word p, by arity alone (no checks), or -1 */
+static int skip_value(int p) {
+    if (p >= ln) return -1;
+    const char *t = lw[p];
+    if (!strcmp(t, "(")) {
+        int q = skip_value(p + 1);
+        return q < 0 || q >= ln || strcmp(lw[q], ")") ? -1 : q + 1;
+    }
+    if (is_term(t)) return -1;
+    if (is_lit(t) || find_name(t)) return p + 1;
+    int g = find_callable(t);
+    if (g >= 0) {
+        p++;
+        for (int i = 0; i < funcs[g].np && p >= 0; i++) p = skip_value(p);
+        return p;
+    }
+    if (scalar_word(t) >= 0) return skip_value(p + 1);
+    if (ref_word(t) >= 0) return p + 2 <= ln ? p + 2 : -1;
+    int o = op_word(t);
+    if (o == OP_GET) return p + 2 <= ln ? skip_value(p + 2) : -1;
+    if (o == OP_NEW) return p + 3 <= ln ? skip_value(p + 3) : -1;
+    if (o == OP_NEG || o == OP_NOT) return skip_value(p + 1);
+    if (o >= 0) { int q = skip_value(p + 1); return q < 0 ? -1 : skip_value(q); }
+    return -1;
+}
+
+/* ---- next: what may follow the prefix ---- */
+static int need_text(const char *fmt, ...) {
+    va_list ap;
+    char tmp[512];
+    va_start(ap, fmt);
+    vsnprintf(tmp, sizeof tmp, fmt, ap);
+    va_end(ap);
+    bput(&g_next, "%s", tmp);
+    return NEED;
+}
+static unsigned array_elems(void) { /* element types of the visible arrays */
+    unsigned m = 0;
+    for (int i = 0; i < nnames; i++)
+        if (regs[names[i].reg].ref != R_NONE) m |= 1u << regs[names[i].reg].s;
+    return m;
+}
+/* a visible array name a with ref_ok(rf, a) (rf 0: the array itself) whose result fits w */
+static int array_fits(int rf, const Want *w) {
+    for (int i = 0; i < nnames; i++) {
+        Ty t = regs[names[i].reg];
+        if (t.ref == R_NONE) continue;
+        if (rf == 0 ? want_ok(w, t) : ref_ok(rf, t) && want_ok(w, (Ty){rf, t.s, t.len})) return 1;
+    }
+    return 0;
+}
+static int callable_fits(int g, const Want *w) {
+    const Func *f = &funcs[g];
+    if (!f->has_ret || !want_ok(w, f->ret)) return 0;
+    for (int i = 0; i < f->np; i++) {
+        if (f->p[i].ref == R_NONE) continue;
+        Want pw = want_param(f->p[i]);
+        if (!array_fits(0, &pw) && !array_fits(R_OWN, &pw) && !array_fits(R_MUT, &pw) && !array_fits(R_SHARED, &pw)) return 0;
+    }
+    return 1;
+}
+static int op_fits(int o, const Want *w) {
+    if (o == OP_NEW) return w->top && (w->arr == A_ANY || (w->arr == A_EXACT && w->p.ref == R_OWN));
+    if (o == OP_GET) return (array_elems() & w->scal) != 0;
+    unsigned m = is_arith(o) || is_shift(o) ? S_INT : is_cmp(o) ? 1u : o == OP_NEG ? S_SIGNED : S_ALL;
+    return (m & w->scal) != 0;
+}
+/* the value slot w: names, number and words that may start a value there */
+static int need_value(const Want *w, const char *extra) {
+    Buf b = {0};
+    int any = 0;
+    bput(&b, "names:");
+    for (int i = 0; i < nnames; i++)
+        if (want_ok(w, regs[names[i].reg])) { bput(&b, " %s", names[i].name); any = 1; }
+    bput(&b, "\n");
+    if (w->lit == L_TYPED && w->lt.s != T_BOOL) { bput(&b, "number: %s\n", GW[w->lt.s]); any = 1; }
+    if (w->lit == L_OPEN && (w->scal & S_INT)) { bput(&b, "number: any (it takes the type of the other value)\n"); any = 1; }
+    bput(&b, "words:");
+    if ((w->lit == L_TYPED && w->lt.s == T_BOOL) || (w->lit == L_OPEN && (w->scal & 1))) { bput(&b, " true false"); any = 1; }
+    for (int o = 0; o < OP_N; o++)
+        if (op_fits(o, w)) { bput(&b, " %s", OPW[o]); any = 1; }
+    for (int s = 0; s < T_NSCALAR; s++)
+        if (w->scal >> s & 1) { bput(&b, " %s", GW[s]); any = 1; }
+    for (int s = 1; s < T_NSCALAR; s++) /* the IR names are accepted too */
+        if (w->scal >> s & 1) bput(&b, " %s", IRN[s]);
+    for (int rf = R_OWN; rf <= R_SHARED; rf++)
+        if (array_fits(rf, w)) { bput(&b, " %s", REFW[rf]); any = 1; }
+    for (int g = 0; g < nfuncs; g++)
+        if (find_callable(funcs[g].name) == g && callable_fits(g, w)) { bput(&b, " %s", funcs[g].name); any = 1; }
+    if (any) bput(&b, " (");
+    if (extra) bput(&b, " %s", extra);
+    bput(&b, "\n");
+    if (!any) { free(b.p); return fail("no value of a fitting type can be written here"); }
+    bput(&g_next, "%s", b.p);
+    free(b.p);
+    return NEED;
+}
+
+/* ---- values ---- */
+/* a parsed value: an untyped bare number (lit, words[word]) or a register of type t. head: the word
+ * of its op, type, own/edit/view or function (-1 for a name or number), arity: the values it takes */
+typedef struct { int lit, word, reg, konst, head, arity, paren, a, b; Ty t; } Val;
+
+static int to_dst(int *dst, Ty t) {
+    if (*dst >= 0) {
+        if (!teq(regs[*dst], t)) return fail("this writes %s but the name holds %s", tname(t), tname(regs[*dst]));
+        return 0;
+    }
+    int r = new_reg(t);
     TRY(r);
-    if (!teq(t, b)) return fail("a condition must be a bool; this is %s", tname(t));
+    *dst = r;
+    return 0;
+}
+/* a name's or number's register: used as is (dst -2), or copied into dst */
+static int leaf(Val *v, int r, Ty t, int dst) {
+    v->t = t;
+    v->b = lp;
+    if (dst == -2) { v->reg = r; return 0; }
+    TRY(to_dst(&dst, t));
+    TRY(op("\"op\": \"mov\", \"dst\": %d, \"a\": %d", dst, r));
+    v->reg = dst;
+    return 0;
+}
+static const char *plural(int n) { return n == 1 ? "" : "s"; }
+/* words left over after the value v (in_paren: before its ')') */
+static int extra_fail(const Val *v, int in_paren) {
+    if (!in_paren && !strcmp(lw[lp], ")")) return fail("')' has no matching '('");
+    int m = 0, p = lp, e = lp;
+    while (p < ln && !is_term(lw[p])) {
+        int q = skip_value(p);
+        if (q < 0) break;
+        m++;
+        p = q;
+    }
+    while (e < ln && !(in_paren && !strcmp(lw[e], ")"))) e++;
+    if (m > 0 && v && v->head >= 0 && !v->paren)
+        return fail("%s has %d values after it; it takes %d", lw[v->head], v->arity + m, v->arity);
+    if (in_paren) return fail("( ... ) must hold exactly one value; '%s' is extra", span(lp, e));
+    return fail("extra words at the end of the line: '%s'", span(lp, ln));
+}
+
+static int value(const Want *want, int dst, Val *v);
+/* operand k (0-based) of the word at head, which takes arity values */
+static int slot(const Want *w, int dst, Val *v, int head, int k, int arity) {
+    int r = value(w, dst, v);
+    if (r == MISSING) return fail("%s has %d value%s after it; it takes %d", lw[head], k, plural(k), arity);
     return r;
+}
+enum { AN_GET, AN_PUT, AN_FREE, AN_REF };
+/* an array name after the word at head (arity: the values head takes); for next, the names that
+ * fit: get (element type in want), put (own or edit), free (own), own|edit|view rf (result in want) */
+static int array_name(int head, int arity, int kind, int rf, const Want *want, int *reg, Ty *t) {
+    if (lp >= ln) {
+        if (!partial) return fail("%s has 0 values after it; it takes %d", lw[head], arity);
+        Buf b = {0};
+        int any = 0;
+        bput(&b, "names:");
+        for (int i = 0; i < nnames; i++) {
+            Ty a = regs[names[i].reg];
+            int ok = a.ref != R_NONE &&
+                     (kind == AN_GET ? (want->scal >> a.s & 1) : kind == AN_PUT ? a.ref != R_SHARED :
+                      kind == AN_FREE ? a.ref == R_OWN : ref_ok(rf, a) && want_ok(want, (Ty){rf, a.s, a.len}));
+            if (ok) { bput(&b, " %s", names[i].name); any = 1; }
+        }
+        bput(&b, "\n");
+        if (any) bput(&g_next, "%s", b.p);
+        free(b.p);
+        return any ? NEED : fail("no array of a fitting type is in scope here");
+    }
+    const char *w = lw[lp];
+    Name *nm = find_name(w);
+    if (!nm) {
+        if (is_term(w) || !strcmp(w, "(")) return fail("%s takes an array name here, not '%s'", lw[head], w);
+        if (is_lit(w)) return fail("'%s' is not an array", w);
+        return fail("'%s' is not a name in scope here", w);
+    }
+    lp++;
+    nm->read = 1;
+    *reg = nm->reg;
+    *t = regs[nm->reg];
+    if (t->ref == R_NONE) return fail("'%s' is not an array", w);
+    return 0;
+}
+
+/* the argument registers of a call to f (its name at word head), checked against its parameters */
+static int call_args(const Func *f, int head, Buf *a) {
+    for (int i = 0; i < f->np; i++) {
+        Want w = want_param(f->p[i]);
+        Val av;
+        TRY(slot(&w, -2, &av, head, i, f->np));
+        if (av.lit) return fail("'%s' is a number; %s takes %s there", lw[av.word], f->name, tname(f->p[i]));
+        if (!binds(f->p[i], av.t))
+            return fail("'%s' is %s; %s takes %s there", span(av.a, av.b), tname(av.t), f->name, tname(f->p[i]));
+        bput(a, "%s%d", i ? ", " : "", av.reg);
+    }
+    return 0;
+}
+
+/*
+ * value: one value starting at word lp, lowered into the current block, innermost first and left to
+ * right. dst >= 0: write it there (its type must match); dst == -1: a fresh register; dst == -2: a
+ * bare name or number uses its own register (no copy), anything else a fresh hidden register.
+ * want: what the slot accepts (a bare number is typed by want->lt when L_TYPED, else left untyped
+ * for the caller). Returns 0, MISSING (no value starts here), NEED (next) or -1.
+ */
+static int value(const Want *want, int dst, Val *v) {
+    memset(v, 0, sizeof *v);
+    v->head = v->word = v->reg = -1;
+    v->a = lp;
+    if (lp >= ln) return partial ? need_value(want, NULL) : MISSING;
+    const char *t = lw[lp];
+    if (!strcmp(t, ")")) return pdepth ? MISSING : fail("')' has no matching '('");
+    if (is_term(t)) return MISSING;
+    if (!strcmp(t, "(")) { /* ( value ): grouping only */
+        int start = lp++;
+        pdepth++;
+        int r = value(want, dst, v);
+        pdepth--;
+        if (r == MISSING) {
+            if (lp < ln && !strcmp(lw[lp], ")")) return fail("( ) holds no value; ( ... ) must hold exactly one value");
+            return fail("a value is missing after '('");
+        }
+        TRY(r);
+        if (lp >= ln) return partial ? need_text("words: )\n") : fail("'(' has no matching ')'");
+        if (strcmp(lw[lp], ")")) return extra_fail(v, 1);
+        lp++;
+        v->paren = 1;
+        v->a = start;
+        v->b = lp;
+        return 0;
+    }
+    if (is_lit(t)) {
+        v->word = lp++;
+        v->b = lp;
+        if (want->lit != L_TYPED) { v->lit = 1; return 0; }
+        int r = lit_reg(t, want->lt);
+        TRY(r);
+        v->konst = 1;
+        return leaf(v, r, want->lt, dst);
+    }
+    Name *nm = find_name(t);
+    if (nm) {
+        lp++;
+        nm->read = 1;
+        return leaf(v, nm->reg, regs[nm->reg], dst);
+    }
+    int g = find_callable(t);
+    if (g < 0 && find_func(t) >= 0) return fail("%s cannot call itself (calls go to earlier functions only)", t);
+    v->head = lp++;
+    if (g >= 0) { /* a call: one value per parameter */
+        Func *f = &funcs[g];
+        if (!f->has_ret) return fail("%s returns nothing; call it on its own line", f->name);
+        v->arity = f->np;
+        Buf a = {0};
+        int r = call_args(f, v->head, &a);
+        if (r >= 0) r = to_dst(&dst, f->ret);
+        if (r >= 0) r = op("\"op\": \"call\", \"func\": \"%s\", \"args\": [%s], \"dst\": %d", f->name, a.p ? a.p : "", dst);
+        free(a.p);
+        TRY(r);
+        v->t = f->ret;
+        goto done;
+    }
+    v->arity = 1;
+    int s = scalar_word(t);
+    if (s >= 0) { /* <type> <number>: a typed number;  <type> <value>: a conversion */
+        Ty ty = {R_NONE, s, 0};
+        Want w = {s == T_BOOL ? 1u : S_INT, A_NONE, {0}, L_TYPED, ty, 0};
+        Val a;
+        TRY(slot(&w, -2, &a, v->head, 0, 1));
+        if (a.t.ref != R_NONE) return fail("'%s' is an array; only numbers convert", span(a.a, a.b));
+        if ((s == T_BOOL) != (a.t.s == T_BOOL)) return fail("bool does not convert to or from numbers; compare instead (ne x 0)");
+        v->t = ty;
+        if (a.konst && dst == -2) { v->reg = a.reg; v->konst = 1; v->b = lp; return 0; } /* the number itself */
+        TRY(to_dst(&dst, ty));
+        TRY(op("\"op\": \"%s\", \"dst\": %d, \"a\": %d", s == a.t.s ? "mov" : "cast", dst, a.reg));
+        goto done;
+    }
+    int rf = ref_word(t);
+    if (rf >= 0) { /* own|edit|view <array name>: move or borrow */
+        int a;
+        Ty ta;
+        TRY(array_name(v->head, 1, AN_REF, rf, want, &a, &ta));
+        if (rf == R_OWN && ta.ref != R_OWN) return fail("own moves an own array; '%s' is %s", lw[lp - 1], tname(ta));
+        if (rf == R_MUT && ta.ref == R_SHARED) return fail("edit needs an own or edit array; '%s' is view only", lw[lp - 1]);
+        v->t = (Ty){rf, ta.s, ta.len};
+        TRY(to_dst(&dst, v->t));
+        TRY(op("\"op\": \"mov\", \"dst\": %d, \"a\": %d", dst, a));
+        goto done;
+    }
+    int o = op_word(t);
+    if (o < 0) return fail("'%s' is not a name in scope here, nor an op, a type or a function", t);
+    if (o == OP_NEG || o == OP_NOT) {
+        Want w = {want->scal & (o == OP_NEG ? S_SIGNED : S_ALL), A_NONE, {0}, L_NO, {0}, 0};
+        Val a;
+        TRY(slot(&w, -2, &a, v->head, 0, 1));
+        if (a.lit) return fail("%s %s: the type of this number is unknown; write <type> %s", OPW[o], lw[a.word], lw[a.word]);
+        if (a.t.ref != R_NONE) return fail("%s needs a number or bool", OPW[o]);
+        if (o == OP_NEG && (a.t.s == T_BOOL || !is_signed(a.t.s))) return fail("neg needs a signed number; '%s' is %s", span(a.a, a.b), tname(a.t));
+        v->t = a.t;
+        TRY(to_dst(&dst, a.t));
+        TRY(op("\"op\": \"%s\", \"dst\": %d, \"a\": %d", o == OP_NEG ? "neg" : (a.t.s == T_BOOL ? "not" : "bnot"), dst, a.reg));
+        goto done;
+    }
+    if (o == OP_GET) { /* get <array name> <index> */
+        v->arity = 2;
+        int a;
+        Ty ta;
+        TRY(array_name(v->head, 2, AN_GET, 0, want, &a, &ta));
+        Want iw = {S_INT, A_NONE, {0}, L_TYPED, {R_NONE, T_U32, 0}, 0};
+        Val i;
+        TRY(slot(&iw, -2, &i, v->head, 1, 2));
+        if (!is_int(i.t)) return fail("index '%s' is not a whole number", span(i.a, i.b));
+        v->t = (Ty){R_NONE, ta.s, 0};
+        TRY(to_dst(&dst, v->t));
+        TRY(op("\"op\": \"load\", \"dst\": %d, \"arr\": %d, \"index\": %d", dst, a, i.reg));
+        goto done;
+    }
+    if (o == OP_NEW) { /* new <type> <length> <init> */
+        v->arity = 3;
+        if (!want->top) return fail("new makes an array for a name: write it on its own line (x = new ...)");
+        if (lp >= ln) {
+            if (!partial) return fail("new has 0 values after it; it takes 3");
+            return need_text("words: bool uchar ushort uint ulong byte short int long u8 u16 u32 u64 i8 i16 i32 i64\n");
+        }
+        if (scalar_word(lw[lp]) < 0) return fail("'%s' is not an element type", lw[lp]);
+        Ty et = {R_NONE, scalar_word(lw[lp++]), 0};
+        if (lp >= ln) {
+            if (!partial) return fail("new has 1 value after it; it takes 3");
+            return need_text("number: 1..64\n");
+        }
+        int neg;
+        uint64_t len;
+        if (!parse_lit(lw[lp], &neg, &len) || neg || len < 1 || len > 64) return fail("array length '%s' must be 1..64", lw[lp]);
+        lp++;
+        Want iw = want_type(et);
+        Val init;
+        TRY(slot(&iw, -2, &init, v->head, 2, 3));
+        if (!teq(init.t, et)) return fail("starting value '%s' is %s, not %s", span(init.a, init.b), tname(init.t), tname(et));
+        v->t = (Ty){R_OWN, et.s, (int)len};
+        TRY(to_dst(&dst, v->t));
+        TRY(op("\"op\": \"alloc\", \"dst\": %d, \"init\": %d", dst, init.reg));
+        goto done;
+    }
+    /* binary ops: a bare number takes the type of the other value; two bare numbers are refused */
+    v->arity = 2;
+    Want w1 = {is_cmp(o) ? S_ALL : want->scal & (is_arith(o) || is_shift(o) ? S_INT : S_ALL), A_NONE, {0}, L_OPEN, {0}, 0};
+    Val a, b;
+    TRY(slot(&w1, -2, &a, v->head, 0, 2));
+    if (!a.lit) {
+        if (a.t.ref != R_NONE) return fail("%s works on numbers, not arrays", OPW[o]);
+        if ((is_arith(o) || is_shift(o)) && a.t.s == T_BOOL) return fail("%s needs whole numbers, not bool", OPW[o]);
+    }
+    Want w2 = {0};
+    if (a.lit) w2 = (Want){lit_fits(lw[a.word], w1.scal), A_NONE, {0}, L_NO, {0}, 0};
+    else w2 = (Want){is_shift(o) ? S_INT : 1u << a.t.s, A_NONE, {0}, L_TYPED, a.t, 0};
+    TRY(slot(&w2, -2, &b, v->head, 1, 2));
+    if (a.lit && b.lit) return fail("%s %s %s: two numbers; give one of them a name first", OPW[o], lw[a.word], lw[b.word]);
+    if (b.t.ref != R_NONE) return fail("%s works on numbers, not arrays", OPW[o]);
+    if (a.lit) { /* typed by the other value */
+        if ((is_arith(o) || is_shift(o)) && b.t.s == T_BOOL) return fail("%s needs whole numbers, not bool", OPW[o]);
+        int r = lit_reg(lw[a.word], b.t);
+        TRY(r);
+        a.reg = r;
+        a.t = b.t;
+    }
+    if (is_shift(o)) {
+        if (!is_int(a.t) || !is_int(b.t)) return fail("shifts need whole numbers");
+        v->t = a.t;
+    } else {
+        if (!teq(a.t, b.t))
+            return fail("%s needs two values of one type: '%s' is %s, '%s' is %s", OPW[o], span(a.a, a.b), tname(a.t), span(b.a, b.b), tname(b.t));
+        if (is_arith(o) && a.t.s == T_BOOL) return fail("%s needs whole numbers, not bool", OPW[o]);
+        v->t = is_cmp(o) ? (Ty){R_NONE, T_BOOL, 0} : a.t;
+    }
+    TRY(to_dst(&dst, v->t));
+    TRY(op("\"op\": \"%s\", \"dst\": %d, \"a\": %d, \"b\": %d", IROP[o], dst, a.reg, b.reg));
+done:
+    v->reg = dst;
+    v->b = lp;
+    return 0;
+}
+
+/* the end of a statement: nothing more on the line (more: other words that may follow, for next) */
+static int line_end(const Val *v, const char *more) {
+    if (lp >= ln) return partial ? need_text("words: %s(newline)\n", more) : 0;
+    return extra_fail(v, 0);
+}
+/* a statement word that stands alone (end, else, break) */
+static int alone(const char *w) {
+    if (lp < ln) return fail("%s stands alone", w);
+    return partial ? need_text("words: (newline)\n") : 0;
+}
+/* a condition: any value giving bool */
+static int cond(Val *c, const char *what) {
+    Want b = want_type((Ty){R_NONE, T_BOOL, 0});
+    int r = value(&b, -2, c);
+    if (r == MISSING) return fail("%s needs a condition", what);
+    TRY(r);
+    if (!(c->t.ref == R_NONE && c->t.s == T_BOOL)) return fail("a condition must be a bool; this is %s", tname(c->t));
+    return 0;
 }
 
 static Frame *push(int kind) {
@@ -536,60 +822,198 @@ static void end_function(void) {
         }
         bput(&out, "]");
         free(b->ops.p);
+        b->ops.p = NULL;
     }
     bput(&out, "\n   ]}");
 }
 
-static int stmt(char **w, int n) {
-    if (!strcmp(w[0], "fn")) {
-        if (in_fn) return fail("fn inside a function: close the function with end first");
-        if (nfuncs >= MAX_FUNCS) return fail("more than %d functions", MAX_FUNCS);
-        if (n < 3) return fail("fn <name> <param> <type> ... to <type or void>");
-        if (!valid_ident(w[1]) || reserved(w[1])) return fail("'%s' cannot be a function name", w[1]);
-        if (find_func(w[1]) >= 0) return fail("function '%s' is already defined", w[1]);
-        Func *f = &funcs[nfuncs];
-        memset(f, 0, sizeof *f);
-        snprintf(f->name, sizeof f->name, "%s", w[1]);
-        nregs = nnames = nconsts = nblocks = norder = nframes = 0;
-        depth = 0;
-        Frame *fr = push(F_FN);
+static int fn_line(char **w, int n) {
+    if (in_fn) return fail("fn inside a function: close the function with end first");
+    if (nfuncs >= MAX_FUNCS) return fail("more than %d functions", MAX_FUNCS);
+    if (n < 3) return fail("fn <name> <param> <type> ... to <type or void>");
+    if (!valid_ident(w[1]) || reserved(w[1])) return fail("'%s' cannot be a function name", w[1]);
+    if (find_func(w[1]) >= 0) return fail("function '%s' is already defined", w[1]);
+    Func *f = &funcs[nfuncs];
+    memset(f, 0, sizeof *f);
+    snprintf(f->name, sizeof f->name, "%s", w[1]);
+    nregs = nnames = nconsts = nblocks = norder = nframes = 0;
+    depth = 0;
+    Frame *fr = push(F_FN);
+    if (!fr) return -1;
+    int i = 2;
+    while (i < n && strcmp(w[i], "to")) {
+        if (f->np >= MAX_PARAMS) return fail("more than %d parameters", MAX_PARAMS);
+        const char *pn = w[i++];
+        Ty t;
+        TRY(parse_type(w, n, &i, &t));
+        f->p[f->np++] = t;
+        int r = new_reg(t);
+        TRY(r);
+        if (find_name(pn)) return fail("parameter '%s' is named twice", pn);
+        TRY(bind(pn, r, 2));
+    }
+    if (i >= n) return fail("fn needs 'to <type>' or 'to void' at the end");
+    i++;
+    if (i < n && !strcmp(w[i], "void")) { f->has_ret = 0; i++; }
+    else {
+        Ty t;
+        TRY(parse_type(w, n, &i, &t));
+        if (t.ref != R_NONE) return fail("a function returns a number or bool, not an array");
+        f->has_ret = 1;
+        f->ret = t;
+    }
+    if (i != n) return fail("'%s' after the return type", w[i]);
+    nparams = nregs;
+    nfuncs++;
+    in_fn = 1;
+    int b = new_block();
+    TRY(b);
+    start_block(b);
+    return 0;
+}
+
+/*
+ * Loops lower to the shape checker2 proves terminating (src/checker2/c2_check.c "loop bounds",
+ * the same shape oscc emits for OSC `while ... bound N`): a counter written in the loop only by
+ * ADD c, one; a guard block dominating every latch that compares the counter with a CONST
+ * K <= 1,000,000 defined once (literals are hoisted and shared, so each is defined once).
+ *   while <cond> [bound N]: hidden ulong counter; head: cond -> guard | exit;
+ *     guard: ge cnt K -> trap 4 (loop bound) | body; body starts with cnt = add cnt 1.
+ *   for <name> <type> <count number>: head: lt i K -> body | exit; latch: i = add i 1.
+ *   for <name> <type> <count value>: as while (lt i count) with the hidden guard; a name is read at
+ *     every pass, any other value is computed once, before the loop.
+ */
+static int guarded_loop(int is_for, int s, const Val *count, const char *forname) {
+    Ty u64 = {R_NONE, T_U64, 0};
+    int zero = lit_reg("0", u64), one = lit_reg("1", u64);
+    TRY(zero);
+    TRY(one);
+    int ctr = -1, cnt = new_reg(u64);
+    TRY(cnt);
+    if (is_for) {
+        Ty t = {R_NONE, s, 0};
+        int z = lit_reg("0", t);
+        TRY(z);
+        TRY(lit_reg("1", t));
+        ctr = new_reg(t);
+        TRY(ctr);
+        TRY(op("\"op\": \"mov\", \"dst\": %d, \"a\": %d", ctr, z));
+    }
+    TRY(op("\"op\": \"mov\", \"dst\": %d, \"a\": %d", cnt, zero));
+    int h = new_block(), g = new_block(), tb = new_block(), body = new_block(), ex = new_block();
+    TRY(h);
+    TRY(g);
+    TRY(tb);
+    TRY(body);
+    TRY(ex);
+    TRY(br(h));
+    start_block(h);
+    int c;
+    const char *bound = "1000000";
+    if (is_for) {
+        c = new_reg((Ty){R_NONE, T_BOOL, 0});
+        TRY(c);
+        TRY(op("\"op\": \"lt\", \"dst\": %d, \"a\": %d, \"b\": %d", c, ctr, count->reg));
+    } else { /* the condition is computed in the head: again before every pass */
+        Val cv;
+        TRY(cond(&cv, "while"));
+        c = cv.reg;
+        if (lp < ln && !strcmp(lw[lp], "bound")) {
+            lp++;
+            if (lp >= ln) return partial ? need_text("number: 1..1000000\n") : fail("bound needs a number 1..1000000");
+            bound = lw[lp++];
+            int neg;
+            uint64_t bv;
+            if (!parse_lit(bound, &neg, &bv) || neg || bv < 1 || bv > 1000000) return fail("bound '%s' must be 1..1000000", bound);
+            TRY(line_end(NULL, ""));
+        } else TRY(line_end(&cv, "bound "));
+    }
+    int lim = lit_reg(bound, u64);
+    TRY(lim);
+    TRY(op("\"op\": \"cbr\", \"cond\": %d, \"then\": @%d@, \"else\": @%d@", c, g, ex));
+    start_block(g);
+    int ge = new_reg((Ty){R_NONE, T_BOOL, 0});
+    TRY(ge);
+    TRY(op("\"op\": \"ge\", \"dst\": %d, \"a\": %d, \"b\": %d", ge, cnt, lim));
+    TRY(op("\"op\": \"cbr\", \"cond\": %d, \"then\": @%d@, \"else\": @%d@", ge, tb, body));
+    start_block(tb);
+    TRY(op("\"op\": \"trap\", \"code\": 4"));
+    TRY(br(ex));
+    start_block(body);
+    TRY(op("\"op\": \"add\", \"dst\": %d, \"a\": %d, \"b\": %d", cnt, cnt, one));
+    Frame *fr = push(is_for ? F_FOR : F_WHILE);
+    if (!fr) return -1;
+    fr->head = h;
+    fr->exit = ex;
+    fr->ctr = ctr;
+    if (is_for) TRY(bind(forname, ctr, 1));
+    return 0;
+}
+
+static int for_line(void) {
+    if (lp >= ln) return partial ? need_text("new-name: any name not in use\n") : fail("for <name> <type> <count>");
+    const char *nm = lw[lp++];
+    TRY(check_new_name(nm));
+    if (lp >= ln) return partial ? need_text("words: uchar ushort uint ulong byte short int long u8 u16 u32 u64 i8 i16 i32 i64\n") : fail("for <name> <type> <count>");
+    int s = scalar_word(lw[lp]);
+    if (s < 0 || s == T_BOOL) return fail("'%s' is not a whole-number type", lw[lp]);
+    lp++;
+    Ty t = {R_NONE, s, 0};
+    if (cur < 0) return fail("this line can never run: the path already ended (ret, trap or break)");
+    if (lp + 1 == ln && is_lit(lw[lp])) { /* for <name> <type> <count number>: name = 0, 1, ... count-1 */
+        const char *kw = lw[lp++];
+        int neg;
+        uint64_t kv;
+        if (!parse_lit(kw, &neg, &kv) || neg || kv > 1000000) return fail("count '%s' must be 0..1000000", kw);
+        TRY(line_end(NULL, ""));
+        int zero = lit_reg("0", t);
+        TRY(zero);
+        int k = lit_reg(kw, t);
+        TRY(k);
+        TRY(lit_reg("1", t));
+        int ctr = new_reg(t);
+        TRY(ctr);
+        TRY(op("\"op\": \"mov\", \"dst\": %d, \"a\": %d", ctr, zero));
+        int h = new_block(), body = new_block(), ex = new_block();
+        TRY(h);
+        TRY(body);
+        TRY(ex);
+        TRY(br(h));
+        start_block(h);
+        int c = new_reg((Ty){R_NONE, T_BOOL, 0});
+        TRY(c);
+        TRY(op("\"op\": \"lt\", \"dst\": %d, \"a\": %d, \"b\": %d", c, ctr, k));
+        TRY(op("\"op\": \"cbr\", \"cond\": %d, \"then\": @%d@, \"else\": @%d@", c, body, ex));
+        Frame *fr = push(F_FOR);
         if (!fr) return -1;
-        int i = 2;
-        while (i < n && strcmp(w[i], "to")) {
-            if (f->np >= MAX_PARAMS) return fail("more than %d parameters", MAX_PARAMS);
-            const char *pn = w[i++];
-            Ty t;
-            TRY(parse_type(w, n, &i, &t));
-            f->p[f->np++] = t;
-            int r = new_reg(t);
-            TRY(r);
-            if (find_name(pn)) return fail("parameter '%s' is named twice", pn);
-            TRY(bind(pn, r, 2));
-        }
-        if (i >= n) return fail("fn needs 'to <type>' or 'to void' at the end");
-        i++;
-        if (i < n && !strcmp(w[i], "void")) { f->has_ret = 0; i++; }
-        else {
-            Ty t;
-            TRY(parse_type(w, n, &i, &t));
-            if (t.ref != R_NONE) return fail("a function returns a number or bool, not an array");
-            f->has_ret = 1;
-            f->ret = t;
-        }
-        if (i != n) return fail("'%s' after the return type", w[i]);
-        nparams = nregs;
-        nfuncs++;
-        in_fn = 1;
-        int b = new_block();
-        TRY(b);
-        start_block(b);
+        fr->head = h;
+        fr->exit = ex;
+        fr->ctr = ctr;
+        TRY(bind(nm, ctr, 1));
+        start_block(body);
         return 0;
     }
-    if (!in_fn) return fail("'%s' outside a function (start one with fn)", w[0]);
+    /* for <name> <type> <count value> */
+    Want w = want_type(t);
+    Val c;
+    int r = value(&w, -2, &c);
+    if (r == MISSING) return fail("for <name> <type> <count>");
+    TRY(r);
+    if (!teq(c.t, t)) return fail("count '%s' is %s, not %s", span(c.a, c.b), tname(c.t), tname(t));
+    TRY(line_end(&c, ""));
+    return guarded_loop(1, s, &c, nm);
+}
+
+static int stmt(void) {
+    if (!strcmp(lw[0], "fn")) return fn_line(lw, ln);
+    if (!in_fn) return fail("'%s' outside a function (start one with fn)", lw[0]);
     Func *f = &funcs[nfuncs - 1];
-    if (!strcmp(w[0], "end")) {
-        if (n != 1) return fail("end stands alone");
+    const char *w0 = lw[0];
+    lp = 1;
+    if (!strcmp(w0, "end")) {
         Frame *fr = &frames[nframes - 1];
+        if (fr->kind == F_FN && cur >= 0 && f->has_ret) return fail("%s can reach its end without ret", f->name);
+        TRY(alone("end"));
         switch (fr->kind) {
         case F_IF:
             if (!fr->has_else) { if (cur >= 0) TRY(br(fr->els)); start_block(fr->els); }
@@ -627,10 +1051,10 @@ static int stmt(char **w, int n) {
         TRY(pop_scope());
         return 0;
     }
-    if (!strcmp(w[0], "else")) {
-        if (n != 1) return fail("else stands alone");
+    if (!strcmp(w0, "else")) {
         Frame *fr = &frames[nframes - 1];
         if (fr->kind != F_IF || fr->has_else) return fail("else without an open if");
+        TRY(alone("else"));
         if (cur >= 0) { fr->join = new_block(); TRY(fr->join); TRY(br(fr->join)); }
         else fr->join = -1;
         fr->has_else = 1;
@@ -639,15 +1063,15 @@ static int stmt(char **w, int n) {
         start_block(fr->els);
         return 0;
     }
-    if (!strcmp(w[0], "if")) {
-        if (n < 2) return fail("if needs a condition");
-        int c = cond(w + 1, n - 1);
-        TRY(c);
+    if (!strcmp(w0, "if")) {
+        Val c;
+        TRY(cond(&c, "if"));
+        TRY(line_end(&c, ""));
         int th = new_block(), el = new_block();
         TRY(th);
         TRY(el);
         blocks[th].refd = blocks[el].refd = 1;
-        TRY(op("\"op\": \"cbr\", \"cond\": %d, \"then\": @%d@, \"else\": @%d@", c, th, el));
+        TRY(op("\"op\": \"cbr\", \"cond\": %d, \"then\": @%d@, \"else\": @%d@", c.reg, th, el));
         Frame *fr = push(F_IF);
         if (!fr) return -1;
         fr->els = el;
@@ -655,219 +1079,134 @@ static int stmt(char **w, int n) {
         start_block(th);
         return 0;
     }
-    /*
-     * Loops lower to the shape checker2 proves terminating (src/checker2/c2_check.c "loop bounds",
-     * the same shape oscc emits for OSC `while ... bound N`): a counter written in the loop only by
-     * ADD c, one; a guard block dominating every latch that compares the counter with a CONST
-     * K <= 1,000,000 defined once (literals are hoisted and shared, so each is defined once).
-     *   while <cond> [bound N]: hidden ulong counter; head: cond -> guard | exit;
-     *     guard: ge cnt K -> trap 4 (loop bound) | body; body starts with cnt = add cnt 1.
-     *   for <name> <type> <count number>: head: lt i K -> body | exit; latch: i = add i 1.
-     *   for <name> <type> <count name>: as while (lt i count) with the hidden guard.
-     */
-    if (!strcmp(w[0], "while") || (!strcmp(w[0], "for") && n == 4 && !is_lit(w[3]))) {
-        int is_for = !strcmp(w[0], "for");
-        if (cur < 0) return fail("this line can never run: the path already ended (ret or break)");
-        const char *bound = "1000000";
-        int cn = n;
-        if (!is_for && n >= 4 && !strcmp(w[n - 2], "bound")) { bound = w[n - 1]; cn = n - 2; }
-        if (!is_for && cn < 2) return fail("while needs a condition");
-        int neg;
-        uint64_t bv;
-        if (!parse_lit(bound, &neg, &bv) || neg || bv < 1 || bv > 1000000) return fail("bound '%s' must be 1..1000000", bound);
-        Ty u64 = {R_NONE, T_U64, 0};
-        int zero = lit_reg("0", u64), lim = lit_reg(bound, u64), one = lit_reg("1", u64);
-        TRY(zero);
-        TRY(lim);
-        TRY(one);
-        int ctr = -1, cnt = new_reg(u64), lim_t = -1;
-        TRY(cnt);
-        if (is_for) { /* for <name> <type> <count name> */
-            int s = scalar_word(w[2]);
-            if (s < 0 || s == T_BOOL) return fail("'%s' is not a whole-number type", w[2]);
-            Ty t = {R_NONE, s, 0}, tc;
-            lim_t = operand(w[3], NULL, &tc);
-            TRY(lim_t);
-            if (!teq(tc, t)) return fail("count '%s' is %s, not %s", w[3], tname(tc), tname(t));
-            int z = lit_reg("0", t);
-            TRY(z);
-            TRY(lit_reg("1", t));
-            ctr = new_reg(t);
-            TRY(ctr);
-            TRY(op("\"op\": \"mov\", \"dst\": %d, \"a\": %d", ctr, z));
-        }
-        TRY(op("\"op\": \"mov\", \"dst\": %d, \"a\": %d", cnt, zero));
-        int h = new_block(), g = new_block(), tb = new_block(), body = new_block(), ex = new_block();
-        TRY(h);
-        TRY(g);
-        TRY(tb);
-        TRY(body);
-        TRY(ex);
-        TRY(br(h));
-        start_block(h);
-        int c;
-        if (is_for) {
-            c = new_reg((Ty){R_NONE, T_BOOL, 0});
-            TRY(c);
-            TRY(op("\"op\": \"lt\", \"dst\": %d, \"a\": %d, \"b\": %d", c, ctr, lim_t));
-        } else {
-            c = cond(w + 1, cn - 1);
-            TRY(c);
-        }
-        TRY(op("\"op\": \"cbr\", \"cond\": %d, \"then\": @%d@, \"else\": @%d@", c, g, ex));
-        start_block(g);
-        int ge = new_reg((Ty){R_NONE, T_BOOL, 0});
-        TRY(ge);
-        TRY(op("\"op\": \"ge\", \"dst\": %d, \"a\": %d, \"b\": %d", ge, cnt, lim));
-        TRY(op("\"op\": \"cbr\", \"cond\": %d, \"then\": @%d@, \"else\": @%d@", ge, tb, body));
-        start_block(tb);
-        TRY(op("\"op\": \"trap\", \"code\": 4"));
-        TRY(br(ex));
-        start_block(body);
-        TRY(op("\"op\": \"add\", \"dst\": %d, \"a\": %d, \"b\": %d", cnt, cnt, one));
-        Frame *fr = push(is_for ? F_FOR : F_WHILE);
-        if (!fr) return -1;
-        fr->head = h;
-        fr->exit = ex;
-        fr->ctr = ctr;
-        if (is_for) TRY(bind(w[1], ctr, 1));
-        return 0;
+    if (!strcmp(w0, "while")) {
+        if (cur < 0) return fail("this line can never run: the path already ended (ret, trap or break)");
+        return guarded_loop(0, 0, NULL, NULL);
     }
-    if (!strcmp(w[0], "for")) { /* for <name> <type> <count number>: name = 0, 1, ... count-1 */
-        if (n != 4) return fail("for <name> <type> <count>");
-        int s = scalar_word(w[2]);
-        if (s < 0 || s == T_BOOL) return fail("'%s' is not a whole-number type", w[2]);
-        Ty t = {R_NONE, s, 0};
-        int neg;
-        uint64_t kv;
-        if (!parse_lit(w[3], &neg, &kv) || neg || kv > 1000000) return fail("count '%s' must be 0..1000000", w[3]);
-        int zero = lit_reg("0", t);
-        TRY(zero);
-        int k = lit_reg(w[3], t);
-        TRY(k);
-        TRY(lit_reg("1", t));
-        int ctr = new_reg(t);
-        TRY(ctr);
-        TRY(op("\"op\": \"mov\", \"dst\": %d, \"a\": %d", ctr, zero));
-        int h = new_block(), body = new_block(), ex = new_block();
-        TRY(h);
-        TRY(body);
-        TRY(ex);
-        TRY(br(h));
-        start_block(h);
-        int c = new_reg((Ty){R_NONE, T_BOOL, 0});
-        TRY(c);
-        TRY(op("\"op\": \"lt\", \"dst\": %d, \"a\": %d, \"b\": %d", c, ctr, k));
-        TRY(op("\"op\": \"cbr\", \"cond\": %d, \"then\": @%d@, \"else\": @%d@", c, body, ex));
-        Frame *fr = push(F_FOR);
-        if (!fr) return -1;
-        fr->head = h;
-        fr->exit = ex;
-        fr->ctr = ctr;
-        TRY(bind(w[1], ctr, 1));
-        start_block(body);
-        return 0;
-    }
-    if (!strcmp(w[0], "break")) {
-        if (n != 1) return fail("break stands alone");
+    if (!strcmp(w0, "for")) return for_line();
+    if (!strcmp(w0, "break")) {
         for (int k = nframes - 1; k >= 0; k--)
-            if (frames[k].kind == F_WHILE || frames[k].kind == F_FOR) return br(frames[k].exit);
+            if (frames[k].kind == F_WHILE || frames[k].kind == F_FOR) { TRY(alone("break")); return br(frames[k].exit); }
         return fail("break outside a loop");
     }
-    if (!strcmp(w[0], "ret")) {
+    if (!strcmp(w0, "ret")) {
         if (!f->has_ret) {
-            if (n != 1) return fail("%s returns nothing: ret stands alone", f->name);
+            if (lp < ln) return fail("%s returns nothing: ret stands alone", f->name);
+            if (partial) return need_text("words: (newline)\n");
             TRY(op("\"op\": \"ret\""));
             cur = -1;
             return 0;
         }
-        if (n < 2) return fail("%s returns %s: ret needs a value", f->name, tname(f->ret));
-        Ty t;
-        int r = expr(w + 1, n - 1, &f->ret, -2, &t);
+        Want w = want_type(f->ret);
+        Val v;
+        int r = value(&w, -2, &v);
+        if (r == MISSING) return fail("%s returns %s: ret needs a value", f->name, tname(f->ret));
         TRY(r);
-        if (!teq(t, f->ret)) return fail("this is %s; %s returns %s", tname(t), f->name, tname(f->ret));
-        TRY(op("\"op\": \"ret\", \"a\": %d", r));
+        if (!teq(v.t, f->ret)) return fail("this is %s; %s returns %s", tname(v.t), f->name, tname(f->ret));
+        TRY(line_end(&v, ""));
+        TRY(op("\"op\": \"ret\", \"a\": %d", v.reg));
         cur = -1;
         return 0;
     }
-    if (!strcmp(w[0], "trap")) {
+    if (!strcmp(w0, "trap")) {
+        if (lp >= ln) return partial ? need_text("number: 1..14\n") : fail("trap <code 1..14>");
         int neg;
         uint64_t c;
-        if (n != 2 || !parse_lit(w[1], &neg, &c) || neg || c < 1 || c > 14) return fail("trap <code 1..14>");
-        return op("\"op\": \"trap\", \"code\": %" PRIu64, c);
+        if (!parse_lit(lw[lp], &neg, &c) || neg || c < 1 || c > 14) return fail("trap <code 1..14>");
+        lp++;
+        if (lp < ln) return fail("trap <code 1..14>");
+        if (partial) return need_text("words: (newline)\n");
+        /* a trap ends the path, as ret does; the IR block still needs a terminator, so a ret that is
+         * never reached follows (with a zero of the return type) */
+        TRY(op("\"op\": \"trap\", \"code\": %" PRIu64, c));
+        if (f->has_ret) {
+            int z = lit_reg(f->ret.s == T_BOOL ? "false" : "0", f->ret);
+            TRY(z);
+            TRY(op("\"op\": \"ret\", \"a\": %d", z));
+        } else TRY(op("\"op\": \"ret\""));
+        cur = -1;
+        return 0;
     }
-    if (!strcmp(w[0], "put")) { /* put <array> <index> <value> */
-        if (n != 4) return fail("put takes an array, an index and a value");
-        Ty ta, tb, tv;
-        int a = operand(w[1], NULL, &ta);
-        TRY(a);
-        if (ta.ref == R_NONE) return fail("'%s' is not an array", w[1]);
-        if (ta.ref == R_SHARED) return fail("'%s' is view only; put needs an own or edit array", w[1]);
-        Ty it = {R_NONE, T_U32, 0}, et = {R_NONE, ta.s, 0};
-        int i = operand(w[2], &it, &tb);
-        TRY(i);
-        if (!is_int(tb)) return fail("index '%s' is not a whole number", w[2]);
-        int v = operand(w[3], &et, &tv);
-        TRY(v);
-        if (!teq(tv, et)) return fail("'%s' is %s; the array holds %s", w[3], tname(tv), tname(et));
-        return op("\"op\": \"store\", \"arr\": %d, \"index\": %d, \"value\": %d", a, i, v);
-    }
-    if (!strcmp(w[0], "free")) {
-        if (n != 2) return fail("free takes one own array");
+    if (!strcmp(w0, "put")) { /* put <array name> <index> <value> */
+        int a;
         Ty ta;
-        int a = operand(w[1], NULL, &ta);
-        TRY(a);
-        if (ta.ref != R_OWN) return fail("'%s' is not an own array", w[1]);
+        Want none = {0};
+        TRY(array_name(0, 3, AN_PUT, 0, &none, &a, &ta));
+        if (ta.ref == R_SHARED) return fail("'%s' is view only; put needs an own or edit array", lw[lp - 1]);
+        Want iw = {S_INT, A_NONE, {0}, L_TYPED, {R_NONE, T_U32, 0}, 0}, vw = want_type((Ty){R_NONE, ta.s, 0});
+        Val i, v;
+        TRY(slot(&iw, -2, &i, 0, 1, 3));
+        if (!is_int(i.t)) return fail("index '%s' is not a whole number", span(i.a, i.b));
+        TRY(slot(&vw, -2, &v, 0, 2, 3));
+        if (!teq(v.t, vw.lt)) return fail("'%s' is %s; the array holds %s", span(v.a, v.b), tname(v.t), tname(vw.lt));
+        Val whole = {.head = 0, .arity = 3};
+        TRY(line_end(&whole, ""));
+        return op("\"op\": \"store\", \"arr\": %d, \"index\": %d, \"value\": %d", a, i.reg, v.reg);
+    }
+    if (!strcmp(w0, "free")) {
+        int a;
+        Ty ta;
+        Want none = {0};
+        TRY(array_name(0, 1, AN_FREE, 0, &none, &a, &ta));
+        if (ta.ref != R_OWN) return fail("'%s' is not an own array", lw[lp - 1]);
+        Val whole = {.head = 0, .arity = 1};
+        TRY(line_end(&whole, ""));
         return op("\"op\": \"release\", \"arr\": %d", a);
     }
-    if (find_func(w[0]) >= 0 && find_callable(w[0]) < 0) return fail("%s cannot call itself (calls go to earlier functions only)", w[0]);
-    int g = find_callable(w[0]);
+    if (find_func(w0) >= 0 && find_callable(w0) < 0) return fail("%s cannot call itself (calls go to earlier functions only)", w0);
+    int g = find_callable(w0);
     if (g >= 0) { /* a call on its own line */
         Func *cf = &funcs[g];
         if (cf->has_ret) return fail("%s returns %s; keep it: <name> = %s ...", cf->name, tname(cf->ret), cf->name);
         Buf a = {0};
-        if (call_args(cf, w + 1, n - 1, &a) < 0) { free(a.p); return -1; }
-        int rc = op("\"op\": \"call\", \"func\": \"%s\", \"args\": [%s]", cf->name, a.p ? a.p : "");
+        Val whole = {.head = 0, .arity = cf->np};
+        int r = call_args(cf, 0, &a);
+        if (r >= 0) r = line_end(&whole, "");
+        if (r >= 0) r = op("\"op\": \"call\", \"func\": \"%s\", \"args\": [%s]", cf->name, a.p ? a.p : "");
         free(a.p);
-        return rc;
+        return r;
     }
-    if (n >= 2 && strcmp(w[1], "=")) { /* <name> <value>: the short form, "=" left out */
-        for (int i = n; i > 1; i--) w[i] = w[i - 1];
-        static char eqs[] = "=";
-        w[1] = eqs;
-        n++;
-    }
-    if (n >= 3 && !strcmp(w[1], "=")) { /* <name> = <value> */
-        Name *nm = find_name(w[0]);
-        if (nm) {
-            if (nm->fixed == 1) return fail("'%s' is the loop counter; it cannot be assigned", w[0]);
-            Ty t;
-            int r = expr(w + 2, n - 2, &regs[nm->reg], nm->reg, &t);
-            TRY(r);
-            return 0;
-        }
-        if (find_func(w[0]) >= 0 || reserved(w[0]) || !valid_ident(w[0])) return fail("'%s' cannot be a name", w[0]);
-        Ty t;
-        int r = expr(w + 2, n - 2, NULL, -1, &t);
-        TRY(r);
-        return bind(w[0], r, 0);
-    }
-    return fail("'%s' does not start a line (a name =, if, while, for, ret, put, free, trap, break, else, end, or a call)", w[0]);
+    /* <name> = <value>, or <name> <value> (the short form, "=" left out) */
+    Name *nm = find_name(w0);
+    if (ln == 1 && !partial)
+        return fail("'%s' does not start a line (a name =, if, while, for, ret, put, free, trap, break, else, end, or a call)", w0);
+    if (nm && nm->fixed == 1) return fail("'%s' is the loop counter; it cannot be assigned", w0);
+    if (!nm && (find_func(w0) >= 0 || reserved(w0) || !valid_ident(w0))) return fail("'%s' cannot be a name", w0);
+    Want w = {S_ALL, A_ANY, {0}, L_NO, {0}, 1};
+    if (nm) { w = want_type(regs[nm->reg]); w.top = 1; }
+    if (lp < ln && !strcmp(lw[lp], "=")) lp++;
+    else if (partial && lp >= ln) return need_value(&w, "=");
+    Val v;
+    int r = value(&w, nm ? nm->reg : -1, &v);
+    if (r == MISSING) return fail("a value is missing after '%s'", span(0, lp));
+    TRY(r);
+    if (v.lit) return fail("'%s': the type of this number is unknown; write <type> %s", lw[v.word], lw[v.word]);
+    TRY(line_end(&v, ""));
+    if (!nm) TRY(bind(w0, v.reg, 0));
+    return 0;
 }
 
-/* split one line into words; returns the count, or -1 on a bad character */
+/* split one line into words; ( and ) are words of their own. Returns the count, or -1 */
+static char LPAR[] = "(", RPAR[] = ")";
 static int split(char *s, char **w) {
     int n = 0;
-    for (char *p = s; *p;) {
-        while (*p == ' ' || *p == '\t' || *p == '\r') p++;
-        if (!*p) break;
+    char *p = s;
+    while (*p) {
+        if (*p == ' ' || *p == '\t' || *p == '\r') { p++; continue; }
         if (n >= MAX_WORDS) return fail("more than %d words on one line", MAX_WORDS);
+        if (*p == '(' || *p == ')') { w[n++] = *p++ == '(' ? LPAR : RPAR; continue; }
         w[n++] = p;
-        while (*p && *p != ' ' && *p != '\t' && *p != '\r') {
+        while (*p && *p != ' ' && *p != '\t' && *p != '\r' && *p != '(' && *p != ')') {
             if (!(isalnum((unsigned char)*p) || *p == '_' || *p == '-' || *p == '=')) return fail("character '%c' is not part of Omegese", *p);
             p++;
         }
-        if (*p) *p++ = 0;
+        char c = *p;
+        if (!c) break;
+        *p++ = 0;
+        if (c == '(' || c == ')') {
+            if (n >= MAX_WORDS) return fail("more than %d words on one line", MAX_WORDS);
+            w[n++] = c == '(' ? LPAR : RPAR;
+        }
     }
     return n;
 }
@@ -886,12 +1225,13 @@ static char *slurp(const char *path, size_t *len) {
     return b;
 }
 
-/* run every complete line of src; returns 0, or -1 with g_err set. last_partial: the unfinished
+/* run every complete line of src; returns 0, or -1 with g_err set. keep_tail: the unfinished
  * last line (no newline) is left unparsed and returned through *tail */
 static int run(char *src, int keep_tail, char **tail) {
     char *p = src;
     g_line = 0;
     out.n = 0;
+    partial = 0;
     bput(&out, "{\"functions\": [");
     for (;;) {
         char *nl = strchr(p, '\n');
@@ -900,8 +1240,14 @@ static int run(char *src, int keep_tail, char **tail) {
         g_line++;
         char *w[MAX_WORDS + 1];
         int n = split(p, w);
-        TRY(n);
-        if (n > 0) TRY(stmt(w, n));
+        if (n < 0) return -1;
+        if (n > 0) {
+            lw = w;
+            ln = n;
+            lp = 0;
+            pdepth = 0;
+            if (stmt() < 0) return -1;
+        }
         if (!nl) break;
         p = nl + 1;
     }
@@ -912,23 +1258,11 @@ static int run(char *src, int keep_tail, char **tail) {
     return 0;
 }
 
-/* omegese next: which words may start or continue the unfinished line (coarse classes plus names) */
-static void list_names(const char *label, int want_kind, Ty want) {
-    /* want_kind 0: any; 1: scalars of type want; 2: arrays; 3: bools */
-    printf("%s:", label);
-    for (int i = 0; i < nnames; i++) {
-        Ty t = regs[names[i].reg];
-        int ok = want_kind == 0 || (want_kind == 1 && teq(t, want)) || (want_kind == 2 && t.ref != R_NONE) ||
-                 (want_kind == 3 && t.ref == R_NONE && t.s == T_BOOL);
-        int shadowed = 0;
-        for (int j = i + 1; j < nnames; j++) if (!strcmp(names[j].name, names[i].name)) shadowed = 1;
-        if (ok && !shadowed) printf(" %s", names[i].name);
-    }
-    printf("\n");
-}
+/* omegese next: which words may start or continue the unfinished line */
 static int next_words(char *src) {
     char *tail = NULL;
     if (run(src, 1, &tail) < 0) { printf("REFUSED omegese: %s\n", g_err); return 1; }
+    g_line++;
     char *w[MAX_WORDS + 1];
     int n = split(tail, w);
     if (n < 0) { printf("REFUSED omegese: %s\n", g_err); return 1; }
@@ -937,53 +1271,37 @@ static int next_words(char *src) {
         printf(n == 0 ? "words: fn\n" : "words: (finish the fn line)\n");
         return 0;
     }
-    Func *f = &funcs[nfuncs - 1];
-    if (n == 0 && cur < 0) { /* the path ended (ret or break): only closing words may follow */
+    if (n == 0 && cur < 0) { /* the path ended (ret, trap or break): only closing words may follow */
         Frame *fr = &frames[nframes - 1];
         printf("words:%s end\n", fr->kind == F_IF && !fr->has_else ? " else" : "");
         return 0;
     }
-    if (cur < 0 && strcmp(w[0], "end") && strcmp(w[0], "else")) { printf("REFUSED omegese: this line can never run: the path already ended (ret or break)\n"); return 1; }
+    if (cur < 0 && strcmp(w[0], "end") && strcmp(w[0], "else")) { printf("REFUSED omegese: this line can never run: the path already ended (ret, trap or break)\n"); return 1; }
     if (n == 0) {
         printf("words: if while for ret put free trap");
         int loop = 0;
         for (int k = 0; k < nframes; k++) if (frames[k].kind == F_WHILE || frames[k].kind == F_FOR) loop = 1;
         if (loop) printf(" break");
         if (frames[nframes - 1].kind == F_IF && !frames[nframes - 1].has_else) printf(" else");
-        printf(" end");
+        if (!(frames[nframes - 1].kind == F_FN && funcs[nfuncs - 1].has_ret)) printf(" end");
         for (int i = 0; i < nfuncs - 1; i++) if (!funcs[i].has_ret) printf(" %s", funcs[i].name);
         printf("\n");
-        list_names("assign", 0, (Ty){0});
-        printf("new-name: any name not in use\n");
+        printf("assign:");
+        for (int i = 0; i < nnames; i++) if (names[i].fixed != 1) printf(" %s", names[i].name);
+        printf("\nnew-name: any name not in use\n");
         return 0;
     }
-    if (n == 1 && !strcmp(w[0], "ret")) {
-        if (!f->has_ret) { printf("words: (newline)\n"); return 0; }
-        list_names("names", 1, f->ret);
-        printf("number: %s\nops: any op giving %s\n", tname(f->ret), tname(f->ret));
-        return 0;
-    }
-    if (n == 1 && (!strcmp(w[0], "if") || !strcmp(w[0], "while"))) {
-        list_names("names", 3, (Ty){0});
-        printf("words: true false eq ne lt le gt ge not");
-        for (int i = 0; i < nnames; i++)
-            if (regs[names[i].reg].ref != R_NONE && regs[names[i].reg].s == T_BOOL) { printf(" get"); break; }
-        for (int i = 0; i < nfuncs - 1; i++)
-            if (funcs[i].has_ret && funcs[i].ret.ref == R_NONE && funcs[i].ret.s == T_BOOL) printf(" %s", funcs[i].name);
-        printf("\n");
-        return 0;
-    }
-    /* after "<op> <a>" for a binary op: the second operand must match a's type */
-    if (n >= 2) {
-        int o = op_word(w[n - 2]);
-        Name *a = find_name(w[n - 1]);
-        if (o >= 0 && o < OP_NEG && o != OP_SHL && o != OP_SHR && a) {
-            list_names("names", 1, regs[a->reg]);
-            printf("number: %s\n", tname(regs[a->reg]));
-            return 0;
-        }
-    }
-    printf("words: (any word of the line form; see OMEGESE.md)\n");
+    /* the unfinished line, read in next mode: it stops where the prefix ends */
+    lw = w;
+    ln = n;
+    lp = 0;
+    pdepth = 0;
+    partial = 1;
+    g_next.n = 0;
+    int r = stmt();
+    if (r == NEED) { fputs(g_next.p, stdout); return 0; }
+    if (r < 0) { printf("REFUSED omegese: %s\n", g_err); return 1; }
+    printf("words: (newline)\n"); /* a line complete without a newline (fn) */
     return 0;
 }
 

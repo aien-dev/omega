@@ -1,0 +1,8 @@
+fn bitrev8 x u8 to u8
+r = u8 0
+for i u8 8
+b = and x (shl u8 1 i)
+r = or r (shl b (sub u8 7 i))
+end
+ret r
+end

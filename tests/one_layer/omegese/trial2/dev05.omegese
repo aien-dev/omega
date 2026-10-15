@@ -1,0 +1,12 @@
+fn checked_mul a i16 b i16 to i16
+p = mul a b
+if lt p short 32767
+if ge p short -32768
+ret p
+else
+trap 1
+end
+else
+trap 1
+end
+end
