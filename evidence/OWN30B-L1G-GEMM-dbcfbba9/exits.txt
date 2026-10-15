@@ -1,0 +1,7 @@
+qmma-probe exit 0: /tmp/wl1g-fix/gpu_qmma_probe_test --save evidence/OWN30B-L1G-GEMM-dbcfbba9/qmma-words.bin
+qmma-probe-seed2 exit 0: /tmp/wl1g-fix/gpu_qmma_probe_test --no-peak
+pfgemm-chip exit 0: /tmp/wl1g-fix/gpu_pfgemm_test --shape-knob 4 16 1 --chip --tokens 3600 --reps 7
+qgemm-chip exit 0: /tmp/wl1g-fix/gpu_qgemm_test --chip --tokens 3600 --reps 7
+qgemm-cached exit 0: /tmp/wl1g-fix/gpu_qgemm_test --chip --cached --tokens 3600 --reps 7
+qgemm-cached-wait0-gateup exit 0: /tmp/wl1g-fix/gpu_qgemm_test --chip --cached --shape gateup --wait 0 --tokens 3600 --reps 7
+qgemm-cached-wait0-down exit 0: /tmp/wl1g-fix/gpu_qgemm_test --chip --cached --shape down --wait 0 --tokens 3600 --reps 7
