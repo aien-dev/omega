@@ -1,0 +1,8 @@
+```
+fn safe_div a uint b uint to uint
+if eq b 0
+trap 2
+end
+ret div a b
+end
+```

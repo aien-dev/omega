@@ -1,0 +1,10 @@
+fn absdiff(a: i32, b: i32) -> i64 {
+    let x: i64 = a as i64;
+    let y: i64 = b as i64;
+    let diff: i64 = x - y;
+    if diff >= 0 {
+        return diff;
+    } else {
+        return -diff;
+    }
+}

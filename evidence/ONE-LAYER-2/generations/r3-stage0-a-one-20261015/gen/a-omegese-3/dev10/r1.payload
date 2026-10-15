@@ -1,0 +1,6 @@
+fn to_i8 x int to byte
+if or lt x -128 gt x 127
+trap 5
+end
+ret byte x
+end

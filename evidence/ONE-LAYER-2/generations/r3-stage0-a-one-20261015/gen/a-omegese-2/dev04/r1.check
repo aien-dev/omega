@@ -1,0 +1,1 @@
+REFUSED omegese: line 5: gcd cannot call itself (calls go to earlier functions only)

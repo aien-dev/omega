@@ -1,0 +1,5 @@
+fn clamp_add(a: u8, b: u8) -> u8 {
+    let s: u16 = (a as u16) + (b as u16);
+    if s > 255 { return 255; }
+    return s as u8;
+}

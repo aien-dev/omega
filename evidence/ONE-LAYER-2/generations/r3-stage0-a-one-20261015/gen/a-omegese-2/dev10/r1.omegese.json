@@ -1,0 +1,8 @@
+{"functions": [
+  {"name": "to_i8", "params": ["i32"], "ret": "i8", "locals": ["i32", "bool", "i32", "bool", "bool", "i8", "i8"],
+   "blocks": [
+    [{"op": "const", "dst": 1, "value": -128}, {"op": "const", "dst": 3, "value": 127}, {"op": "const", "dst": 6, "value": 0}, {"op": "lt", "dst": 2, "a": 0, "b": 1}, {"op": "gt", "dst": 4, "a": 0, "b": 3}, {"op": "or", "dst": 5, "a": 2, "b": 4}, {"op": "cbr", "cond": 5, "then": 1, "else": 2}],
+    [{"op": "trap", "code": 5}, {"op": "ret", "a": 6}],
+    [{"op": "cast", "dst": 7, "a": 0}, {"op": "ret", "a": 7}]
+   ]}
+]}

@@ -1,0 +1,11 @@
+{"functions": [
+  {"name": "isqrt", "params": ["u32"], "ret": "u32", "locals": ["u32", "u32", "u64", "u64", "u64", "u32", "bool", "u64", "bool", "u32", "u32"],
+   "blocks": [
+    [{"op": "const", "dst": 1, "value": 0}, {"op": "const", "dst": 3, "value": 0}, {"op": "const", "dst": 4, "value": 1}, {"op": "const", "dst": 8, "value": 32}, {"op": "const", "dst": 10, "value": 1}, {"op": "mov", "dst": 2, "a": 1}, {"op": "mov", "dst": 5, "a": 3}, {"op": "br", "to": 1}],
+    [{"op": "mul", "dst": 6, "a": 2, "b": 2}, {"op": "le", "dst": 7, "a": 6, "b": 0}, {"op": "cbr", "cond": 7, "then": 2, "else": 5}],
+    [{"op": "ge", "dst": 9, "a": 5, "b": 8}, {"op": "cbr", "cond": 9, "then": 3, "else": 4}],
+    [{"op": "trap", "code": 4}, {"op": "br", "to": 5}],
+    [{"op": "add", "dst": 5, "a": 5, "b": 4}, {"op": "add", "dst": 2, "a": 2, "b": 10}, {"op": "br", "to": 1}],
+    [{"op": "sub", "dst": 11, "a": 2, "b": 10}, {"op": "ret", "a": 11}]
+   ]}
+]}

@@ -1,0 +1,7 @@
+fn safe_div(a: u32, b: u32) -> u32 {
+    if b == 0 {
+        // This will trigger trap 2 (division by zero)
+        return 0 / b;
+    }
+    return a / b;
+}

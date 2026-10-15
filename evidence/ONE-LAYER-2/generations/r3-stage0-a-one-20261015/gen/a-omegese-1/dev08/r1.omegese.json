@@ -1,0 +1,14 @@
+{"functions": [
+  {"name": "collatz_steps", "params": ["u32"], "ret": "u32", "locals": ["u32", "u32", "u64", "u64", "u64", "u32", "bool", "u64", "bool", "u32", "u32", "bool", "u32", "u32"],
+   "blocks": [
+    [{"op": "const", "dst": 1, "value": 0}, {"op": "const", "dst": 3, "value": 0}, {"op": "const", "dst": 4, "value": 1}, {"op": "const", "dst": 6, "value": 1}, {"op": "const", "dst": 8, "value": 1000}, {"op": "const", "dst": 10, "value": 2}, {"op": "const", "dst": 13, "value": 3}, {"op": "mov", "dst": 2, "a": 1}, {"op": "mov", "dst": 5, "a": 3}, {"op": "br", "to": 1}],
+    [{"op": "ne", "dst": 7, "a": 0, "b": 6}, {"op": "cbr", "cond": 7, "then": 2, "else": 8}],
+    [{"op": "ge", "dst": 9, "a": 5, "b": 8}, {"op": "cbr", "cond": 9, "then": 3, "else": 4}],
+    [{"op": "trap", "code": 4}, {"op": "br", "to": 8}],
+    [{"op": "add", "dst": 5, "a": 5, "b": 4}, {"op": "rem", "dst": 11, "a": 0, "b": 10}, {"op": "eq", "dst": 12, "a": 11, "b": 1}, {"op": "cbr", "cond": 12, "then": 5, "else": 6}],
+    [{"op": "div", "dst": 0, "a": 0, "b": 10}, {"op": "br", "to": 7}],
+    [{"op": "mul", "dst": 14, "a": 0, "b": 13}, {"op": "add", "dst": 0, "a": 14, "b": 6}, {"op": "br", "to": 7}],
+    [{"op": "add", "dst": 2, "a": 2, "b": 6}, {"op": "br", "to": 1}],
+    [{"op": "ret", "a": 2}]
+   ]}
+]}

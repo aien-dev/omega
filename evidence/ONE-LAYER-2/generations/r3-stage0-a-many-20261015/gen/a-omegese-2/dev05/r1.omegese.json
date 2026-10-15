@@ -1,0 +1,8 @@
+{"functions": [
+  {"name": "checked_mul", "params": ["i16", "i16"], "ret": "i16", "locals": ["i16", "i16", "bool", "i16", "bool", "bool", "i16"],
+   "blocks": [
+    [{"op": "const", "dst": 3, "value": -32768}, {"op": "const", "dst": 5, "value": 32767}, {"op": "const", "dst": 8, "value": 0}, {"op": "mul", "dst": 2, "a": 0, "b": 1}, {"op": "lt", "dst": 4, "a": 2, "b": 3}, {"op": "gt", "dst": 6, "a": 2, "b": 5}, {"op": "or", "dst": 7, "a": 4, "b": 6}, {"op": "cbr", "cond": 7, "then": 1, "else": 2}],
+    [{"op": "trap", "code": 1}, {"op": "ret", "a": 8}],
+    [{"op": "ret", "a": 2}]
+   ]}
+]}

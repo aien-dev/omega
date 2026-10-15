@@ -1,0 +1,12 @@
+fn checked_mul a short b short to short
+let product = mul a b
+let min = short -32768
+let max = short 32767
+if ge product max
+trap 1
+end
+if le product min
+trap 1
+end
+ret product
+end

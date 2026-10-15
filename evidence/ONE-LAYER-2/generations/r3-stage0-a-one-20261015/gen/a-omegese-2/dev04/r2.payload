@@ -1,0 +1,11 @@
+fn gcd a uint b uint to uint
+if eq b 0
+ret a
+end
+while ne b 0 bound 64
+let r = rem a b
+a = b
+b = r
+end
+ret a
+end

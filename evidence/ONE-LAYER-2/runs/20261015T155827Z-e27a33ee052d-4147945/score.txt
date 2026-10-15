@@ -1,0 +1,3 @@
+references_accepted=10/10
+replay_identical=yes probes=PASS clean_tree=yes
+RUN VALID

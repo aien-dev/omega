@@ -1,0 +1,6 @@
+```
+fn clamp_add a uchar b uchar to uchar
+s = add a b
+ret if gt s 255 uchar 255 s
+end
+```

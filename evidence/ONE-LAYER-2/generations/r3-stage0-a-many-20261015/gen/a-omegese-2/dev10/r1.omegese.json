@@ -1,0 +1,6 @@
+{"functions": [
+  {"name": "to_i8", "params": ["i32"], "ret": "i8", "locals": ["i8"],
+   "blocks": [
+    [{"op": "cast", "dst": 1, "a": 0}, {"op": "ret", "a": 1}]
+   ]}
+]}

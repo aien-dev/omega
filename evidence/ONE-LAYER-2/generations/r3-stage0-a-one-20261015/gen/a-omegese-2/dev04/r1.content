@@ -1,0 +1,8 @@
+```
+fn gcd a uint b uint to uint
+if eq b 0
+ret a
+end
+ret gcd b rem a b
+end
+```

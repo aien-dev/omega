@@ -1,0 +1,455 @@
+You write a small program for the Omega machine. The task says which function to write: its name,
+its parameter types and its return type. You may add helper functions before it.
+
+Values and rules (the same whatever form you write the program in):
+
+- Types: bool, u8, u16, u32, u64 (unsigned), i8, i16, i32, i64 (signed, two's complement).
+- No implicit conversions: the two operands of an arithmetic, bitwise or comparison operation have
+  the same type (a shift amount may be any integer type). Convert explicitly.
+- Unsigned arithmetic wraps modulo 2^width.
+- Signed +, -, *, negation and << must give a representable result, otherwise the run stops with
+  trap 1 (overflow).
+- Division truncates toward zero; remainder has the sign of the dividend. A divisor of 0 stops the
+  run with trap 2 (division by zero). Signed MIN / -1 is trap 1.
+- An array index out of bounds is trap 3. A loop that runs past its bound is trap 4.
+- A conversion to a type that cannot hold the value is trap 5 (conversion out of range).
+- A shift amount outside 0..width-1 is trap 7.
+- A trap ends the whole run; it is the function's outcome. Only trap where the task asks for one.
+
+Answer with exactly one fenced code block (three backticks) that holds the complete program and
+nothing else. Text outside the block is ignored.
+
+REPRESENTATION: omegese
+
+Write the program in Omegese: one statement per line, words separated by single spaces. No commas,
+no semicolons, no indentation, no comments. A checker reads it line by line and refuses
+the first invalid line with a reason; a valid program becomes the program.
+
+Types (Omegese name = type): bool = bool, uchar = u8, ushort = u16, uint = u32, ulong = u64,
+byte = i8, short = i16, int = i32, long = i64. The names u8 .. i64 are accepted too.
+
+Statements:
+
+    fn <name> <param> <type> <param> <type> ... to <type>     (or: to void); end closes the function
+    <name> = <value>          write a value: a new name, or an existing name of the same type
+    if <cond>  ...  else  ...  end           (else is optional)
+    while <cond> bound <N>  ...  end         N in 1..1000000; more than N iterations is trap 4
+    for <i> <type> <count>  ...  end         i = 0, 1, ..., count-1 (count is a number or a value)
+    break                     leave the innermost while or for
+    ret <value>               (ret alone in a void function)
+    put <array> <index> <value>
+    free <array>
+    trap <code>               code 1..14; like ret, it ends the path
+    <function> <args>         call a void function
+
+Values (each op takes a fixed number of values; each value may itself be an op):
+
+    <name>  or  <number>
+    add sub mul div rem and or xor shl shr  <a> <b>
+    eq ne lt le gt ge  <a> <b>                (gives bool)
+    neg <a>  (signed)     not <a>  (bool: logical; number: bitwise)
+    <type> <number>       a typed number, e.g. uint 0
+    <type> <value>        convert, e.g. ulong x (trap 5 if the value does not fit)
+    get <array> <index>
+    new <type> <len> <init>   only as a whole line: <name> = new ...
+    own <array>  edit <array>  view <array>
+    <function> <args>     call a function written earlier in the program
+
+Values nest in prefix order: `add mul a a 1` is (a*a)+1, `eq rem n 2 0` is n%2 == 0. Brackets are
+optional and change nothing: `add (mul a a) 1`. A ( must hold exactly one value.
+
+Rules:
+- Types are inferred: a new name takes the type of its value. A plain number takes the type of the
+  other value of its op (`add x 1`); where there is none, write the type (`s = uint 0`). Both values
+  of an op have one type; convert explicitly. Two plain numbers in one op are refused.
+- A condition is any value giving bool (`while ne b 0 bound 64`, `if or lt p 0 gt p 9`).
+- A name first written inside if/else/while/for exists only until that block's end. To use a value
+  after the block, write it before the block, then overwrite it inside.
+- Every name you write must be read later. Parameters may be overwritten. A for counter may not.
+- Every path through a function that returns a value must end in ret or trap.
+- Parameters of array type: own|edit|view <type> <len>, e.g. `v view uint 4`.
+
+Word card: every fixed word and what it does.
+
+    fn      start a function: fn <name> <param> <type> ... to <type>
+    to      in a fn line: the return type follows
+    void    in a fn line: the function returns nothing (to void)
+    end     close the innermost fn, if, else, while or for
+    if      if <cond>: run the lines up to else or end when cond is true
+    else    the lines run when the if condition is false
+    while   while <cond> bound <N>: repeat while cond is true
+    bound   in a while line: the most passes allowed; one more is trap 4
+    for     for <i> <type> <count>: run with i = 0, 1, ..., count-1
+    break   leave the innermost while or for
+    ret     return a value (ret alone in a void function)
+    trap    trap <code>: stop the run with that trap code
+    put     put <array> <index> <value>: store into an array
+    free    free <array>: release an array made with new
+    true    the bool value true
+    false   the bool value false
+    add     add <a> <b>: a + b
+    sub     sub <a> <b>: a - b
+    mul     mul <a> <b>: a * b
+    div     div <a> <b>: a / b, truncated toward zero
+    rem     rem <a> <b>: remainder of a / b, sign of a
+    and     and <a> <b>: bitwise and; on bools, logical and
+    or      or <a> <b>: bitwise or; on bools, logical or
+    xor     xor <a> <b>: bitwise exclusive or
+    shl     shl <a> <b>: a shifted left by b bits
+    shr     shr <a> <b>: a shifted right by b bits
+    eq      eq <a> <b>: a == b (bool)
+    ne      ne <a> <b>: a != b (bool)
+    lt      lt <a> <b>: a < b (bool)
+    le      le <a> <b>: a <= b (bool)
+    gt      gt <a> <b>: a > b (bool)
+    ge      ge <a> <b>: a >= b (bool)
+    neg     neg <a>: -a (signed)
+    not     not <a>: logical not of a bool, bitwise not of a number
+    get     get <array> <index>: read an element
+    new     <name> = new <type> <len> <init>: a new array of len elements, all init
+    bool    type bool; bool <v> converts or types a value
+    uchar   type u8 (unsigned 8-bit); uchar <v> converts or types a value
+    ushort  type u16 (unsigned 16-bit)
+    uint    type u32 (unsigned 32-bit)
+    ulong   type u64 (unsigned 64-bit)
+    byte    type i8 (signed 8-bit)
+    short   type i16 (signed 16-bit)
+    int     type i32 (signed 32-bit)
+    long    type i64 (signed 64-bit)
+    own     own <array>: move the array (a parameter: own <type> <len>)
+    edit    edit <array>: lend the array for writing (a parameter: edit <type> <len>)
+    view    view <array>: lend the array for reading (a parameter: view <type> <len>)
+
+Worked examples (14): each is a task as you receive it, then a correct program.
+
+Example 1.
+
+entry hash_step
+params u32 u8
+ret u32
+
+Write a function hash_step that takes an unsigned 32-bit number h and an unsigned 8-bit number c
+and returns h * 31 + c, computed in unsigned 32-bit arithmetic: the result wraps modulo 2^32. It
+never traps.
+
+```
+fn hash_step h uint c uchar to uint
+ret add mul h 31 uint c
+end
+```
+
+Example 2.
+
+entry sum_squares3
+params i16 i16 i16
+ret i16
+
+Write a function sum_squares3 that takes three signed 16-bit numbers a, b and c and returns
+a*a + b*b + c*c as a signed 16-bit number. If a square or the sum does not fit in a signed 16-bit
+number, the run stops with trap 1 (overflow).
+
+```
+fn sum_squares3 a short b short c short to short
+ret add add mul a a mul b b mul c c
+end
+```
+
+Example 3.
+
+entry narrow_sum
+params i16 i16
+ret i8
+
+Write a function narrow_sum that takes two signed 16-bit numbers a and b and returns a + b as a
+signed 8-bit number. If a + b does not fit in a signed 16-bit number, the run stops with trap 1
+(overflow); if it fits in 16 bits but not in a signed 8-bit number, the run stops with trap 5
+(conversion out of range).
+
+```
+fn narrow_sum a short b short to byte
+ret byte add a b
+end
+```
+
+Example 4.
+
+entry nibble_mirror
+params u16
+ret bool
+
+Write a function nibble_mirror that takes an unsigned 16-bit number x and returns true when its four
+4-bit groups read the same from both ends: bits 0-3 equal bits 12-15, and bits 4-7 equal bits 8-11.
+It never traps.
+
+```
+fn nibble_mirror x ushort to bool
+a = and x 15
+b = and shr x 4 15
+c = and shr x 8 15
+d = shr x 12
+ret and eq a d eq b c
+end
+```
+
+Example 5.
+
+entry rotl8
+params u8 u8
+ret u8
+
+Write a function rotl8 that takes two unsigned 8-bit numbers x and k and rotates the 8 bits of x to
+the left by k mod 8 places: bits shifted out on the left come back in on the right. It never traps.
+
+```
+fn rotl8 x uchar k uchar to uchar
+s = rem k 8
+if eq s 0
+ret x
+end
+ret or shl x s shr x sub 8 s
+end
+```
+
+Example 6.
+
+entry count_digits
+params u64
+ret u8
+
+Write a function count_digits that takes an unsigned 64-bit number n and returns the number of its
+decimal digits as an unsigned 8-bit number. 0 has one digit. It never traps.
+
+```
+fn count_digits n ulong to uchar
+k = uchar 1
+while ge n 10 bound 20
+n = div n 10
+k = add k 1
+end
+ret k
+end
+```
+
+Example 7.
+
+entry has_digit
+params u32 u8
+ret bool
+
+Write a function has_digit that takes an unsigned 32-bit number n and an unsigned 8-bit number d and
+returns true when one of the decimal digits of n is d, false otherwise. 0 has the single digit 0.
+When d is larger than 9 the answer is false. It never traps.
+
+```
+fn has_digit n uint d uchar to bool
+t = uint d
+found = eq rem n 10 t
+while ge n 10 bound 10
+n = div n 10
+if eq rem n 10 t
+found = true
+end
+end
+ret found
+end
+```
+
+Example 8.
+
+entry halve_or_dec_steps
+params u32
+ret u32
+
+Write a function halve_or_dec_steps that takes an unsigned 32-bit number n and counts the steps that
+bring it down to 1 or less, where one step halves n when n is even and subtracts 1 when n is odd.
+Return the count as an unsigned 32-bit number (0 when n is 0 or 1). It never traps.
+
+```
+fn halve_or_dec_steps n uint to uint
+k = uint 0
+while gt n 1 bound 64
+if eq rem n 2 0
+n = div n 2
+else
+n = sub n 1
+end
+k = add k 1
+end
+ret k
+end
+```
+
+Example 9.
+
+entry sum_range
+params i32 i32
+ret i64
+
+Write a function sum_range that takes two signed 32-bit numbers lo and hi and returns the sum of all
+integers from lo to hi inclusive, as a signed 64-bit number. When lo > hi the sum is 0. lo and hi
+are always between -100000 and 100000. It never traps.
+
+```
+fn sum_range lo int hi int to long
+s = long 0
+i = lo
+while le i hi bound 300000
+s = add s long i
+i = add i 1
+end
+ret s
+end
+```
+
+Example 10.
+
+entry tri_kind
+params u16 u16 u16
+ret u8
+
+Write a function tri_kind that takes three unsigned 16-bit side lengths a, b and c and returns, as an
+unsigned 8-bit number: 0 when they cannot form a triangle (the sum of some two sides is at most the
+third side; add in 32 bits so the sum cannot wrap), 1 when all three sides are equal, 2 when exactly
+two sides are equal, 3 otherwise. It never traps.
+
+```
+fn tri_kind a ushort b ushort c ushort to uchar
+x = uint a
+y = uint b
+z = uint c
+if or or le add x y z le add x z y le add y z x
+ret 0
+else
+if and eq a b eq b c
+ret 1
+else
+if or or eq a b eq b c eq a c
+ret 2
+end
+end
+end
+ret 3
+end
+```
+
+Example 11.
+
+entry power_mod
+params u32 u32 u32
+ret u32
+
+Write a function power_mod that takes three unsigned 32-bit numbers b, e and m and returns b to the
+power e, modulo m (0 to the power 0 is 1). Work in unsigned 64-bit numbers: start with r = 1 mod m
+and x = b mod m, then while e > 0: if e is odd, r = r * x mod m; x = x * x mod m; e = e / 2. Use a
+helper function for "a * b mod m". When m is 0 the run stops with trap 2 (division by zero).
+
+```
+fn mod a ulong b ulong m ulong to ulong
+ret rem mul a b m
+end
+fn power_mod b uint e uint m uint to uint
+mm = ulong m
+r = rem ulong 1 mm
+x = rem ulong b mm
+while gt e 0 bound 40
+if eq rem e 2 1
+r = mod r x mm
+end
+x = mod x x mm
+e = div e 2
+end
+ret uint r
+end
+```
+
+Example 12.
+
+entry cube_xor_pair
+params u8
+ret u16
+
+Write a function cube_xor_pair that takes an unsigned 8-bit number n. Fill a table T of 16 unsigned
+16-bit entries with T[i] = i * i * i for i = 0 .. 15, and return T[n] xor T[n + 1], computing the
+index n + 1 in 32 bits. When an index is past the table (n of 15 or more) the lookup is out of bounds
+and the run stops with trap 3.
+
+```
+fn cube_xor_pair n uchar to ushort
+t = new ushort 16 0
+for i uint 16
+v = ushort i
+put t i mul mul v v v
+end
+j = uint n
+r = xor get t j get t add j 1
+free t
+ret r
+end
+```
+
+Example 13.
+
+entry count_above
+params i32 i32 i32 i32 i32
+ret u8
+
+Write a function count_above that takes five signed 32-bit numbers a, b, c, d and t and returns how
+many of a, b, c and d are greater than t, as an unsigned 8-bit number. Put a, b, c and d in an array
+of four and count with a helper function that reads the array. It never traps.
+
+```
+fn above v view int 4 t int to uchar
+k = uchar 0
+for i uint 4
+if gt get v i t
+k = add k 1
+end
+end
+ret k
+end
+fn count_above a int b int c int d int t int to uchar
+v = new int 4 0
+put v 0 a
+put v 1 b
+put v 2 c
+put v 3 d
+k = above view v t
+free v
+ret k
+end
+```
+
+Example 14.
+
+entry dot3
+params i16 i16 i16 i16 i16 i16
+ret i64
+
+Write a function dot3 that takes six signed 16-bit numbers a, b, c, x, y, z and returns
+a*x + b*y + c*z computed in signed 64-bit arithmetic. Convert the six values to signed 64-bit
+numbers, store them in two arrays of three, and compute the sum with a helper function that reads
+both arrays. It never traps.
+
+```
+fn dot u view long 3 w view long 3 to long
+s = long 0
+for i uint 3
+s = add s mul get u i get w i
+end
+ret s
+end
+fn dot3 a short b short c short x short y short z short to long
+u = new long 3 0
+w = new long 3 0
+put u 0 long a
+put u 1 long b
+put u 2 long c
+put w 0 long x
+put w 1 long y
+put w 2 long z
+s = dot view u view w
+free u
+free w
+ret s
+end
+```

@@ -1,0 +1,11 @@
+fn bitrev8 x uchar to uchar
+let result = uchar 0
+let i = uchar 0
+while lt i 8 bound 8
+let bit = and x shl uchar 1 i
+let rev_bit = shl uchar 1 sub 7 i
+let result = or result bit
+let i = add i 1
+end
+ret result
+end

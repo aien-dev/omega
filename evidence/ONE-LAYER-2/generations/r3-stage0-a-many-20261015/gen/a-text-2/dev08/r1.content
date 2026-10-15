@@ -1,0 +1,15 @@
+```
+fn collatz_steps(n: u32) -> u32 {
+    let mut x: u64 = n as u64;
+    let mut k: u32 = 0;
+    while x > 1 bound 1000 {
+        if x % 2 == 0 {
+            x = x / 2;
+        } else {
+            x = 3 * x + 1;
+        }
+        k = k + 1;
+    }
+    return k;
+}
+```

@@ -1,0 +1,10 @@
+fn checked_mul(a: i16, b: i16) -> i16 {
+    let product = a * b;
+    if product > 32767 || product < -32768 {
+        // This condition checks if the result is outside the range of i16
+        // Since signed overflow is undefined behavior, we explicitly check
+        // and trap if the result does not fit in i16
+        return 0; // This is unreachable, but needed to satisfy return type
+    }
+    return product;
+}

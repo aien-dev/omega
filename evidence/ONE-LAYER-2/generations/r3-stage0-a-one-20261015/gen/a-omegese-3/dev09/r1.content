@@ -1,0 +1,16 @@
+```
+fn bitrev8 x uchar to uchar
+let result = uchar 0
+let mask = uchar 1
+let i = uchar 0
+while lt i 8 bound 8
+let bit = and x mask
+if ne bit 0
+let result = or result shl mask 7
+end
+let mask = shl mask 1
+let i = add i 1
+end
+ret result
+end
+```

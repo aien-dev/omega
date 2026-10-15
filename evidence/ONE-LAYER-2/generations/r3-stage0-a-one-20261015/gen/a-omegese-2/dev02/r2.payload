@@ -1,0 +1,8 @@
+fn absdiff a int b int to long
+let diff = sub a b
+let abs_diff = diff
+if lt diff 0
+let abs_diff = neg diff
+end
+ret abs_diff
+end

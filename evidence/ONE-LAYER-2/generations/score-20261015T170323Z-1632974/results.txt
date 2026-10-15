@@ -1,0 +1,14 @@
+exp445 r3 results (harness: RUN VALID; references accepted 10/10; provenance OK; prompt mode one)
+success = harness ACCEPT on hidden inputs of the final candidate; attempt 1 is the pre-registered primary measure; round 1 = accepted without the repair round; 95% Wilson intervals
+
+config a   arm omegese  attempt1 2/10    0.200 [0.057, 0.510]   round 1 only 2/10      any-of-attempts 2/10    0.200 [0.057, 0.510]
+                        completion tokens 2824 total, 94.1 per generation; prompt 3553.2 per generation; wall 140.2 s; repaired 18 (accepted 0)
+config a   arm text     attempt1 3/10    0.300 [0.108, 0.603]   round 1 only 2/10      any-of-attempts 3/10    0.300 [0.108, 0.603]
+                        completion tokens 7230 total, 241.0 per generation; prompt 3182.5 per generation; wall 313.8 s; repaired 24 (accepted 5)
+cost config a: omegese / text mean completion tokens per generation x0.39 (94.1 / 241.0); prompt tokens per generation 3553.2 / 3182.5
+distinct candidates config a arm omegese: 1.00 per task over 3.00 attempts; every attempt identical on 10 of 10 tasks with 2+ attempts
+distinct candidates config a arm text: 1.70 per task over 3.00 attempts; every attempt identical on 5 of 10 tasks with 2+ attempts
+paired attempt 1 config a: both 0, only omegese 2, only text 3, neither 5; exact two-sided McNemar p = 1.000000
+
+gate config a: omegese 2/10, text 3/10: FAIL (needs omegese >= 80% and at most 10 points below text)
+GATE NOT EVALUATED: configs scored a, the protocol needs a,b; INTERIM result (protocol 13.3)
