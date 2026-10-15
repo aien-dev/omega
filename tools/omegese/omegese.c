@@ -1404,6 +1404,11 @@ static char *slurp(const char *path, size_t *len) {
     fclose(fp);
     if (n > MAX_IN) { fprintf(stderr, "%s: larger than %u bytes\n", path, MAX_IN); exit(2); }
     b[n] = 0;
+#if defined(OMEGESE_CANARY) && OMEGESE_CANARY == 1 /* negative control for the ASan run: a read after free */
+    { char *volatile q = malloc(8); if (!q) exit(2); free(q); volatile char c = q[0]; (void)c; }
+#elif defined(OMEGESE_CANARY) && OMEGESE_CANARY == 2 /* negative control for the UBSan run: signed overflow */
+    { volatile int k = 2147483647; k += (int)n + 1; (void)k; }
+#endif
     if (strlen(b) != n) { printf("REFUSED omegese: a zero byte in the input\n"); exit(1); }
     *len = n;
     return b;

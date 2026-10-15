@@ -18,6 +18,26 @@ T="$(mktemp -d "${TMPDIR:-/tmp}/omegese-test.XXXXXXXX")"; trap 'rm -rf "$T"' EXI
 fails=0
 bad() { echo "FAIL $*"; fails=$((fails + 1)); }
 
+# 0. sanitized run (OMEGESE_SANITIZED=1: <omegese> is built with ASan and UBSan, which exit 86 on a
+#    finding; omegese itself only exits 0, 1 or 2). <omegese> is wrapped so that every exit 86 is logged
+#    with its report and fails the run at the end, wherever the test reads the exit code. Negative control
+#    first: each binary in OMEGESE_CANARIES (built with -DOMEGESE_CANARY=1, a read after free, or =2, a
+#    signed overflow) must be caught, so a sanitizer that is silently off cannot pass.
+if [ "${OMEGESE_SANITIZED:-0}" = 1 ]; then
+  export ASAN_OPTIONS="exitcode=86" UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1:exitcode=86"
+  nc=0
+  for c in ${OMEGESE_CANARIES:-}; do
+    rc=0; "$c" emit "$ROOT/tests/one_layer/omegese/dev/dev01.omegese" "$T/canary.json" > /dev/null 2> "$T/canary.err" || rc=$?
+    if [ "$rc" -eq 86 ] && grep -qE 'heap-use-after-free|signed integer overflow' "$T/canary.err"; then nc=$((nc + 1))
+    else bad "sanitizer negative control $(basename "$c"): not caught (exit $rc)"; fi
+  done
+  [ "$nc" -eq 2 ] || bad "sanitizer negative control: $nc canaries caught, want 2 (set OMEGESE_CANARIES)"
+  echo "sanitizers: $nc/2 canaries caught (read after free, signed overflow)"
+  printf '%s\n' '#!/usr/bin/env bash' "e=\"\$(mktemp)\"; rc=0; '$G' \"\$@\" 2> \"\$e\" || rc=\$?" \
+    "[ \$rc -ne 86 ] || { echo \"== \$*\"; cat \"\$e\"; } >> '$T/san.log'" 'cat "$e" >&2; rm -f "$e"; exit $rc' > "$T/gsan"
+  chmod +x "$T/gsan"; G="$T/gsan"
+fi
+
 # 1. dev programs
 n=0
 for f in "$ROOT"/tests/one_layer/omegese/dev/dev*.omegese; do
@@ -897,5 +917,9 @@ for f in "$ROOT"/tests/one_layer/omegese/nested/*.omegese "$ROOT"/tests/one_laye
   done
 done
 echo "truncation fuzz: $nf byte prefixes through emit, next and next --machine, exit 0 or 1"
+if [ "${OMEGESE_SANITIZED:-0}" = 1 ]; then
+  if [ -s "$T/san.log" ]; then bad "sanitizer reports: $(grep -m3 -E '^==|ERROR|runtime error' "$T/san.log")"
+  else echo "sanitizers: no ASan or UBSan report in the whole run"; fi
+fi
 [ "$fails" -eq 0 ] || { echo "test-omegese: $fails failure(s)"; exit 1; }
 echo "test-omegese: PASS"
