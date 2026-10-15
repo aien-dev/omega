@@ -1,7 +1,8 @@
-# Glyph: a program language built for the AI writer (v0)
+# Omegese: a program language built for the AI writer (v0)
 
-Status: v0, phase 1 (language, translator, checks, token measurement). No model has written Glyph
-yet; that is phase 2 (below). Tool: `tools/glyph/glyph.c`; tests: `make test-glyph`.
+Status: v0. Phase 1 done (language, translator, checks, token measurement); phase 2 started (section 7).
+Tool: `tools/omegese/omegese.c`; tests: `make test-omegese`. Named Glyph until 2026-10-15 (the name was
+taken); evidence recorded before then says glyph.
 
 ## 1. Why
 
@@ -11,14 +12,14 @@ errors come from the same places: punctuation and keys (JSON), two characters pe
 bookkeeping the writer must do in its head: numbered registers with declared types, numbered blocks,
 byte offsets. Text avoids the bookkeeping but needs a compiler for a human-readable language.
 
-Glyph keeps the machine-first path (no human source language in production) and removes the
+Omegese keeps the machine-first path (no human source language in production) and removes the
 bookkeeping and the punctuation. Its words are chosen from the writer model's own vocabulary.
 
 ## 2. Design rules
 
 1. **One word, one token.** Every fixed word (ops, types, keywords) is exactly one token of the
    target tokenizer when written with its leading space (Qwen3; the 8B, 30B and 4B tokenizers share
-   one vocabulary). `make test-glyph` checks this when given a tokenizer (section 6). There is no
+   one vocabulary). `make test-omegese` checks this when given a tokenizer (section 6). There is no
    punctuation besides `=` (also one token, and optional), no brackets, no commas, no indentation.
    Numbers cost one token for the space plus one per digit (Qwen3 splits digits).
 2. **Types are inferred.** Only parameters, the return type, conversions, typed numbers
@@ -37,10 +38,10 @@ bookkeeping and the punctuation. Its words are chosen from the writer model's ow
 5. **Loops are proven to end.** Every loop lowers to the shape checker2 proves terminating
    (`src/checker2/c2_check.c`, "loop bounds"; the shape oscc emits for `while ... bound N`).
 6. **Prefix-decidable.** After any prefix the checker knows which words may come next
-   (`glyph next`): the mask an inference engine can apply while the model writes, so an invalid
+   (`omegese next`): the mask an inference engine can apply while the model writes, so an invalid
    program cannot be written.
-7. **Same trust chain.** Glyph -> omega_emit op list -> canonical OSC binary IR -> checker2 ->
-   signed receipt. Glyph changes nothing after the op list.
+7. **Same trust chain.** Omegese -> omega_emit op list -> canonical OSC binary IR -> checker2 ->
+   signed receipt. Omegese changes nothing after the op list.
 
 ## 3. The language
 
@@ -111,10 +112,10 @@ is defined exactly once, as checker2 requires). Blocks are numbered in the order
 
 The 10 public dev tasks (`tests/one_layer/exp445/dev`), reference solutions in each spelling,
 tokens counted offline with the Qwen3 tokenizer (the measure.sh method: text = reference.osc;
-bytes = hex of the compiled IR; structured = `omega_emit lift` of that IR; Glyph =
-`tests/one_layer/glyph/dev/*.glyph`; Glyph short = the same with `=` left out).
+bytes = hex of the compiled IR; structured = `omega_emit lift` of that IR; Omegese =
+`tests/one_layer/omegese/dev/*.omegese`; Omegese short = the same with `=` left out).
 
-| task | text | bytes | structured | Glyph | Glyph short |
+| task | text | bytes | structured | Omegese | Omegese short |
 |---|---|---|---|---|---|
 | dev01 | 64 | 281 | 309 | 48 | 45 |
 | dev02 | 60 | 256 | 286 | 43 | 40 |
@@ -128,31 +129,34 @@ bytes = hex of the compiled IR; structured = `omega_emit lift` of that IR; Glyph
 | dev10 | 22 | 98 | 79 | 15 | 15 |
 | **total** | **661** | **3762** | **4210** | **449** | **417** |
 
-Glyph is 9.4x fewer tokens than the structured op list and 32% fewer than OSC text, for the same
-IR shape (all 10: harness `ola.sh experiment` set glyph-1 accepted 10/10, RUN VALID, run
+Omegese is 9.4x fewer tokens than the structured op list and 32% fewer than OSC text, for the same
+IR shape (all 10: harness `ola.sh experiment` set omegese-1 accepted 10/10, RUN VALID, run
 `20261015T094000Z-e27a33ee052d-562014`; checker2 ACCEPT on all 10).
 
-Limits: the Glyph programs were written by the designer, not by a model, and in places use the
+Limits: the Omegese programs were written by the designer, not by a model, and in places use the
 shortest form (writing to parameters instead of copies), so the text column is not an equal-effort
-rewrite. Whether models write Glyph reliably is not measured yet.
+rewrite. Whether models write Omegese reliably is not measured yet.
 
-## 6. Checks (`make test-glyph`)
+## 6. Checks (`make test-omegese`)
 
-- the 10 dev programs: glyph -> omega_emit -> checker2 ACCEPT;
+- the 10 dev programs: omegese -> omega_emit -> checker2 ACCEPT;
 - 5 coverage programs (IR type names, break, nested loops, else-if, a for with a name as count, arrays and calls,
   calls without values, a bool function as a condition);
 - 21 refusals, each with its expected reason, each with a fixed control that is accepted;
-- `glyph next` on 6 prefixes (only `end` after ret; a binary op's second operand of the first's type;
+- `omegese next` on 6 prefixes (only `end` after ret; a binary op's second operand of the first's type;
   bool functions and `get` after `if`; a line after ret, and a line before `fn`, refused);
 - loop guard negative control: the dev04 op list without the hidden counter increment passes
   omega_emit and is REJECTED by checker2 (`C2-LOOP-UNBOUNDED`);
-- tokenizer gate, when `GLYPH_TOKCOUNT` (a counter: `<tool> <tokenizer.json> words <word>...`
-  printing the token count of " word" first) and `GLYPH_TOKENIZER` are set.
+- tokenizer gate, when `OMEGESE_TOKCOUNT` (a counter: `<tool> <tokenizer.json> words <word>...`
+  printing the token count of " word" first) and `OMEGESE_TOKENIZER` are set.
 
-## 7. Phase 2 (not done)
+## 7. Phase 2
 
-1. Prompt-only trial on the dev tasks, no mask, against the structured arm.
-2. The mask inside our own engine: `glyph next` as a table on the GPU, one lookup per token;
+1. Prompt-only trial on the dev tasks, no mask (done once, 2026-10-15): the 30B on our own engine, one
+   attempt, harness run `20261015T105049Z-e27a33ee052d-1500714` (RUN VALID): Omegese 3/10, text 3/10,
+   structured 0/10; completion tokens 1015 / 1346 / 12027. 8 of 10 first answers were refused only for
+   writing the task signature's type names (`u8`, `u32`); those are now accepted. Rerun owed.
+2. The mask inside our own engine: `omegese next` as a table on the GPU, one lookup per token;
    positions with one legal word need no model step.
 3. A pre-registered held-out comparison under a new protocol revision.
 

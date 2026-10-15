@@ -14,7 +14,7 @@ reader() {
     bytes) if line="$("$X" hex "$o.payload" "$o.candidate.oscir")"; then line="$("$X" check oscir "$o.candidate.oscir" "$req" || true)"; fi ;;
     structured) if line="$("$EMIT" emit "$o.payload" "$o.candidate.oscir" 2>&1)"; then line="$("$X" check oscir "$o.candidate.oscir" "$req" || true)"
                 else rm -f "$o.candidate.oscir"; fi ;;
-    glyph) if line="$("$G" emit "$o.payload" "$o.glyph.json" 2>&1)" && line="$("$EMIT" emit "$o.glyph.json" "$o.candidate.oscir" 2>&1)"; then
+    omegese) if line="$("$G" emit "$o.payload" "$o.omegese.json" 2>&1)" && line="$("$EMIT" emit "$o.omegese.json" "$o.candidate.oscir" 2>&1)"; then
              line="$("$X" check oscir "$o.candidate.oscir" "$req" || true)"
            else rm -f "$o.candidate.oscir"; fi ;;
     *) line="REFUSED checker: unknown arm $arm" ;;

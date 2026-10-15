@@ -1,16 +1,16 @@
 /*
- * glyph.c -- Glyph, a program language built for the AI writer (one-layer plan, after exp445).
- * Spec: docs/one_layer/GLYPH.md. Glyph lowers to the omega_emit op list (tools/omega_emit/SCHEMA.md),
+ * omegese.c -- Omegese, a program language built for the AI writer (one-layer plan, after exp445).
+ * Spec: docs/one_layer/OMEGESE.md. Omegese lowers to the omega_emit op list (tools/omega_emit/SCHEMA.md),
  * which omega_emit turns into canonical OSC binary IR; the IR, checker2 and the signed receipt chain
- * are unchanged. Glyph only removes the bookkeeping the writer had to do: no register numbers, no
+ * are unchanged. Omegese only removes the bookkeeping the writer had to do: no register numbers, no
  * block numbers, no declared locals (every type is inferred), no punctuation.
  *
- *   glyph emit <in.glyph> <out.json>   exit 0 written; 1 refused (one line on stdout:
- *                                      "REFUSED glyph: line N: <reason>"); 2 usage / I/O
- *   glyph next <prefix.glyph>          the words that may come next after the prefix (the mask an
+ *   omegese emit <in.omegese> <out.json>   exit 0 written; 1 refused (one line on stdout:
+ *                                      "REFUSED omegese: line N: <reason>"); 2 usage / I/O
+ *   omegese next <prefix.omegese>          the words that may come next after the prefix (the mask an
  *                                      engine applies while the model writes); exit 1 if the
  *                                      prefix is already invalid
- *   glyph words                        every fixed word of the language, one per line (the
+ *   omegese words                        every fixed word of the language, one per line (the
  *                                      tokenizer gate checks each is one token)
  *
  * Nothing is repaired or guessed: the first defect wins.
@@ -78,7 +78,7 @@ static int word_in(const char *w, const char *const *set, int n) {
         if (!strcmp(w, set[i])) return i;
     return -1;
 }
-/* a scalar type: the one-token Glyph word, or the IR name the task signature uses (u8 .. i64) */
+/* a scalar type: the one-token Omegese word, or the IR name the task signature uses (u8 .. i64) */
 static int scalar_word(const char *w) { int s = word_in(w, GW, T_NSCALAR); return s >= 0 ? s : word_in(w, IRN, T_NSCALAR); }
 static int ref_word(const char *w) { int r = word_in(w, REFW + 1, 3); return r < 0 ? -1 : r + 1; }
 static int op_word(const char *w) { return word_in(w, OPW, OP_N); }
@@ -107,11 +107,11 @@ static void bput(Buf *b, const char *fmt, ...) {
         va_start(ap, fmt);
         int k = vsnprintf(b->p ? b->p + b->n : NULL, b->p ? b->cap - b->n : 0, fmt, ap);
         va_end(ap);
-        if (k < 0) { fputs("glyph: format error\n", stderr); exit(2); }
+        if (k < 0) { fputs("omegese: format error\n", stderr); exit(2); }
         if (b->p && b->n + (size_t)k < b->cap) { b->n += (size_t)k; return; }
         b->cap = b->cap ? b->cap * 2 + (size_t)k : 256 + (size_t)k;
         b->p = realloc(b->p, b->cap);
-        if (!b->p) { fputs("glyph: out of memory\n", stderr); exit(2); }
+        if (!b->p) { fputs("omegese: out of memory\n", stderr); exit(2); }
         if (b->n == 0) b->p[0] = 0;
     }
 }
@@ -864,7 +864,7 @@ static int split(char *s, char **w) {
         if (n >= MAX_WORDS) return fail("more than %d words on one line", MAX_WORDS);
         w[n++] = p;
         while (*p && *p != ' ' && *p != '\t' && *p != '\r') {
-            if (!(isalnum((unsigned char)*p) || *p == '_' || *p == '-' || *p == '=')) return fail("character '%c' is not part of Glyph", *p);
+            if (!(isalnum((unsigned char)*p) || *p == '_' || *p == '-' || *p == '=')) return fail("character '%c' is not part of Omegese", *p);
             p++;
         }
         if (*p) *p++ = 0;
@@ -881,7 +881,7 @@ static char *slurp(const char *path, size_t *len) {
     fclose(fp);
     if (n > MAX_IN) { fprintf(stderr, "%s: larger than %u bytes\n", path, MAX_IN); exit(2); }
     b[n] = 0;
-    if (strlen(b) != n) { printf("REFUSED glyph: a zero byte in the input\n"); exit(1); }
+    if (strlen(b) != n) { printf("REFUSED omegese: a zero byte in the input\n"); exit(1); }
     *len = n;
     return b;
 }
@@ -912,7 +912,7 @@ static int run(char *src, int keep_tail, char **tail) {
     return 0;
 }
 
-/* glyph next: which words may start or continue the unfinished line (coarse classes plus names) */
+/* omegese next: which words may start or continue the unfinished line (coarse classes plus names) */
 static void list_names(const char *label, int want_kind, Ty want) {
     /* want_kind 0: any; 1: scalars of type want; 2: arrays; 3: bools */
     printf("%s:", label);
@@ -928,12 +928,12 @@ static void list_names(const char *label, int want_kind, Ty want) {
 }
 static int next_words(char *src) {
     char *tail = NULL;
-    if (run(src, 1, &tail) < 0) { printf("REFUSED glyph: %s\n", g_err); return 1; }
+    if (run(src, 1, &tail) < 0) { printf("REFUSED omegese: %s\n", g_err); return 1; }
     char *w[MAX_WORDS + 1];
     int n = split(tail, w);
-    if (n < 0) { printf("REFUSED glyph: %s\n", g_err); return 1; }
+    if (n < 0) { printf("REFUSED omegese: %s\n", g_err); return 1; }
     if (!in_fn) {
-        if (n > 0 && strcmp(w[0], "fn")) { printf("REFUSED glyph: a program starts with fn\n"); return 1; }
+        if (n > 0 && strcmp(w[0], "fn")) { printf("REFUSED omegese: a program starts with fn\n"); return 1; }
         printf(n == 0 ? "words: fn\n" : "words: (finish the fn line)\n");
         return 0;
     }
@@ -943,7 +943,7 @@ static int next_words(char *src) {
         printf("words:%s end\n", fr->kind == F_IF && !fr->has_else ? " else" : "");
         return 0;
     }
-    if (cur < 0 && strcmp(w[0], "end") && strcmp(w[0], "else")) { printf("REFUSED glyph: this line can never run: the path already ended (ret or break)\n"); return 1; }
+    if (cur < 0 && strcmp(w[0], "end") && strcmp(w[0], "else")) { printf("REFUSED omegese: this line can never run: the path already ended (ret or break)\n"); return 1; }
     if (n == 0) {
         printf("words: if while for ret put free trap");
         int loop = 0;
@@ -983,7 +983,7 @@ static int next_words(char *src) {
             return 0;
         }
     }
-    printf("words: (any word of the line form; see GLYPH.md)\n");
+    printf("words: (any word of the line form; see OMEGESE.md)\n");
     return 0;
 }
 
@@ -1005,12 +1005,12 @@ int main(int argc, char **argv) {
     if (argc == 4 && !strcmp(argv[1], "emit")) {
         size_t len;
         char *src = slurp(argv[2], &len), *tail = NULL;
-        if (run(src, 0, &tail) < 0) { printf("REFUSED glyph: %s\n", g_err); free(src); return 1; }
+        if (run(src, 0, &tail) < 0) { printf("REFUSED omegese: %s\n", g_err); free(src); return 1; }
         free(src);
         FILE *fp = fopen(argv[3], "wb");
         if (!fp || fwrite(out.p, 1, out.n, fp) != out.n || fclose(fp)) { perror(argv[3]); return 2; }
         return 0;
     }
-    fprintf(stderr, "usage: glyph emit <in.glyph> <out.json> | glyph next <prefix.glyph> | glyph words\n");
+    fprintf(stderr, "usage: omegese emit <in.omegese> <out.json> | omegese next <prefix.omegese> | omegese words\n");
     return 2;
 }

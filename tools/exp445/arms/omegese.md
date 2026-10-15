@@ -1,10 +1,10 @@
-REPRESENTATION: glyph
+REPRESENTATION: omegese
 
-Write the program in Glyph: one statement per line, words separated by single spaces. No brackets,
+Write the program in Omegese: one statement per line, words separated by single spaces. No brackets,
 no commas, no semicolons, no indentation, no comments. A checker reads it line by line and refuses
 the first invalid line with a reason; a valid program becomes the program.
 
-Types (Glyph name = type): bool = bool, uchar = u8, ushort = u16, uint = u32, ulong = u64,
+Types (Omegese name = type): bool = bool, uchar = u8, ushort = u16, uint = u32, ulong = u64,
 byte = i8, short = i16, int = i32, long = i64. The names u8 .. i64 are accepted too.
 
 Statements:
