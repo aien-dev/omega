@@ -1,0 +1,2 @@
+Write a function rotl8 that takes two unsigned 8-bit numbers x and k and rotates the 8 bits of x to
+the left by k mod 8 places: bits shifted out on the left come back in on the right. It never traps.

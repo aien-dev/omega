@@ -1,0 +1,3 @@
+Write a function sum_range that takes two signed 32-bit numbers lo and hi and returns the sum of all
+integers from lo to hi inclusive, as a signed 64-bit number. When lo > hi the sum is 0. lo and hi
+are always between -100000 and 100000. It never traps.

@@ -1,0 +1,7 @@
+fn rotl8 x uchar k uchar to uchar
+s = rem k 8
+if eq s 0
+ret x
+end
+ret or shl x s shr x sub 8 s
+end

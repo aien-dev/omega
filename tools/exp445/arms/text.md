@@ -84,13 +84,3 @@ that would start iteration N+1 traps with OSC_TRAP_LOOP_BOUND.
 
 Return. Every path of a non-void function ends in `return expr;`. A function
 returns a scalar only (no `->` arr_type in OSC-1).
-
-
-Example. Task: function clamp_sub, parameters u32 u32, returns u32: a - b when a >= b, else 0.
-
-```
-fn clamp_sub(a: u32, b: u32) -> u32 {
-    if a >= b { return a - b; }
-    return 0;
-}
-```

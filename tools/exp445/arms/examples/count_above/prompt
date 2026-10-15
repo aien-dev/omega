@@ -1,0 +1,3 @@
+Write a function count_above that takes five signed 32-bit numbers a, b, c, d and t and returns how
+many of a, b, c and d are greater than t, as an unsigned 8-bit number. Put a, b, c and d in an array
+of four and count with a helper function that reads the array. It never traps.

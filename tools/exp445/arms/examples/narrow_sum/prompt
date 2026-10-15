@@ -1,0 +1,4 @@
+Write a function narrow_sum that takes two signed 16-bit numbers a and b and returns a + b as a
+signed 8-bit number. If a + b does not fit in a signed 16-bit number, the run stops with trap 1
+(overflow); if it fits in 16 bits but not in a signed 8-bit number, the run stops with trap 5
+(conversion out of range).

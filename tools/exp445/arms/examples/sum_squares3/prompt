@@ -1,0 +1,3 @@
+Write a function sum_squares3 that takes three signed 16-bit numbers a, b and c and returns
+a*a + b*b + c*c as a signed 16-bit number. If a square or the sum does not fit in a signed 16-bit
+number, the run stops with trap 1 (overflow).

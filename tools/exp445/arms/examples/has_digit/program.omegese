@@ -1,0 +1,11 @@
+fn has_digit n uint d uchar to bool
+t = uint d
+found = eq rem n 10 t
+while ge n 10 bound 10
+n = div n 10
+if eq rem n 10 t
+found = true
+end
+end
+ret found
+end

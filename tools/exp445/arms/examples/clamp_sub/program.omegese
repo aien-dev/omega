@@ -1,0 +1,6 @@
+fn clamp_sub a uint b uint to uint
+if ge a b
+ret sub a b
+end
+ret 0
+end

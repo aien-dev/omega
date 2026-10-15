@@ -1,0 +1,17 @@
+fn tri_kind a ushort b ushort c ushort to uchar
+x = uint a
+y = uint b
+z = uint c
+if or or le add x y z le add x z y le add y z x
+ret 0
+else
+if and eq a b eq b c
+ret 1
+else
+if or or eq a b eq b c eq a c
+ret 2
+end
+end
+end
+ret 3
+end

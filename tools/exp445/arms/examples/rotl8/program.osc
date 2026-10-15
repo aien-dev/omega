@@ -1,0 +1,5 @@
+fn rotl8(x: u8, k: u8) -> u8 {
+    let s: u8 = k % 8;
+    if s == 0 { return x; }
+    return (x << s) | (x >> (8 - s));
+}

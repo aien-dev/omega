@@ -1,0 +1,3 @@
+Write a function hash_step that takes an unsigned 32-bit number h and an unsigned 8-bit number c
+and returns h * 31 + c, computed in unsigned 32-bit arithmetic: the result wraps modulo 2^32. It
+never traps.

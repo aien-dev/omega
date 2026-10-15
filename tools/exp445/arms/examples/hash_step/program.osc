@@ -1,0 +1,3 @@
+fn hash_step(h: u32, c: u8) -> u32 {
+    return h * 31 + (c as u32);
+}

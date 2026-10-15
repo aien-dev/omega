@@ -1,0 +1,4 @@
+Write a function fib_mod that takes an unsigned 8-bit number n and returns the Fibonacci number F(n)
+(F(0) = 0, F(1) = 1, F(k) = F(k-1) + F(k-2)) in unsigned 32-bit arithmetic, so additions wrap modulo
+2^32. Fill a table of 64 entries F(0) .. F(63) and return entry n; when n is larger than 63 the
+lookup is out of bounds and the run stops with trap 3.

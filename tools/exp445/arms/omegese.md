@@ -48,31 +48,53 @@ Rules:
 - Every path through a function that returns a value must end in ret or trap.
 - Parameters of array type: own|edit|view <type> <len>, e.g. `v view uint 4`.
 
-Example:
+Word card: every fixed word and what it does.
 
-```
-fn digitsq x uint to uint
-s = uint 0
-while ne x 0 bound 10
-s = add s mul rem x 10 rem x 10
-x = div x 10
-end
-ret s
-end
-```
-
-Example:
-
-```
-fn sum4 v view long 4 to long
-s = long 0
-for i uint 4
-t = get v i
-if gt t 0
-s = add s t
-end
-end
-ret s
-end
-```
-
+    fn      start a function: fn <name> <param> <type> ... to <type>
+    to      in a fn line: the return type follows
+    void    in a fn line: the function returns nothing (to void)
+    end     close the innermost fn, if, else, while or for
+    if      if <cond>: run the lines up to else or end when cond is true
+    else    the lines run when the if condition is false
+    while   while <cond> bound <N>: repeat while cond is true
+    bound   in a while line: the most passes allowed; one more is trap 4
+    for     for <i> <type> <count>: run with i = 0, 1, ..., count-1
+    break   leave the innermost while or for
+    ret     return a value (ret alone in a void function)
+    trap    trap <code>: stop the run with that trap code
+    put     put <array> <index> <value>: store into an array
+    free    free <array>: release an array made with new
+    true    the bool value true
+    false   the bool value false
+    add     add <a> <b>: a + b
+    sub     sub <a> <b>: a - b
+    mul     mul <a> <b>: a * b
+    div     div <a> <b>: a / b, truncated toward zero
+    rem     rem <a> <b>: remainder of a / b, sign of a
+    and     and <a> <b>: bitwise and; on bools, logical and
+    or      or <a> <b>: bitwise or; on bools, logical or
+    xor     xor <a> <b>: bitwise exclusive or
+    shl     shl <a> <b>: a shifted left by b bits
+    shr     shr <a> <b>: a shifted right by b bits
+    eq      eq <a> <b>: a == b (bool)
+    ne      ne <a> <b>: a != b (bool)
+    lt      lt <a> <b>: a < b (bool)
+    le      le <a> <b>: a <= b (bool)
+    gt      gt <a> <b>: a > b (bool)
+    ge      ge <a> <b>: a >= b (bool)
+    neg     neg <a>: -a (signed)
+    not     not <a>: logical not of a bool, bitwise not of a number
+    get     get <array> <index>: read an element
+    new     <name> = new <type> <len> <init>: a new array of len elements, all init
+    bool    type bool; bool <v> converts or types a value
+    uchar   type u8 (unsigned 8-bit); uchar <v> converts or types a value
+    ushort  type u16 (unsigned 16-bit)
+    uint    type u32 (unsigned 32-bit)
+    ulong   type u64 (unsigned 64-bit)
+    byte    type i8 (signed 8-bit)
+    short   type i16 (signed 16-bit)
+    int     type i32 (signed 32-bit)
+    long    type i64 (signed 64-bit)
+    own     own <array>: move the array (a parameter: own <type> <len>)
+    edit    edit <array>: lend the array for writing (a parameter: edit <type> <len>)
+    view    view <array>: lend the array for reading (a parameter: view <type> <len>)

@@ -1,0 +1,4 @@
+Write a function tri_kind that takes three unsigned 16-bit side lengths a, b and c and returns, as an
+unsigned 8-bit number: 0 when they cannot form a triangle (the sum of some two sides is at most the
+third side; add in 32 bits so the sum cannot wrap), 1 when all three sides are equal, 2 when exactly
+two sides are equal, 3 otherwise. It never traps.

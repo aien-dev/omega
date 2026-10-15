@@ -1,0 +1,9 @@
+fn count_digits(n: u64) -> u8 {
+    let mut x: u64 = n;
+    let mut k: u8 = 1;
+    while x >= 10 bound 20 {
+        x = x / 10;
+        k = k + 1;
+    }
+    return k;
+}

@@ -1,0 +1,19 @@
+fn above v view int 4 t int to uchar
+k = uchar 0
+for i uint 4
+if gt get v i t
+k = add k 1
+end
+end
+ret k
+end
+fn count_above a int b int c int d int t int to uchar
+v = new int 4 0
+put v 0 a
+put v 1 b
+put v 2 c
+put v 3 d
+k = above view v t
+free v
+ret k
+end

@@ -1,0 +1,9 @@
+fn sum_range(lo: i32, hi: i32) -> i64 {
+    let mut s: i64 = 0;
+    let mut i: i32 = lo;
+    while i <= hi bound 300000 {
+        s = s + (i as i64);
+        i = i + 1;
+    }
+    return s;
+}

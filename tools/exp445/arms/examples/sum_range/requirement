@@ -1,0 +1,5 @@
+# exp445 worked example (protocol r3 section 13.2), not a held-out task
+kind task
+entry sum_range
+params i32 i32
+ret i64
