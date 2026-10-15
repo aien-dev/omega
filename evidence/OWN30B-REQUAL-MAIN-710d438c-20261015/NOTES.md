@@ -66,4 +66,5 @@ ANSWER: YES. Sealed investigation folder (plan.md Result, SHA256SUMS; the two re
 
 ### #457 fix after review (omega457-gate-fix-r2/)
 The fix branch was revised after review (pending flag cleared on device close, distinct refusal for the prefix copy). The
-regression gate was rerun on that revision: GPU_L2_STALE_CHIP PASS, 20/20 FRESH.
+regression gate was rerun on that revision: GPU_L2_STALE_CHIP PASS, 20/20 FRESH. device.txt shows 8f491df2 dirty: the run
+used the uncommitted revision, committed unchanged as 6c87d849 (its only src diff from 8f491df2).
