@@ -338,7 +338,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" != "pull_request" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
           CHANGED=$(git diff --name-only HEAD^1 HEAD)
-          if echo "$CHANGED" | grep -Eq '^(tools/omegese/|tools/omega_emit/|mk/omegese\.mk$|mk/omega-emit\.mk$|docs/one_layer/OMEGESE\.md$|src/compiler/|src/checker2/|src/sha256\.|\.github/workflows/host-suites\.yml$)'; then
+          if echo "$CHANGED" | grep -Eq '^(tools/omegese/|tests/one_layer/omegese/|tools/omega_emit/|mk/omegese\.mk$|mk/checker2\.mk$|mk/omega-emit\.mk$|docs/one_layer/OMEGESE\.md$|src/compiler/|src/checker2/|src/sha256\.|\.github/workflows/host-suites\.yml$)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"; echo "no Omegese files changed; skipping"

@@ -306,8 +306,8 @@ ID2="$(g0_ident "$T/PARAMS2" A)"
 [ "$(lcat "$T/g0c3.ledger" | cut -f2,4,5)" = "$(printf 'A\t%s\tPASS' "$ID2")" ] && [ "$(lcat "$T/g0c3.ledger" | cut -f7)" = "$(sha256sum < "$T/g0c3/g0/SHA256SUMS" | cut -d' ' -f1)" ] &&
   ok "G0 ledger: a PASS appended too, with its record's SHA256SUMS sha" || bad "G0 ledger PASS line: $(lcat "$T/g0c3.ledger")"
 [ "$(find "$T/g0c1.ledger" -type f | wc -l)" = 1 ] && [ "$(find "$T/g0c3.ledger" -type f | wc -l)" = 1 ] && h1="$(lcat "$T/g0c1.ledger" | sha256sum)" &&
-  not env EXP445_G0_LEDGER="$T/g0c1.ledger" bash -c ". '$HERE/reader.sh'; g0_append \"\$1\"" _ "$(lcat "$T/g0c1.ledger" | sed 's/FAIL/PASS/')" 2> /dev/null &&
-  [ "$(lcat "$T/g0c1.ledger" | sha256sum)" = "$h1" ] && [ "$(find "$T/g0c1.ledger" -type f | wc -l)" = 1 ] &&
+  not env EXP445_G0_LEDGER="$T/g0c1.ledger" bash -c ". '$HERE/reader.sh'; g0_append \"\$1\"" _ "$(lcat "$T/g0c1.ledger" | sed 's/FAIL/PASS/')" 2> "$T/ga.err" &&
+  grep -q "exists already" "$T/ga.err" && [ "$(lcat "$T/g0c1.ledger" | sha256sum)" = "$h1" ] && [ "$(find "$T/g0c1.ledger" -type f | wc -l)" = 1 ] &&
   ok "G0 ledger: one new file per verdict (evidence stays append-only); an entry with the same name is never overwritten (a FAIL cannot become a PASS)" || bad "G0 ledger files"
 g0refuse() { # g0refuse <name> <ledger> <PARAMS>: g0.sh refused with exit 3 and the ledger reason, nothing written
   local e=0; rm -rf "$T/g0again"; env EXP445_G0_LEDGER="$2" EXP445_PARAMS="$3" "$HERE/g0.sh" --config A --out "$T/g0again" > /dev/null 2> "$T/g0again.err" || e=$?
