@@ -1,6 +1,7 @@
-# exp445 generation parameters, frozen by docs/one_layer/EXP445_PROTOCOL.md before any held-out generation.
-# run.sh reads these; a command-line override is recorded in meta.txt as protocol=OVERRIDDEN and makes
-# the run invalid for score.sh. Only the configurations named here can run.
+# exp445 generation parameters, frozen by docs/one_layer/EXP445_PROTOCOL.md (revision r3, section 13)
+# before any r3 generation. run.sh reads these; a command-line override is recorded in meta.txt as
+# protocol=OVERRIDDEN and makes the run invalid for score.sh. Only the configurations named here can run.
+revision=r3
 attempts=3
 max_tokens=3072
 temperature=0.7
@@ -8,15 +9,27 @@ top_p=0.8
 seed_base=445000
 timeout_s=900
 retries=2
-arms=text,bytes,structured
+arms=omegese,text
+# prompt modes (13.2): many = the worked examples of arms/examples/many.list; one = the single r2 example
+# (arms/examples/one.list), Stage 0 on the dev tasks only. A held-out run must use heldout_prompt_mode.
+prompt_modes=many,one
+heldout_prompt_mode=many
 heldout_tasks=60
-# configurations: model id at the endpoint, endpoint, extra JSON fields merged into every request
+# Stage 1 stop rule (13.4): after attempt 1, omegese attempt-1 successes <= futility_max of heldout_tasks
+# means attempts 2 and 3 are not run
+futility_max=30
+# G0 sampling gate (13.4): g0_task in the omegese arm, many-shot prompt, g0_seeds seeds plus one repeat of
+# the first; PASS needs at least g0_min_distinct distinct answers and the repeat byte-identical
+g0_task=dev01
+g0_seeds=8
+g0_min_distinct=4
+# configurations: model id at the endpoint, endpoint, extra JSON fields merged into every request, server
 config.A.model=qwen3-30b-a3b-instruct-2507
 config.A.base_url=http://127.0.0.1:18091/v1
 config.A.extra={}
+config.A.server=PLACEHOLDER: the aien-serve-http binary and its sha256 are frozen here by the commit that opens Stage 1
 config.B.model=qwen3-8b
-config.B.base_url=http://127.0.0.1:18097/v1
-config.B.extra={"chat_template_kwargs":{"enable_thinking":false}}
+config.B.unavailable=config B runs on our own dense 8B engine (OWN-8B), which has not requalified; a later protocol revision freezes its server, endpoint and request extra (protocol 13.3)
 # weights: the frozen sha256 list of each configuration's model files (protocol section 9), checked in
 # models_root by check_weights.sh into every run dir before generation
 models_root=/home/drakestapleton/models

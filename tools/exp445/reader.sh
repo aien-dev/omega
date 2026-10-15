@@ -75,9 +75,9 @@ gen_row() {
     "${k1//$'\t'/ }" "${k2//$'\t'/ }" "$cs")"
 }
 # gen_sums <gen dir> / run_sums <run dir>: the hashed raw record (requests, responses, failed bodies,
-# transport records; and per run also the prompts, meta.txt, log.tsv, weights.check, server.json)
+# transport records; and per run also the prompts, the G0 record g0/, meta.txt, log.tsv, weights.check, server.json)
 gen_sums() { (cd "$1" && for f in r*.req.json r*.resp.json r*.err.*.json r*.transport; do if [ -f "$f" ]; then sha256sum "$f"; fi; done) > "$1/SHA256SUMS"; }
-run_files() { (cd "$1" && { find gen prompts -type f \( -name '*.json' -o -name '*.transport' -o -name '*.system.txt' \); printf '%s\n' meta.txt log.tsv weights.check server.json; } | LC_ALL=C sort); }
+run_files() { (cd "$1" && { find gen prompts -type f \( -name '*.json' -o -name '*.transport' -o -name '*.system.txt' \); if [ -d g0 ]; then find g0 -type f; fi; printf '%s\n' meta.txt log.tsv weights.check server.json; } | LC_ALL=C sort); }
 run_sums() { (cd "$1" && run_files . | tr '\n' '\0' | xargs -0 sha256sum) > "$1/SHA256SUMS"; }
 # weights_ok <run dir> <hash list> <model id>: weights.check is exactly "<file>: OK" for every file of the
 # config's frozen hash list, and server.json (GET /models) lists the model id
@@ -85,4 +85,117 @@ weights_ok() {
   [ -f "$1/weights.check" ] && [ -f "$1/server.json" ] && [ -s "$2" ] || return 1
   [ "$(awk 'NF { n = $2; sub(/^\*/, "", n); print n ": OK" }' "$2" | LC_ALL=C sort)" = "$(LC_ALL=C sort "$1/weights.check")" ] || return 1
   jq -e --arg m "$3" '[.data[]?.id] | index($m) != null' "$1/server.json" > /dev/null 2>&1
+}
+
+# ---- protocol r3 (section 13): prompts, G0, held-out and the Stage 1 stop rule ----------------------
+# system_prompt <arms dir> <arm> <mode>: the system message of an r3 arm (13.2): arms/common.md, the arm
+# document, then the worked examples of the prompt mode (many: examples/many.list, one: examples/one.list).
+# Each example is the task as the user message gives it (signature lines, then the prompt) followed by the
+# program in the arm's own form (text: program.osc, omegese: program.omegese); the task text is the same in
+# both arms.
+system_prompt() {
+  local A="$1" arm="$2" mode="$3" ext list e n=0 k
+  case "$arm" in omegese) ext=omegese ;; text) ext=osc ;; *) echo "system_prompt: arm $arm has no r3 prompt" >&2; return 1 ;; esac
+  case "$mode" in many|one) list="$A/examples/$mode.list" ;; *) echo "system_prompt: unknown prompt mode $mode" >&2; return 1 ;; esac
+  [ -s "$list" ] || { echo "system_prompt: no example list $list" >&2; return 1; }
+  k="$(grep -c . "$list")"
+  cat "$A/common.md"; echo; cat "$A/$arm.md"; echo
+  if [ "$k" = 1 ]; then echo "Worked example: a task as you receive it, then a correct program."
+  else echo "Worked examples ($k): each is a task as you receive it, then a correct program."; fi
+  while IFS= read -r e; do
+    [ -n "$e" ] || continue
+    [ -f "$A/examples/$e/program.$ext" ] || { echo "system_prompt: example $e has no program.$ext" >&2; return 1; }
+    n=$((n + 1))
+    printf '\nExample %d.\n\n%s\n\n%s\n\n```\n%s\n```\n' "$n" "$(grep -E '^(entry|params|ret)( |$)' "$A/examples/$e/requirement")" \
+      "$(cat "$A/examples/$e/prompt")" "$(cat "$A/examples/$e/program.$ext")"
+  done < "$list"
+}
+# heldout <task id>...: true when any task id is not a dev task (the held-out pack; protocol section 3)
+heldout() { local t; for t in "$@"; do case "$t" in dev*) ;; *) return 0 ;; esac; done; return 1; }
+# a1_rows_sha <log.tsv>: the attempt-1 rows of a run, sorted, hashed (ties the Stage 1 stop decision to them)
+a1_rows_sha() { tail -n +2 "$1" | awk -F'\t' '$1 ~ /-1$/' | LC_ALL=C sort | sha256sum | cut -d' ' -f1; }
+# G0, the sampling gate (13.4). <run dir>/g0/ holds g0.sh (the script that made it), prompt.system.txt,
+# rK.req.json, rK.transport and rK.resp.json (or rK.err.J.json) for K = 1 .. g0_seeds + 1 (the last request
+# repeats the seed of the first), verdict.txt and SHA256SUMS.
+# g0_files <g0 dir>: the hashed files, sorted
+g0_files() { (cd "$1" && find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%P\n' | LC_ALL=C sort); }
+# g0_seed <seed_base> <k> <task index>: the seed of G0 request k (request g0_seeds + 1 uses k = 1)
+g0_seed() { seed_of "$1" "$2" "$3"; }
+# g0_derive <g0 dir> <seeds>: prints "distinct=D/N repeat_identical=yes|no answered=A/N+1" from the raw responses
+g0_derive() {
+  local d="$1" n="$2" k a=0 u
+  for k in $(seq 1 $((n + 1))); do if round_ok "$d/r$k"; then a=$((a + 1)); fi; done
+  u="$(for k in $(seq 1 "$n"); do if round_ok "$d/r$k"; then content_of "$d/r$k.resp.json" | sha256sum | cut -d' ' -f1; fi; done | LC_ALL=C sort -u | grep -c . || true)"
+  local rep=no
+  if round_ok "$d/r1" && round_ok "$d/r$((n + 1))" && [ "$(content_of "$d/r1.resp.json" | sha256sum)" = "$(content_of "$d/r$((n + 1)).resp.json" | sha256sum)" ]; then rep=yes; fi
+  echo "distinct=$u/$n repeat_identical=$rep answered=$a/$((n + 1))"
+}
+# g0_check <g0 dir> <want: config model base_url extra server params_sha256> <system prompt file> <user msg>
+#   <max_tokens> <temperature> <top_p> <seed_base> <task index> <seeds> <min distinct>
+# returns 0 when G0 PASSED for exactly this configuration and server: SHA256SUMS verifies and lists every
+# file, every request is the frozen G0 request, the verdict's identity lines match, and the verdict
+# re-derived from the raw responses is PASS. Prints the reason otherwise.
+g0_check() {
+  local d="$1" cfg="$2" model="$3" base="$4" extra="$5" server="$6" psha="$7" sysf="$8" user="$9"
+  local mt="${10}" tt="${11}" tp="${12}" sb="${13}" ti="${14}" n="${15}" md="${16}" k s msgs v der dd
+  v="$d/verdict.txt"
+  [ -f "$v" ] && [ -f "$d/SHA256SUMS" ] || { echo "no G0 record in $d (run tools/exp445/g0.sh first)"; return 1; }
+  (cd "$d" && sha256sum -c --quiet --strict SHA256SUMS > /dev/null 2>&1) || { echo "G0 SHA256SUMS does not verify"; return 1; }
+  [ "$(g0_files "$d")" = "$(awk '{ print substr($0, 67) }' "$d/SHA256SUMS" | LC_ALL=C sort)" ] || { echo "G0 SHA256SUMS does not list exactly the G0 files"; return 1; }
+  gv() { awk -F= -v k="$1" '$1 == k { print substr($0, length(k) + 2); exit }' "$v"; }
+  for kv_ in "config=$cfg" "model=$model" "base_url=$base" "request_extra=$extra" "server=$server" "params_sha256=$psha"; do
+    [ "$(gv "${kv_%%=*}")" = "${kv_#*=}" ] || { echo "G0 was made for another ${kv_%%=*} ($(gv "${kv_%%=*}"))"; return 1; }
+  done
+  cmp -s "$d/prompt.system.txt" "$sysf" || { echo "G0 prompt is not the current many-shot omegese prompt"; return 1; }
+  msgs="$(first_msgs "$(cat "$sysf")" "$user")"
+  for k in $(seq 1 $((n + 1))); do
+    s="$(g0_seed "$sb" "$([ "$k" -le "$n" ] && echo "$k" || echo 1)" "$ti")"
+    [ -f "$d/r$k.req.json" ] && jq -e --argjson b "$(request_json "$model" "$msgs" "$mt" "$tt" "$tp" "$s" "$extra")" '. == $b' "$d/r$k.req.json" > /dev/null 2>&1 ||
+      { echo "G0 request $k is not the frozen G0 request"; return 1; }
+  done
+  der="$(g0_derive "$d" "$n")"
+  [ "$(gv derived)" = "$der" ] || { echo "G0 verdict ($(gv derived)) differs from its raw responses ($der)"; return 1; }
+  dd="${der#distinct=}"; dd="${dd%%/*}"
+  if [ "$dd" -ge "$md" ] && [[ "$der" == *"repeat_identical=yes answered=$((n + 1))/$((n + 1))" ]]; then
+    [ "$(tail -n 1 "$v")" = "G0 PASS" ] || { echo "G0 verdict line is not G0 PASS"; return 1; }
+    return 0
+  fi
+  echo "G0 FAILED ($der; PASS needs distinct >= $md of $n, the repeat identical and every request answered)"; return 1
+}
+
+# ---- transport, shared by run.sh and g0.sh (globals BASE, TIMEOUT, RETRIES and die() come from the caller)
+# ask <gen dir> <round> <request json>: one round, committed to disk as soon as it is received.
+# Writes rN.req.json, then per try a transport line (rN.transport.tmp) and the body (rN.resp.json on
+# success, rN.err.K.json otherwise); renaming rN.transport.tmp to rN.transport commits the round. A
+# committed round is never requested again; an interrupted one continues with its next try.
+ask() {
+  local d="$1" r="$2" q="$3" p="$1/r$2" k e out code t t0 body lb msg
+  if [ -f "$p.req.json" ]; then [ "$(cat "$p.req.json")" = "$q" ] || die "$p.req.json differs from the request this run sends: resume refused"
+  else printf '%s\n' "$q" > "$p.req.json.tmp"; mv "$p.req.json.tmp" "$p.req.json"; fi
+  if [ ! -f "$p.transport" ]; then
+    touch "$p.transport.tmp"
+    lb="$(tail -n 1 "$p.transport.tmp" | sed -n 's/.* body=\([^ ]*\).*/\1/p')"
+    if [ -n "$lb" ] && [ "$lb" != none ] && [ ! -f "$d/$lb" ] && [ -f "$p.try" ]; then mv "$p.try" "$d/$lb"; fi
+    rm -f "$p.try"
+    if [ "$lb" != "r$r.resp.json" ]; then
+      k="$(wc -l < "$p.transport.tmp")"
+      while [ "$k" -le "$RETRIES" ]; do
+        t0="$EPOCHREALTIME"
+        if out="$(curl -sS -m "$TIMEOUT" -o "$p.try" -w '%{http_code} %{time_total}' -H 'Content-Type: application/json' \
+                   --data-binary @"$p.req.json" "$BASE/chat/completions" 2> "$p.curl.err")"; then e=0; else e=$?; fi
+        code="${out%% *}" t="${out#* }"
+        [[ "$code" =~ ^[0-9]{3}$ ]] || code=000
+        [[ "$t" =~ ^[0-9]+(\.[0-9]+)?$ ]] || t="$(awk -v a="$t0" -v b="$EPOCHREALTIME" 'BEGIN { printf "%.6f", b - a }')"
+        if [ "$e" = 0 ] && [ "$code" = 200 ] && resp_ok "$p.try"; then body="r$r.resp.json"
+        elif [ -s "$p.try" ]; then body="r$r.err.$k.json"; else body=none; rm -f "$p.try"; fi
+        msg="$(tr '\n\t' '  ' < "$p.curl.err")"; rm -f "$p.curl.err"
+        echo "try=$k http=$code curl_exit=$e time_s=$t body=$body msg=$msg" >> "$p.transport.tmp"
+        [ "$body" = none ] || mv "$p.try" "$d/$body"
+        [ "$body" = "r$r.resp.json" ] && break
+        k=$((k + 1))
+      done
+    fi
+    mv "$p.transport.tmp" "$p.transport"
+  fi
+  round_ok "$p"
 }

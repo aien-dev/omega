@@ -1,14 +1,19 @@
 #!/usr/bin/env bash
-# tools/exp445/score.sh [--configs A,B] <tasks.tar> <TASKS.sha256> <run dir> [<run dir> ...] -- score the
-# generated candidates of driver runs (run.sh) and write the results table (omega#445,
-# docs/one_layer/EXP445_PROTOCOL.md sections 4, 7, 8).
+# tools/exp445/score.sh [--configs A] [--interim] <tasks.tar> <TASKS.sha256> <run dir> [<run dir> ...] -- score
+# the generated candidates of driver runs (run.sh) and write the results table (omega#445,
+# docs/one_layer/EXP445_PROTOCOL.md sections 4, 7, 10 and revision r3, section 13). Scores r3 runs only:
+# a run made under r1/r2 (meta.txt without revision=r3) is refused with that reason.
 #   1 provenance check, before anything is scored (any failure: RUN INVALID, no tables, exit 1):
-#     - every run: meta.txt protocol=PARAMS (no override flag), params_sha256 = the PARAMS in force, its
-#       sampling settings equal to PARAMS, the configuration named in PARAMS with its frozen model,
-#       endpoint and request extra, the arm prompts equal to the ones the current arm documents give, the
-#       public view of these tasks, a clean generation commit whose tools equal the scoring commit's,
-#       weights.check all OK for the config's frozen hash list and server.json listing its model id
-#     - every run: SHA256SUMS verifies and lists exactly the raw files, prompts, meta.txt, log.tsv,
+#     - PARAMS is revision r3; every run: meta.txt revision=r3, protocol=PARAMS (no override flag),
+#       params_sha256 = the PARAMS in force, its sampling settings equal to PARAMS, the configuration named
+#       in PARAMS (not unavailable) with its frozen model, endpoint, request extra and server, a prompt mode
+#       of PARAMS prompt_modes (the same in every run scored together; a held-out run: heldout_prompt_mode,
+#       and a server that is no longer a PLACEHOLDER), the arm prompts equal to the ones the current arm
+#       documents and worked examples give for that mode, the public view of these tasks, a clean
+#       generation commit whose tools equal the scoring commit's, weights.check all OK for the config's
+#       frozen hash list and server.json listing its model id, and a G0 PASS (g0/, reader.sh g0_check)
+#       for the config, server and PARAMS
+#     - every run: SHA256SUMS verifies and lists exactly the raw files, prompts, g0/, meta.txt, log.tsv,
 #       weights.check and server.json
 #     - every generation, from its raw files only: each hashed request equals the one PARAMS, the config,
 #       the frozen arm prompt, the public task and the seed rule give; a round 2 exists exactly when the
@@ -18,11 +23,19 @@
 #       responses (reader.sh gen_row) and log.tsv must equal the re-derived rows; the file in cands/ must
 #       be the re-derived candidate
 #     - the matrix is complete: every task of the tarball x every arm x attempts 1..N x every config
-#       in --configs (default: every config named in PARAMS), exactly once; held-out = heldout_tasks
+#       in --configs (default: every available config of PARAMS), exactly once; held-out = heldout_tasks.
+#       A held-out config whose run holds attempt 1 only is complete when the Stage 1 stop rule fired
+#       (checked in step 3).
 #   2 merge the candidates; tests/one_layer/acceptance/ola.sh experiment (seal, references, replay,
 #     probes, clean tree): its RUN INVALID also stops here
-#   3 results.txt / results.tsv from the re-derived rows: per config x arm, success on attempt 1 and on
-#     any attempt with Wilson 95% intervals, tokens, wall seconds, and the gate of protocol section 8
+#   3 results.txt / results.tsv from the re-derived rows: per config x arm, success on attempt 1 (final
+#     candidate, and round 1 alone beside it) and on any attempt with Wilson 95% intervals, tokens, wall
+#     seconds; per config the cost ratio omegese / text, the paired attempt-1 view with the exact two-sided
+#     McNemar test, the Stage 1 stop rule, and the gate of protocol 13.6 (evaluated only when every config
+#     named in PARAMS is scored; config A alone is labelled interim).
+# --interim (Stage 1 stop rule, 13.4): attempt 1 only (later attempts in the runs are ignored), and
+#   futility.txt with one line per run: run=<dir> config=<X> omegese_attempt1=<k>/<n> futility_max=<m>
+#   a1_rows_sha256=<sha> decision=STOP|CONTINUE, which run.sh --futility reads.
 # EXP445_TEST=1 (dry-run tests only): accepts EXP445_PARAMS, a dirty tree (OLA_ALLOW_DIRTY), and a
 # harness RUN INVALID caused by the dirty tree alone; the output then says TEST MODE, NOT EVIDENCE.
 set -euo pipefail
@@ -33,14 +46,25 @@ TEST="${EXP445_TEST:-0}"
 PARAMS="$HERE/PARAMS"
 if [ "$TEST" = 1 ]; then PARAMS="${EXP445_PARAMS:-$PARAMS}"; else unset OLA_ALLOW_DIRTY OLA_EVIDENCE_ROOT EXP445_PARAMS; fi
 kv() { awk -F= -v k="$1" '$1 == k { print substr($0, length(k) + 2); exit }' "$PARAMS"; }
-CONFIGS=""
-if [ "${1:-}" = --configs ]; then CONFIGS="$2"; shift 2; fi
-[ $# -ge 3 ] || die "usage: score.sh [--configs A,B] <tasks.tar> <TASKS.sha256> <run dir> [<run dir> ...]"
+[ "$(kv revision)" = r3 ] || die "$PARAMS is not protocol revision r3: r1/r2 scoring is retired (protocol section 13)"
+CONFIGS="" INTERIM=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --configs) CONFIGS="$2"; shift 2 ;;
+    --interim) INTERIM=1; shift ;;
+    *) break ;;
+  esac
+done
+[ $# -ge 3 ] || die "usage: score.sh [--configs A] [--interim] <tasks.tar> <TASKS.sha256> <run dir> [<run dir> ...]"
 TAR="$(realpath -e "$1")"; SEALED="$(realpath -e "$2")"; shift 2
 runs=(); for r in "$@"; do runs+=("$(realpath -e "$r")"); done
-[ -n "$CONFIGS" ] || CONFIGS="$(awk -F= '$1 ~ /^config\.[A-Za-z0-9]+\.model$/ { split($1, p, "."); printf "%s%s", s, p[2]; s = "," }' "$PARAMS")"
-B="$ROOT/build/omega_emit" X="$ROOT/build/omega_emit/x445" EMIT="$ROOT/build/omega_emit/omega_emit"
-make -s -C "$ROOT" PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 omega-emit >&2
+# named = every config of PARAMS (the gate needs all of them); available = those not marked unavailable
+NAMED="$(awk -F= '$1 ~ /^config\.[A-Za-z0-9]+\.model$/ { split($1, p, "."); printf "%s%s", s, p[2]; s = "," }' "$PARAMS")"
+AVAIL=""; for c in ${NAMED//,/ }; do [ -n "$(kv "config.$c.unavailable")" ] || AVAIL="$AVAIL${AVAIL:+,}$c"; done
+[ -n "$CONFIGS" ] || CONFIGS="$AVAIL"
+for c in ${CONFIGS//,/ }; do un="$(kv "config.$c.unavailable")"; [ -z "$un" ] || die "config $c is unavailable: $un"; done
+B="$ROOT/build/omega_emit" X="$ROOT/build/omega_emit/x445" EMIT="$ROOT/build/omega_emit/omega_emit" G="$ROOT/build/omegese/omegese"
+make -s -C "$ROOT" PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 omega-emit omegese >&2
 . "$HERE/reader.sh"
 OUT="${runs[0]}/../score-$(date -u +%Y%m%dT%H%M%SZ)-$$"
 mkdir "$OUT"; OUT="$(realpath -e "$OUT")"
@@ -57,12 +81,17 @@ mapfile -t TASKS < <(ls "$W/pub/tasks/cases" | LC_ALL=C sort)
 declare -A TI; i=0; for t in "${TASKS[@]}"; do i=$((i + 1)); TI[$t]=$i; done
 ARMS="$(kv arms)" ATT="$(kv attempts)" params_sha="$(sha256sum "$PARAMS" | cut -d' ' -f1)"
 MT="$(kv max_tokens)" TT="$(kv temperature)" TP="$(kv top_p)" SB="$(kv seed_base)" RT="$(kv retries)"
-heldout=0; for t in "${TASKS[@]}"; do case "$t" in dev*) ;; *) heldout=1 ;; esac; done
+heldout=0; if heldout "${TASKS[@]}"; then heldout=1; fi
 [ "$heldout" = 0 ] || [ "${#TASKS[@]}" = "$(kv heldout_tasks)" ] || inval "held-out tarball has ${#TASKS[@]} tasks, the protocol fixes $(kv heldout_tasks)"
 head_commit="$(git -C "$ROOT" rev-parse HEAD)"
-for arm in ${ARMS//,/ }; do
-  { cat "$HERE/arms/common.md"; echo; cat "$HERE/arms/$arm.md"; [ "$arm" = structured ] && cat "$ROOT/tools/omega_emit/SCHEMA.md"; true; } > "$W/prompt.$arm"
-done
+# the arm prompts of every prompt mode, and the G0 prompt and task (13.4)
+for mode in $(kv prompt_modes | tr ',' ' '); do for arm in ${ARMS//,/ }; do
+  system_prompt "$HERE/arms" "$arm" "$mode" > "$W/prompt.$arm.$mode" || die "cannot build the $arm $mode prompt"
+done; done
+DEVC="$ROOT/tests/one_layer/exp445/dev/tasks/cases" G0T="$(kv g0_task)"
+system_prompt "$HERE/arms" omegese "$(kv heldout_prompt_mode)" > "$W/g0.system" || die "cannot build the G0 prompt"
+G0U="$(user_msg "$DEVC/$G0T/requirement" "$DEVC/$G0T/prompt")" G0I="$(ls "$DEVC" | LC_ALL=C sort | awk -v t="$G0T" '$0 == t { print NR }')"
+MODE=""
 # req_same <saved request> <expected json>: equal as JSON; otherwise prints the top-level fields that differ
 req_same() {
   [ -f "$1" ] || { echo "(missing)"; return 1; }
@@ -73,44 +102,44 @@ req_same() {
 # tcheck <round prefix>: the transport record of a committed round (protocol section 10)
 tcheck() {
   local p="$1" b="${1##*/}" n=0 line h e body succ=0 f
-  [ -f "$p.transport" ] || { inval "$G $b has no transport record (never committed)"; return; }
+  [ -f "$p.transport" ] || { inval "$GL $b has no transport record (never committed)"; return; }
   while IFS= read -r line; do
     [[ "$line" =~ ^try=([0-9]+)\ http=([0-9]{3})\ curl_exit=([0-9]+)\ time_s=[0-9]+(\.[0-9]+)?\ body=([^ ]+)\ msg= ]] ||
-      { inval "$G $b transport line $((n + 1)) malformed"; return; }
-    [ "${BASH_REMATCH[1]}" = "$n" ] || { inval "$G $b transport tries out of order"; return; }
+      { inval "$GL $b transport line $((n + 1)) malformed"; return; }
+    [ "${BASH_REMATCH[1]}" = "$n" ] || { inval "$GL $b transport tries out of order"; return; }
     h="${BASH_REMATCH[2]}" e="${BASH_REMATCH[3]}" body="${BASH_REMATCH[5]}"
-    [ "$succ" = 0 ] || { inval "$G $b has a try after its successful one"; return; }
+    [ "$succ" = 0 ] || { inval "$GL $b has a try after its successful one"; return; }
     case "$body" in
       "$b.resp.json") succ=1
-        [ "$h" = 200 ] && [ "$e" = 0 ] && resp_ok "$p.resp.json" || inval "$G $b response is not an HTTP 200 answer with content" ;;
-      "$b.err.$n.json") [ -f "${p%/*}/$body" ] || inval "$G $b failed body $body missing"
-        if [ "$h" = 200 ] && [ "$e" = 0 ] && resp_ok "${p%/*}/$body"; then inval "$G $b try $n is a valid answer filed as a failure"; fi ;;
-      none) if [ "$h" = 200 ] && [ "$e" = 0 ]; then inval "$G $b try $n: HTTP 200 without a body"; fi ;;
-      *) inval "$G $b try $n names body $body" ;;
+        [ "$h" = 200 ] && [ "$e" = 0 ] && resp_ok "$p.resp.json" || inval "$GL $b response is not an HTTP 200 answer with content" ;;
+      "$b.err.$n.json") [ -f "${p%/*}/$body" ] || inval "$GL $b failed body $body missing"
+        if [ "$h" = 200 ] && [ "$e" = 0 ] && resp_ok "${p%/*}/$body"; then inval "$GL $b try $n is a valid answer filed as a failure"; fi ;;
+      none) if [ "$h" = 200 ] && [ "$e" = 0 ]; then inval "$GL $b try $n: HTTP 200 without a body"; fi ;;
+      *) inval "$GL $b try $n names body $body" ;;
     esac
     n=$((n + 1))
   done < "$p.transport"
-  [ "$n" -ge 1 ] && [ "$n" -le $((RT + 1)) ] || inval "$G $b has $n tries, the protocol allows 1..$((RT + 1))"
-  [ "$succ" = 1 ] || [ "$n" = $((RT + 1)) ] || inval "$G failed round $b has $n tries, the protocol makes $((RT + 1)) with transport evidence"
-  [ "$succ" = 1 ] || [ ! -e "$p.resp.json" ] || inval "$G $b has a response file but no successful try"
-  for f in "$p".err.*.json; do [ -f "$f" ] || continue; grep -q " body=${f##*/} " "$p.transport" || inval "$G ${f##*/} is not in the transport record"; done
+  [ "$n" -ge 1 ] && [ "$n" -le $((RT + 1)) ] || inval "$GL $b has $n tries, the protocol allows 1..$((RT + 1))"
+  [ "$succ" = 1 ] || [ "$n" = $((RT + 1)) ] || inval "$GL failed round $b has $n tries, the protocol makes $((RT + 1)) with transport evidence"
+  [ "$succ" = 1 ] || [ ! -e "$p.resp.json" ] || inval "$GL $b has a response file but no successful try"
+  for f in "$p".err.*.json; do [ -f "$f" ] || continue; grep -q " body=${f##*/} " "$p.transport" || inval "$GL ${f##*/} is not in the transport record"; done
 }
 # gcheck <run> <set> <task> <gen dir> <config>: every request against PARAMS and the config, the repair
 # chain, the transport records, then the row and the candidate re-derived from the raw responses
 gcheck() {
   local r="$1" sid="$2" task="$3" d="$4" cl="$5" v="$W/g" arm at req msgs q a1 k1 r2=no why f
-  G="$r: $sid $task"
-  [[ "$sid" =~ ^([a-z0-9]+)-([a-z]+)-([1-9])$ ]] && [ "${BASH_REMATCH[1]}" = "$cl" ] || { inval "$G: set is not one of config $cl"; return; }
+  GL="$r: $sid $task"
+  [[ "$sid" =~ ^([a-z0-9]+)-([a-z]+)-([1-9])$ ]] && [ "${BASH_REMATCH[1]}" = "$cl" ] || { inval "$GL: set is not one of config $cl"; return; }
   arm="${BASH_REMATCH[2]}" at="${BASH_REMATCH[3]}"
-  [[ ",$ARMS," == *",$arm,"* ]] && [ "$at" -le "$ATT" ] || { inval "$G: arm or attempt outside PARAMS"; return; }
+  [[ ",$ARMS," == *",$arm,"* ]] && [ "$at" -le "$ATT" ] || { inval "$GL: arm or attempt outside PARAMS"; return; }
   req="$W/pub/tasks/cases/$task/requirement"
-  [ -f "$req" ] || { inval "$G is not a task of this tarball"; return; }
-  [ -f "$d/done" ] || { inval "$G never finished"; return; }
+  [ -f "$req" ] || { inval "$GL is not a task of this tarball"; return; }
+  [ -f "$d/done" ] || { inval "$GL never finished"; return; }
   echo "$sid $task" >> "$W/rows"
   rm -rf "$v"; mkdir -p "$v"
   msgs="$(first_msgs "$(cat "$W/prompt.$arm")" "$(user_msg "$req" "$W/pub/tasks/cases/$task/prompt")")"
   q="$(request_json "$FM" "$msgs" "$MT" "$TT" "$TP" "$(seed_of "$SB" "$at" "${TI[$task]}")" "$FX")"
-  why="$(req_same "$d/r1.req.json" "$q")" || inval "$G r1 request differs from the frozen request in: $why"
+  why="$(req_same "$d/r1.req.json" "$q")" || inval "$GL r1 request differs from the frozen request in: $why"
   tcheck "$d/r1"
   if round_ok "$d/r1"; then
     a1="$(content_of "$d/r1.resp.json")"; printf '%s' "$a1" > "$v/r1.content"
@@ -118,65 +147,84 @@ gcheck() {
     if [ "$k1" != OK ]; then
       r2=yes
       q="$(request_json "$FM" "$(repair_msgs "$msgs" "$a1" "$k1")" "$MT" "$TT" "$TP" "$(seed_of "$SB" "$at" "${TI[$task]}")" "$FX")"
-      why="$(req_same "$d/r2.req.json" "$q")" || inval "$G round 1 was refused ($k1); r2 request is not its frozen repair, differs in: $why"
+      why="$(req_same "$d/r2.req.json" "$q")" || inval "$GL round 1 was refused ($k1); r2 request is not its frozen repair, differs in: $why"
       tcheck "$d/r2"
       if round_ok "$d/r2"; then printf '%s' "$(content_of "$d/r2.resp.json")" > "$v/r2.content"; reader "$X" "$EMIT" "$arm" "$v/r2.content" "$v/r2" "$req"; fi
     fi
   fi
   if [ "$r2" = no ]; then for f in "$d"/r2.req.json "$d"/r2.transport "$d"/r2.resp.json "$d"/r2.err.*.json; do
-    if [ -e "$f" ]; then inval "$G has a round 2 without a round-1 refusal"; break; fi; done; fi
-  for f in "$d"/r[03-9]*.req.json "$d"/r[03-9]*.transport "$d"/r[03-9]*.resp.json; do if [ -e "$f" ]; then inval "$G has a round other than 1 and 2"; break; fi; done
+    if [ -e "$f" ]; then inval "$GL has a round 2 without a round-1 refusal"; break; fi; done; fi
+  for f in "$d"/r[03-9]*.req.json "$d"/r[03-9]*.transport "$d"/r[03-9]*.resp.json; do if [ -e "$f" ]; then inval "$GL has a round other than 1 and 2"; break; fi; done
   gen_row "$sid" "$task" "$d" "$v"
   # token counts come from the untrusted server response: each must be a non-negative integer (or "-"
   # for an absent round 2); reader.sh usage_of prints BAD otherwise
   awk -F'\t' '{ for (i = 4; i <= 6; i++) if ($i !~ /^[0-9]+$/ && !(i == 6 && $i == "-")) exit 1 }' <<< "$ROW" ||
-    inval "$G token counts in the response are not non-negative integers ($(cut -f4-6 <<< "$ROW" | tr '\t' ' '))"
+    inval "$GL token counts in the response are not non-negative integers ($(cut -f4-6 <<< "$ROW" | tr '\t' ' '))"
   printf '%s\n' "$ROW" >> "$W/derived"
   local want got n=0; want="$(cut -f12 <<< "$ROW")" got=-
   for f in "$r/cands/$sid/$task"/*; do [ -f "$f" ] || continue; n=$((n + 1)); got="$(sha256sum < "$f" | cut -d' ' -f1)"; done
-  [ "$n" -le 1 ] && [ "$got" = "$want" ] || inval "$G candidate in cands/ does not match the candidate re-derived from the response"
+  [ "$n" -le 1 ] && [ "$got" = "$want" ] || inval "$GL candidate in cands/ does not match the candidate re-derived from the response"
 }
 : > "$W/rows"; : > "$W/all_derived"
 HDR="$(printf 'set\ttask\trounds\tprompt_tokens\tcompletion_tokens_r1\tcompletion_tokens_r2\tfinish_r1\tfinish_r2\twall_s\tcheck_r1\tcheck_r2\tcandidate_sha256')"
+declare -A RUNCFG STOPPED
 for r in "${runs[@]}"; do
   m="$r/meta.txt"
   mv_() { awk -F= -v k="$1" '$1 == k { print substr($0, length(k) + 2); exit }' "$m"; }
   [ -f "$m" ] && [ -f "$r/log.tsv" ] && [ -f "$r/SHA256SUMS" ] && [ -d "$r/cands" ] && [ -d "$r/gen" ] || { inval "$r: not a complete run dir (meta.txt, log.tsv, SHA256SUMS, gen/, cands/)"; continue; }
-  c="$(mv_ config)"; cl="$(echo "$c" | tr 'A-Z' 'a-z')"
+  if [ "$(mv_ revision)" != r3 ]; then
+    inval "$r: not an r3 run (meta.txt has no revision=r3): r1/r2 runs are not scored under protocol r3 (section 13.1)"; continue
+  fi
+  c="$(mv_ config)"; cl="$(echo "$c" | tr 'A-Z' 'a-z')"; RUNCFG[$r]="$c"
   [[ ",$CONFIGS," == *",$c,"* ]] || inval "$r: config '$c' is not one of the configs scored ($CONFIGS)"
   [ -n "$(kv "config.$c.model")" ] || inval "$r: config '$c' is not named in PARAMS"
-  FM="$(kv "config.$c.model")" FX="$(kv "config.$c.extra" | jq -c . 2>/dev/null || echo '{}')"
+  [ -z "$(kv "config.$c.unavailable")" ] || inval "$r: config '$c' is unavailable in PARAMS"
+  FM="$(kv "config.$c.model")" FX="$(kv "config.$c.extra" | jq -c . 2>/dev/null || echo '{}')" FS="$(kv "config.$c.server")"
   [ "$(mv_ model)" = "$FM" ] || inval "$r: model $(mv_ model) is not config $c's frozen model"
   [ "$(mv_ base_url)" = "$(kv "config.$c.base_url")" ] || inval "$r: endpoint $(mv_ base_url) is not config $c's frozen endpoint"
   [ "$(mv_ request_extra)" = "$FX" ] || inval "$r: request extra differs from config $c's frozen extra"
+  [ -n "$FS" ] && [ "$(mv_ server)" = "$FS" ] || inval "$r: server '$(mv_ server)' is not config $c's frozen server"
   [ "$(mv_ protocol)" = PARAMS ] || inval "$r: settings overridden on the command line ($(mv_ protocol))"
   [ "$(mv_ params_sha256)" = "$params_sha" ] || inval "$r: PARAMS changed since generation (params_sha256 differs)"
   [ "$(mv_ arms)" = "$ARMS" ] && [ "$(mv_ attempts)" = "$ATT" ] || inval "$r: arms/attempts differ from PARAMS"
+  [ "$(mv_ order)" = attempt,task,arm ] || inval "$r: generation order is not attempt,task,arm (protocol 13.4)"
   for kp in max_tokens_per_round:max_tokens temperature:temperature top_p:top_p seed_base:seed_base timeout_s:timeout_s retries:retries; do
     [ "$(mv_ "${kp%%:*}")" = "$(kv "${kp#*:}")" ] || inval "$r: meta.txt ${kp%%:*} differs from PARAMS"; done
   [ "$(mv_ repair_rounds)" = 1 ] || inval "$r: meta.txt repair_rounds is not 1"
   [ "$(mv_ tasks_public_sha256)" = "$pub_sha" ] || inval "$r: generated from a different public task view"
+  rm_="$(mv_ prompt_mode)"
+  if [[ ",$(kv prompt_modes)," != *",$rm_,"* ]]; then inval "$r: prompt mode '$rm_' is not one of PARAMS prompt_modes"; rm_="$(kv heldout_prompt_mode)"; fi
+  if [ -z "$MODE" ]; then MODE="$rm_"; elif [ "$MODE" != "$rm_" ]; then inval "$r: prompt mode $rm_ differs from the other runs' ($MODE): score each prompt mode on its own"; fi
+  if [ "$heldout" = 1 ]; then
+    [ "$rm_" = "$(kv heldout_prompt_mode)" ] || inval "$r: a held-out run must use the $(kv heldout_prompt_mode) prompt mode (protocol 13.4), not $rm_"
+    case "$FS" in PLACEHOLDER*) inval "$r: config $c's server is still a placeholder in PARAMS; held-out runs need the frozen server (protocol 13.3)" ;; esac
+  fi
   wl="$(kv "config.$c.weights")"; case "$wl" in /*|"") ;; *) wl="$ROOT/$wl" ;; esac
   weights_ok "$r" "$wl" "$FM" || inval "$r: weights.check / server.json missing or not all OK for config $c (tools/exp445/check_weights.sh)"
+  why="$(g0_check "$r/g0" "$c" "$FM" "$(kv "config.$c.base_url")" "$FX" "$FS" "$params_sha" "$W/g0.system" "$G0U" "$MT" "$TT" "$TP" "$SB" "$G0I" \
+    "$(kv g0_seeds)" "$(kv g0_min_distinct)")" || inval "$r: no G0 PASS for config $c and its server: $why"
   for arm in ${ARMS//,/ }; do
-    [ "$(mv_ "prompt_${arm}_sha256")" = "$(sha256sum < "$W/prompt.$arm" | cut -d' ' -f1)" ] &&
-      cmp -s "$r/prompts/$arm.system.txt" "$W/prompt.$arm" || inval "$r: arm $arm prompt differs from the current arm documents"
+    [ "$(mv_ "prompt_${arm}_sha256")" = "$(sha256sum < "$W/prompt.$arm.$rm_" | cut -d' ' -f1)" ] &&
+      cmp -s "$r/prompts/$arm.system.txt" "$W/prompt.$arm.$rm_" || inval "$r: arm $arm prompt differs from the current arm documents and $rm_ examples"
+    cp "$W/prompt.$arm.$rm_" "$W/prompt.$arm"
   done
   gc="$(mv_ commit)"
   if [ "$TEST" != 1 ]; then
     case "$gc" in *-dirty) inval "$r: generated from a dirty tree ($gc)" ;; esac
-    git -C "$ROOT" diff --quiet "${gc%-dirty}" "$head_commit" -- tools tests/one_layer docs/one_layer src/compiler src/sha256.c mk/omega-emit.mk Makefile 2> /dev/null ||
+    git -C "$ROOT" diff --quiet "${gc%-dirty}" "$head_commit" -- tools tests/one_layer docs/one_layer src/compiler src/sha256.c mk/omega-emit.mk mk/omegese.mk Makefile 2> /dev/null ||
       inval "$r: tools at generation commit ${gc%-dirty} differ from the scoring commit"
   fi
-  (cd "$r" && sha256sum -c --quiet --strict SHA256SUMS > /dev/null 2>&1) || inval "$r: SHA256SUMS does not verify (a raw file, prompt, meta.txt or log.tsv changed)"
+  (cd "$r" && sha256sum -c --quiet --strict SHA256SUMS > /dev/null 2>&1) || inval "$r: SHA256SUMS does not verify (a raw file, prompt, G0 record, meta.txt or log.tsv changed)"
   run_files "$r" > "$W/have"
   awk '{ print substr($0, 67) }' "$r/SHA256SUMS" | LC_ALL=C sort > "$W/listed"
-  cmp -s "$W/have" "$W/listed" || inval "$r: SHA256SUMS does not list exactly the raw files, prompts, meta.txt, log.tsv, weights.check and server.json"
+  cmp -s "$W/have" "$W/listed" || inval "$r: SHA256SUMS does not list exactly the raw files, prompts, g0/, meta.txt, log.tsv, weights.check and server.json"
   [ "$(head -n 1 "$r/log.tsv")" = "$HDR" ] || inval "$r: log.tsv header"
-  # every generation, from its raw files; log.tsv must equal the re-derived rows
+  # every generation, from its raw files; log.tsv must equal the re-derived rows (--interim: attempt 1 only)
   : > "$W/derived"
-  for d in "$r"/gen/*/*/; do [ -d "$d" ] || continue; d="${d%/}"; gcheck "$r" "$(basename "$(dirname "$d")")" "$(basename "$d")" "$d" "$cl"; done
-  LC_ALL=C sort "$W/derived" > "$W/derived_s"; tail -n +2 "$r/log.tsv" | LC_ALL=C sort > "$W/log_s"
+  for d in "$r"/gen/*/*/; do [ -d "$d" ] || continue; d="${d%/}"; sid="$(basename "$(dirname "$d")")"
+    if [ "$INTERIM" = 1 ] && [[ "$sid" != *-1 ]]; then continue; fi
+    gcheck "$r" "$sid" "$(basename "$d")" "$d" "$cl"; done
+  LC_ALL=C sort "$W/derived" > "$W/derived_s"; tail -n +2 "$r/log.tsv" | awk -F'\t' -v i="$INTERIM" 'i == 0 || $1 ~ /-1$/' | LC_ALL=C sort > "$W/log_s"
   if ! cmp -s "$W/derived_s" "$W/log_s"; then
     inval "$r: log.tsv differs from the rows re-derived from the raw files (first: $(diff "$W/derived_s" "$W/log_s" | sed -n 's/^[<>] //p' | head -n 1 | cut -f1,2 | tr '\t' ' '))"
   fi
@@ -184,10 +232,14 @@ for r in "${runs[@]}"; do
   for s in "$r"/cands/*/*/; do [ -d "$s" ] || continue; sid="$(basename "$(dirname "$s")")"; t="$(basename "$s")"
     [ -f "$r/gen/$sid/$t/done" ] || inval "$r: cands/$sid/$t has no finished generation"; done
 done
-# matrix
+# matrix. --interim: attempt 1 only. A held-out config with no generation after attempt 1 is scored as
+# stopped by the Stage 1 rule (13.4); step 3 checks that the rule really fired.
 : > "$W/want"
-for c in ${CONFIGS//,/ }; do for arm in ${ARMS//,/ }; do for at in $(seq 1 "$ATT"); do for t in "${TASKS[@]}"; do
-  echo "$(echo "$c" | tr 'A-Z' 'a-z')-$arm-$at $t" >> "$W/want"; done; done; done; done
+for c in ${CONFIGS//,/ }; do cl="$(echo "$c" | tr 'A-Z' 'a-z')" na="$ATT"
+  if [ "$INTERIM" = 1 ]; then na=1
+  elif [ "$heldout" = 1 ] && [ "$ATT" -gt 1 ] && ! grep -q "^$cl-[a-z]*-[2-9] " "$W/rows"; then na=1; STOPPED[$cl]=1; fi
+  for arm in ${ARMS//,/ }; do for at in $(seq 1 "$na"); do for t in "${TASKS[@]}"; do echo "$cl-$arm-$at $t" >> "$W/want"; done; done; done
+done
 dups="$(LC_ALL=C sort "$W/rows" | uniq -d | wc -l)"
 [ "$dups" = 0 ] || inval "$dups generations appear more than once"
 LC_ALL=C sort -u "$W/rows" > "$W/have_rows"; LC_ALL=C sort "$W/want" > "$W/want_s"
@@ -199,12 +251,14 @@ if [ "$bad" -gt 0 ]; then
   head -5 "$OUT/validity.txt" >&2
   exit 1
 fi
-echo "provenance OK: ${#runs[@]} runs, $(wc -l < "$W/want_s") generations, configs $CONFIGS" >> "$OUT/validity.txt"
+echo "provenance OK: ${#runs[@]} runs, $(wc -l < "$W/want_s") generations, configs $CONFIGS, prompt mode $MODE$([ "$INTERIM" = 1 ] && echo ', interim: attempt 1 only')" >> "$OUT/validity.txt"
 
 # ---- 2. harness ------------------------------------------------------------------------------------
 M="$W/cands"; mkdir "$M"; cp "$W/all_derived" "$OUT/log.tsv"   # the rows re-derived from the raw files
 for r in "${runs[@]}"; do
-  for s in "$r"/cands/*/; do [ -d "$s" ] || continue; cp -R "$s" "$M/$(basename "$s")"; done
+  for s in "$r"/cands/*/; do [ -d "$s" ] || continue; sid="$(basename "$s")"
+    if [ "$INTERIM" = 1 ] && [[ "$sid" != *-1 ]]; then continue; fi
+    cp -R "$s" "$M/$sid"; done
   echo "$r $(sha256sum "$r/SHA256SUMS" | cut -d' ' -f1)" >> "$OUT/runs.txt"
 done
 while IFS=$'\t' read -r sid _; do mkdir -p "$M/$sid"; done < "$OUT/log.tsv"
@@ -229,56 +283,90 @@ fi
 # ---- 3. results ------------------------------------------------------------------------------------
 for v in "$ev"/sets/*/verdicts.txt; do s="$(basename "$(dirname "$v")")"; [ "$s" = references ] && continue
   awk -v s="$s" '{ print s "\t" $1 "\t" $2 "\t" $3 }' "$v"; done > "$OUT/verdicts.tsv"
-# per config x arm rows: n, attempt-1 accepted, tasks, any-attempt accepted, generations, accepted, repaired,
-# repaired accepted, completion tokens (sum, mean per generation), prompt tokens mean, wall seconds
+# per config x arm rows: n, attempt-1 accepted, attempt-1 accepted in round 1, tasks, any-attempt accepted,
+# generations, accepted, repaired, repaired accepted, completion tokens (sum, mean per generation), prompt
+# tokens mean, wall seconds
 awk -F'\t' '
-  FNR == NR { split($1, p, "-"); key = p[1] "\t" p[2]; att = p[3]; acc = ($3 == "ACCEPT");
-              keys[key] = 1; tasks[key, $2] = 1; if (att == 1) { n1[key]++; a1[key] += acc }
-              if (acc) any[key, $2] = 1; gen[key]++; gacc[key] += acc; ok[$1, $2] = acc; next }
-  { last[$1, $2] = $0 }
+  FNR == NR { acc[$1, $2] = ($3 == "ACCEPT"); next }
+  { split($1, p, "-"); key = p[1] "\t" p[2]; att = p[3]; a = acc[$1, $2] + 0
+    keys[key] = 1; tasks[key, $2] = 1; if (att == 1) { n1[key]++; a1[key] += a; if ($3 == 1) r1[key] += a }
+    if (a) any[key, $2] = 1; gen[key]++; gacc[key] += a
+    c = $5 + ($6 == "-" ? 0 : $6); tok[key] += c; pt[key] += $4; wall[key] += $9
+    if ($3 == 2) { rep[key]++; repok[key] += a } }
   END {
-    for (k in last) { split(last[k], f, "\t"); split(f[1], p, "-"); key = p[1] "\t" p[2]
-      c = f[5] + (f[6] == "-" ? 0 : f[6]); tok[key] += c; pt[key] += f[4]; wall[key] += f[9]; lg[key]++
-      if (f[3] == 2) { rep[key]++; if (ok[f[1], f[2]]) repok[key]++ } }
     for (key in keys) { na = 0; for (kt in tasks) { split(kt, q, SUBSEP); if (q[1] == key) { nt[key]++; if (any[key, q[2]]) na++ } }
-      printf "%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%.1f\t%.1f\t%.1f\t%.2f\n", key, n1[key], a1[key], nt[key], na, gen[key], gacc[key],
-             rep[key] + 0, repok[key] + 0, tok[key], (lg[key] ? tok[key] / lg[key] : 0), (lg[key] ? pt[key] / lg[key] : 0), wall[key] }
+      printf "%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%.1f\t%.1f\t%.1f\t%.2f\n", key, n1[key], a1[key], r1[key], nt[key], na, gen[key], gacc[key],
+             rep[key] + 0, repok[key] + 0, tok[key], tok[key] / gen[key], pt[key] / gen[key], wall[key] }
   }' "$OUT/verdicts.tsv" "$OUT/log.tsv" | LC_ALL=C sort > "$OUT/rows.tsv"
 {
-  printf 'config\tarm\ttasks\tsuccess_attempt1\tp1\tp1_lo\tp1_hi\tsuccess_any\tpany\tpany_lo\tpany_hi\tgenerations\tgen_accepted\trepaired\trepaired_accepted\tcompletion_tokens_total\tcompletion_tokens_mean\tprompt_tokens_mean\twall_s_total\n'
-  while IFS=$'\t' read -r c a n1 a1 nt na g ga rp ro tt tm pm wt; do
+  printf 'config\tarm\ttasks\tsuccess_attempt1\tp1\tp1_lo\tp1_hi\tsuccess_attempt1_round1\tsuccess_any\tpany\tpany_lo\tpany_hi\tgenerations\tgen_accepted\trepaired\trepaired_accepted\tcompletion_tokens_total\tcompletion_tokens_mean\tprompt_tokens_mean\twall_s_total\n'
+  while IFS=$'\t' read -r c a n1 a1 r1 nt na g ga rp ro tt tm pm wt; do
     w1="$("$X" wilson "$a1" "$n1" | tr ' ' '\t')"; wa="$("$X" wilson "$na" "$nt" | tr ' ' '\t')"
-    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$c" "$a" "$n1" "$a1/$n1" "$w1" "$na/$nt" "$wa" "$g" "$ga" "$rp" "$ro" "$tt" "$tm" "$pm" "$wt"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$c" "$a" "$n1" "$a1/$n1" "$w1" "$r1/$n1" "$na/$nt" "$wa" "$g" "$ga" "$rp" "$ro" "$tt" "$tm" "$pm" "$wt"
   done < "$OUT/rows.tsv"
 } > "$OUT/results.tsv"
-# gate (protocol section 8): per config, on attempt-1 successes; overall only when every config of
-# PARAMS is scored
-allcfg="$(awk -F= '$1 ~ /^config\.[A-Za-z0-9]+\.model$/ { split($1, p, "."); print tolower(p[2]) }' "$PARAMS" | LC_ALL=C sort | paste -sd,)"
+# paired attempt-1 view per config (13.6): tasks where only omegese succeeds (b) and only text (c), exact
+# two-sided McNemar test on (b, c)
+: > "$OUT/paired.tsv"
+for c in ${CONFIGS//,/ }; do cl="$(echo "$c" | tr 'A-Z' 'a-z')"
+  read -r both bo bt none < <(awk -F'\t' -v o="$cl-omegese-1" -v t="$cl-text-1" '
+    $1 == o { so[$2] = ($3 == "ACCEPT"); k[$2] = 1 } $1 == t { st[$2] = ($3 == "ACCEPT"); k[$2] = 1 }
+    END { for (x in k) { if (so[x] && st[x]) b++; else if (so[x]) bo++; else if (st[x]) bt++; else n++ } printf "%d %d %d %d\n", b, bo, bt, n }' "$OUT/verdicts.tsv")
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$cl" "$both" "$bo" "$bt" "$none" "$("$X" mcnemar "$bo" "$bt")" >> "$OUT/paired.tsv"
+done
+# Stage 1 stop rule (13.4), per config of a held-out run: omegese attempt-1 successes <= futility_max
+FMAX="$(kv futility_max)" stopbad=0
+declare -A FUTD
+while IFS=$'\t' read -r c a n1 a1 _; do
+  [ "$a" = omegese ] || continue
+  if [ "$a1" -le "$FMAX" ]; then FUTD[$c]=STOP; else FUTD[$c]=CONTINUE; fi
+  if [ "$INTERIM" = 0 ] && [ "$heldout" = 1 ] && [ "$ATT" -gt 1 ]; then
+    if [ "${STOPPED[$c]:-0}" = 1 ] && [ "${FUTD[$c]}" = CONTINUE ]; then
+      echo "INVALID: config $c: attempts 2..$ATT are missing but the stop rule did not fire (omegese attempt 1 $a1/$n1 > $FMAX)" >> "$OUT/validity.txt"; stopbad=1; fi
+    if [ "${STOPPED[$c]:-0}" = 0 ] && [ "${FUTD[$c]}" = STOP ]; then
+      echo "INVALID: config $c: the stop rule fired (omegese attempt 1 $a1/$n1 <= $FMAX) but attempts 2..$ATT were run" >> "$OUT/validity.txt"; stopbad=1; fi
+  fi
+done < "$OUT/rows.tsv"
+if [ "$stopbad" = 1 ]; then echo "RUN INVALID: the Stage 1 stop rule was not followed (see $OUT/validity.txt)" | tee -a "$OUT/validity.txt" >&2; exit 1; fi
+if [ "$INTERIM" = 1 ]; then
+  : > "$OUT/futility.txt"
+  for r in "${runs[@]}"; do c="${RUNCFG[$r]}"; cl="$(echo "$c" | tr 'A-Z' 'a-z')"
+    k="$(awk -F'\t' -v c="$cl" '$1 == c && $2 == "omegese" { print $4 "/" $3 }' "$OUT/rows.tsv")"; [ -n "$k" ] || k="0/0"
+    echo "run=$r config=$c omegese_attempt1=$k futility_max=$FMAX a1_rows_sha256=$(a1_rows_sha "$r/log.tsv") decision=${FUTD[$cl]:-STOP}" >> "$OUT/futility.txt"
+  done
+fi
+# gate (13.6): per config on attempt-1 successes; the experiment's gate only when every config named in
+# PARAMS is scored (config A alone is interim, 13.3)
+allcfg="$(echo "$NAMED" | tr 'A-Z,' 'a-z\n' | LC_ALL=C sort | paste -sd,)"
 scored="$(echo "$CONFIGS" | tr 'A-Z,' 'a-z\n' | LC_ALL=C sort | paste -sd,)"
-gate="$(awk -F'\t' -v all="$allcfg" -v scored="$scored" 'NR == 1 { next }
-  { split($4, q, "/"); k[$1, $2] = q[1]; n[$1, $2] = q[2]; cfg[$1] = 1; tm[$1, $2] = $17 }
+gate="$(awk -F'\t' -v all="$allcfg" -v scored="$scored" -v interim="$INTERIM" 'NR == 1 { next }
+  { split($4, q, "/"); k[$1, $2] = q[1]; n[$1, $2] = q[2]; cfg[$1] = 1 }
   END {
-    sg = 1; bw = 1; nc = 0
-    for (c in cfg) { nc++
-      s = k[c, "structured"]; t = k[c, "text"]; b = k[c, "bytes"]; N = n[c, "structured"]
-      sp = (100 * s >= 80 * N) && (100 * (t - s) <= 10 * N)
-      bp = (b >= s) && (tm[c, "bytes"] < tm[c, "structured"])
-      printf "gate config %s: structured %d/%d, text %d/%d: structured %s (needs >= 80%% and at most 10 points below text)\n", c, s, N, t, n[c, "text"], sp ? "PASS" : "FAIL"
-      printf "bytes rule config %s: bytes %d/%d vs structured %d/%d, mean completion tokens %.1f vs %.1f: bytes %s\n", c, b, n[c, "bytes"], s, N, tm[c, "bytes"], tm[c, "structured"], bp ? "WINS" : "does not win"
-      sg = sg && sp; bw = bw && bp }
-    if (scored != all) { printf "GATE NOT EVALUATED: configs scored %s, the protocol needs %s\n", scored, all; exit }
-    printf "GATE %s (structured passes in every config)\n", sg ? "PASS" : "FAIL"
-    printf "BYTES %s (bytes wins only with >= structured successes and fewer mean completion tokens in every config)\n", bw ? "WIN" : "NO WIN"
+    g = 1
+    for (c in cfg) {
+      o = k[c, "omegese"]; t = k[c, "text"]; N = n[c, "omegese"]
+      p = (100 * o >= 80 * N) && (100 * (t - o) <= 10 * N)
+      printf "gate config %s: omegese %d/%d, text %d/%d: %s (needs omegese >= 80%% and at most 10 points below text)\n", c, o, N, t, n[c, "text"], p ? "PASS" : "FAIL"
+      g = g && p }
+    if (interim) { print "GATE NOT EVALUATED: interim score of attempt 1 (Stage 1 stop rule)"; exit }
+    if (scored != all) { printf "GATE NOT EVALUATED: configs scored %s, the protocol needs %s; INTERIM result (protocol 13.3)\n", scored, all; exit }
+    printf "GATE %s (omegese passes in every config)\n", g ? "PASS" : "FAIL"
   }' "$OUT/results.tsv")"
 {
-  echo "${mode}exp445 results (harness: $valid; $(sed -n 's/^references_accepted=/references accepted /p' "$ev/score.txt"); provenance OK)"
-  echo "success = harness ACCEPT on hidden inputs; attempt 1 is the pre-registered primary measure; 95% Wilson intervals"
+  echo "${mode}exp445 r3 results$([ "$INTERIM" = 1 ] && echo ', INTERIM: attempt 1 only') (harness: $valid; $(sed -n 's/^references_accepted=/references accepted /p' "$ev/score.txt"); provenance OK; prompt mode $MODE)"
+  echo "success = harness ACCEPT on hidden inputs of the final candidate; attempt 1 is the pre-registered primary measure; round 1 = accepted without the repair round; 95% Wilson intervals"
   echo
   awk -F'\t' 'NR == 1 { next }
-    { printf "config %-3s arm %-10s attempt1 %-7s %.3f [%.3f, %.3f]   any-of-attempts %-7s %.3f [%.3f, %.3f]\n", $1, $2, $4, $5, $6, $7, $8, $9, $10, $11
-      printf "                          completion tokens %.0f total, %.1f per generation; prompt %.1f per generation; wall %.1f s; repaired %d (accepted %d)\n", $16, $17, $18, $19, $14, $15
-      if ($2 == "text") textm[$1] = $17; mean[$1, $2] = $17; cfgs[$1] = 1 }
-    END { for (c in cfgs) if (textm[c] > 0) printf "token cost relative to text, config %s: bytes x%.2f, structured x%.2f (mean completion tokens per generation)\n", c, mean[c, "bytes"] / textm[c], mean[c, "structured"] / textm[c] }' "$OUT/results.tsv"
+    { printf "config %-3s arm %-8s attempt1 %-7s %.3f [%.3f, %.3f]   round 1 only %-7s   any-of-attempts %-7s %.3f [%.3f, %.3f]\n", $1, $2, $4, $5, $6, $7, $8, $9, $10, $11, $12
+      printf "                        completion tokens %.0f total, %.1f per generation; prompt %.1f per generation; wall %.1f s; repaired %d (accepted %d)\n", $17, $18, $19, $20, $15, $16
+      mean[$1, $2] = $18; pm[$1, $2] = $19; cfgs[$1] = 1 }
+    END { for (c in cfgs) if (mean[c, "text"] > 0)
+      printf "cost config %s: omegese / text mean completion tokens per generation x%.2f (%.1f / %.1f); prompt tokens per generation %.1f / %.1f\n", c, mean[c, "omegese"] / mean[c, "text"], mean[c, "omegese"], mean[c, "text"], pm[c, "omegese"], pm[c, "text"] }' "$OUT/results.tsv"
+  while IFS=$'\t' read -r c both bo bt none p; do
+    echo "paired attempt 1 config $c: both $both, only omegese $bo, only text $bt, neither $none; exact two-sided McNemar p = $p"
+  done < "$OUT/paired.tsv"
+  if [ "$heldout" = 1 ]; then for c in "${!FUTD[@]}"; do
+    echo "stop rule config $c (omegese attempt 1 <= $FMAX): ${FUTD[$c]}$([ "${STOPPED[$c]:-0}" = 1 ] && echo ', attempts 2 and later not run')"; done; fi
   echo
   echo "$gate"
 } > "$OUT/results.txt"
