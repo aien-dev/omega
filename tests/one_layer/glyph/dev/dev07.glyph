@@ -1,0 +1,14 @@
+fn isqrt x uint to uint
+v = ulong x
+r = ulong 0
+for i ulong 16
+sh = sub 15 i
+bit = shl 1 sh
+c = or r bit
+sq = mul c c
+if le sq v
+r = c
+end
+end
+ret uint r
+end

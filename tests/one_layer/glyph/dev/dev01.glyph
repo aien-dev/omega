@@ -1,0 +1,9 @@
+fn clamp_add a uchar b uchar to uchar
+x = ushort a
+y = ushort b
+s = add x y
+if gt s 255
+ret 255
+end
+ret uchar s
+end
