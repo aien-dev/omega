@@ -29,6 +29,72 @@ done
 [ "$n" -eq 10 ] || bad "dev programs accepted $n/10"
 echo "dev: $n/10 glyph -> omega_emit -> checker2 ACCEPT"
 
+# 1b. coverage programs (break, nested loops, else-if, a for with a name as the count, arrays and
+#     calls across functions): glyph -> omega_emit -> checker2 ACCEPT
+cov=0
+awk -v d="$T" '/^== / { k++; f = d "/c" k ".glyph"; next } { print > f }' <<'EOF'
+== break and nested loops
+fn f n uint to uint
+s = uint 0
+for i uint n
+for j uint 8
+if gt j i
+break
+end
+s = add s j
+end
+end
+ret s
+end
+== else-if chain
+fn sign a int to int
+if lt a 0
+ret -1
+else
+if gt a 0
+ret 1
+end
+end
+ret 0
+end
+== arrays and calls
+fn sum4 v view uint 4 to uint
+s = uint 0
+for i uint 4
+x = get v i
+s = add s x
+end
+ret s
+end
+fn fill e edit uint 4 to void
+for i uint 4
+put e i i
+end
+end
+fn f to uint
+a = new uint 4 0
+m = edit a
+fill m
+s = sum4 a
+free a
+ret s
+end
+EOF
+for f in "$T"/c*.glyph; do
+  if "$G" emit "$f" "$T/c.json" > "$T/c.out" && "$OME" emit "$T/c.json" "$T/c.oscir" > "$T/c.out"; then
+    v="$("$C2" check "$T/c.oscir" 2>&1 | head -1 || true)"
+    case "$v" in checker2=ACCEPT*) cov=$((cov + 1)) ;; *) bad "coverage $(basename "$f") checker2: $v" ;; esac
+  else bad "coverage $(basename "$f"): $(cat "$T/c.out")"; fi
+done
+echo "coverage: $cov/$(ls "$T"/c*.glyph | wc -l) accepted"
+
+# 1c. glyph next: the allowed words after a prefix
+nx() { printf '%b' "$1" > "$T/p"; "$G" next "$T/p"; }
+[ "$(nx 'fn f a uint to uint\nret a\n')" = "words: end" ] || bad "next after ret: $(nx 'fn f a uint to uint\nret a\n')"
+[ "$(nx 'fn f a uint b ulong to uint\nx = add a ')" = "$(printf 'names: a\nnumber: uint')" ] || bad "next after 'add a': $(nx 'fn f a uint b ulong to uint\nx = add a ')"
+case "$(nx 'fn f a uint to uint\nfor i uint 4\n')" in "words: if while for ret put free trap break end"*) ;; *) bad "next in a loop" ;; esac
+echo "next: 3 prefixes give the expected words"
+
 # 2. refusals: "== <expected reason substring>", the bad program, "-- control", the fixed program
 r=0
 awk -v d="$T" '
@@ -49,6 +115,7 @@ end
 fn f a uint to uint
 if gt a 1
 y = add a 1
+a = y
 end
 ret y
 end
@@ -214,6 +281,59 @@ end
 fn f a int to int
 ret neg a
 end
+== g takes uint there
+fn g a uint to uint
+ret a
+end
+fn f b ulong to uint
+x = g b
+ret x
+end
+-- control
+fn g a uint to uint
+ret a
+end
+fn f b ulong to uint
+c = uint b
+x = g c
+ret x
+end
+== cannot call itself
+fn f a uint to uint
+x = f a
+ret x
+end
+-- control
+fn f a uint to uint
+ret a
+end
+== is named twice
+fn f a uint a ulong to ulong
+ret a
+end
+-- control
+fn f a uint b ulong to ulong
+ret b
+end
+== is written but never read
+fn f a uint to uint
+x = add a 1
+rte x
+ret x
+end
+-- control
+fn f a uint to uint
+x = add a 1
+ret x
+end
+== is a word of the language, not a name
+fn f bound uint to uint
+ret bound
+end
+-- control
+fn f n uint to uint
+ret n
+end
 EOF
 for want in "$T"/r*.want; do
   k="${want%.want}"
@@ -230,7 +350,8 @@ done
 echo "refusals: $r/$(ls "$T"/r*.want | wc -l) refused with the expected reason, every control accepted"
 
 # 3. loop guard negative control
-sed 's/{"op": "add", "dst": 5, "a": 5, "b": 4}, //' "$T/dev04.json" > "$T/m.json"
+ctr="$(grep -o '"op": "ge", "dst": [0-9]*, "a": [0-9]*' "$T/dev04.json" | head -1 | sed 's/.*"a": //')"
+sed -E "s/\{\"op\": \"add\", \"dst\": $ctr, \"a\": $ctr, \"b\": [0-9]+\}, //" "$T/dev04.json" > "$T/m.json"
 if cmp -s "$T/dev04.json" "$T/m.json"; then bad "loop mutant: the counter increment was not found"; fi
 if "$OME" emit "$T/m.json" "$T/m.oscir" > "$T/m.out"; then
   v="$("$C2" check "$T/m.oscir" 2>&1 | head -1 || true)"

@@ -30,6 +30,10 @@ bookkeeping and the punctuation. Its words are chosen from the writer model's ow
 4. **Scope gives definite assignment.** A name first written inside an `if`, `else`, `while` or
    `for` dies at its `end`; to carry a value out, write it before the block. So every read is
    written on every path by construction.
+   Every name written must be read before its scope ends (parameters and loop counters excepted), so a
+   misspelled word (the short form turns `rte a` into a new name) or a forgotten value is refused.
+   Parameter names are distinct. Calls go to earlier functions only, with each argument checked
+   against the parameter (arrays: own from own, edit from own or edit, view from any).
 5. **Loops are proven to end.** Every loop lowers to the shape checker2 proves terminating
    (`src/checker2/c2_check.c`, "loop bounds"; the shape oscc emits for `while ... bound N`).
 6. **Prefix-decidable.** After any prefix the checker knows which words may come next
@@ -54,6 +58,7 @@ ret [<value>]
 put <array> <index> <value>      store
 free <array>                     release an own array
 trap <code 1..14>
+                          (a trap stops the program; lines after it are allowed, as in the IR)
 <function> <args>         call a function that returns nothing
 ```
 
@@ -132,7 +137,9 @@ rewrite. Whether models write Glyph reliably is not measured yet.
 ## 6. Checks (`make test-glyph`)
 
 - the 10 dev programs: glyph -> omega_emit -> checker2 ACCEPT;
-- 15 refusals, each with its expected reason, each with a fixed control that is accepted;
+- 3 coverage programs (break, nested loops, else-if, a for with a name as count, arrays and calls);
+- 20 refusals, each with its expected reason, each with a fixed control that is accepted;
+- `glyph next` on 3 prefixes (only `end` after ret; a binary op's second operand of the first's type);
 - loop guard negative control: the dev04 op list without the hidden counter increment passes
   omega_emit and is REJECTED by checker2 (`C2-LOOP-UNBOUNDED`);
 - tokenizer gate, when `GLYPH_TOKCOUNT` (a counter: `<tool> <tokenizer.json> words <word>...`

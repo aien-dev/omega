@@ -70,7 +70,7 @@ enum { OP_ADD, OP_SUB, OP_MUL, OP_DIV, OP_REM, OP_AND, OP_OR, OP_XOR, OP_SHL, OP
 static const char *const OPW[OP_N] = {"add", "sub", "mul", "div", "rem", "and", "or", "xor", "shl", "shr",
                                       "eq", "ne", "lt", "le", "gt", "ge", "neg", "not", "get", "new"};
 static const char *const KW[] = {"fn", "to", "void", "end", "else", "if", "while", "for", "break", "ret",
-                                 "trap", "put", "free", "true", "false", "="};
+                                 "trap", "put", "free", "true", "false", "bound", "="};
 #define NKW (sizeof KW / sizeof KW[0])
 
 static int word_in(const char *w, const char *const *set, int n) {
@@ -117,7 +117,7 @@ static void bput(Buf *b, const char *fmt, ...) {
 
 /* ---- program state ---- */
 typedef struct { char name[NAME_MAX_LEN + 1]; int np; Ty p[MAX_PARAMS]; int has_ret; Ty ret; } Func;
-typedef struct { char name[NAME_MAX_LEN + 1]; int reg; int depth; int fixed; } Name;
+typedef struct { char name[NAME_MAX_LEN + 1]; int reg; int depth; int fixed; int read; } Name; /* fixed: 1 loop counter, 2 parameter */
 typedef struct { Ty t; int neg; uint64_t mag; int reg; } Const;
 typedef struct { Buf ops; int nops; int order; int refd; } Block;
 enum { F_FN, F_IF, F_WHILE, F_FOR };
@@ -160,6 +160,11 @@ static int find_func(const char *w) {
         if (!strcmp(funcs[i].name, w)) return i;
     return -1;
 }
+/* a function this line may call: an earlier one (the one being written is not callable) */
+static int find_callable(const char *w) {
+    int g = find_func(w);
+    return g >= 0 && !(in_fn && g == nfuncs - 1) ? g : -1;
+}
 static int valid_ident(const char *w) {
     if (!(isalpha((unsigned char)w[0]) || w[0] == '_') || strlen(w) > NAME_MAX_LEN) return 0;
     for (const char *c = w; *c; c++)
@@ -175,12 +180,16 @@ static int bind(const char *w, int reg, int fixed) {
     names[nnames].reg = reg;
     names[nnames].depth = depth;
     names[nnames].fixed = fixed;
+    names[nnames].read = 0;
     nnames++;
     return 0;
 }
-static void pop_scope(void) {
-    while (nnames > 0 && names[nnames - 1].depth > depth - 1) nnames--;
+static int pop_scope(void) {
+    for (; nnames > 0 && names[nnames - 1].depth > depth - 1; nnames--)
+        if (!names[nnames - 1].fixed && !names[nnames - 1].read)
+            return fail("'%s' is written but never read (a typo, or a value left unused)", names[nnames - 1].name);
     depth--;
+    return 0;
 }
 
 /* ---- ops into the current block (block refs are written as @id@, numbered at the end) ---- */
@@ -259,8 +268,29 @@ static int operand(const char *w, const Ty *want, Ty *got) {
         if (find_func(w) >= 0) return fail("'%s' is a function; call it on its own line", w);
         return fail("'%s' is not a name in scope here", w);
     }
+    n->read = 1;
     if (got) *got = regs[n->reg];
     return n->reg;
+}
+
+/* may a value of type a be passed for a parameter of type p (the IR's reference binding rule:
+ * own from own, edit from own or edit, view from any array of the same element type and length) */
+static int binds(Ty p, Ty a) {
+    if (p.ref == R_NONE || a.ref == R_NONE) return teq(p, a);
+    if (p.s != a.s || p.len != a.len) return 0;
+    return p.ref == R_SHARED || (p.ref == R_MUT && a.ref != R_SHARED) || (p.ref == R_OWN && a.ref == R_OWN);
+}
+/* the argument registers of a call to f, checked against its parameters, as "r, r, ..." */
+static int call_args(const Func *f, char **w, int n, Buf *a) {
+    if (n != f->np) return fail("%s takes %d values, got %d", f->name, f->np, n);
+    for (int i = 0; i < f->np; i++) {
+        Ty ta;
+        int r = operand(w[i], f->p[i].ref == R_NONE ? &f->p[i] : NULL, &ta);
+        TRY(r);
+        if (!binds(f->p[i], ta)) return fail("'%s' is %s; %s takes %s there", w[i], tname(ta), f->name, tname(f->p[i]));
+        bput(a, "%s%d", i ? ", " : "", r);
+    }
+    return 0;
 }
 
 /* the type of the first name among operands (for typing literals) */
@@ -302,7 +332,8 @@ static const char *IROP[OP_N] = {"add", "sub", "mul", "div", "rem", "and", "or",
 static int expr(char **w, int n, const Ty *hint, int dst, Ty *out_t) {
     Ty t, ta, tb;
     if (n == 0) return fail("a value is missing");
-    int o = op_word(w[0]), s = scalar_word(w[0]), rf = ref_word(w[0]), g = find_func(w[0]);
+    int o = op_word(w[0]), s = scalar_word(w[0]), rf = ref_word(w[0]), g = find_callable(w[0]);
+    if (g < 0 && find_func(w[0]) >= 0) return fail("%s cannot call itself (calls go to earlier functions only)", w[0]);
 #define DST(ty) do {                                                                              \
         if (dst >= 0) { if (!teq(regs[dst], (ty))) return fail("this writes %s but the name holds %s", tname(ty), tname(regs[dst])); } \
         else { dst = new_reg(ty); TRY(dst); }                                                     \
@@ -365,13 +396,8 @@ static int expr(char **w, int n, const Ty *hint, int dst, Ty *out_t) {
     if (g >= 0) { /* a call */
         Func *f = &funcs[g];
         if (!f->has_ret) return fail("%s returns nothing; call it on its own line", f->name);
-        if (n - 1 != f->np) return fail("%s takes %d values, got %d", f->name, f->np, n - 1);
         Buf a = {0};
-        for (int i = 0; i < f->np; i++) {
-            int r = operand(w[1 + i], f->p[i].ref == R_NONE ? &f->p[i] : NULL, &ta);
-            if (r < 0) { free(a.p); return -1; }
-            bput(&a, "%s%d", i ? ", " : "", r);
-        }
+        if (call_args(f, w + 1, n - 1, &a) < 0) { free(a.p); return -1; }
         DST(f->ret);
         int rc = op("\"op\": \"call\", \"func\": \"%s\", \"args\": [%s], \"dst\": %d", f->name, a.p ? a.p : "", dst);
         free(a.p);
@@ -535,7 +561,8 @@ static int stmt(char **w, int n) {
             f->p[f->np++] = t;
             int r = new_reg(t);
             TRY(r);
-            TRY(bind(pn, r, 0));
+            if (find_name(pn)) return fail("parameter '%s' is named twice", pn);
+            TRY(bind(pn, r, 2));
         }
         if (i >= n) return fail("fn needs 'to <type>' or 'to void' at the end");
         i++;
@@ -595,7 +622,7 @@ static int stmt(char **w, int n) {
             break;
         }
         nframes--;
-        pop_scope();
+        TRY(pop_scope());
         return 0;
     }
     if (!strcmp(w[0], "else")) {
@@ -605,7 +632,7 @@ static int stmt(char **w, int n) {
         if (cur >= 0) { fr->join = new_block(); TRY(fr->join); TRY(br(fr->join)); }
         else fr->join = -1;
         fr->has_else = 1;
-        pop_scope();
+        TRY(pop_scope());
         depth++;
         start_block(fr->els);
         return 0;
@@ -791,18 +818,13 @@ static int stmt(char **w, int n) {
         if (ta.ref != R_OWN) return fail("'%s' is not an own array", w[1]);
         return op("\"op\": \"release\", \"arr\": %d", a);
     }
-    int g = find_func(w[0]);
+    if (find_func(w[0]) >= 0 && find_callable(w[0]) < 0) return fail("%s cannot call itself (calls go to earlier functions only)", w[0]);
+    int g = find_callable(w[0]);
     if (g >= 0) { /* a call on its own line */
         Func *cf = &funcs[g];
         if (cf->has_ret) return fail("%s returns %s; keep it: <name> = %s ...", cf->name, tname(cf->ret), cf->name);
-        if (n - 1 != cf->np) return fail("%s takes %d values, got %d", cf->name, cf->np, n - 1);
         Buf a = {0};
-        for (int i = 0; i < cf->np; i++) {
-            Ty ta;
-            int r = operand(w[1 + i], cf->p[i].ref == R_NONE ? &cf->p[i] : NULL, &ta);
-            if (r < 0) { free(a.p); return -1; }
-            bput(&a, "%s%d", i ? ", " : "", r);
-        }
+        if (call_args(cf, w + 1, n - 1, &a) < 0) { free(a.p); return -1; }
         int rc = op("\"op\": \"call\", \"func\": \"%s\", \"args\": [%s]", cf->name, a.p ? a.p : "");
         free(a.p);
         return rc;
@@ -816,7 +838,7 @@ static int stmt(char **w, int n) {
     if (n >= 3 && !strcmp(w[1], "=")) { /* <name> = <value> */
         Name *nm = find_name(w[0]);
         if (nm) {
-            if (nm->fixed) return fail("'%s' is the loop counter; it cannot be assigned", w[0]);
+            if (nm->fixed == 1) return fail("'%s' is the loop counter; it cannot be assigned", w[0]);
             Ty t;
             int r = expr(w + 2, n - 2, &regs[nm->reg], nm->reg, &t);
             TRY(r);
@@ -911,6 +933,11 @@ static int cmd_next(const char *path) {
     if (n < 0) { printf("REFUSED glyph: %s\n", g_err); return 1; }
     if (!in_fn) { printf(n == 0 ? "words: fn\n" : "words: (finish the fn line)\n"); return 0; }
     Func *f = &funcs[nfuncs - 1];
+    if (n == 0 && cur < 0) { /* the path ended (ret or break): only closing words may follow */
+        Frame *fr = &frames[nframes - 1];
+        printf("words:%s end\n", fr->kind == F_IF && !fr->has_else ? " else" : "");
+        return 0;
+    }
     if (n == 0) {
         printf("words: if while for ret put free trap");
         int loop = 0;
@@ -961,7 +988,8 @@ int main(int argc, char **argv) {
     if (argc == 4 && !strcmp(argv[1], "emit")) {
         size_t len;
         char *src = slurp(argv[2], &len), *tail = NULL;
-        if (run(src, 0, &tail) < 0) { printf("REFUSED glyph: %s\n", g_err); return 1; }
+        if (run(src, 0, &tail) < 0) { printf("REFUSED glyph: %s\n", g_err); free(src); return 1; }
+        free(src);
         FILE *fp = fopen(argv[3], "wb");
         if (!fp || fwrite(out.p, 1, out.n, fp) != out.n || fclose(fp)) { perror(argv[3]); return 2; }
         return 0;
