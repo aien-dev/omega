@@ -187,6 +187,8 @@ fence "$OMD/dev02.omegese" > "$A/omegese/absdiff.repair"
 fence "$OMD/dev04.omegese" > "$A/omegese/gcd"
 g0seeds() { for k in 1 2 3 4 5 6 7 8; do seed_of 445000 "$k" 1; done; }
 for s in $(g0seeds); do { echo "Answer for seed $s."; fence "$OMD/dev01.omegese"; } > "$A/omegese/clamp_add.seed$s"; done
+# text, attempt 2 of the first task (seed 447001): the same program with another variable name (a distinct candidate)
+sed 's/\bs\b/t/g' "$DEV/dev01/hidden/reference.osc" > "$T/clamp_add.alt.osc"; fence "$T/clamp_add.alt.osc" > "$A/text/clamp_add.seed447001"
 printf '{"object":"list","data":[{"id":"qwen3-30b-a3b-instruct-2507","object":"model"},{"id":"qwen3-8b","object":"model"}]}\n' > "$A/models.json"
 A2="$T/answers2"; mkdir -p "$A2/omegese"; cp "$A/models.json" "$A2/"; fence "$OMD/dev01.omegese" > "$A2/omegese/clamp_add"
 startfake() { "$FAKE" "$1" "$2" & FPIDS="$FPIDS $!"; for i in $(seq 1 50); do [ -s "$1" ] && break; sleep 0.1; done; printf -v "$3" "http://127.0.0.1:%s/v1" "$(cat "$1")"; }
@@ -242,44 +244,68 @@ refuse "driver on a config not named in PARAMS" "config C is not named in" "$HER
 refuse "the bytes arm (dropped by r3)" "arm bytes is dropped by protocol r3" "$HERE/run.sh" --config A --tasks "$T/pub" --out "$T/runc" --arms omegese,bytes
 refuse "an unknown prompt mode" "prompt mode 'few' is not one of PARAMS prompt_modes" "$HERE/run.sh" --config A --tasks "$T/pub" --out "$T/runc" --prompt-mode few
 refuse "a held-out run in the one-shot mode" "a held-out run uses the many prompt mode" env EXP445_PARAMS="$T/PARAMSH" "$HERE/run.sh" --config A --tasks "$T/hpub" --out "$T/runc" --prompt-mode one
-# G0: PASS on the fake endpoint (8 distinct answers, the repeat identical); FAIL when the answers do not vary;
-# FAIL when the repeat of seed 1 differs
+# G0 (13.4): the stage S sampling gate (vendored, frozen by sha256) plus dev01 at 8 seeds and a repeat of the first.
+GS="$(sha256sum < "$HERE/sampling-gate.sh" | cut -d' ' -f1)"
+grep -qx "g0_gate_sha256=$GS" "$HERE/PARAMS" && ok "the vendored sampling gate's sha256 equals PARAMS g0_gate_sha256" || bad "vendored sampling gate sha256 vs PARAMS"
+SC="$HOME/workspace/aien-sovereign-core"
+if git -C "$SC" cat-file -e f881710a:scripts/sampling-gate.sh 2> /dev/null; then
+  [ "$(git -C "$SC" show f881710a:scripts/sampling-gate.sh | sha256sum | cut -d' ' -f1)" = "$GS" ] &&
+    ok "  and is byte for byte aien-sovereign-core f881710a scripts/sampling-gate.sh" || bad "vendored sampling gate differs from sovereign-core f881710a"
+else echo "skip: aien-sovereign-core f881710a not present here; the vendored gate is checked against PARAMS only"; fi
+# PASS on the fake endpoint: 8 distinct answers, the repeat identical, every reply sampled with its own seed
 G0P="$T/g0pass"; cw A "$G0P"
 if "$HERE/g0.sh" --config A --out "$G0P" > "$T/g0p.out" 2>&1; then
   v="$G0P/g0/verdict.txt"
-  [ "$(tail -1 "$v")" = "G0 PASS" ] && grep -qx 'derived=distinct=8/8 repeat_identical=yes answered=9/9' "$v" &&
+  [ "$(tail -1 "$v")" = "G0 PASS" ] && grep -qx 'derived=gate=PASS distinct=8/8 repeat_identical=yes sampled_own_seed=9/9' "$v" &&
+  [ "$(tail -1 "$G0P/g0/gate/gate.txt")" = "VERDICT PASS" ] && grep -q '^gate d PASS distinct=8/8' "$G0P/g0/gate/gate.txt" &&
   [ "$(jq -s '[.[].seed] | join(" ")' "$G0P"/g0/r[1-9].req.json)" = "\"$(g0seeds | tr '\n' ' ')446001\"" ] &&
   jq -s -e 'all(.[]; .temperature == 0.7 and .top_p == 0.8 and .max_tokens == 3072)' "$G0P"/g0/r*.req.json > /dev/null &&
   jq -e '.messages[1].content | test("\nentry clamp_add\n")' "$G0P/g0/r1.req.json" > /dev/null && cmp -s "$G0P/g0/prompt.system.txt" "$T/p.omegese.many" &&
-  (cd "$G0P/g0" && sha256sum -c --quiet --strict SHA256SUMS) &&
-    ok "G0 PASS: dev01, omegese many-shot prompt, 8 seeds (those of dev01's attempts 1..8) + a repeat of the first, T 0.7, top_p 0.8; requests, responses, verdict hashed" ||
+  cmp -s "$G0P/g0/sampling-gate.sh" "$HERE/sampling-gate.sh" && grep -qx "gate_sha256=$GS" "$v" &&
+  (cd "$G0P/g0" && sha256sum -c --quiet --strict SHA256SUMS) && grep -q ' gate/d-r8.json$' "$G0P/g0/SHA256SUMS" &&
+    ok "G0 PASS: the sampling gate passes (its gate d on dev01's 8 attempt seeds), the repeat of seed 1 identical, 9/9 sampled with their own seeds; T 0.7, top_p 0.8; all hashed" ||
     { bad "G0 PASS record"; cat "$v"; }
 else bad "g0.sh did not PASS: $(tail -2 "$T/g0p.out")"; fi
 refuse "g0.sh over an existing G0 record" "exists: a G0 record is never overwritten" "$HERE/g0.sh" --config A --out "$G0P"
-G0F="$T/g0fail"; EXP445_PARAMS="$T/PARAMS2" cw A "$G0F"
-EXP445_PARAMS="$T/PARAMS2" "$HERE/g0.sh" --config A --out "$G0F" > /dev/null 2>&1 && bad "g0.sh passed identical answers" ||
-  { grep -qx 'derived=distinct=1/8 repeat_identical=yes answered=9/9' "$G0F/g0/verdict.txt" && [ "$(tail -1 "$G0F/g0/verdict.txt")" = "G0 FAIL" ] &&
-    ok "G0 FAIL (exit 1): the same answer for every seed (distinct 1 of 8)" || bad "G0 FAIL record (identical)"; }
+# the same answer for every seed: PASS only when the reported p_repeat makes it plausible (p_repeat^7 >= 0.01)
+g0case() { # g0case <name> <sampling.json or -> <expect PASS|FAIL> <derived> [gate.txt line grep]
+  local d="$T/g0c$((++G0N))"; if [ "$2" = - ]; then rm -f "$A2/sampling.json"; else printf '%s\n' "$2" > "$A2/sampling.json"; fi
+  EXP445_PARAMS="$T/PARAMS2" cw A "$d"; local e=0; EXP445_PARAMS="$T/PARAMS2" "$HERE/g0.sh" --config A --out "$d" > /dev/null 2>&1 || e=$?
+  [ "$e" = "$([ "$3" = PASS ] && echo 0 || echo 1)" ] && [ "$(tail -1 "$d/g0/verdict.txt")" = "G0 $3" ] && grep -qx "derived=$4" "$d/g0/verdict.txt" &&
+    { [ -z "${5:-}" ] || grep -q -- "$5" "$d/g0/gate/gate.txt"; } && ok "G0 $3 (exit $e): $1" || { bad "G0 case: $1"; grep derived "$d/g0/verdict.txt"; tail -3 "$d/g0/gate/gate.txt"; }
+  G0LAST="$d"
+}
+G0N=0
+g0case "identical answers, p_repeat 0.5 (0.5^7 < 0.01): the seed looks ignored" - FAIL 'gate=FAIL distinct=1/8 repeat_identical=yes sampled_own_seed=9/9' 'gate d FAIL identical replies with p_repeat^7=0.0078125 < 0.01'
+g0case "identical answers, p_repeat 0.51 (0.51^7 = 0.00897 < 0.01), boundary" '{"p_repeat": 0.51}' FAIL 'gate=FAIL distinct=1/8 repeat_identical=yes sampled_own_seed=9/9' 'gate d FAIL identical'
+g0case "identical answers, p_repeat 0.52 (0.52^7 = 0.0103 >= 0.01): a confident model; distinct 1/8 recorded, not gated" '{"p_repeat": 0.52}' PASS 'gate=PASS distinct=1/8 repeat_identical=yes sampled_own_seed=9/9' 'gate d PASS identical replies explained by confidence'
+g0case "a server that ignores the seed (reports seed 0, the stage S mutant)" '{"ignore_seed": true, "p_repeat": 0.9}' FAIL 'gate=FAIL distinct=1/8 repeat_identical=yes sampled_own_seed=0/9' 'gate d FAIL a reply was not sampled with its own seed'
+g0case "a server that forces greedy decoding (reports mode greedy, the stage S mutant)" '{"force_greedy": true, "p_repeat": 0.9}' FAIL 'gate=FAIL distinct=1/8 repeat_identical=yes sampled_own_seed=0/9' 'gate b 0/4 FAIL'
 for s in $(g0seeds); do { echo "Answer for seed $s."; fence "$OMD/dev01.omegese"; } > "$A2/omegese/clamp_add.seed$s"; done
-{ echo "Another answer."; fence "$OMD/dev01.omegese"; } > "$A2/omegese/clamp_add.seed446001.again"; : > "$A2/requests.log"
-G0R="$T/g0rep"; EXP445_PARAMS="$T/PARAMS2" cw A "$G0R"
-EXP445_PARAMS="$T/PARAMS2" "$HERE/g0.sh" --config A --out "$G0R" > /dev/null 2>&1 && bad "g0.sh passed a repeat that differs" ||
-  { grep -qx 'derived=distinct=8/8 repeat_identical=no answered=9/9' "$G0R/g0/verdict.txt" && [ "$(tail -1 "$G0R/g0/verdict.txt")" = "G0 FAIL" ] &&
-    ok "G0 FAIL (exit 1): 8 distinct answers but the repeat of seed 1 differs" || bad "G0 FAIL record (repeat)"; }
+{ echo "Another answer."; fence "$OMD/dev01.omegese"; } > "$A2/omegese/clamp_add.seed446001.again"; rm -f "$A2"/seen.*
+g0case "8 distinct answers, the sampling gate passes, but the repeat of seed 1 differs" - FAIL 'gate=PASS distinct=8/8 repeat_identical=no sampled_own_seed=9/9' '^VERDICT PASS$'
+G0R="$G0LAST"
 # run.sh refuses without a G0 PASS for this config, server and PARAMS
 cw A "$T/nog0"
 refuse "run.sh with no G0 record" "no G0 PASS for config A and this server in .*no G0 record" "$HERE/run.sh" --config A --tasks "$T/pub" --out "$T/nog0"
-refuse "run.sh with a G0 FAIL (repeat differs)" "no G0 PASS for config A .*G0 FAILED (distinct=8/8 repeat_identical=no" env EXP445_PARAMS="$T/PARAMS2" "$HERE/run.sh" --config A --tasks "$T/pub" --out "$G0R"
+refuse "run.sh with a G0 FAIL (repeat differs)" "no G0 PASS for config A .*G0 FAILED (gate=PASS distinct=8/8 repeat_identical=no" env EXP445_PARAMS="$T/PARAMS2" "$HERE/run.sh" --config A --tasks "$T/pub" --out "$G0R"
 sed -i '$s/.*/G0 PASS/' "$G0R/g0/verdict.txt"; g0hash "$G0R"
-refuse "run.sh with a G0 FAIL whose verdict line was edited to PASS (re-hashed)" "G0 FAILED (distinct=8/8 repeat_identical=no" env EXP445_PARAMS="$T/PARAMS2" "$HERE/run.sh" --config A --tasks "$T/pub" --out "$G0R"
+refuse "run.sh with a G0 FAIL whose verdict line was edited to PASS (re-hashed)" "G0 FAILED (gate=PASS distinct=8/8 repeat_identical=no" env EXP445_PARAMS="$T/PARAMS2" "$HERE/run.sh" --config A --tasks "$T/pub" --out "$G0R"
 cw B "$T/g0b"; cp -R "$G0P/g0" "$T/g0b/g0"
 refuse "run.sh with config A's G0 in a config B run" "G0 was made for another config (A)" "$HERE/run.sh" --config B --tasks "$T/pub" --out "$T/g0b"
 cw A "$T/g0s"; cp -R "$G0P/g0" "$T/g0s/g0"; sed -i 's/^server=.*/server=another server/' "$T/g0s/g0/verdict.txt"; g0hash "$T/g0s"
 refuse "run.sh with a G0 made on another server (re-hashed)" "G0 was made for another server (another server)" "$HERE/run.sh" --config A --tasks "$T/pub" --out "$T/g0s"
-cw A "$T/g0t"; cp -R "$G0P/g0" "$T/g0t/g0"; sed -i 's/Answer/answer/' "$T/g0t/g0/r3.resp.json"
+cw A "$T/g0t"; cp -R "$G0P/g0" "$T/g0t/g0"; sed -i 's/Answer/answer/' "$T/g0t/g0/gate/d-r3.json"
 refuse "run.sh with a G0 response edited (not re-hashed)" "G0 SHA256SUMS does not verify" "$HERE/run.sh" --config A --tasks "$T/pub" --out "$T/g0t"
 cw A "$T/g0q"; cp -R "$G0P/g0" "$T/g0q/g0"; jqi() { jq -c "$1" "$2" > "$2.tmp"; mv "$2.tmp" "$2"; }; jqi '.temperature = 0' "$T/g0q/g0/r2.req.json"; g0hash "$T/g0q"
 refuse "run.sh with a G0 request at another temperature (re-hashed)" "G0 request 2 is not the frozen G0 request" "$HERE/run.sh" --config A --tasks "$T/pub" --out "$T/g0q"
+cw A "$T/g0g"; cp -R "$G0P/g0" "$T/g0g/g0"; sed -i 's/>= 0.01/>= 0.001/' "$T/g0g/g0/sampling-gate.sh"; g0hash "$T/g0g"
+refuse "run.sh with a G0 made by an edited sampling gate (re-hashed)" "G0 was made by another sampling gate script" "$HERE/run.sh" --config A --tasks "$T/pub" --out "$T/g0g"
+mut_make0() { rm -rf "$T/mg"; mkdir -p "$T/mg"; cp "$HERE/g0.sh" "$HERE/PARAMS" "$HERE/reader.sh" "$HERE/sampling-gate.sh" "$T/mg/"; cp -R "$HERE/arms" "$T/mg/arms"
+  sed -i "s|^ROOT=.*|ROOT=\"$ROOT\"|" "$T/mg/g0.sh"; }
+mut_make0; sed -i "s/at_least \"\$chance\" 0.01/at_least \"\$chance\" 0.001/" "$T/mg/sampling-gate.sh"; ! cmp -s "$T/mg/sampling-gate.sh" "$HERE/sampling-gate.sh" || bad "gate mutant: sed changed nothing"
+refuse "g0.sh with an edited sampling gate script" "is not the frozen sampling gate" "$T/mg/g0.sh" --config A --out "$T/g0mg"
+[ ! -e "$T/g0mg/g0" ] && ok "  nothing recorded by the refused G0" || bad "refused G0 wrote a record"
 # a dev run of 3 tasks
 R="$T/gens/run-a"; prep A "$R"
 "$HERE/run.sh" --config A --tasks "$T/pub" --out "$R" --only dev01,dev02,dev03 > /dev/null 2> "$T/run.err" || { bad "run.sh failed"; tail -5 "$T/run.err"; }
@@ -322,7 +348,7 @@ has_kw "$FB" && no_kw "$FA" && not has_kw "$FA" && grep -qx 'model=qwen3-8b' "$F
 grep -qx 'prompt_mode=one' "$FBO/meta.txt" && grep -qx 'protocol=PARAMS' "$FBO/meta.txt" && cmp -s "$FBO/prompts/omegese.system.txt" "$T/p.omegese.one" &&
   ok "--prompt-mode one: the one-shot prompts, recorded as prompt_mode=one (not an override)" || bad "one-shot run"
 # driver mutants
-mut_make() { rm -rf "$T/mut"; mkdir -p "$T/mut"; cp "$HERE/run.sh" "$HERE/PARAMS" "$HERE/reader.sh" "$HERE/g0.sh" "$T/mut/"; cp -R "$HERE/arms" "$T/mut/arms"
+mut_make() { rm -rf "$T/mut"; mkdir -p "$T/mut"; cp "$HERE/run.sh" "$HERE/PARAMS" "$HERE/reader.sh" "$HERE/g0.sh" "$HERE/sampling-gate.sh" "$T/mut/"; cp -R "$HERE/arms" "$T/mut/arms"
   sed -i "s|^ROOT=.*|ROOT=\"$ROOT\"|" "$T/mut/run.sh" "$T/mut/g0.sh"; cp "$T/mut/$1" "$T/mut/$1.orig"; sed -i "$2" "$T/mut/$1"
   if cmp -s "$T/mut/$1.orig" "$T/mut/$1"; then bad "mutant: sed changed nothing in $1 ($2)"; return 1; fi; }
 mut_run() { mut_make "$2" "$3" || return 1; rm -rf "$T/mr"; cw "${4:-A}" "$T/mr"; "$T/mut/g0.sh" --config "${4:-A}" --out "$T/mr" > /dev/null 2>&1 || true
@@ -466,7 +492,7 @@ invalid "a one-shot run relabelled many (re-hashed)" "arm omegese prompt differs
 cpr; rm -rf "$T/neg/a/g0"; rehash "$T/neg/a"
 invalid "no G0 record (re-hashed)" "no G0 PASS for config A and its server: no G0 record" "${NA[@]}"
 smut 's/|| inval "\$r: no G0 PASS/|| true "/' "the G0 check" "${NA[@]}"
-cpr; sed -i 's/Answer/answer/' "$T/neg/a/g0/r4.resp.json"; rehash "$T/neg/a"
+cpr; sed -i 's/Answer/answer/' "$T/neg/a/g0/gate/d-r4.json"; rehash "$T/neg/a"
 invalid "a G0 response edited (run re-hashed, G0 not)" "G0 SHA256SUMS does not verify" "${NA[@]}"
 cpr; rm -rf "$T/neg/a/g0"; cp -R "$G0R/g0" "$T/neg/a/g0"; rehash "$T/neg/a"
 invalid "a G0 made with another PARAMS" "G0 was made for another base_url" "${NA[@]}"
@@ -515,6 +541,9 @@ if SC --interim --configs A "${HPK[@]}" "$H2" > /dev/null 2> "$T/hi2.err"; then
     ok "decision CONTINUE: attempt 2 run; 16 generations in the order attempt, then task, then arm" || bad "CONTINUE run: $(tail -n +2 "$H2/log.tsv" | cut -f1,2 | paste -sd, | head -c 300)"
   if SC --configs A "${HPK[@]}" "$H2" > "$T/hc.out" 2> "$T/hc.err"; then
     grep -qx 'stop rule config a (omegese attempt 1 <= 2): CONTINUE' "$T/hc.out" && ok "final score of the continued run: valid, stop rule CONTINUE" || { bad "continued run results"; cat "$T/hc.out"; }
+    grep -qx 'distinct candidates config a arm omegese: 1.00 per task over 2.00 attempts; every attempt identical on 4 of 4 tasks with 2+ attempts' "$T/hc.out" &&
+    grep -qx 'distinct candidates config a arm text: 1.25 per task over 2.00 attempts; every attempt identical on 3 of 4 tasks with 2+ attempts' "$T/hc.out" &&
+      ok "  distinct candidates per task reported (13.5): text 1.25 (h01 attempt 2 is another program), omegese 1.00 (the same program every attempt)" || { bad "distinct candidates line"; grep distinct "$T/hc.out"; }
   else bad "score.sh refused the continued held-out run: $(grep INVALID "$T/hc.err" | head -2)"; fi
 else bad "score.sh --interim (CONTINUE) failed"; fi
 unset EXP445_PARAMS

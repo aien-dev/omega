@@ -114,38 +114,49 @@ system_prompt() {
 heldout() { local t; for t in "$@"; do case "$t" in dev*) ;; *) return 0 ;; esac; done; return 1; }
 # a1_rows_sha <log.tsv>: the attempt-1 rows of a run, sorted, hashed (ties the Stage 1 stop decision to them)
 a1_rows_sha() { tail -n +2 "$1" | awk -F'\t' '$1 ~ /-1$/' | LC_ALL=C sort | sha256sum | cut -d' ' -f1; }
-# G0, the sampling gate (13.4). <run dir>/g0/ holds g0.sh (the script that made it), prompt.system.txt,
-# rK.req.json, rK.transport and rK.resp.json (or rK.err.J.json) for K = 1 .. g0_seeds + 1 (the last request
-# repeats the seed of the first), verdict.txt and SHA256SUMS.
-# g0_files <g0 dir>: the hashed files, sorted
-g0_files() { (cd "$1" && find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%P\n' | LC_ALL=C sort); }
+# G0, the sampling gate (13.4). <run dir>/g0/ holds g0.sh and sampling-gate.sh (the scripts that made it),
+# prompt.system.txt, rK.req.json for K = 1 .. g0_seeds + 1 (the last repeats the seed of the first), gate/
+# (the stage S gate's output: gate.txt and every reply; d-rK.json is the reply to rK.req.json), the
+# repeat's rK.transport and rK.resp.json, verdict.txt and SHA256SUMS.
+# g0_files <g0 dir>: the hashed files (gate/ included), sorted
+g0_files() { (cd "$1" && find . -type f ! -path ./SHA256SUMS -printf '%P\n' | LC_ALL=C sort); }
 # g0_seed <seed_base> <k> <task index>: the seed of G0 request k (request g0_seeds + 1 uses k = 1)
 g0_seed() { seed_of "$1" "$2" "$3"; }
-# g0_derive <g0 dir> <seeds>: prints "distinct=D/N repeat_identical=yes|no answered=A/N+1" from the raw responses
+# g0_reply <g0 dir> <k> <seeds>: the reply file of request k (the gate's for k <= seeds, the repeat's after)
+g0_reply() { if [ "$2" -le "$3" ]; then echo "$1/gate/d-r$2.json"; elif round_ok "$1/r$2"; then echo "$1/r$2.resp.json"; else echo "$1/none"; fi; }
+# g0_derive <g0 dir> <seeds>: "gate=PASS|FAIL distinct=D/N repeat_identical=yes|no sampled_own_seed=S/N+1",
+# from the raw files: the gate's verdict line, the replies' exact content and their sampling records
 g0_derive() {
-  local d="$1" n="$2" k a=0 u
-  for k in $(seq 1 $((n + 1))); do if round_ok "$d/r$k"; then a=$((a + 1)); fi; done
-  u="$(for k in $(seq 1 "$n"); do if round_ok "$d/r$k"; then content_of "$d/r$k.resp.json" | sha256sum | cut -d' ' -f1; fi; done | LC_ALL=C sort -u | grep -c . || true)"
-  local rep=no
-  if round_ok "$d/r1" && round_ok "$d/r$((n + 1))" && [ "$(content_of "$d/r1.resp.json" | sha256sum)" = "$(content_of "$d/r$((n + 1)).resp.json" | sha256sum)" ]; then rep=yes; fi
-  echo "distinct=$u/$n repeat_identical=$rep answered=$a/$((n + 1))"
+  local d="$1" n="$2" k f s=0 u rep=no g=FAIL a b
+  [ "$(tail -n 1 "$d/gate/gate.txt" 2> /dev/null)" = "VERDICT PASS" ] && g=PASS
+  for k in $(seq 1 $((n + 1))); do f="$(g0_reply "$d" "$k" "$n")"
+    if [ -f "$f" ] && jq -e --argjson s "$(jq '.seed' "$d/r$k.req.json")" \
+         '.usage.aien_sampling.mode == "sampled" and .usage.aien_sampling.seed == $s and (.choices[0].message.content | type == "string")' "$f" > /dev/null 2>&1; then
+      s=$((s + 1)); fi; done
+  u="$(for k in $(seq 1 "$n"); do f="$(g0_reply "$d" "$k" "$n")"; if [ -f "$f" ]; then jq -j '.choices[0].message.content' "$f" | sha256sum | cut -d' ' -f1; fi; done | LC_ALL=C sort -u | grep -c . || true)"
+  a="$(g0_reply "$d" 1 "$n")" b="$(g0_reply "$d" $((n + 1)) "$n")"
+  if [ -f "$a" ] && [ -f "$b" ] && [ "$(jq -j '.choices[0].message.content' "$a" | sha256sum)" = "$(jq -j '.choices[0].message.content' "$b" | sha256sum)" ]; then rep=yes; fi
+  echo "gate=$g distinct=$u/$n repeat_identical=$rep sampled_own_seed=$s/$((n + 1))"
 }
-# g0_check <g0 dir> <want: config model base_url extra server params_sha256> <system prompt file> <user msg>
-#   <max_tokens> <temperature> <top_p> <seed_base> <task index> <seeds> <min distinct>
+# g0_pass <derived> <seeds>: the G0 rule on a derived line (distinct answers are recorded, not gated)
+g0_pass() { [[ "$1" == "gate=PASS "* && "$1" == *" repeat_identical=yes sampled_own_seed=$(($2 + 1))/$(($2 + 1))" ]]; }
+# g0_check <g0 dir> <want: config model base_url extra server params_sha256 gate_sha256> <system prompt file>
+#   <user msg> <max_tokens> <temperature> <top_p> <seed_base> <task index> <seeds>
 # returns 0 when G0 PASSED for exactly this configuration and server: SHA256SUMS verifies and lists every
-# file, every request is the frozen G0 request, the verdict's identity lines match, and the verdict
-# re-derived from the raw responses is PASS. Prints the reason otherwise.
+# file, the record's gate script is the frozen one, every request is the frozen G0 request, the verdict's
+# identity lines match, and the verdict re-derived from the raw files is PASS. Prints the reason otherwise.
 g0_check() {
-  local d="$1" cfg="$2" model="$3" base="$4" extra="$5" server="$6" psha="$7" sysf="$8" user="$9"
-  local mt="${10}" tt="${11}" tp="${12}" sb="${13}" ti="${14}" n="${15}" md="${16}" k s msgs v der dd
+  local d="$1" cfg="$2" model="$3" base="$4" extra="$5" server="$6" psha="$7" gsha="$8" sysf="$9" user="${10}"
+  local mt="${11}" tt="${12}" tp="${13}" sb="${14}" ti="${15}" n="${16}" k s msgs v der
   v="$d/verdict.txt"
   [ -f "$v" ] && [ -f "$d/SHA256SUMS" ] || { echo "no G0 record in $d (run tools/exp445/g0.sh first)"; return 1; }
   (cd "$d" && sha256sum -c --quiet --strict SHA256SUMS > /dev/null 2>&1) || { echo "G0 SHA256SUMS does not verify"; return 1; }
   [ "$(g0_files "$d")" = "$(awk '{ print substr($0, 67) }' "$d/SHA256SUMS" | LC_ALL=C sort)" ] || { echo "G0 SHA256SUMS does not list exactly the G0 files"; return 1; }
   gv() { awk -F= -v k="$1" '$1 == k { print substr($0, length(k) + 2); exit }' "$v"; }
-  for kv_ in "config=$cfg" "model=$model" "base_url=$base" "request_extra=$extra" "server=$server" "params_sha256=$psha"; do
+  for kv_ in "config=$cfg" "model=$model" "base_url=$base" "request_extra=$extra" "server=$server" "params_sha256=$psha" "gate_sha256=$gsha"; do
     [ "$(gv "${kv_%%=*}")" = "${kv_#*=}" ] || { echo "G0 was made for another ${kv_%%=*} ($(gv "${kv_%%=*}"))"; return 1; }
   done
+  [ "$(sha256sum < "$d/sampling-gate.sh" 2> /dev/null | cut -d' ' -f1)" = "$gsha" ] || { echo "G0 was made by another sampling gate script"; return 1; }
   cmp -s "$d/prompt.system.txt" "$sysf" || { echo "G0 prompt is not the current many-shot omegese prompt"; return 1; }
   msgs="$(first_msgs "$(cat "$sysf")" "$user")"
   for k in $(seq 1 $((n + 1))); do
@@ -154,13 +165,12 @@ g0_check() {
       { echo "G0 request $k is not the frozen G0 request"; return 1; }
   done
   der="$(g0_derive "$d" "$n")"
-  [ "$(gv derived)" = "$der" ] || { echo "G0 verdict ($(gv derived)) differs from its raw responses ($der)"; return 1; }
-  dd="${der#distinct=}"; dd="${dd%%/*}"
-  if [ "$dd" -ge "$md" ] && [[ "$der" == *"repeat_identical=yes answered=$((n + 1))/$((n + 1))" ]]; then
+  [ "$(gv derived)" = "$der" ] || { echo "G0 verdict ($(gv derived)) differs from its raw files ($der)"; return 1; }
+  if g0_pass "$der" "$n"; then
     [ "$(tail -n 1 "$v")" = "G0 PASS" ] || { echo "G0 verdict line is not G0 PASS"; return 1; }
     return 0
   fi
-  echo "G0 FAILED ($der; PASS needs distinct >= $md of $n, the repeat identical and every request answered)"; return 1
+  echo "G0 FAILED ($der; PASS needs gate=PASS, the repeat identical and every reply sampled with its own seed)"; return 1
 }
 
 # ---- transport, shared by run.sh and g0.sh (globals BASE, TIMEOUT, RETRIES and die() come from the caller)

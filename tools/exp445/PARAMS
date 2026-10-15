@@ -18,11 +18,13 @@ heldout_tasks=60
 # Stage 1 stop rule (13.4): after attempt 1, omegese attempt-1 successes <= futility_max of heldout_tasks
 # means attempts 2 and 3 are not run
 futility_max=30
-# G0 sampling gate (13.4): g0_task in the omegese arm, many-shot prompt, g0_seeds seeds plus one repeat of
-# the first; PASS needs at least g0_min_distinct distinct answers and the repeat byte-identical
+# G0 sampling gate (13.4): the stage S gate of aien-sovereign-core (scripts/sampling-gate.sh at f881710a,
+# vendored byte for byte as tools/exp445/sampling-gate.sh with this sha256), plus g0_task in the omegese arm,
+# many-shot prompt, at g0_seeds seeds and one repeat of the first
+g0_gate_source=aien-spark/aien-sovereign-core f881710a scripts/sampling-gate.sh
+g0_gate_sha256=2934e348676e531f8c08584548f7d3e31e1320788c197da7304544ab1453f5cc
 g0_task=dev01
 g0_seeds=8
-g0_min_distinct=4
 # configurations: model id at the endpoint, endpoint, extra JSON fields merged into every request, server
 config.A.model=qwen3-30b-a3b-instruct-2507
 config.A.base_url=http://127.0.0.1:18091/v1

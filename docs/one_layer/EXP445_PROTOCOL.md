@@ -300,12 +300,14 @@ is reported as an interim result, labelled interim.
 
 ### 13.4 Stages and pre-registered stop rules
 
-**G0, the sampling gate (before every stage, per configuration).** On the frozen server, the dev
-task `dev01` in the `omegese` arm, `temperature=0.7`, `top_p=0.8`: 8 requests with 8 different seeds
-and one repeat of the first seed. PASS when at least 4 of the 8 answers are distinct and the repeat
-is byte-identical to its first answer. The script and its output are saved in the run directory
-before any generation. On FAIL nothing in that configuration runs; with identical answers across
-seeds, three attempts are one attempt and the attempt statistics mean nothing.
+**G0, the sampling gate (before every stage, per configuration).** G0 runs aien-sovereign-core
+`scripts/sampling-gate.sh` (the Stage S gate, merged f881710a, with its ignore-seed and force-greedy
+mutant controls) against the frozen server, plus one exp445 check: dev01 in the omegese arm at seeds
+s1..s8 plus a repeat of s1. PASS when the sampling gate passes, the repeat is byte-identical, and
+every reply reports mode=sampled with its own seed. Identical replies across seeds pass only when the
+server's reported p_repeat makes them plausible (p_repeat^(k-1) >= 0.01, as in the Stage S gate). The
+distinct-answer count is recorded, not gated. The script and its output are saved in the run
+directory before any generation. On FAIL nothing in that configuration runs.
 
 **Stage 0, pilot on the 10 dev tasks (never evidence).** Config A, both arms, one-shot and
 many-shot prompts, 3 attempts each: 10 x 2 x 2 x 3 = 120 generations. GO to Stage 1 when all of:
@@ -333,6 +335,8 @@ decision), and the result is reported with the reason. Config B repeats Stage 1 
   measure counts the final candidate; round-1-only success is reported beside it.
 - Budget, sampling values, seeds, transport retries, hashing and validity: sections 5, 7 and 10,
   with the arms of 13.2.
+- Attempts 2 and 3 may repeat attempt 1 when the model is confident; this is measured (distinct
+  candidates per task are reported), not a fault.
 - `top_p` and the seed on config A are no longer UNVERIFIED once G0 passes; G0's output is the record.
 
 ### 13.6 Decision

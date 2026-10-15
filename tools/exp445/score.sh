@@ -30,7 +30,7 @@
 #     probes, clean tree): its RUN INVALID also stops here
 #   3 results.txt / results.tsv from the re-derived rows: per config x arm, success on attempt 1 (final
 #     candidate, and round 1 alone beside it) and on any attempt with Wilson 95% intervals, tokens, wall
-#     seconds; per config the cost ratio omegese / text, the paired attempt-1 view with the exact two-sided
+#     seconds, distinct final candidates per task across attempts (13.5, distinct.tsv); per config the cost ratio omegese / text, the paired attempt-1 view with the exact two-sided
 #     McNemar test, the Stage 1 stop rule, and the gate of protocol 13.6 (evaluated only when every config
 #     named in PARAMS is scored; config A alone is labelled interim).
 # --interim (Stage 1 stop rule, 13.4): attempt 1 only (later attempts in the runs are ignored), and
@@ -201,8 +201,8 @@ for r in "${runs[@]}"; do
   fi
   wl="$(kv "config.$c.weights")"; case "$wl" in /*|"") ;; *) wl="$ROOT/$wl" ;; esac
   weights_ok "$r" "$wl" "$FM" || inval "$r: weights.check / server.json missing or not all OK for config $c (tools/exp445/check_weights.sh)"
-  why="$(g0_check "$r/g0" "$c" "$FM" "$(kv "config.$c.base_url")" "$FX" "$FS" "$params_sha" "$W/g0.system" "$G0U" "$MT" "$TT" "$TP" "$SB" "$G0I" \
-    "$(kv g0_seeds)" "$(kv g0_min_distinct)")" || inval "$r: no G0 PASS for config $c and its server: $why"
+  why="$(g0_check "$r/g0" "$c" "$FM" "$(kv "config.$c.base_url")" "$FX" "$FS" "$params_sha" "$(kv g0_gate_sha256)" "$W/g0.system" "$G0U" "$MT" "$TT" "$TP" "$SB" "$G0I" \
+    "$(kv g0_seeds)")" || inval "$r: no G0 PASS for config $c and its server: $why"
   for arm in ${ARMS//,/ }; do
     [ "$(mv_ "prompt_${arm}_sha256")" = "$(sha256sum < "$W/prompt.$arm.$rm_" | cut -d' ' -f1)" ] &&
       cmp -s "$r/prompts/$arm.system.txt" "$W/prompt.$arm.$rm_" || inval "$r: arm $arm prompt differs from the current arm documents and $rm_ examples"
@@ -305,6 +305,10 @@ awk -F'\t' '
     printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$c" "$a" "$n1" "$a1/$n1" "$w1" "$r1/$n1" "$na/$nt" "$wa" "$g" "$ga" "$rp" "$ro" "$tt" "$tm" "$pm" "$wt"
   done < "$OUT/rows.tsv"
 } > "$OUT/results.tsv"
+# distinct candidates per task (13.5): per config x arm x task, the attempts run and the distinct
+# final-candidate hashes among them ("-", no candidate, counts as one value)
+awk -F'\t' '{ split($1, p, "-"); k = p[1] "\t" p[2] "\t" $2; n[k]++; if (!((k, $12) in seen)) { seen[k, $12] = 1; d[k]++ } }
+  END { for (k in n) printf "%s\t%d\t%d\n", k, n[k], d[k] }' "$OUT/log.tsv" | LC_ALL=C sort > "$OUT/distinct.tsv"
 # paired attempt-1 view per config (13.6): tasks where only omegese succeeds (b) and only text (c), exact
 # two-sided McNemar test on (b, c)
 : > "$OUT/paired.tsv"
@@ -362,6 +366,8 @@ gate="$(awk -F'\t' -v all="$allcfg" -v scored="$scored" -v interim="$INTERIM" 'N
       mean[$1, $2] = $18; pm[$1, $2] = $19; cfgs[$1] = 1 }
     END { for (c in cfgs) if (mean[c, "text"] > 0)
       printf "cost config %s: omegese / text mean completion tokens per generation x%.2f (%.1f / %.1f); prompt tokens per generation %.1f / %.1f\n", c, mean[c, "omegese"] / mean[c, "text"], mean[c, "omegese"], mean[c, "text"], pm[c, "omegese"], pm[c, "text"] }' "$OUT/results.tsv"
+  awk -F'\t' '{ k = $1 "\t" $2; t[k]++; a[k] += $4; s[k] += $5; if ($4 > 1 && $5 == 1) same[k]++; if ($4 > 1) multi[k]++ }
+    END { for (k in t) { split(k, q, "\t"); printf "distinct candidates config %s arm %s: %.2f per task over %.2f attempts; every attempt identical on %d of %d tasks with 2+ attempts\n", q[1], q[2], s[k] / t[k], a[k] / t[k], same[k], multi[k] } }' "$OUT/distinct.tsv" | LC_ALL=C sort
   while IFS=$'\t' read -r c both bo bt none p; do
     echo "paired attempt 1 config $c: both $both, only omegese $bo, only text $bt, neither $none; exact two-sided McNemar p = $p"
   done < "$OUT/paired.tsv"

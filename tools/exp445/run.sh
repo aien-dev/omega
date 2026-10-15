@@ -109,9 +109,9 @@ weights_ok "$OUT" "$WLIST" "$FMODEL" ||
 DEVC="$ROOT/tests/one_layer/exp445/dev/tasks/cases" G0T="$(kv g0_task)"
 W0="$(mktemp -d "${TMPDIR:-/tmp}/exp445-run.XXXXXXXX")"; trap 'rm -rf "$W0"' EXIT
 system_prompt "$HERE/arms" omegese "$(kv heldout_prompt_mode)" > "$W0/g0.system" || die "cannot build the omegese prompt"
-why="$(g0_check "$OUT/g0" "$CONFIG" "$FMODEL" "$FBASE" "$EXTRA" "$SERVER" "$(sha256sum "$PARAMS" | cut -d' ' -f1)" "$W0/g0.system" \
+why="$(g0_check "$OUT/g0" "$CONFIG" "$FMODEL" "$FBASE" "$EXTRA" "$SERVER" "$(sha256sum "$PARAMS" | cut -d" " -f1)" "$(kv g0_gate_sha256)" "$W0/g0.system" \
   "$(user_msg "$DEVC/$G0T/requirement" "$DEVC/$G0T/prompt")" "$(kv max_tokens)" "$(kv temperature)" "$(kv top_p)" "$(kv seed_base)" \
-  "$(ls "$DEVC" | LC_ALL=C sort | awk -v t="$G0T" '$0 == t { print NR }')" "$(kv g0_seeds)" "$(kv g0_min_distinct)")" ||
+  "$(ls "$DEVC" | LC_ALL=C sort | awk -v t="$G0T" '$0 == t { print NR }')" "$(kv g0_seeds)")" ||
   die "no G0 PASS for config $CONFIG and this server in $OUT/g0: $why (run tools/exp445/g0.sh --config $CONFIG --out $OUT; protocol 13.4)"
 mkdir -p "$OUT/prompts" "$OUT/gen" "$OUT/cands"
 OUT="$(realpath -e "$OUT")"
