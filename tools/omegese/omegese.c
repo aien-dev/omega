@@ -139,7 +139,15 @@ typedef struct { char name[NAME_MAX_LEN + 1]; int reg; int depth; int fixed; int
 typedef struct { Ty t; int neg; uint64_t mag; int reg; } Const;
 typedef struct { Buf ops; int nops; int order; int refd; } Block;
 enum { F_FN, F_IF, F_WHILE, F_FOR };
-typedef struct { int kind; int depth; int els, join, has_else; int head, exit; int ctr; } Frame;
+/* an own array's may-state (checker2 "ownership flow"): bits OS_U not yet holding, OS_L holding, OS_D
+ * freed or moved, on some path to here; m: the loop heads (bit = frame index) whose state, not yet
+ * known while the loop is open, is also included */
+enum { OS_U = 1, OS_L = 2, OS_D = 4 };
+#define MAX_OWN 64
+typedef struct { uint8_t b; uint64_t m; } Os;
+/* oin: if, the state the else path starts with; loop, the state before it. oacc: if, the then path's
+ * end (ohas); loop, the joined states at its breaks (ohas). opost: loop, the state after its head */
+typedef struct { int kind; int depth; int els, join, has_else; int head, exit; int ctr; int ohas; Os oin[MAX_OWN], oacc[MAX_OWN], opost[MAX_OWN]; } Frame;
 
 static Func funcs[MAX_FUNCS];
 static int nfuncs;
@@ -155,6 +163,49 @@ static Block blocks[MAX_BLOCKS];
 static int nblocks, norder, cur; /* cur: current block id, -1 when the path has ended */
 static Frame frames[MAX_FRAMES];
 static int nframes;
+
+/* ---- ownership: the may-states of checker2's ownership flow, kept along the path being parsed ----
+ * checker2 rejects an own array that is used, moved or freed while it holds nothing on every path to
+ * that point, and one that gets a new array or reaches a return while it holds one on every path
+ * (src/checker2/c2_check.c, C2-OWN-USE-DEAD, C2-OWN-DOUBLE-RELEASE, C2-OWN-LEAK). The same states are
+ * kept here so that emit refuses those programs at the line that makes them wrong (OMEGESE.md 6.4).
+ * Inside an open loop a state that includes the loop head is not known until the loop ends (a later
+ * line of the body can change it): such a check waits in owq and is decided at the loop's end line,
+ * when the head state is known. Borrows are not followed. */
+static int nown;               /* tracked own registers of this function (beyond MAX_OWN: not tracked) */
+static int own_reg[MAX_OWN];
+static Os ost[MAX_OWN];        /* along the current path */
+static Os own_pend[MAX_OWN];   /* the state before the loop whose head line is being read */
+static int own_pk = -1;        /* that loop's frame index while its head is read, else -1 */
+static uint64_t g_loops;       /* the loop heads whose state is still open, bit = frame index */
+/* a check that waits for a loop to end: at line `line`, `name` needed an array (OW_USE, OW_FREE) or
+ * needed to hold none on some path (OW_BIRTH, OW_RET) in state o, which still includes loop k's head */
+enum { OW_USE, OW_FREE, OW_BIRTH, OW_RET };
+#define MAX_OWQ 256
+typedef struct { int k, kind, s, line; Os o; char name[NAME_MAX_LEN + 1]; } Ow;
+static Ow owq[MAX_OWQ];
+static int nowq;
+static uint64_t below(int f) { return f >= 64 ? ~0ull : (1ull << f) - 1; }
+static Os os_join(Os a, Os b) { return (Os){(uint8_t)(a.b | b.b), a.m | b.m}; }
+static int own_slot(int r) {
+    for (int s = 0; s < nown; s++)
+        if (own_reg[s] == r) return s;
+    return -1;
+}
+/* a new own register holds nothing on every path so far; the open loops may bring a state back */
+static void own_track(int r) {
+    if (nown >= MAX_OWN) return;
+    int s = nown++;
+    own_reg[s] = r;
+    for (int f = 0; f < nframes && f < MAX_FRAMES; f++) {
+        int loop = frames[f].kind == F_WHILE || frames[f].kind == F_FOR;
+        frames[f].oin[s] = (Os){OS_U, g_loops & below(f)};
+        frames[f].oacc[s] = (Os){OS_U, g_loops & below(loop ? f + 1 : f)};
+        frames[f].opost[s] = (Os){OS_U, g_loops & below(f + 1)};
+    }
+    if (own_pk >= 0) own_pend[s] = (Os){OS_U, g_loops & below(own_pk)};
+    ost[s] = (Os){OS_U, g_loops};
+}
 
 /* the line being read: its words and the read position */
 static char **lw;
@@ -200,6 +251,7 @@ static int fill_text(const char *s) {
 static int new_reg(Ty t) {
     if (nregs >= MAX_REGS) return fail("more than %d values in one function", MAX_REGS);
     regs[nregs] = t;
+    if (t.ref == R_OWN) own_track(nregs);
     return nregs++;
 }
 static int new_block(void) {
@@ -255,6 +307,161 @@ static int pop_scope(void) {
             return fail("'%s' is written but never read (a typo, or a value left unused)", names[nnames - 1].name);
     depth--;
     return 0;
+}
+
+static const char *own_label(int r) {
+    for (int i = nnames - 1; i >= 0; i--)
+        if (names[i].reg == r) return names[i].name;
+    return NULL;
+}
+static int os_none(Os o) { return o.m == 0 && !(o.b & OS_L); } /* holds nothing on every path */
+static int os_only(Os o) { return o.m == 0 && o.b == OS_L; }   /* holds an array on every path */
+/* an own array that holds nothing on every path here: no line may use, move or free it */
+static int own_dead(int r) { int s = own_slot(r); return s >= 0 && os_none(ost[s]); }
+/* a check on a state that still includes an open loop's head waits for the innermost such loop */
+static int own_defer(int kind, int s, Os o) {
+    if (nowq >= MAX_OWQ) return fail("more than %d ownership checks wait for their loops to end", MAX_OWQ);
+    const char *n = own_label(own_reg[s]);
+    Ow *e = &owq[nowq++];
+    e->k = 63 - __builtin_clzll(o.m);
+    e->kind = kind;
+    e->s = s;
+    e->line = g_line;
+    e->o = o;
+    snprintf(e->name, sizeof e->name, "%s", n ? n : "");
+    return 0;
+}
+static int needs_array(Os o) { return o.m != 0 && !(o.b & OS_L); }           /* may turn out to hold none */
+static int needs_room(Os o) { return o.m != 0 && !(o.b & (OS_U | OS_D)); }   /* may turn out to hold one */
+/* a use: get, put, edit, view, an argument (C2-OWN-USE-DEAD) */
+static int own_use(int r) {
+    int s = own_slot(r);
+    if (s >= 0 && os_none(ost[s])) {
+        const char *n = own_label(r);
+        return fail("'%s' holds no array here: it was freed or moved on every path to this line", n ? n : "own");
+    }
+    if (s >= 0 && needs_array(ost[s])) return own_defer(OW_USE, s, ost[s]);
+    return 0;
+}
+static int own_kill(int r) { /* moved away */
+    TRY(own_use(r));
+    int s = own_slot(r);
+    if (s >= 0) ost[s] = (Os){OS_D, 0};
+    return 0;
+}
+static int own_birth(int r) { /* gets an array (C2-OWN-LEAK when it still holds one) */
+    int s = own_slot(r);
+    if (s < 0) return 0;
+    if (os_only(ost[s])) {
+        const char *n = own_label(r);
+        return fail("'%s' still holds an array on every path to this line; free it before it gets another", n ? n : "own");
+    }
+    if (needs_room(ost[s])) TRY(own_defer(OW_BIRTH, s, ost[s]));
+    ost[s] = (Os){OS_L, 0};
+    return 0;
+}
+static int own_release(int r) { /* free (C2-OWN-DOUBLE-RELEASE) */
+    int s = own_slot(r);
+    if (s < 0) return 0;
+    if (os_none(ost[s])) {
+        const char *n = own_label(r);
+        return fail("'%s' holds no array here: it was already freed or moved on every path to this line", n ? n : "own");
+    }
+    if (needs_array(ost[s])) TRY(own_defer(OW_FREE, s, ost[s]));
+    ost[s] = (Os){OS_D, 0};
+    return 0;
+}
+/* a mov dst <- a: an own array into an own register moves it, anything else borrows (a use) */
+static int own_mov(int dst, int a) {
+    if (regs[a].ref != R_OWN) return 0;
+    if (regs[dst].ref == R_OWN) { TRY(own_kill(a)); return own_birth(dst); }
+    return own_use(a);
+}
+/* a call: every array argument is used; one given to an own parameter is moved */
+static int own_call(const Func *g, const int *args) {
+    for (int k = 0; k < g->np; k++) {
+        if (regs[args[k]].ref == R_NONE) continue;
+        TRY(own_use(args[k]));
+        if (g->p[k].ref == R_OWN) TRY(own_kill(args[k]));
+    }
+    return 0;
+}
+/* a return: no own array may still hold its array on every path (C2-OWN-LEAK) */
+static int own_ret(void) {
+    for (int s = 0; s < nown; s++)
+        if (os_only(ost[s])) {
+            const char *n = own_label(own_reg[s]);
+            if (n) return fail("'%s' still holds its array at this return on every path; free it first", n);
+            return fail("an array whose name is out of scope here still holds its data on every path to this return; free it inside its block, or end this path with trap");
+        }
+    for (int s = 0; s < nown; s++)
+        if (needs_room(ost[s])) TRY(own_defer(OW_RET, s, ost[s]));
+    return 0;
+}
+/* the head of a loop at frame index nframes is read next: its state is open until the loop ends */
+static void own_loop_open(void) {
+    int k = nframes;
+    memcpy(own_pend, ost, sizeof ost[0] * (size_t)nown);
+    own_pk = k;
+    g_loops |= 1ull << k;
+    for (int s = 0; s < nown; s++) ost[s] = (Os){0, 1ull << k};
+}
+/* the loop's frame is pushed: keep the state before it and the state after its head */
+static void own_loop_pushed(Frame *fr) {
+    memcpy(fr->oin, own_pend, sizeof ost[0] * (size_t)nown);
+    memcpy(fr->opost, ost, sizeof ost[0] * (size_t)nown);
+    fr->ohas = 0;
+    own_pk = -1;
+}
+static Os os_subst(Os o, uint64_t kb, Os h) { return (o.m & kb) ? (Os){(uint8_t)(o.b | h.b), (o.m & ~kb) | h.m} : o; }
+/* the loop at frame k ends: its head state is the state before it joined with the state at the end
+ * of its body (the fixed point: the body's states only add the head's own), and the path continues
+ * with the state after the head (the condition is false) joined with the states at its breaks */
+static int own_loop_close(int k) {
+    Frame *fr = &frames[k];
+    uint64_t kb = 1ull << k;
+    Os h[MAX_OWN];
+    for (int s = 0; s < nown; s++) {
+        h[s] = fr->oin[s];
+        if (cur >= 0) h[s] = os_join(h[s], (Os){ost[s].b, ost[s].m & ~kb});
+        Os x = os_subst(fr->opost[s], kb, h[s]);
+        if (fr->ohas) x = os_join(x, os_subst(fr->oacc[s], kb, h[s]));
+        ost[s] = x;
+    }
+    g_loops &= ~kb;
+    /* the checks that waited for this loop: decided now, or passed on to the loop around it */
+    int keep = 0;
+    for (int i = 0; i < nowq; i++) {
+        Ow e = owq[i];
+        if (e.k == k) {
+            e.o = os_subst(e.o, kb, h[e.s]);
+            if (e.o.m) e.k = 63 - __builtin_clzll(e.o.m);
+            else {
+                const char *n = e.name[0] ? e.name : "an array out of scope here";
+                if ((e.kind == OW_USE || e.kind == OW_FREE) && !(e.o.b & OS_L))
+                    return fail("'%s' holds no array at line %d on every path, once this loop is closed: it was freed or moved and the loop gives it no new one", n, e.line);
+                if (e.kind == OW_BIRTH && e.o.b == OS_L)
+                    return fail("'%s' still holds an array at line %d on every path, once this loop is closed, where it gets another; free it first", n, e.line);
+                if (e.kind == OW_RET && e.o.b == OS_L)
+                    return fail("'%s' still holds its array at the return on line %d on every path, once this loop is closed; free it first", n, e.line);
+                continue;
+            }
+        }
+        owq[keep++] = e;
+    }
+    nowq = keep;
+    return 0;
+}
+static void own_save(Os *to) { memcpy(to, ost, sizeof ost[0] * (size_t)nown); }
+static void own_join_into(Os *to, int has) {
+    for (int s = 0; s < nown; s++) to[s] = has ? os_join(to[s], ost[s]) : ost[s];
+}
+/* an if ends: the path after it joins this path (if it still runs) with the other one: the else path
+ * of an if without else, or the then path of an if with else (if that one still ran at the else) */
+static void own_if_end(const Frame *fr) {
+    const Os *other = fr->has_else ? (fr->ohas ? fr->oacc : NULL) : fr->oin;
+    if (!other) return;
+    for (int s = 0; s < nown; s++) ost[s] = cur >= 0 ? os_join(ost[s], other[s]) : other[s];
 }
 
 /* ---- ops into the current block (block refs are written as @id@, numbered at the end) ---- */
@@ -468,7 +675,7 @@ static int pick_array(const Want *w) {
     int best = -1;
     for (int i = 0; i < nnames; i++) {
         Ty t = regs[names[i].reg];
-        if (t.ref == R_NONE || !want_ok(w, t)) continue;
+        if (t.ref == R_NONE || !want_ok(w, t) || own_dead(names[i].reg)) continue;
         if (in_r(i)) return i;
         if (best < 0) best = i;
     }
@@ -583,7 +790,7 @@ static int gen_value(const Want *w) {
         for (int rf = R_OWN; i < 0 && rf <= R_SHARED; rf++)
             for (int k = 0; k < nnames && i < 0; k++) {
                 Ty t = regs[names[k].reg];
-                if (ref_ok(rf, t) && want_ok(w, (Ty){rf, t.s, t.len})) { i = k; bput(&b, "%s %s", REFW[rf], names[k].name); }
+                if (ref_ok(rf, t) && want_ok(w, (Ty){rf, t.s, t.len}) && !own_dead(names[k].reg)) { i = k; bput(&b, "%s %s", REFW[rf], names[k].name); }
             }
         if (i < 0 && w->top && w->arr == A_EXACT && w->p.ref == R_OWN)
             bput(&b, "new %s %d %s", GW[w->p.s], w->p.len, w->p.s == T_BOOL ? "false" : "0");
@@ -637,6 +844,7 @@ static int leaf(Val *v, int r, Ty t, int dst) {
     if (dst == -2) { v->reg = r; return 0; }
     TRY(to_dst(&dst, t));
     TRY(op("\"op\": \"mov\", \"dst\": %d, \"a\": %d", dst, r));
+    TRY(own_mov(dst, r));
     v->reg = dst;
     return 0;
 }
@@ -672,7 +880,7 @@ enum { AN_GET, AN_PUT, AN_FREE, AN_REF };
 static int array_name(int head, int arity, int kind, int rf, const Want *want, int *reg, Ty *t) {
     if (lp >= ln) {
         if (!g_fill) return fail("%s has 0 values after it; it takes %d", lw[head], arity);
-        int cand[MAX_NAMES], nc = 0;
+        int cand[MAX_NAMES], nc = 0, nd = 0;
         memset(g_taken, 0, sizeof g_taken);
         for (int pass = 0; pass < 2; pass++)
             for (int i = 0; i < nnames; i++) {
@@ -680,8 +888,10 @@ static int array_name(int head, int arity, int kind, int rf, const Want *want, i
                 int ok = a.ref != R_NONE &&
                          (kind == AN_GET ? (want->scal >> a.s & 1) : kind == AN_PUT ? a.ref != R_SHARED :
                           kind == AN_FREE ? a.ref == R_OWN : ref_ok(rf, a) && want_ok(want, (Ty){rf, a.s, a.len}));
-                if (ok && in_r(i) == !pass) cand[nc++] = i;
+                if (ok && own_dead(names[i].reg)) nd += !pass;
+                else if (ok && in_r(i) == !pass) cand[nc++] = i;
             }
+        if (!nc && nd) return fail("every array that fits here holds nothing: it was freed or moved on every path to this line");
         if (!nc) return fail("no array of a fitting type is in scope here");
         int k = 0;
         if (nc > 1 && !g_nopt) { g_nopt = nc; k = g_pick % nc; }
@@ -703,7 +913,7 @@ static int array_name(int head, int arity, int kind, int rf, const Want *want, i
 }
 
 /* the argument registers of a call to f (its name at word head), checked against its parameters */
-static int call_args(const Func *f, int head, Buf *a) {
+static int call_args(const Func *f, int head, Buf *a, int *args) {
     for (int i = 0; i < f->np; i++) {
         Want w = want_param(f->p[i]);
         Val av;
@@ -712,6 +922,7 @@ static int call_args(const Func *f, int head, Buf *a) {
         if (!binds(f->p[i], av.t))
             return fail("'%s' is %s; %s takes %s there", span(av.a, av.b), tname(av.t), f->name, tname(f->p[i]));
         bput(a, "%s%d", i ? ", " : "", av.reg);
+        args[i] = av.reg;
     }
     return 0;
 }
@@ -781,9 +992,11 @@ static int value(const Want *want, int dst, Val *v) {
         if (!f->has_ret) return fail("%s returns nothing; call it on its own line", f->name);
         v->arity = f->np;
         Buf a = {0};
-        int r = call_args(f, v->head, &a);
+        int args[MAX_PARAMS];
+        int r = call_args(f, v->head, &a, args);
         if (r >= 0) r = to_dst(&dst, f->ret);
         if (r >= 0) r = op("\"op\": \"call\", \"func\": \"%s\", \"args\": [%s], \"dst\": %d", f->name, a.p ? a.p : "", dst);
+        if (r >= 0) r = own_call(f, args);
         free(a.p);
         TRY(r);
         v->t = f->ret;
@@ -814,6 +1027,7 @@ static int value(const Want *want, int dst, Val *v) {
         v->t = (Ty){rf, ta.s, ta.len};
         TRY(to_dst(&dst, v->t));
         TRY(op("\"op\": \"mov\", \"dst\": %d, \"a\": %d", dst, a));
+        TRY(own_mov(dst, a));
         goto done;
     }
     int o = op_word(t);
@@ -842,6 +1056,7 @@ static int value(const Want *want, int dst, Val *v) {
         v->t = (Ty){R_NONE, ta.s, 0};
         TRY(to_dst(&dst, v->t));
         TRY(op("\"op\": \"load\", \"dst\": %d, \"arr\": %d, \"index\": %d", dst, a, i.reg));
+        TRY(own_use(a));
         goto done;
     }
     if (o == OP_NEW) { /* new <type> <length> <init> */
@@ -870,6 +1085,7 @@ static int value(const Want *want, int dst, Val *v) {
         v->t = (Ty){R_OWN, et.s, (int)len};
         TRY(to_dst(&dst, v->t));
         TRY(op("\"op\": \"alloc\", \"dst\": %d, \"init\": %d", dst, init.reg));
+        TRY(own_birth(dst));
         goto done;
     }
     /* binary ops: a bare number takes the type of the other value; two bare numbers are refused */
@@ -990,6 +1206,10 @@ static int fn_line(void) {
     memset(f, 0, sizeof *f);
     snprintf(f->name, sizeof f->name, "%s", lw[1]);
     nregs = nnames = nconsts = nblocks = norder = nframes = 0;
+    nown = 0;
+    nowq = 0;
+    g_loops = 0;
+    own_pk = -1;
     depth = 0;
     Frame *fr = push(F_FN);
     if (!fr) return -1;
@@ -1009,6 +1229,7 @@ static int fn_line(void) {
         TRY(r);
         if (find_name(pn)) return fail("parameter '%s' is named twice", pn);
         TRY(bind(pn, r, 2));
+        if (t.ref == R_OWN && own_slot(r) >= 0) ost[own_slot(r)] = (Os){OS_L, 0}; /* a parameter holds its array */
     }
     lp++;
     if (lp >= ln && g_fill) TRY(fill_word("void"));
@@ -1065,6 +1286,7 @@ static int guarded_loop(int is_for, int s, const Val *count, const char *forname
     TRY(body);
     TRY(ex);
     TRY(br(h));
+    own_loop_open();
     start_block(h);
     int c;
     const char *bound = "1000000";
@@ -1104,6 +1326,7 @@ static int guarded_loop(int is_for, int s, const Val *count, const char *forname
     TRY(op("\"op\": \"add\", \"dst\": %d, \"a\": %d, \"b\": %d", cnt, cnt, one));
     Frame *fr = push(is_for ? F_FOR : F_WHILE);
     if (!fr) return -1;
+    own_loop_pushed(fr);
     fr->head = h;
     fr->exit = ex;
     fr->ctr = ctr;
@@ -1162,6 +1385,7 @@ static int for_line(void) {
         TRY(body);
         TRY(ex);
         TRY(br(h));
+        own_loop_open();
         start_block(h);
         int c = new_reg((Ty){R_NONE, T_BOOL, 0});
         TRY(c);
@@ -1169,6 +1393,7 @@ static int for_line(void) {
         TRY(op("\"op\": \"cbr\", \"cond\": %d, \"then\": @%d@, \"else\": @%d@", c, body, ex));
         Frame *fr = push(F_FOR);
         if (!fr) return -1;
+        own_loop_pushed(fr);
         fr->head = h;
         fr->exit = ex;
         fr->ctr = ctr;
@@ -1199,6 +1424,7 @@ static int stmt(void) {
         TRY(alone("end"));
         switch (fr->kind) {
         case F_IF:
+            own_if_end(fr);
             if (!fr->has_else) { if (cur >= 0) TRY(br(fr->els)); start_block(fr->els); }
             else {
                 if (cur >= 0) { if (fr->join < 0) { fr->join = new_block(); TRY(fr->join); } TRY(br(fr->join)); }
@@ -1206,10 +1432,12 @@ static int stmt(void) {
             }
             break;
         case F_WHILE:
+            TRY(own_loop_close(nframes - 1));
             if (cur >= 0) TRY(br(fr->head));
             start_block(fr->exit);
             break;
         case F_FOR: {
+            TRY(own_loop_close(nframes - 1));
             if (cur >= 0) {
                 Ty t = regs[fr->ctr];
                 int one = lit_reg("1", t);
@@ -1224,6 +1452,7 @@ static int stmt(void) {
             if (cur >= 0) {
                 if (f->has_ret) return fail("%s can reach its end without ret", f->name);
                 TRY(op("\"op\": \"ret\""));
+                TRY(own_ret());
                 cur = -1;
             }
             if (!g_quiet) end_function();
@@ -1238,12 +1467,14 @@ static int stmt(void) {
         Frame *fr = &frames[nframes - 1];
         if (fr->kind != F_IF || fr->has_else) return fail("else without an open if");
         TRY(alone("else"));
+        if (cur >= 0) { own_save(fr->oacc); fr->ohas = 1; }
         if (cur >= 0) { fr->join = new_block(); TRY(fr->join); TRY(br(fr->join)); }
         else fr->join = -1;
         fr->has_else = 1;
         TRY(pop_scope());
         depth++;
         start_block(fr->els);
+        memcpy(ost, fr->oin, sizeof ost[0] * (size_t)nown);
         return 0;
     }
     if (!strcmp(w0, "if")) {
@@ -1256,6 +1487,7 @@ static int stmt(void) {
         blocks[th].refd = blocks[el].refd = 1;
         TRY(op("\"op\": \"cbr\", \"cond\": %d, \"then\": @%d@, \"else\": @%d@", c.reg, th, el));
         Frame *fr = push(F_IF);
+        if (fr) { own_save(fr->oin); fr->ohas = 0; }
         if (!fr) return -1;
         fr->els = el;
         fr->join = -1;
@@ -1269,13 +1501,18 @@ static int stmt(void) {
     if (!strcmp(w0, "for")) return for_line();
     if (!strcmp(w0, "break")) {
         for (int k = nframes - 1; k >= 0; k--)
-            if (frames[k].kind == F_WHILE || frames[k].kind == F_FOR) { TRY(alone("break")); return br(frames[k].exit); }
+            if (frames[k].kind == F_WHILE || frames[k].kind == F_FOR) {
+                TRY(alone("break"));
+                if (cur >= 0) { own_join_into(frames[k].oacc, frames[k].ohas); frames[k].ohas = 1; }
+                return br(frames[k].exit);
+            }
         return fail("break outside a loop");
     }
     if (!strcmp(w0, "ret")) {
         if (!f->has_ret) {
             if (lp < ln) return fail("%s returns nothing: ret stands alone", f->name);
             TRY(op("\"op\": \"ret\""));
+            TRY(own_ret());
             cur = -1;
             return 0;
         }
@@ -1288,6 +1525,7 @@ static int stmt(void) {
         if (!teq(v.t, f->ret)) return fail("this is %s; %s returns %s", tname(v.t), f->name, tname(f->ret));
         TRY(line_end(&v));
         TRY(op("\"op\": \"ret\", \"a\": %d", v.reg));
+        TRY(own_ret());
         cur = -1;
         return 0;
     }
@@ -1326,7 +1564,8 @@ static int stmt(void) {
         if (!teq(v.t, vw.lt)) return fail("'%s' is %s; the array holds %s", span(v.a, v.b), tname(v.t), tname(vw.lt));
         Val whole = {.head = 0, .arity = 3};
         TRY(line_end(&whole));
-        return op("\"op\": \"store\", \"arr\": %d, \"index\": %d, \"value\": %d", a, i.reg, v.reg);
+        TRY(op("\"op\": \"store\", \"arr\": %d, \"index\": %d, \"value\": %d", a, i.reg, v.reg));
+        return own_use(a);
     }
     if (!strcmp(w0, "free")) {
         int a;
@@ -1336,7 +1575,8 @@ static int stmt(void) {
         if (ta.ref != R_OWN) return fail("'%s' is not an own array", lw[lp - 1]);
         Val whole = {.head = 0, .arity = 1};
         TRY(line_end(&whole));
-        return op("\"op\": \"release\", \"arr\": %d", a);
+        TRY(op("\"op\": \"release\", \"arr\": %d", a));
+        return own_release(a);
     }
     if (find_func(w0) >= 0 && find_callable(w0) < 0) return fail("%s cannot call itself (calls go to earlier functions only)", w0);
     int g = find_callable(w0);
@@ -1345,9 +1585,11 @@ static int stmt(void) {
         if (cf->has_ret) return fail("%s returns %s; keep it: <name> = %s ...", cf->name, tname(cf->ret), cf->name);
         Buf a = {0};
         Val whole = {.head = 0, .arity = cf->np};
-        int r = call_args(cf, 0, &a);
+        int args[MAX_PARAMS];
+        int r = call_args(cf, 0, &a, args);
         if (r >= 0) r = line_end(&whole);
         if (r >= 0) r = op("\"op\": \"call\", \"func\": \"%s\", \"args\": [%s]", cf->name, a.p ? a.p : "");
+        if (r >= 0) r = own_call(cf, args);
         free(a.p);
         return r;
     }
@@ -1460,7 +1702,10 @@ static int run(char *src, int keep_tail, char **tail) {
 typedef __int128 i128;
 
 /* the state after the head; every witness starts from it */
-static struct { int nfuncs, in_fn, nregs, nparams, nnames, depth, nconsts, nblocks, norder, cur, nframes; } S0;
+static struct { int nfuncs, in_fn, nregs, nparams, nnames, depth, nconsts, nblocks, norder, cur, nframes, nown, nowq; uint64_t loops; } S0;
+static Ow S0q[MAX_OWQ];
+static int S0or[MAX_OWN];
+static Os S0os[MAX_OWN];
 static Func S0f[MAX_FUNCS];
 static Ty S0r[MAX_REGS];
 static Name S0n[MAX_NAMES];
@@ -1474,6 +1719,8 @@ static void save(void) {
     S0.nframes = nframes;
     COPY(S0f, funcs, nfuncs); COPY(S0r, regs, nregs); COPY(S0n, names, nnames);
     COPY(S0k, consts, nconsts); COPY(S0b, blocks, nblocks); COPY(S0fr, frames, nframes);
+    S0.nown = nown; S0.loops = g_loops; COPY(S0or, own_reg, nown); COPY(S0os, ost, nown);
+    S0.nowq = nowq; COPY(S0q, owq, nowq);
 }
 static void restore(void) {
     nfuncs = S0.nfuncs; in_fn = S0.in_fn; nregs = S0.nregs; nparams = S0.nparams; nnames = S0.nnames;
@@ -1481,6 +1728,8 @@ static void restore(void) {
     nframes = S0.nframes;
     COPY(funcs, S0f, nfuncs); COPY(regs, S0r, nregs); COPY(names, S0n, nnames);
     COPY(consts, S0k, nconsts); COPY(blocks, S0b, nblocks); COPY(frames, S0fr, nframes);
+    nown = S0.nown; g_loops = S0.loops; own_pk = -1; COPY(own_reg, S0or, nown); COPY(ost, S0os, nown);
+    nowq = S0.nowq; COPY(owq, S0q, nowq);
 }
 
 static char *W[MAX_WORDS + 1]; /* the complete words of the unfinished line */
@@ -1503,10 +1752,37 @@ static int run_line(const char *text) {
     pdepth = 0;
     return stmt();
 }
-/* close everything from a line start: each unread name is read (x = x), a function that owes a
- * value returns one, every block ends, and a function is written if there is none */
+/* before the end line of the loop at the top: a check waiting for that loop that would fail there gets
+ * the line that settles it, when the name is in scope: an array for a name that needs one at the loop
+ * head (x = new ...), or a free for one that would still hold its array there */
+static int own_repair(char *line, size_t cap) {
+    int k = nframes - 1;
+    const Frame *fr = &frames[k];
+    uint64_t kb = 1ull << k;
+    for (int i = 0; i < nowq; i++) {
+        const Ow *e = &owq[i];
+        if (e->k != k) continue;
+        int s = e->s, r = own_reg[s];
+        Os o = os_subst(e->o, kb, os_join(fr->oin[s], (Os){ost[s].b, ost[s].m & ~kb}));
+        const char *n = own_label(r);
+        if (o.m || !n || find_name(n)->reg != r) continue;
+        if ((e->kind == OW_USE || e->kind == OW_FREE) && !(o.b & OS_L) && !os_only(ost[s])) {
+            snprintf(line, cap, "%s = new %s %d %s", n, GW[regs[r].s], regs[r].len, regs[r].s == T_BOOL ? "false" : "0");
+            return 1;
+        }
+        if ((e->kind == OW_BIRTH || e->kind == OW_RET) && o.b == OS_L && !os_none(ost[s])) {
+            snprintf(line, cap, "free %s", n);
+            return 1;
+        }
+    }
+    return 0;
+}
+/* close everything from a line start: each unread name is read (x = x), at the function's end each own
+ * array that holds its array on every path is freed (or the path ends with trap 1 when such an array is
+ * out of scope), before a loop ends the lines own_repair finds, a function that owes a value returns one,
+ * every block ends, and a function is written if there is none */
 static int close_all(Buf *txt) {
-    for (int guard = 0; guard < 2 * (MAX_NAMES + MAX_FRAMES) + 2; guard++) {
+    for (int guard = 0; guard < 2 * (MAX_NAMES + MAX_FRAMES) + MAX_OWN + MAX_OWQ + 3; guard++) {
         char line[160];
         if (!in_fn) {
             if (nfuncs > 0) break;
@@ -1515,7 +1791,14 @@ static int close_all(Buf *txt) {
             int u = -1;
             for (int i = 0; i < nnames && u < 0; i++)
                 if (!names[i].fixed && !names[i].read && names[i].depth >= depth) u = i;
+            int o = -1, hidden = 0; /* at the function's end: an own array that would leak (own_ret) */
+            if (u < 0 && frames[nframes - 1].kind == F_FN)
+                for (int s = 0; s < nown && o < 0; s++)
+                    if (os_only(ost[s])) { if (own_label(own_reg[s])) o = s; else hidden = 1; }
             if (u >= 0) snprintf(line, sizeof line, "%s = %s", names[u].name, names[u].name);
+            else if (o >= 0) snprintf(line, sizeof line, "free %s", own_label(own_reg[o]));
+            else if (hidden) snprintf(line, sizeof line, "trap 1");
+            else if ((frames[nframes - 1].kind == F_WHILE || frames[nframes - 1].kind == F_FOR) && own_repair(line, sizeof line)) {}
             else if (frames[nframes - 1].kind == F_FN && funcs[nfuncs - 1].has_ret)
                 snprintf(line, sizeof line, "ret %s", funcs[nfuncs - 1].ret.s == T_BOOL ? "false" : "0");
             else snprintf(line, sizeof line, "end");
