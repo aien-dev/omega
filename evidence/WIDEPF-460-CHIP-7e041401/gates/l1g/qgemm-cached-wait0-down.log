@@ -1,0 +1,8 @@
+down second launch identical: yes
+down bit-identity on 64 sampled rows: 0 differ
+QGEMM-cached down tokens 3600 M 28800 n 2048 k 768 tiles 517: median 6.955 ms (min 6.360), 13.0 TFLOPS, weights 201 MB -> 29 GB/s of distinct weights
+down mutant 1: caught
+down mutant 2: caught
+down mutant 3: caught
+down mutant 4: caught
+GPU_QGEMM: PASS

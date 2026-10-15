@@ -1,0 +1,5 @@
+FAIL tests/gpu_serving_alloc_count_test.c:408: unprepared call with a full pinned cache: rc=-4 output poison survived
+FAIL tests/gpu_serving_alloc_count_test.c:410: refused call asked the driver for memory
+FAIL tests/gpu_serving_alloc_count_test.c:415: prepared kernels rebuilt: 1 driver allocations
+gpu_serving_alloc_count_test pin: FAIL (3 failed checks)
+pin exit=1
