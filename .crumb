@@ -51,8 +51,8 @@
           "purpose": "Directory calibration. Purpose not yet described by a human."
         },
         {
-          "digest": "1205a96fe4d6139dec735c6c4747868ea67c4f4631ba542b55122d6be4d65990",
-          "last_commit": "5a632a71",
+          "digest": "8528f074b9790f056b67986b80d692bb7ab83da77e23ed535f978871b5350f14",
+          "last_commit": "5b52b653",
           "name": "docs",
           "purpose": "Directory docs. Purpose not yet described by a human."
         },
@@ -99,21 +99,21 @@
           "purpose": "Directory tests. Purpose not yet described by a human."
         },
         {
-          "digest": "379c40d41aca35a1e464da2a266add9414a49708c5b4234272a3b911d594a7fa",
-          "last_commit": "4c5e4ec0",
+          "digest": "88a850fabbf746c52356835ef2753c5ca03a1c64578eb70aaad0c3bad88cb264",
+          "last_commit": "5b52b653",
           "name": "tools",
           "purpose": "Directory tools. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:779e18e6d6d96555e5671695494f6a31a9135d540e6e2a0c010a105aa2da3056",
-      "compiled_at": "2026-10-15T16:25:52Z",
+      "children_root": "sha256:2e10d80ea461652514abac11d155b0ccd58bc0b3d8093b5a0ff0275924270bc8",
+      "compiled_at": "2026-10-15T16:48:21Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:da73bddec283ca0fb4d70f22dd10ed44886fd3428ecfedc9497fe9ade2fbe2b3",
+      "digest": "sha256:cf5ef25964ab4eea5e8a5c2fe5eeee9327e0cd5957e2e44f6f398e78f080df6f",
       "evidence_files": 7672,
       "evidence_root": "sha256:2098a318fabaa82c8c0c78d2a33261f4b35394f2e48582161a79b4071587e81a",
       "files": 10536,
-      "generated_at_commit": "4c5e4ec0f92675890388cc86acfa7daac1670a01",
-      "source_tree": "sha256:c8639d94d57132a5c33ad60a865ebdacd8cafe5d0a618ef1ceb625a59a6deee5"
+      "generated_at_commit": "5b52b653c03811e963965b75302c27e6da3e7fc6",
+      "source_tree": "sha256:7d19c1684f5e496979dedac920d65548a787c4791ae764bb12f452d93437319e"
     },
     "owner_lane": "",
     "provenance": {
