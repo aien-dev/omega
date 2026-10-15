@@ -1,14 +1,19 @@
 #!/usr/bin/env bash
 # tools/omegese/test_omegese.sh <omegese> <omega_emit> <checker2> -- Omegese checks (docs/one_layer/OMEGESE.md).
+#  0. with OMEGESE_SANITIZED=1 (an ASan and UBSan build): canary negative controls, then every sanitizer
+#     exit fails the run;
 #  1. every public dev program (tests/one_layer/omegese/dev) -> omegese emit -> omega_emit emit -> checker2
-#     ACCEPT;
-#  1b. coverage programs and omegese next prefixes (including prefixes that must be refused);
+#     ACCEPT; 1a nested and trial-2 programs; 1b coverage programs; 1c omegese next on fixed prefixes;
 #  2. refusals: each bad program is refused by omegese with its expected reason, and a control (the
 #     same program with the defect fixed) is accepted;
 #  3. loop guard negative control: the dev04 op list with the hidden loop counter increment removed
 #     still passes omega_emit, and checker2 must REJECT it as C2-LOOP-UNBOUNDED;
 #  4. tokenizer gate (only when OMEGESE_TOKCOUNT and OMEGESE_TOKENIZER are set): every fixed word of
-#     the language, with its leading space, is exactly one token.
+#     the language, with its leading space, is exactly one token;
+#  5. next oracle: every word of every accepted program is legal where it is written;
+#  6. completeness: single-word mutants (OMEGESE_MUTANTS per program): emit accepts iff every word legal;
+#  7. soundness fuzz (OMEGESE_WALKS walks of OMEGESE_STEPS items) closed by omegese complete; then the
+#     truncation fuzz: every byte prefix through emit, next and next --machine answers, never crashes.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
