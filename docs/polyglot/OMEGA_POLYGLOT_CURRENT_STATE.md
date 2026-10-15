@@ -1,5 +1,9 @@
 # Omega POLYGLOT: verified current state (lane A audit)
 
+> **Lane B3 (Mojo) removed on 2026-10-15.** Modular MAX and Mojo were dropped from AIEN, and the Mojo lane's source,
+> build rules and test were deleted from this repo. Mojo text below is the original design record, kept unchanged;
+> the Mojo receipts stay in `evidence/`.
+
 > **Language wording superseded 2026-10-01.** References below to a "No-Rust rule" or to Rust as migration input describe the 2026-09-27 rule. [ADR 0024](https://github.com/aien-spark/aien-architecture/blob/main/docs/adr/0024-rust-scaffolding-omega-destination.md) now governs: Rust is scaffolding, Omega is the destination, C or assembly only where hardware, boot, ABI or measurement justifies them. Current status and sequencing: [CURRENT_EXECUTION_PLAN.md](https://github.com/aien-spark/aien-architecture/blob/main/CURRENT_EXECUTION_PLAN.md). The original text is kept below as history.
 
 Date: 2026-09-29. Author: worker A (audit lane, Opus 5.5). Read-only audit; the only file written is this one.

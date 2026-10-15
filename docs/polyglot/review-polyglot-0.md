@@ -1,5 +1,9 @@
 # POLYGLOT-0 independent adversarial review (lane G)
 
+> **Lane B3 (Mojo) removed on 2026-10-15.** Modular MAX and Mojo were dropped from AIEN, and the Mojo lane's source,
+> build rules and test were deleted from this repo. Mojo text below is the original design record, kept unchanged;
+> the Mojo receipts stay in `evidence/`.
+
 Reviewer: worker G (Opus 5.5), did not author any reviewed code.
 Reviewed: branch `feat/polyglot-0` at 17d2854 (worktree `~/workspace/omega-polyglot-review`, branch `polyglot/review`).
 Scope: `spec/polyglot-0.md`, `docs/polyglot/POLYGLOT_AGENT_OWNERSHIP.md`, `mk/polyglot*.mk`, `src/polyglot/**`,

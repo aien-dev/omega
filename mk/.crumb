@@ -7,14 +7,14 @@
     "generated": {
       "children": [],
       "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "compiled_at": "2026-10-15T02:29:25Z",
+      "compiled_at": "2026-10-15T11:15:35Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:60ff5250efa4158d1e8305c087451dbcaa0d61ce78c24970767d53d11fd70285",
+      "digest": "sha256:e3e6eaf0a6cd64e9af307c8009fe2dcbba7a823ca5ae219fccb550da1a20aa7d",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 70,
-      "generated_at_commit": "0e028587d774a2864fb5ae3f95ab17a6613f369e",
-      "source_tree": "sha256:316b8ec770d32728ad72be7affd36b16fa0b7ae8f6f427040e4122490285c095"
+      "files": 69,
+      "generated_at_commit": "61c09411331e992ebb9882a50412f938c6bb687f",
+      "source_tree": "sha256:2df8429309d5e8af3c5ef15ae6afef15ab3fc22da93652e8c6b40ba927d2c606"
     },
     "owner_lane": "",
     "provenance": {
@@ -453,7 +453,6 @@
         "machine-identity.mk",
         "polyglot-asm.mk",
         "polyglot-encoder.mk",
-        "polyglot-mojo.mk",
         "polyglot.mk",
         "program-id.mk",
         "program-realize.mk",

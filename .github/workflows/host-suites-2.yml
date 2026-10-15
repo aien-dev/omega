@@ -33,7 +33,6 @@ name: Host suites 2
 # Pinned dependencies are read from physics.lock, aienos.lock and argus.lock.
 #
 # Deliberately NOT here:
-#   test-polyglot-mojo (needs the Mojo toolchain);
 #   test-turing-exp001-eval: environment. Its fail-closed tests run the
 #   evaluator inside a bubblewrap jail (/usr/bin/bwrap), which the runner does
 #   not have (79 passed, 4 failed: "bubblewrap not found"). Spark -j1: PASS;

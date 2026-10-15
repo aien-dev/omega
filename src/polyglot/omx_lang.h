@@ -35,7 +35,7 @@ typedef struct {
 
 typedef struct {
     const oma_rz_impl *impl;   /* pack/run, id, family (representation) */
-    const char *language;      /* "c", "asm-aarch64", "omega-encoder", "mojo" */
+    const char *language;      /* "c", "asm-aarch64", "omega-encoder" */
     const char *toolchain;     /* e.g. "gcc 13.3 -O2", "gnu-as 2.42" */
     int compiler_derived;      /* 1: started from compiler output (spec section 5) */
     int toolchain_only;        /* 1: own-encoder rule, not a language result (spec section 4) */
@@ -56,7 +56,5 @@ extern const omx_candidate omx_lane_asm[];
 extern const size_t omx_lane_asm_count;
 extern const omx_candidate omx_lane_encoder[];
 extern const size_t omx_lane_encoder_count;
-extern const omx_candidate omx_lane_mojo[];
-extern const size_t omx_lane_mojo_count;
 
 #endif /* OMX_LANG_H */
