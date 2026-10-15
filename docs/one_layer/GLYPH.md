@@ -32,7 +32,7 @@ bookkeeping and the punctuation. Its words are chosen from the writer model's ow
    written on every path by construction.
    Every name written must be read before its scope ends (parameters and loop counters excepted), so a
    misspelled word (the short form turns `rte a` into a new name) or a forgotten value is refused.
-   Parameter names are distinct. Calls go to earlier functions only, with each argument checked
+   No name hides a visible one (loop names included). Parameter names are distinct. Calls go to earlier functions only, with each argument checked
    against the parameter (arrays: own from own, edit from own or edit, view from any).
 5. **Loops are proven to end.** Every loop lowers to the shape checker2 proves terminating
    (`src/checker2/c2_check.c`, "loop bounds"; the shape oscc emits for `while ... bound N`).
@@ -53,6 +53,7 @@ fn <name> (<param> <type>)* to <type> | void      a function; `end` closes it
 if <cond> / else / end
 while <cond> [bound N] / end      N 1..1000000, default 1000000; past N iterations: trap 4
 for <name> <type> <count> / end   name = 0 .. count-1 (count a number or a name of that type)
+                          (a name as count: trap 4 after 1000000 passes, as a while with no bound)
 break                     leave the innermost loop
 ret [<value>]
 put <array> <index> <value>      store
@@ -137,9 +138,11 @@ rewrite. Whether models write Glyph reliably is not measured yet.
 ## 6. Checks (`make test-glyph`)
 
 - the 10 dev programs: glyph -> omega_emit -> checker2 ACCEPT;
-- 3 coverage programs (break, nested loops, else-if, a for with a name as count, arrays and calls);
-- 20 refusals, each with its expected reason, each with a fixed control that is accepted;
-- `glyph next` on 3 prefixes (only `end` after ret; a binary op's second operand of the first's type);
+- 4 coverage programs (break, nested loops, else-if, a for with a name as count, arrays and calls,
+  calls without values, a bool function as a condition);
+- 21 refusals, each with its expected reason, each with a fixed control that is accepted;
+- `glyph next` on 6 prefixes (only `end` after ret; a binary op's second operand of the first's type;
+  bool functions and `get` after `if`; a line after ret, and a line before `fn`, refused);
 - loop guard negative control: the dev04 op list without the hidden counter increment passes
   omega_emit and is REJECTED by checker2 (`C2-LOOP-UNBOUNDED`);
 - tokenizer gate, when `GLYPH_TOKCOUNT` (a counter: `<tool> <tokenizer.json> words <word>...`

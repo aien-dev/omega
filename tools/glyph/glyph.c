@@ -175,6 +175,7 @@ static int bind(const char *w, int reg, int fixed) {
     if (!valid_ident(w)) return fail("'%s' is not a name (a letter or _, then letters, digits or _)", w);
     if (reserved(w)) return fail("'%s' is a word of the language, not a name", w);
     if (find_func(w) >= 0) return fail("'%s' is a function name", w);
+    if (find_name(w)) return fail("'%s' is already a name here; pick a new name", w);
     if (nnames >= MAX_NAMES) return fail("more than %d names", MAX_NAMES);
     snprintf(names[nnames].name, sizeof names[nnames].name, "%s", w);
     names[nnames].reg = reg;
@@ -339,7 +340,7 @@ static int expr(char **w, int n, const Ty *hint, int dst, Ty *out_t) {
         else { dst = new_reg(ty); TRY(dst); }                                                     \
         if (out_t) *out_t = (ty);                                                                 \
     } while (0)
-    if (n == 1) { /* a bare name or literal */
+    if (n == 1 && !(find_callable(w[0]) >= 0 && funcs[find_callable(w[0])].np == 0)) { /* a bare name or literal */
         if (is_lit(w[0])) {
             if (!hint) return fail("'%s': the type of this number is unknown; write <type> %s", w[0], w[0]);
             int r = lit_reg(w[0], *hint);
@@ -924,20 +925,24 @@ static void list_names(const char *label, int want_kind, Ty want) {
     }
     printf("\n");
 }
-static int cmd_next(const char *path) {
-    size_t len;
-    char *src = slurp(path, &len), *tail = NULL;
+static int next_words(char *src) {
+    char *tail = NULL;
     if (run(src, 1, &tail) < 0) { printf("REFUSED glyph: %s\n", g_err); return 1; }
     char *w[MAX_WORDS + 1];
     int n = split(tail, w);
     if (n < 0) { printf("REFUSED glyph: %s\n", g_err); return 1; }
-    if (!in_fn) { printf(n == 0 ? "words: fn\n" : "words: (finish the fn line)\n"); return 0; }
+    if (!in_fn) {
+        if (n > 0 && strcmp(w[0], "fn")) { printf("REFUSED glyph: a program starts with fn\n"); return 1; }
+        printf(n == 0 ? "words: fn\n" : "words: (finish the fn line)\n");
+        return 0;
+    }
     Func *f = &funcs[nfuncs - 1];
     if (n == 0 && cur < 0) { /* the path ended (ret or break): only closing words may follow */
         Frame *fr = &frames[nframes - 1];
         printf("words:%s end\n", fr->kind == F_IF && !fr->has_else ? " else" : "");
         return 0;
     }
+    if (cur < 0 && strcmp(w[0], "end") && strcmp(w[0], "else")) { printf("REFUSED glyph: this line can never run: the path already ended (ret or break)\n"); return 1; }
     if (n == 0) {
         printf("words: if while for ret put free trap");
         int loop = 0;
@@ -959,7 +964,12 @@ static int cmd_next(const char *path) {
     }
     if (n == 1 && (!strcmp(w[0], "if") || !strcmp(w[0], "while"))) {
         list_names("names", 3, (Ty){0});
-        printf("words: true false eq ne lt le gt ge not\n");
+        printf("words: true false eq ne lt le gt ge not");
+        for (int i = 0; i < nnames; i++)
+            if (regs[names[i].reg].ref != R_NONE && regs[names[i].reg].s == T_BOOL) { printf(" get"); break; }
+        for (int i = 0; i < nfuncs - 1; i++)
+            if (funcs[i].has_ret && funcs[i].ret.ref == R_NONE && funcs[i].ret.s == T_BOOL) printf(" %s", funcs[i].name);
+        printf("\n");
         return 0;
     }
     /* after "<op> <a>" for a binary op: the second operand must match a's type */
@@ -984,7 +994,13 @@ int main(int argc, char **argv) {
         for (int i = 1; i <= 3; i++) printf("%s\n", REFW[i]);
         return 0;
     }
-    if (argc == 3 && !strcmp(argv[1], "next")) return cmd_next(argv[2]);
+    if (argc == 3 && !strcmp(argv[1], "next")) {
+        size_t len;
+        char *src = slurp(argv[2], &len);
+        int rc = next_words(src);
+        free(src);
+        return rc;
+    }
     if (argc == 4 && !strcmp(argv[1], "emit")) {
         size_t len;
         char *src = slurp(argv[2], &len), *tail = NULL;

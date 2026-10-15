@@ -2,6 +2,7 @@
 # tools/glyph/test_glyph.sh <glyph> <omega_emit> <checker2> -- Glyph checks (docs/one_layer/GLYPH.md).
 #  1. every public dev program (tests/one_layer/glyph/dev) -> glyph emit -> omega_emit emit -> checker2
 #     ACCEPT;
+#  1b. coverage programs and glyph next prefixes (including prefixes that must be refused);
 #  2. refusals: each bad program is refused by glyph with its expected reason, and a control (the
 #     same program with the defect fixed) is accepted;
 #  3. loop guard negative control: the dev04 op list with the hidden loop counter increment removed
@@ -79,6 +80,21 @@ s = sum4 a
 free a
 ret s
 end
+== calls without values, a bool function as a condition
+fn seven to uint
+ret 7
+end
+fn odd a uint to bool
+b = and a 1
+ret ne b 0
+end
+fn f a uint to uint
+x = seven
+if odd a
+ret x
+end
+ret a
+end
 EOF
 for f in "$T"/c*.glyph; do
   if "$G" emit "$f" "$T/c.json" > "$T/c.out" && "$OME" emit "$T/c.json" "$T/c.oscir" > "$T/c.out"; then
@@ -93,7 +109,10 @@ nx() { printf '%b' "$1" > "$T/p"; "$G" next "$T/p"; }
 [ "$(nx 'fn f a uint to uint\nret a\n')" = "words: end" ] || bad "next after ret: $(nx 'fn f a uint to uint\nret a\n')"
 [ "$(nx 'fn f a uint b ulong to uint\nx = add a ')" = "$(printf 'names: a\nnumber: uint')" ] || bad "next after 'add a': $(nx 'fn f a uint b ulong to uint\nx = add a ')"
 case "$(nx 'fn f a uint to uint\nfor i uint 4\n')" in "words: if while for ret put free trap break end"*) ;; *) bad "next in a loop" ;; esac
-echo "next: 3 prefixes give the expected words"
+case "$(nx 'fn f a uint to uint\nret a\nret ')" in "REFUSED glyph: "*) ;; *) bad "next after a dead line: not refused" ;; esac
+case "$(nx 'x = add ')" in "REFUSED glyph: "*) ;; *) bad "next before fn: not refused" ;; esac
+case "$(nx 'fn odd a uint to bool\nret true\nend\nfn f a uint fl view bool 4 to uint\nif ')" in *"words: true false eq ne lt le gt ge not get odd") ;; *) bad "next after if: get and odd missing" ;; esac
+echo "next: 6 prefixes give the expected words"
 
 # 2. refusals: "== <expected reason substring>", the bad program, "-- control", the fixed program
 r=0
@@ -325,6 +344,21 @@ end
 fn f a uint to uint
 x = add a 1
 ret x
+end
+== is already a name here
+fn f to uint
+i = uint 0
+for i uint 10
+end
+ret i
+end
+-- control
+fn f to uint
+i = uint 0
+for k uint 10
+i = add i k
+end
+ret i
 end
 == is a word of the language, not a name
 fn f bound uint to uint
