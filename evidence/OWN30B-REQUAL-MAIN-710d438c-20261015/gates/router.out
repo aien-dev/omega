@@ -1,0 +1,174 @@
+codegen warps  8 depth 1: 567 instructions, 44 registers (declared 48, register file 12288 of 65536)
+codegen warps  8 depth 2: 567 instructions, 44 registers (declared 48, register file 12288 of 65536)
+codegen warps  8 depth 4: 567 instructions, 46 registers (declared 48, register file 12288 of 65536)
+codegen warps  8 depth 8: 567 instructions, 60 registers (declared 64, register file 16384 of 65536)
+codegen warps 16 depth 1: 543 instructions, 40 registers (declared 48, register file 24576 of 65536)
+codegen warps 16 depth 2: 543 instructions, 40 registers (declared 48, register file 24576 of 65536)
+codegen warps 16 depth 4: 543 instructions, 46 registers (declared 48, register file 24576 of 65536)
+codegen warps 16 depth 8: 543 instructions, 60 registers (declared 64, register file 32768 of 65536)
+codegen warps 32 depth 1: 547 instructions, 40 registers (declared 48, register file 49152 of 65536)
+codegen warps 32 depth 2: 547 instructions, 40 registers (declared 48, register file 49152 of 65536)
+codegen warps 32 depth 4: 547 instructions, 46 registers (declared 48, register file 49152 of 65536)
+codegen warps 32 depth 8: 547 instructions, 60 registers (declared 64, register file 65536 of 65536)
+gpu_router_test: 69 checks, 0 failed: PASS
+sim depth 8 norm: ok ids equal, w max abs 4.14e-08, x' max abs 1.67e-07 (of 2.05), tables ok, margin 1.40e-01
+sim depth 8 norm seed 12: ok ids equal, w max abs 2.88e-08, x' max abs 1.67e-07 (of 2.03), tables ok, margin 7.86e-02
+sim depth 8 no-norm: ok ids equal, w max abs 2.89e-08, x' max abs 1.33e-07 (of 2.05), tables ok, margin 2.17e-02
+sim depth 4 norm: ok ids equal, w max abs 5.29e-08, x' max abs 3.03e-07 (of 2.04), tables ok, margin 5.94e-02
+sim depth 1 norm: ok ids equal, w max abs 5.22e-08, x' max abs 2.82e-07 (of 2.00), tables ok, margin 4.43e-02
+sim depth 2 norm out_scale 2^64: ok ids equal, w max abs 5.07e-08, x' max abs 1.37e-07 (of 2.08), tables ok, margin 1.20e-01
+sim mutant 1: caught (bad mask 5) ids DIFFER, w max abs 0.00e+00, x' max abs 3.45e-01 (of 2.07), tables ok, margin 1.39e-01
+sim mutant 2: caught (bad mask 1) ids DIFFER, w max abs 0.00e+00, x' max abs 1.81e-07 (of 2.07), tables ok, margin 1.39e-01
+sim mutant 3: caught (bad mask 8) ids equal, w max abs 2.02e-08, x' max abs 1.81e-07 (of 2.07), tables WRONG, margin 1.39e-01
+sim mutant 4: caught (bad mask 2) ids equal, w max abs 6.91e-01, x' max abs 1.81e-07 (of 2.07), tables ok, margin 1.39e-01
+sim: 630654 warp issues in total
+gpu_router_test: 10 checks, 0 failed: PASS
+PASS timing 1x2048x8192 upload_ms=240.5 ok_calls=100 median_ms=0.366 p90_ms=0.412 min_ms=0.301 max_ms=0.926 chip_ns_mean=354105 grid=64x1 e2e_first=2.36603e-07 e2e_last=2.36603e-07 repeat_mismatch=0
+PASS timing 1x8192x2048 upload_ms=106.5 ok_calls=100 median_ms=0.718 p90_ms=0.723 min_ms=0.691 max_ms=1.273 chip_ns_mean=719993 grid=64x1 e2e_first=5.21488e-07 e2e_last=5.21488e-07 repeat_mismatch=0
+PASS: 4 checks, 0 failed
+baseline exit 0 (recorded)
+router alloc (2 layers): rc=OK 136.2 ms ()
+parity 0 (norm 1, out_scale 1, x scale 0.01): ok ids equal, w max abs 3.70e-08, x' max abs 1.66e-07 (of 1.98), tables ok, margin 7.98e-03
+second call: bit-identical
+parity 1 (norm 1, out_scale 1, x scale 1): ok ids equal, w max abs 3.62e-08, x' max abs 2.32e-07 (of 2.05), tables ok, margin 3.88e-02
+parity 2 (norm 1, out_scale 1, x scale 40): ok ids equal, w max abs 2.09e-08, x' max abs 1.65e-07 (of 2.04), tables ok, margin 1.40e-02
+parity 24 (norm 0, out_scale 1, x scale 0.01): ok ids equal, w max abs 1.95e-08, x' max abs 2.90e-07 (of 2.05), tables ok, margin 7.60e-02
+parity 25 (norm 0, out_scale 1, x scale 1): ok ids equal, w max abs 1.29e-08, x' max abs 1.34e-07 (of 2.06), tables ok, margin 3.20e-02
+parity 26 (norm 0, out_scale 1, x scale 40): ok ids equal, w max abs 8.15e-09, x' max abs 2.93e-07 (of 2.03), tables ok, margin 8.03e-02
+parity 27 (norm 0, out_scale 1, x scale 0.01): ok ids equal, w max abs 6.59e-09, x' max abs 1.52e-07 (of 2.07), tables ok, margin 5.37e-02
+parity 28 (norm 0, out_scale 1, x scale 1): ok ids equal, w max abs 9.86e-09, x' max abs 1.80e-07 (of 2.03), tables ok, margin 1.24e-02
+parity 29 (norm 0, out_scale 1, x scale 40): ok ids equal, w max abs 3.25e-08, x' max abs 1.26e-07 (of 2.04), tables ok, margin 3.17e-02
+parity 30 (norm 0, out_scale 1, x scale 0.01): ok ids equal, w max abs 3.96e-08, x' max abs 2.52e-07 (of 2.03), tables ok, margin 1.30e-01
+parity 31 (norm 0, out_scale 1, x scale 1): ok ids equal, w max abs 1.79e-08, x' max abs 1.48e-07 (of 2.05), tables ok, margin 3.20e-02
+parity 32 (norm 1, out_scale 2^64, x scale 40): ok ids equal, w max abs 1.81e-07, x' max abs 3.07e-07 (of 2.05), tables ok, margin 1.48e-02
+parity 33 (norm 1, out_scale 2^64, x scale 0.01): ok ids equal, w max abs 5.09e-08, x' max abs 1.33e-07 (of 2.01), tables ok, margin 3.39e-02
+parity 34 (norm 1, out_scale 2^64, x scale 1): ok ids equal, w max abs 3.93e-08, x' max abs 2.49e-07 (of 2.08), tables ok, margin 3.67e-02
+parity 35 (norm 1, out_scale 2^64, x scale 40): ok ids equal, w max abs 6.79e-08, x' max abs 3.01e-07 (of 2.06), tables ok, margin 1.47e-01
+chip parity: 0 of 36 mismatches, 0 margin cases (recorded, oracle margin below 1e-04)
+chip mutant 1: caught (bad mask 5) ids DIFFER, w max abs 0.00e+00, x' max abs 3.30e-01 (of 2.04), tables ok, margin 1.04e-01
+chip mutant 2: caught (bad mask 1) ids DIFFER, w max abs 0.00e+00, x' max abs 2.10e-07 (of 2.04), tables ok, margin 1.04e-01
+chip mutant 3: caught (bad mask 8) ids equal, w max abs 5.10e-08, x' max abs 2.10e-07 (of 2.04), tables WRONG, margin 1.04e-01
+chip mutant 4: caught (bad mask 2) ids equal, w max abs 7.51e-01, x' max abs 2.10e-07 (of 2.04), tables ok, margin 1.04e-01
+fp8 upload gate+up 384 MB + down 24 MB: rc OK / OK, 178 ms
+e2e router layer 1: ok ids equal, w max abs 6.92e-08, x' max abs 2.50e-07 (of 2.02), tables ok, margin 7.28e-02
+e2e grouped gate+up (8 experts, 1536 x 2048): device table/x' vs host table: bit-identical; chip 156.2 us vs 147.3 us, call 411.6 us vs 165.6 us
+e2e group 3 vs fp8 oracle: worst rel 2.33e-08
+timing (medians of 50, evict 1, warps 32 depth 4): router chip 72.1 us, router call 75.7 us, grouped gate+up dev chip 144.7 us, router+gate+up sequence 229.6 us
+gpu_router_test: 17 checks, 0 failed: PASS
+router alloc (2 layers): rc=OK 135.1 ms ()
+parity 0 (norm 1, out_scale 1, x scale 0.01): ok ids equal, w max abs 3.70e-08, x' max abs 1.66e-07 (of 1.98), tables ok, margin 7.98e-03
+second call: bit-identical
+parity 1 (norm 1, out_scale 1, x scale 1): ok ids equal, w max abs 3.62e-08, x' max abs 2.32e-07 (of 2.05), tables ok, margin 3.88e-02
+parity 2 (norm 1, out_scale 1, x scale 40): ok ids equal, w max abs 2.09e-08, x' max abs 1.65e-07 (of 2.04), tables ok, margin 1.40e-02
+parity 24 (norm 0, out_scale 1, x scale 0.01): ok ids equal, w max abs 1.95e-08, x' max abs 2.90e-07 (of 2.05), tables ok, margin 7.60e-02
+parity 25 (norm 0, out_scale 1, x scale 1): ok ids equal, w max abs 1.29e-08, x' max abs 1.34e-07 (of 2.06), tables ok, margin 3.20e-02
+parity 26 (norm 0, out_scale 1, x scale 40): ok ids equal, w max abs 8.15e-09, x' max abs 2.93e-07 (of 2.03), tables ok, margin 8.03e-02
+parity 27 (norm 0, out_scale 1, x scale 0.01): ok ids equal, w max abs 6.59e-09, x' max abs 1.52e-07 (of 2.07), tables ok, margin 5.37e-02
+parity 28 (norm 0, out_scale 1, x scale 1): ok ids equal, w max abs 9.86e-09, x' max abs 1.80e-07 (of 2.03), tables ok, margin 1.24e-02
+parity 29 (norm 0, out_scale 1, x scale 40): ok ids equal, w max abs 3.25e-08, x' max abs 1.26e-07 (of 2.04), tables ok, margin 3.17e-02
+parity 30 (norm 0, out_scale 1, x scale 0.01): ok ids equal, w max abs 3.96e-08, x' max abs 2.52e-07 (of 2.03), tables ok, margin 1.30e-01
+parity 31 (norm 0, out_scale 1, x scale 1): ok ids equal, w max abs 1.79e-08, x' max abs 1.48e-07 (of 2.05), tables ok, margin 3.20e-02
+parity 32 (norm 1, out_scale 2^64, x scale 40): ok ids equal, w max abs 1.81e-07, x' max abs 3.07e-07 (of 2.05), tables ok, margin 1.48e-02
+parity 33 (norm 1, out_scale 2^64, x scale 0.01): ok ids equal, w max abs 5.09e-08, x' max abs 1.33e-07 (of 2.01), tables ok, margin 3.39e-02
+parity 34 (norm 1, out_scale 2^64, x scale 1): ok ids equal, w max abs 3.93e-08, x' max abs 2.49e-07 (of 2.08), tables ok, margin 3.67e-02
+parity 35 (norm 1, out_scale 2^64, x scale 40): ok ids equal, w max abs 6.79e-08, x' max abs 3.01e-07 (of 2.06), tables ok, margin 1.47e-01
+chip parity: 0 of 36 mismatches, 0 margin cases (recorded, oracle margin below 1e-04)
+chip mutant 1: caught (bad mask 5) ids DIFFER, w max abs 0.00e+00, x' max abs 3.30e-01 (of 2.04), tables ok, margin 1.04e-01
+chip mutant 2: caught (bad mask 1) ids DIFFER, w max abs 0.00e+00, x' max abs 2.10e-07 (of 2.04), tables ok, margin 1.04e-01
+chip mutant 3: caught (bad mask 8) ids equal, w max abs 5.10e-08, x' max abs 2.10e-07 (of 2.04), tables WRONG, margin 1.04e-01
+chip mutant 4: caught (bad mask 2) ids equal, w max abs 7.51e-01, x' max abs 2.10e-07 (of 2.04), tables ok, margin 1.04e-01
+fp8 upload gate+up 384 MB + down 24 MB: rc OK / OK, 178 ms
+e2e router layer 1: ok ids equal, w max abs 6.92e-08, x' max abs 2.50e-07 (of 2.02), tables ok, margin 7.28e-02
+e2e grouped gate+up (8 experts, 1536 x 2048): device table/x' vs host table: bit-identical; chip 150.7 us vs 143.5 us, call 412.4 us vs 161.6 us
+e2e group 3 vs fp8 oracle: worst rel 2.33e-08
+timing (medians of 50, evict 1, warps 32 depth 8): router chip 77.1 us, router call 80.1 us, grouped gate+up dev chip 146.9 us, router+gate+up sequence 238.1 us
+gpu_router_test: 17 checks, 0 failed: PASS
+warps 32 depth 8 exit 0 (informational)
+router alloc (2 layers): rc=OK 135.3 ms ()
+parity 0 (norm 1, out_scale 1, x scale 0.01): ok ids equal, w max abs 3.70e-08, x' max abs 1.66e-07 (of 1.98), tables ok, margin 7.98e-03
+second call: bit-identical
+parity 1 (norm 1, out_scale 1, x scale 1): ok ids equal, w max abs 3.62e-08, x' max abs 2.32e-07 (of 2.05), tables ok, margin 3.88e-02
+parity 2 (norm 1, out_scale 1, x scale 40): ok ids equal, w max abs 2.09e-08, x' max abs 1.65e-07 (of 2.04), tables ok, margin 1.40e-02
+parity 24 (norm 0, out_scale 1, x scale 0.01): ok ids equal, w max abs 1.27e-08, x' max abs 1.28e-07 (of 2.05), tables ok, margin 7.60e-02
+parity 25 (norm 0, out_scale 1, x scale 1): ok ids equal, w max abs 1.42e-08, x' max abs 2.45e-07 (of 2.06), tables ok, margin 3.20e-02
+parity 26 (norm 0, out_scale 1, x scale 40): ok ids equal, w max abs 8.15e-09, x' max abs 2.93e-07 (of 2.03), tables ok, margin 8.03e-02
+parity 27 (norm 0, out_scale 1, x scale 0.01): ok ids equal, w max abs 6.59e-09, x' max abs 1.52e-07 (of 2.07), tables ok, margin 5.37e-02
+parity 28 (norm 0, out_scale 1, x scale 1): ok ids equal, w max abs 9.86e-09, x' max abs 1.80e-07 (of 2.03), tables ok, margin 1.24e-02
+parity 29 (norm 0, out_scale 1, x scale 40): ok ids equal, w max abs 3.25e-08, x' max abs 1.26e-07 (of 2.04), tables ok, margin 3.17e-02
+parity 30 (norm 0, out_scale 1, x scale 0.01): ok ids equal, w max abs 3.96e-08, x' max abs 2.52e-07 (of 2.03), tables ok, margin 1.30e-01
+parity 31 (norm 0, out_scale 1, x scale 1): ok ids equal, w max abs 3.02e-08, x' max abs 1.96e-07 (of 2.05), tables ok, margin 3.20e-02
+parity 32 (norm 1, out_scale 2^64, x scale 40): ok ids equal, w max abs 3.16e-08, x' max abs 2.43e-07 (of 2.05), tables ok, margin 1.48e-02
+parity 33 (norm 1, out_scale 2^64, x scale 0.01): ok ids equal, w max abs 5.09e-08, x' max abs 1.33e-07 (of 2.01), tables ok, margin 3.39e-02
+parity 34 (norm 1, out_scale 2^64, x scale 1): ok ids equal, w max abs 3.93e-08, x' max abs 2.49e-07 (of 2.08), tables ok, margin 3.67e-02
+parity 35 (norm 1, out_scale 2^64, x scale 40): ok ids equal, w max abs 2.56e-08, x' max abs 1.18e-07 (of 2.06), tables ok, margin 1.47e-01
+chip parity: 0 of 36 mismatches, 0 margin cases (recorded, oracle margin below 1e-04)
+chip mutant 1: caught (bad mask 5) ids DIFFER, w max abs 0.00e+00, x' max abs 3.30e-01 (of 2.04), tables ok, margin 1.04e-01
+chip mutant 2: caught (bad mask 1) ids DIFFER, w max abs 0.00e+00, x' max abs 1.52e-07 (of 2.04), tables ok, margin 1.04e-01
+chip mutant 3: caught (bad mask 8) ids equal, w max abs 4.71e-08, x' max abs 1.52e-07 (of 2.04), tables WRONG, margin 1.04e-01
+chip mutant 4: caught (bad mask 2) ids equal, w max abs 7.51e-01, x' max abs 1.52e-07 (of 2.04), tables ok, margin 1.04e-01
+fp8 upload gate+up 384 MB + down 24 MB: rc OK / OK, 179 ms
+e2e router layer 1: ok ids equal, w max abs 6.92e-08, x' max abs 2.50e-07 (of 2.02), tables ok, margin 7.28e-02
+e2e grouped gate+up (8 experts, 1536 x 2048): device table/x' vs host table: bit-identical; chip 153.8 us vs 146.4 us, call 411.7 us vs 164.4 us
+e2e group 3 vs fp8 oracle: worst rel 2.33e-08
+timing (medians of 50, evict 1, warps 16 depth 8): router chip 80.7 us, router call 84.1 us, grouped gate+up dev chip 150.7 us, router+gate+up sequence 244.1 us
+gpu_router_test: 17 checks, 0 failed: PASS
+warps 16 depth 8 exit 0 (informational)
+router alloc (2 layers): rc=OK 136.2 ms ()
+parity 0 (norm 1, out_scale 1, x scale 0.01): ok ids equal, w max abs 2.92e-08, x' max abs 2.31e-07 (of 1.98), tables ok, margin 7.98e-03
+second call: bit-identical
+parity 1 (norm 1, out_scale 1, x scale 1): ok ids equal, w max abs 3.62e-08, x' max abs 2.32e-07 (of 2.05), tables ok, margin 3.88e-02
+parity 2 (norm 1, out_scale 1, x scale 40): ok ids equal, w max abs 2.09e-08, x' max abs 1.65e-07 (of 2.04), tables ok, margin 1.40e-02
+parity 24 (norm 0, out_scale 1, x scale 0.01): ok ids equal, w max abs 1.27e-08, x' max abs 1.28e-07 (of 2.05), tables ok, margin 7.60e-02
+parity 25 (norm 0, out_scale 1, x scale 1): ok ids equal, w max abs 7.38e-08, x' max abs 2.28e-07 (of 2.06), tables ok, margin 3.20e-02
+parity 26 (norm 0, out_scale 1, x scale 40): ok ids equal, w max abs 8.15e-09, x' max abs 2.93e-07 (of 2.03), tables ok, margin 8.03e-02
+parity 27 (norm 0, out_scale 1, x scale 0.01): ok ids equal, w max abs 6.59e-09, x' max abs 1.52e-07 (of 2.07), tables ok, margin 5.37e-02
+parity 28 (norm 0, out_scale 1, x scale 1): ok ids equal, w max abs 9.86e-09, x' max abs 1.80e-07 (of 2.03), tables ok, margin 1.24e-02
+parity 29 (norm 0, out_scale 1, x scale 40): ok ids equal, w max abs 3.25e-08, x' max abs 1.26e-07 (of 2.04), tables ok, margin 3.17e-02
+parity 30 (norm 0, out_scale 1, x scale 0.01): ok ids equal, w max abs 3.96e-08, x' max abs 2.52e-07 (of 2.03), tables ok, margin 1.30e-01
+parity 31 (norm 0, out_scale 1, x scale 1): ok ids equal, w max abs 3.02e-08, x' max abs 1.96e-07 (of 2.05), tables ok, margin 3.20e-02
+parity 32 (norm 1, out_scale 2^64, x scale 40): ok ids equal, w max abs 3.16e-08, x' max abs 1.32e-07 (of 2.05), tables ok, margin 1.48e-02
+parity 33 (norm 1, out_scale 2^64, x scale 0.01): ok ids equal, w max abs 5.09e-08, x' max abs 1.33e-07 (of 2.01), tables ok, margin 3.39e-02
+parity 34 (norm 1, out_scale 2^64, x scale 1): ok ids equal, w max abs 3.93e-08, x' max abs 2.49e-07 (of 2.08), tables ok, margin 3.67e-02
+parity 35 (norm 1, out_scale 2^64, x scale 40): ok ids equal, w max abs 6.79e-08, x' max abs 3.01e-07 (of 2.06), tables ok, margin 1.47e-01
+chip parity: 0 of 36 mismatches, 0 margin cases (recorded, oracle margin below 1e-04)
+chip mutant 1: caught (bad mask 5) ids DIFFER, w max abs 0.00e+00, x' max abs 3.30e-01 (of 2.04), tables ok, margin 1.04e-01
+chip mutant 2: caught (bad mask 1) ids DIFFER, w max abs 0.00e+00, x' max abs 1.52e-07 (of 2.04), tables ok, margin 1.04e-01
+chip mutant 3: caught (bad mask 8) ids equal, w max abs 4.71e-08, x' max abs 1.52e-07 (of 2.04), tables WRONG, margin 1.04e-01
+chip mutant 4: caught (bad mask 2) ids equal, w max abs 7.51e-01, x' max abs 1.52e-07 (of 2.04), tables ok, margin 1.04e-01
+fp8 upload gate+up 384 MB + down 24 MB: rc OK / OK, 178 ms
+e2e router layer 1: ok ids equal, w max abs 1.69e-07, x' max abs 1.63e-07 (of 2.02), tables ok, margin 7.28e-02
+e2e grouped gate+up (8 experts, 1536 x 2048): device table/x' vs host table: bit-identical; chip 147.7 us vs 145.5 us, call 402.5 us vs 166.0 us
+e2e group 3 vs fp8 oracle: worst rel 2.72e-08
+timing (medians of 50, evict 1, warps 8 depth 8): router chip 87.2 us, router call 91.0 us, grouped gate+up dev chip 146.9 us, router+gate+up sequence 247.2 us
+gpu_router_test: 17 checks, 0 failed: PASS
+warps 8 depth 8 exit 0 (informational)
+router alloc (2 layers): rc=OK 135.1 ms ()
+parity 0 (norm 1, out_scale 1, x scale 0.01): ok ids equal, w max abs 3.70e-08, x' max abs 1.66e-07 (of 1.98), tables ok, margin 7.98e-03
+second call: bit-identical
+parity 1 (norm 1, out_scale 1, x scale 1): ok ids equal, w max abs 3.62e-08, x' max abs 2.32e-07 (of 2.05), tables ok, margin 3.88e-02
+parity 2 (norm 1, out_scale 1, x scale 40): ok ids equal, w max abs 2.09e-08, x' max abs 1.65e-07 (of 2.04), tables ok, margin 1.40e-02
+parity 24 (norm 0, out_scale 1, x scale 0.01): ok ids equal, w max abs 1.95e-08, x' max abs 2.90e-07 (of 2.05), tables ok, margin 7.60e-02
+parity 25 (norm 0, out_scale 1, x scale 1): ok ids equal, w max abs 1.29e-08, x' max abs 1.34e-07 (of 2.06), tables ok, margin 3.20e-02
+parity 26 (norm 0, out_scale 1, x scale 40): ok ids equal, w max abs 8.15e-09, x' max abs 2.93e-07 (of 2.03), tables ok, margin 8.03e-02
+parity 27 (norm 0, out_scale 1, x scale 0.01): ok ids equal, w max abs 6.59e-09, x' max abs 1.52e-07 (of 2.07), tables ok, margin 5.37e-02
+parity 28 (norm 0, out_scale 1, x scale 1): ok ids equal, w max abs 9.86e-09, x' max abs 1.80e-07 (of 2.03), tables ok, margin 1.24e-02
+parity 29 (norm 0, out_scale 1, x scale 40): ok ids equal, w max abs 3.25e-08, x' max abs 1.26e-07 (of 2.04), tables ok, margin 3.17e-02
+parity 30 (norm 0, out_scale 1, x scale 0.01): ok ids equal, w max abs 3.96e-08, x' max abs 2.52e-07 (of 2.03), tables ok, margin 1.30e-01
+parity 31 (norm 0, out_scale 1, x scale 1): ok ids equal, w max abs 1.79e-08, x' max abs 1.48e-07 (of 2.05), tables ok, margin 3.20e-02
+parity 32 (norm 1, out_scale 2^64, x scale 40): ok ids equal, w max abs 1.81e-07, x' max abs 3.07e-07 (of 2.05), tables ok, margin 1.48e-02
+parity 33 (norm 1, out_scale 2^64, x scale 0.01): ok ids equal, w max abs 5.09e-08, x' max abs 1.33e-07 (of 2.01), tables ok, margin 3.39e-02
+parity 34 (norm 1, out_scale 2^64, x scale 1): ok ids equal, w max abs 3.93e-08, x' max abs 2.49e-07 (of 2.08), tables ok, margin 3.67e-02
+parity 35 (norm 1, out_scale 2^64, x scale 40): ok ids equal, w max abs 6.79e-08, x' max abs 3.01e-07 (of 2.06), tables ok, margin 1.47e-01
+chip parity: 0 of 36 mismatches, 0 margin cases (recorded, oracle margin below 1e-04)
+chip mutant 1: caught (bad mask 5) ids DIFFER, w max abs 0.00e+00, x' max abs 3.30e-01 (of 2.04), tables ok, margin 1.04e-01
+chip mutant 2: caught (bad mask 1) ids DIFFER, w max abs 0.00e+00, x' max abs 2.10e-07 (of 2.04), tables ok, margin 1.04e-01
+chip mutant 3: caught (bad mask 8) ids equal, w max abs 5.10e-08, x' max abs 2.10e-07 (of 2.04), tables WRONG, margin 1.04e-01
+chip mutant 4: caught (bad mask 2) ids equal, w max abs 7.51e-01, x' max abs 2.10e-07 (of 2.04), tables ok, margin 1.04e-01
+fp8 upload gate+up 384 MB + down 24 MB: rc OK / OK, 178 ms
+e2e router layer 1: ok ids equal, w max abs 6.92e-08, x' max abs 2.50e-07 (of 2.02), tables ok, margin 7.28e-02
+e2e grouped gate+up (8 experts, 1536 x 2048): device table/x' vs host table: bit-identical; chip 153.6 us vs 145.9 us, call 409.5 us vs 163.8 us
+e2e group 3 vs fp8 oracle: worst rel 2.33e-08
+timing (medians of 50, evict 0, warps 32 depth 4): router chip 26.0 us, router call 27.2 us, grouped gate+up dev chip 150.0 us, router+gate+up sequence 185.3 us
+gpu_router_test: 17 checks, 0 failed: PASS
+no-evict exit 0 (informational)
+GPU_ROUTER_CHIP: PASS

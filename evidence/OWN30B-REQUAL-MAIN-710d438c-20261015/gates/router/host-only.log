@@ -1,0 +1,13 @@
+codegen warps  8 depth 1: 567 instructions, 44 registers (declared 48, register file 12288 of 65536)
+codegen warps  8 depth 2: 567 instructions, 44 registers (declared 48, register file 12288 of 65536)
+codegen warps  8 depth 4: 567 instructions, 46 registers (declared 48, register file 12288 of 65536)
+codegen warps  8 depth 8: 567 instructions, 60 registers (declared 64, register file 16384 of 65536)
+codegen warps 16 depth 1: 543 instructions, 40 registers (declared 48, register file 24576 of 65536)
+codegen warps 16 depth 2: 543 instructions, 40 registers (declared 48, register file 24576 of 65536)
+codegen warps 16 depth 4: 543 instructions, 46 registers (declared 48, register file 24576 of 65536)
+codegen warps 16 depth 8: 543 instructions, 60 registers (declared 64, register file 32768 of 65536)
+codegen warps 32 depth 1: 547 instructions, 40 registers (declared 48, register file 49152 of 65536)
+codegen warps 32 depth 2: 547 instructions, 40 registers (declared 48, register file 49152 of 65536)
+codegen warps 32 depth 4: 547 instructions, 46 registers (declared 48, register file 49152 of 65536)
+codegen warps 32 depth 8: 547 instructions, 60 registers (declared 64, register file 65536 of 65536)
+gpu_router_test: 69 checks, 0 failed: PASS

@@ -1,0 +1,6 @@
+chip down: 3600 tokens, M 28800 rows, 128 segments, 512 tiles, grid 16 x 512, rt 4 ct 2 warps 8, declared 128 registers
+chip bit-identity: 0 of 524288 sampled outputs (256 rows) differ from the emulation (bit-identical)
+chip second call: identical
+TCGEMM down (medians of 9): chip 12462.7 us, call 55552.5 us; 7.27 TFLOPS; weights streamed 805 MB (64.6 GB/s), activations gathered 805 MB, output 236 MB; total 148.2 GB/s
+chip: PASS
+GPU_TCGEMM: PASS

@@ -1,0 +1,16 @@
+594eed3776d3890dc99e212aeae3d88625ceb11e2e835f57d02ab28627618b95  ./1-cached-base.log
+1e6666b676a0ea76c021c3ec7b692fa7dc67b05f722d063f8748f573d1dabd84  ./2-cached-prefetch.log
+e91708c996cb4463141a6fb4c8f5e57a7eca64f1e5a2ebd93239e8a1bd04dc57  ./3-cached-base.log
+8f98894cdedddb44db6773397950932dd45a91a0b50f78e9325c968ee744f768  ./4-cached-prefetch.log
+82e083af84537df6b59fcbf44db33876731911054cdb8b664f980017568b9765  ./5-uncached-prefetch.log
+f2a258fa4edff328a3a58e12dff945133e9bbcae77fbfd5d7dc6550323599d75  ./binaries.sha256
+5cfd0e771de1af1722bb0b909d14b6c1d1d516d75b91e6293411a6b94e047c78  ./build.log
+195d3d41e482308ce37aea9823e71dffb56324791d42a73056a13dd1cdf8f5f4  ./cmdlist.log
+14b6b06bc7fd620433d7a5ac2f8cfcaa7411bd73afc02463aa8b69a36b662e67  ./device.txt
+e85fefdb75fdadda6416109526cd95768210af2f9dde8b6e2f8d32c010d5f921  ./receipt-1-cached-base.json
+bb82fe0a021901a25966f4af3e771b8179379909d82e724fc1b69c7b3520d3c9  ./receipt-2-cached-prefetch.json
+c7ec6d3f847973f6592df9900b82e8fb60bbca78ef3a76474c1d119fedc0247a  ./receipt-3-cached-base.json
+d1cb40c6aab5f09f18f70d04cfd0faacea59cf0366c761f6c84ad1d93d9af686  ./receipt-4-cached-prefetch.json
+cc66ab5da4ace1bceca658bc90ad87081e6280e6ba93a61a9eb3e74c321f2b40  ./receipt-5-uncached-prefetch.json
+b6ab6345b69f3aa76c444d9e7f170f41b0445e3fb64e626178f85f898086bfe1  ./receipt-red.json
+6ba0afd5c1daabecdb28a848b0901abae1903c4e72ad0e9cfb9b2df176e84264  ./red.log

@@ -1,0 +1,4 @@
+sealed=2026-10-15T01:15:39Z
+physics=e95e3ed dirty=0
+omega=ce42e62f dirty=127
+queue=quiet flag: HELD by 'OWN30B quietlock OWN-30B_requal_check-full' pid=2690278 alive=yes minutes_left=19 queue: 0 job(s)  flush lock: none workers (task dir /tmp/claude-1000/-home-drakestapleton/294ea9b6-30d4-4265-b77f-085ab4d95397/tasks): 
