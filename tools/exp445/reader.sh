@@ -124,6 +124,8 @@ meta_resume() {
     echo "settings differ: $(diff <(grep -v '^commit=' "$a") <(grep -v '^commit=' "$b") | grep '^[<>]' | head -n 4 | tr '\n' ' ')"; return 1
   fi
   ca="$(sed -n 's/^commit=//p' "$a")" cb="$(sed -n 's/^commit=//p' "$b")"
+  local h40='^[0-9a-f]{40}(-dirty)?$'
+  [[ $ca =~ $h40 && $cb =~ $h40 ]] || { echo "a commit is not a full commit id: ${ca:-none} -> ${cb:-none}"; return 1; }
   git -C "$root" cat-file -e "${ca%-dirty}^{commit}" 2> /dev/null || { echo "the run's commit ${ca%-dirty} is not in this repository"; return 1; }
   git -C "$root" diff --quiet "${ca%-dirty}" "${cb%-dirty}" -- "${TOOL_PATHS[@]}" 2> /dev/null ||
     { echo "tool files differ between the run's commit ${ca%-dirty} and ${cb%-dirty}"; return 1; }

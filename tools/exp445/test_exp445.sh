@@ -636,7 +636,7 @@ if SC --interim --configs A "${HPK[@]}" "$H2" > /dev/null 2> "$T/hi2.err"; then
   cp "$T/h2meta" "$H2/meta.txt"
   if [ "$MC" = "${MC%-dirty}" ]; then
     # a later commit with the very same tree, like the ledger commit (an object only; no ref moves)
-    LC="$(git -C "$ROOT" commit-tree "HEAD^{tree}" -p HEAD -m "exp445 test: a later commit, same tools")"
+    LC="$(git -C "$ROOT" -c user.name=exp445-test -c user.email=exp445-test@invalid commit-tree "HEAD^{tree}" -p HEAD -m "exp445 test: a later commit, same tools")"
     sed -i "s/^commit=.*/commit=$LC/" "$H2/meta.txt"
   else echo "skip resume across commits (tree dirty; meta_resume unit tests cover it, CI runs it clean)"; fi
   grep -q "decision=CONTINUE$" "$FUT2" && "$HERE/run.sh" --config A --tasks "$T/hpub" --out "$H2" --futility "$FUT2" > /dev/null 2> "$T/h2b.err" &&
@@ -663,5 +663,8 @@ mrok x "$C1" "$C3" && bad "meta_resume accepted changed tools" || { grep -q "too
 mrok x "$C1" "$C2-dirty" && bad "meta_resume accepted a dirty tree across commits" || { grep -q "dirty" "$T/mr.why" && ok "meta_resume: a dirty tree across commits refused" || bad "meta_resume dirty reason"; }
 mrok x "$C1" "$C2" y && bad "meta_resume accepted another setting" || { grep -q "settings differ" "$T/mr.why" && ok "meta_resume: another setting refused even with the same tools" || bad "meta_resume settings reason"; }
 mrok x "$C1" "0000000000000000000000000000000000000000" && bad "meta_resume accepted an unknown commit" || ok "meta_resume: an unknown commit refused"
+if mrok x HEAD "$C2"; then bad "meta_resume accepted a revision name (commit=HEAD)"
+elif grep -q "not a full commit id" "$T/mr.why"; then ok "meta_resume: a revision name (commit=HEAD) refused"
+else bad "meta_resume revision name reason: $(cat "$T/mr.why")"; fi
 echo
 if [ "$fails" -eq 0 ]; then echo "test-exp445: PASS"; else echo "test-exp445: FAIL ($fails)"; exit 1; fi

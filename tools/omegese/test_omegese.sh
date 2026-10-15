@@ -310,6 +310,13 @@ nxk=$((nxk + 1)); got="$(printf 'fn f a own uint 4 n uint to uint\nfree a\nwhile
 [ "$got" = "$(printf 'a = new uint 4 0\nend\nret 0\nend')" ] || bad "complete in a loop whose head uses a freed array: got '$got'"
 nxk=$((nxk + 1)); got="$(printf 'fn f n uint to void\nx = new uint 4 n\nwhile gt n 0\nx = new uint 4 n\n' > "$T/p"; "$G" complete "$T/p")"
 [ "$got" = "$(printf 'free x\nend\nend')" ] || bad "complete in a loop that gives an array a second one: got '$got'"
+# a loop opened at the nesting limit is refused before its head state is set up (no shift past bit 63)
+{ echo 'fn f n uint to uint'; for ((i = 0; i < 63; i++)); do echo "if gt n $i"; done; echo 'while gt n 0'; } > "$T/deep.omegese"
+nxk=$((nxk + 1)); got="$("$G" emit "$T/deep.omegese" "$T/x.json" 2>&1 || true)"
+case "$got" in "REFUSED omegese: line 65: more than 64 nested blocks"*) ;; *) bad "a loop at the nesting limit: got '$got'" ;; esac
+# 300 uses of one array inside a loop wait as one check (the same state): accepted, as checker2 does
+{ echo 'fn f a own uint 4 n uint to uint'; echo 'for i uint 3'; for ((i = 0; i < 300; i++)); do echo 'n = get a 0'; done; echo 'end'; echo 'free a'; echo 'ret n'; echo 'end'; } > "$T/many.omegese"
+nxk=$((nxk + 1)); accept "$T/many.omegese" many-uses-in-a-loop || true
 nxeq 'fn f a short to short\nret add a -' 'number: -32768..32767'
 nxeq 'fn f a short to short\nret add a -0' 'REFUSED omegese: line 2: no text after this prefix makes a program emit accepts ('"'"'-0'"'"' is not a number (digits, an optional minus sign, no leading zeros, no -0))'
 # the number ranges each slot allows: every scalar type, a minus sign where none fits, and the fixed

@@ -271,8 +271,9 @@ walks that `emit` accepts and omega_emit or checker2 then rejects.
 | after | 0 of 2000 | none |
 
 Not folded, so a program `emit` accepts can still be rejected later:
-- C2-BORROW-OUTLIVES-OWNER: checker2 ties a view to the array it was taken from until either name is
-  bound again; `emit` does not follow borrows (0 of 2000 walks met it);
+- C2-BORROW-OUTLIVES-OWNER: checker2 ties each view to the array it was taken from over the whole
+  function (a view filled from two arrays loses its origin); `emit` does not follow borrows (0 of
+  2000 walks met it);
 - more than 64 own arrays in one function: the ones past 64 are not tracked;
 - C2-OWN-ARENA-MOVE and C2-OWN-RELEASE-ARENA: Omegese has no arenas, so no program reaches them.
 
@@ -295,13 +296,14 @@ out; a `ret` whose value moves the array into a call is not tried by the witness
   return, and five decided at a loop's `end`, one of them through a nested loop);
 - review fixes: a conversion of a typed number converts it (`ret long int 5`, `uchar int 300`); a for
   count in brackets lowers exactly as the bare count and has the same limit;
-- `omegese next` on 67 prefixes, red before green (the open-type list after a binary op, a typed second
+- `omegese next` on 69 prefixes and cases, red before green (the open-type list after a binary op, a typed second
   value, a bracket waiting for `)`, a `ret` that must read the names its path leaves unread, a cut
   inside a word, the exact number range of every scalar type and of trap codes, array lengths, loop
   bounds and counts, a minus sign where none fits, `-0`, the `--machine` lines including the 6.2
   example and the new-name exclusion list, `complete`, refusals as soon as a prefix is wrong, and
   ownership: no `ret` or second free while it would be refused, `end` left out of a loop whose head
-  needs an array, and `complete` settling a loop and freeing at the function's end);
+  needs an array, `complete` settling a loop and freeing at the function's end, a loop opened at the
+  nesting limit refused, 300 uses of one array in a loop accepted);
 - next oracle: at all 2636 word boundaries of the 75 accepted programs in the suite, the real next
   word, and the end of input at the end, are legal;
 - completeness: 150 single-word mutants of those programs (a word dropped, doubled, or replaced by a

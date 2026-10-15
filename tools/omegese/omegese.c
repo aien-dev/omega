@@ -320,10 +320,13 @@ static int os_only(Os o) { return o.m == 0 && o.b == OS_L; }   /* holds an array
 static int own_dead(int r) { int s = own_slot(r); return s >= 0 && os_none(ost[s]); }
 /* a check on a state that still includes an open loop's head waits for the innermost such loop */
 static int own_defer(int kind, int s, Os o) {
+    int k = 63 - __builtin_clzll(o.m);
+    for (int i = 0; i < nowq; i++) /* the same check on the same state: the same verdict, first line kept */
+        if (owq[i].k == k && owq[i].kind == kind && owq[i].s == s && owq[i].o.b == o.b && owq[i].o.m == o.m) return 0;
     if (nowq >= MAX_OWQ) return fail("more than %d ownership checks wait for their loops to end", MAX_OWQ);
     const char *n = own_label(own_reg[s]);
     Ow *e = &owq[nowq++];
-    e->k = 63 - __builtin_clzll(o.m);
+    e->k = k;
     e->kind = kind;
     e->s = s;
     e->line = g_line;
@@ -399,12 +402,14 @@ static int own_ret(void) {
     return 0;
 }
 /* the head of a loop at frame index nframes is read next: its state is open until the loop ends */
-static void own_loop_open(void) {
+static int own_loop_open(void) {
     int k = nframes;
+    if (k >= MAX_FRAMES) return fail("more than %d nested blocks", MAX_FRAMES); /* before the bit k below */
     memcpy(own_pend, ost, sizeof ost[0] * (size_t)nown);
     own_pk = k;
     g_loops |= 1ull << k;
     for (int s = 0; s < nown; s++) ost[s] = (Os){0, 1ull << k};
+    return 0;
 }
 /* the loop's frame is pushed: keep the state before it and the state after its head */
 static void own_loop_pushed(Frame *fr) {
@@ -1286,7 +1291,7 @@ static int guarded_loop(int is_for, int s, const Val *count, const char *forname
     TRY(body);
     TRY(ex);
     TRY(br(h));
-    own_loop_open();
+    TRY(own_loop_open());
     start_block(h);
     int c;
     const char *bound = "1000000";
@@ -1385,7 +1390,7 @@ static int for_line(void) {
         TRY(body);
         TRY(ex);
         TRY(br(h));
-        own_loop_open();
+        TRY(own_loop_open());
         start_block(h);
         int c = new_reg((Ty){R_NONE, T_BOOL, 0});
         TRY(c);
