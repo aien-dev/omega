@@ -649,7 +649,7 @@ static int value(const Want *want, int dst, Val *v) {
         if (a.t.ref != R_NONE) return fail("'%s' is an array; only numbers convert", span(a.a, a.b));
         if ((s == T_BOOL) != (a.t.s == T_BOOL)) return fail("bool does not convert to or from numbers; compare instead (ne x 0)");
         v->t = ty;
-        if (a.konst && dst == -2) { v->reg = a.reg; v->konst = 1; v->b = lp; return 0; } /* the number itself */
+        if (a.konst && dst == -2 && a.t.s == s) { v->reg = a.reg; v->konst = 1; v->b = lp; return 0; } /* the number itself */
         TRY(to_dst(&dst, ty));
         TRY(op("\"op\": \"%s\", \"dst\": %d, \"a\": %d", s == a.t.s ? "mov" : "cast", dst, a.reg));
         goto done;
@@ -950,6 +950,19 @@ static int guarded_loop(int is_for, int s, const Val *count, const char *forname
     return 0;
 }
 
+/* a for count that is a plain number, possibly in brackets: ( ( 8 ) ). Returns the number's word
+ * index and sets *owed to the ')' still missing (above 0 only in next mode, when the prefix ends
+ * inside the brackets); -1 when the count is any other value. */
+static int count_number(int *owed) {
+    int i = lp, k = 0;
+    while (i < ln && !strcmp(lw[i], "(")) { i++; k++; }
+    if (i >= ln || !is_lit(lw[i])) return -1;
+    int j = i + 1, c = 0;
+    while (j < ln && c < k && !strcmp(lw[j], ")")) { j++; c++; }
+    if (j != ln || (c < k && !partial)) return -1;
+    *owed = k - c;
+    return i;
+}
 static int for_line(void) {
     if (lp >= ln) return partial ? need_text("new-name: any name not in use\n") : fail("for <name> <type> <count>");
     const char *nm = lw[lp++];
@@ -960,11 +973,14 @@ static int for_line(void) {
     lp++;
     Ty t = {R_NONE, s, 0};
     if (cur < 0) return fail("this line can never run: the path already ended (ret, trap or break)");
-    if (lp + 1 == ln && is_lit(lw[lp])) { /* for <name> <type> <count number>: name = 0, 1, ... count-1 */
-        const char *kw = lw[lp++];
+    int owed, ki = count_number(&owed);
+    if (ki >= 0) { /* for <name> <type> <count number>: name = 0, 1, ... count-1 (brackets change nothing) */
+        const char *kw = lw[ki];
         int neg;
         uint64_t kv;
         if (!parse_lit(kw, &neg, &kv) || neg || kv > 1000000) return fail("count '%s' must be 0..1000000", kw);
+        if (owed) return need_text("words: )\n");
+        lp = ln;
         TRY(line_end(NULL, ""));
         int zero = lit_reg("0", t);
         TRY(zero);

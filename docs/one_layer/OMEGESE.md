@@ -91,7 +91,10 @@ written against a name.
 Typing is bottom-up. A value's type comes from its op; a bare number takes the type of the other
 value of its op (`add x 1`, `sub 15 i`, `shl 1 sh`), or the type the place needs when it stands
 alone (`ret 0`, `x = 5` for an existing x, a call argument, an index is uint). Two bare numbers in one
-op are refused (`add 1 2`, also when nested: `add a mul 2 3`). Comparisons give bool.
+op are refused (`add 1 2`, also when nested: `add a mul 2 3`). Comparisons give bool. In a shift a
+bare number on the left takes the type of the shift amount (`shl 1 sh` with sh uchar shifts a uchar);
+write its type when you mean another (`shl ulong 1 sh`). A typed number inside a conversion is
+converted (`long int 5` is the int 5 converted to long; `uchar int 300` traps 5).
 
 A condition is any value that gives bool (`while ne b 0`, `if or lt p -32768 gt p 32767`). Values may
 be nested wherever a value goes: after `=`, `ret`, `if`, `while`, `put` (index and value), call
@@ -181,6 +184,8 @@ rewrite. Whether models write Omegese reliably is not measured yet.
   arrays and calls, calls without values, a bool function as a condition, nested values);
 - 34 refusals, each with its expected reason, each with a fixed control that is accepted (arity, brackets,
   two numbers in one op, extra words, `new` inside a value, lines after trap);
+- review fixes: a conversion of a typed number converts it (`ret long int 5`, `uchar int 300`); a for
+  count in brackets lowers exactly as the bare count and has the same limit;
 - `omegese next` on 26 prefixes (the open-type list after a binary op, a typed second value, a bracket
   waiting for `)`, `end` withheld while a value function can still reach its end, refusals as soon as
   a prefix is wrong);

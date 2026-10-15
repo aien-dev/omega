@@ -52,6 +52,22 @@ done
 [ "$nn" -eq 6 ] && [ "$nt" -eq 5 ] || bad "nested $nn/6, trial2 $nt/5"
 echo "nested: $nn/6 rewritten dev programs and $nt/5 trial-2 model answers ACCEPT; trial-2 dev07 refused for its extra value"
 
+# 1a'. review fixes: a conversion of a typed number of another type must convert (not reuse the
+#      number's register under the wrong type); brackets around a for count change nothing
+printf 'fn f to long\nret long int 5\nend\n' > "$T/s1.omegese"
+accept "$T/s1.omegese" stacked-ret || true
+printf 'fn f x ulong to ulong\nret shl x uchar int 300\nend\n' > "$T/s2.omegese"
+accept "$T/s2.omegese" stacked-shift || true
+grep -q '"op": "cast"' "$T/stacked-shift.json" 2>/dev/null || bad "uchar int 300 must emit a cast (trap 5), not reuse the int const"
+printf 'fn f to uint\ns = uint 0\nfor i ulong %s\ns = add s 1\nend\nret s\nend\n' 8 > "$T/f1.omegese"
+printf 'fn f to uint\ns = uint 0\nfor i ulong %s\ns = add s 1\nend\nret s\nend\n' '( ( 8 ) )' > "$T/f2.omegese"
+"$G" emit "$T/f1.omegese" "$T/f1.json" > /dev/null && "$G" emit "$T/f2.omegese" "$T/f2.json" > /dev/null \
+  && cmp -s "$T/f1.json" "$T/f2.json" || bad "for i ulong ( ( 8 ) ) must lower exactly as for i ulong 8"
+printf 'fn f to uint\ns = uint 0\nfor i ulong ( 2000000 )\ns = add s 1\nend\nret s\nend\n' > "$T/f3.omegese"
+out="$("$G" emit "$T/f3.omegese" "$T/f3.json" || true)"
+[ "$out" = "REFUSED omegese: line 3: count '2000000' must be 0..1000000" ] || bad "bracketed count over the limit: got '$out'"
+echo "review fixes: stacked conversions convert; brackets around a for count change nothing"
+
 # 1b. coverage programs (break, nested loops, else-if, a for with a name as the count, arrays and
 #     calls across functions): omegese -> omega_emit -> checker2 ACCEPT
 cov=0
