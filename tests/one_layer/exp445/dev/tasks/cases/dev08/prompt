@@ -1,0 +1,4 @@
+Write a function collatz_steps that takes an unsigned 32-bit number n (at least 1) and returns how
+many steps the Collatz rule takes to reach 1: if n is even, n becomes n / 2, otherwise n becomes
+3 * n + 1. collatz_steps(1) = 0. Intermediate values can exceed 32 bits; for every input checked the
+answer is below 1000. It never traps for the inputs checked.

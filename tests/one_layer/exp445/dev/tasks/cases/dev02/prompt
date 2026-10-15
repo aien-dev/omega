@@ -1,0 +1,3 @@
+Write a function absdiff that takes two signed 32-bit numbers a and b and returns the absolute
+value of a - b as a signed 64-bit number. The result is exact for every pair of inputs (no overflow,
+no trap), including a = -2147483648 and b = 2147483647.

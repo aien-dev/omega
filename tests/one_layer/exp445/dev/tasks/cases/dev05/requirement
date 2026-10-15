@@ -1,0 +1,5 @@
+# public dev task (omega#445), not held out
+kind task
+entry checked_mul
+params i16 i16
+ret i16

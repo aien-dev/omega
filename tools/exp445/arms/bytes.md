@@ -1,0 +1,75 @@
+REPRESENTATION: bytes
+
+Write the program as OSC binary IR (spec/one-layer-format.md), spelled as hexadecimal: two hex
+digits per byte (0-9, a-f or A-F); spaces and line breaks between bytes are ignored; nothing else
+is allowed. The bytes are read by a strict decoder: any byte out of place refuses the whole program.
+
+All integers are little-endian, no padding. Use format version 1 (no struct table).
+
+Unit:
+  7 bytes  magic 4f 53 43 31 49 52 00
+  1 byte   version: 01
+  2 bytes  number of functions, 1..32, then each function record
+
+Function record:
+  1 + n    name: length n (1..63), then n ASCII bytes [A-Za-z_][A-Za-z0-9_]*, unique in the unit
+  1        number of parameters P (0..6)
+  type     return type
+  2        number of registers R (P..480), then R types: registers 0..P-1 are the parameters in
+           order, registers P..R-1 are locals
+  2        number of blocks B (1..512), then per block: 4 bytes index of its first instruction,
+           4 bytes instruction count. Blocks cover the instructions in order without gaps:
+           block 0 starts at 0, each next block starts where the previous ended. Block 0 is the entry.
+  4        number of instructions, then the instructions
+  2        00 00  (empty "requires" text)
+  2        00 00  (empty "ensures" text)
+
+Type: one byte: 0 void (return type only), 1 bool, 2 u8, 3 u16, 4 u32, 5 u64, 6 i8, 7 i16, 8 i32,
+9 i64; or an array reference: 0a, then kind (1 own, 2 shared, 3 mut), element type byte (1..9),
+2 bytes length (1..64).
+
+Instruction: one opcode byte, then its fields. r = 2-byte register / block / function index;
+ff ff means "none".
+  01 CONST   r dst, 8 bytes value (the value as a 64-bit number: unsigned zero-extended, signed
+             sign-extended two's complement, bool 0 or 1)
+  02 MOV     r dst, r a                   dst = a
+  03 BIN     1 sub, r dst, r a, r b       sub: 1 add 2 sub 3 mul 4 div 5 rem 6 and 7 or 8 xor 9 shl 10 shr
+  04 UN      1 sub, r dst, r a            sub: 1 neg 2 bitwise-not 3 logical-not (bool)
+  05 CMP     1 sub, r dst, r a, r b       sub: 1 eq 2 ne 3 lt 4 le 5 gt 6 ge; dst is bool
+  06 CAST    r dst, r a                   dst = a converted to dst's integer type
+  07 ALLOC   r dst, r a                   dst (own array) = new array, every element = a
+  08 RELEASE r a                          give back own array a
+  09 LOAD    r dst, r a, r b              dst = a[b]
+  0a STORE   r a, r b, r c                a[b] = c (a is own or mut)
+  0b CALL    r dst (ff ff for a void callee), r function index (an EARLIER function), 1 nargs,
+             nargs x r arg
+  0c TRAP    1 code (1..14)               stop with that trap
+  0d BR      r block                      continue at block
+  0e CBR     r a (bool), r then-block, r else-block
+  0f RET     r a (ff ff in a void function)
+
+Rules: every block ends with exactly one BR, CBR or RET, and only its last instruction is one
+(a TRAP does not end a block). Types agree (BIN/CMP: a and b the same type; BIN and UN: dst the
+same type as a). Every register is read only after it is written on every path to the read
+(parameters count as written). No recursion: a function calls only functions before it.
+
+Example. Task: function clamp_sub, parameters u32 u32, returns u32: a - b when a >= b, else 0.
+Registers: 0 a (u32), 1 b (u32), 2 bool, 3 u32, 4 u32.
+
+```
+4f5343314952000101000963 6c616d705f737562
+02 04 0500 04 04 01 04 04
+0300 00000000 02000000 02000000 02000000 04000000 02000000
+06000000
+05 06 0200 0000 0100
+0e 0200 0100 0200
+03 02 0300 0000 0100
+0f 0300
+01 0400 0000000000000000
+0f 0400
+0000 0000
+```
+
+(Line by line: magic, version 1, one function, name "clamp_sub"; 2 params, returns u32,
+5 registers u32 u32 bool u32 u32; 3 blocks at 0+2, 2+2, 4+2; 6 instructions; CMP ge r2 = r0 >= r1;
+CBR r2 -> block 1 else block 2; BIN sub r3 = r0 - r1; RET r3; CONST r4 = 0; RET r4; empty contracts.)

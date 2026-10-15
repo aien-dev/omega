@@ -1,0 +1,10 @@
+fn gcd(a: u32, b: u32) -> u32 {
+    let mut x: u32 = a;
+    let mut y: u32 = b;
+    while y != 0 bound 100 {
+        let t: u32 = x % y;
+        x = y;
+        y = t;
+    }
+    return x;
+}

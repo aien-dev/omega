@@ -1,0 +1,13 @@
+2ae33fcd49b545a81b10a543af2f61206beef6269f4409495b52ec6ad7872890  gen/b-bytes-1/dev01/r1.req.json
+d1ce635dfdc6cad1837eac566da99002d78c78f2d04d84c3cf394adbfbb21663  gen/b-bytes-1/dev01/r1.resp.json
+93372af50e11a1be72cb0b4911601a611a90b661e80c9d82f8e42b2edb1fc30b  gen/b-bytes-1/dev01/r2.req.json
+3c8e8bdc6ae38bbc81b94a333c69a5b77aa82fa1868a7080243e29b3d50733e5  gen/b-bytes-1/dev01/r2.resp.json
+ecd1457e1025c160f1c4c3081bf44b1503f83f9ef2bd28b39e491e4e201aad42  gen/b-structured-1/dev01/r1.req.json
+272c8cd03a49e498d05ef369e2533c593b21fd259501927c87400a5a78152dfb  gen/b-structured-1/dev01/r1.resp.json
+4fc800d30de934c90053f0e9d6a1a6a46d392433b9f533eead9c8a70e2a4da2c  gen/b-structured-1/dev01/r2.req.json
+eb05b65a9961dca47aef9a4b5e8e88a2dab8bdd6e75e4abcbe3d55157ee7fd32  gen/b-structured-1/dev01/r2.resp.json
+de8e64b48721b9a0abafbcd6b17a2b3ab282cb25f4b3e229db8855187e359fe3  gen/b-text-1/dev01/r1.req.json
+eb5d394c605aad9775dbce5d31af4eca120d9fa47a92c9cfec18ac24cf4a0874  gen/b-text-1/dev01/r1.resp.json
+e751ec87b82636a8f2f09d70459be40d41f5606f6933ee03231de2f7b09d086d  prompts/bytes.system.txt
+24256d60a47bbfd3c8955a15a665fe4e3bef2b6318e535ba49dcea118f6368a9  prompts/structured.system.txt
+1b690699231a6aeb16ab8de62aba5a5d1e45d19cbcf6779859a9ce35fd977ae5  prompts/text.system.txt

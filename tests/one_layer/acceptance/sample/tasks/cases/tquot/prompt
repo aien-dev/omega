@@ -1,0 +1,2 @@
+Write a function quot that takes two unsigned 16-bit numbers a and b and returns a divided by b,
+rounded toward zero. When b is 0 it must stop with trap kind 2 (division by zero).

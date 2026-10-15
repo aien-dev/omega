@@ -1,0 +1,3 @@
+Write a function checked_mul that takes two signed 16-bit numbers a and b and returns a * b as a
+signed 16-bit number. If the product does not fit in a signed 16-bit number (-32768..32767), it must
+stop with trap kind 1 (overflow).

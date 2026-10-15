@@ -1,0 +1,9 @@
+fn popcount(x: u64) -> u8 {
+    let mut v: u64 = x;
+    let mut n: u8 = 0;
+    for i in 0 .. 64 {
+        if (v & 1) == 1 { n = n + 1; }
+        v = v >> 1;
+    }
+    return n;
+}

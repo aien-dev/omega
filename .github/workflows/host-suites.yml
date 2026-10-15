@@ -26,6 +26,8 @@ name: Host suites
 #       compiler (OSC-1, own path guard),
 #       one-layer-acceptance (test-one-layer-acceptance: stage-1 harness
 #       selftest on the public sample corpus; omega #443),
+#       exp445-tools (test-omega-emit test-exp445: stage-2 driver, scorer and
+#       mutants on dev tasks with a fake server; omega #445),
 #       chip-tool-selftests (test-m19r-qualify test-gate14-combine
 #       test-window-lane-guard test-unwritten-trap-host test-ldst-host: the
 #       host-only self-tests of chip tooling; omega #425)
@@ -292,6 +294,32 @@ jobs:
       - name: Stage-1 acceptance harness selftest (sample corpus)
         if: steps.guard.outputs.run == 'true'
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-one-layer-acceptance
+
+  exp445-tools:
+    # One-layer stage 2 (omega#445): omega_emit and the exp445 experiment driver, scorer and their
+    # mutants, against a fake local server on dev tasks only (no model, no GPU, no held-out data).
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Changed-path guard (stage-2 tools only)
+        id: guard
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          CHANGED=$(git diff --name-only HEAD^1 HEAD)
+          if echo "$CHANGED" | grep -Eq '^(tools/omega_emit/|tools/exp445/|tools/omegese/|mk/omega-emit\.mk$|mk/omegese\.mk$|mk/one-layer-acceptance\.mk$|tests/one_layer/|docs/one_layer/EXP445_PROTOCOL\.md$|src/compiler/|src/checker2/|src/sha256\.|\.github/workflows/host-suites\.yml$)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"; echo "no stage-2 tool files changed; skipping"
+          fi
+      - name: Tools the driver needs (jq, curl, flock)
+        if: steps.guard.outputs.run == 'true'
+        run: command -v jq && command -v curl && command -v flock
+      - name: omega_emit and exp445 driver self-tests (dev tasks, fake server)
+        if: steps.guard.outputs.run == 'true'
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-omega-emit test-exp445
 
   chip-tool-selftests:
     # Host-only self-tests of chip tooling that previously ran nowhere in CI

@@ -3,6 +3,8 @@
 interface=HARNESS_INTERFACE.md
 interface_version=v1
 interface_sha256=a9e7e2aae27ff43d0e09e6dcd9173ad1f19776007c1a24496b102e830290de5e
+interface_v2=HARNESS_INTERFACE_V2.md
+interface_v2_sha256=a7e38a6faa7cdf7d479891209055f4fe789a55f5d377e4b6e36840aefe7f04c8
 # per-case limits inside the sandbox (wall clock and RLIMIT_CPU; RLIMIT_AS)
 time_ms=5000
 mem_mb=512

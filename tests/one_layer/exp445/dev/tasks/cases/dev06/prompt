@@ -1,0 +1,2 @@
+Write a function safe_div that takes two unsigned 32-bit numbers a and b and returns a divided by
+b, rounded down. When b is 0 it must stop with trap kind 2 (division by zero).

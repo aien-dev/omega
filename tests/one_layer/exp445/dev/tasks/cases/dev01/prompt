@@ -1,0 +1,2 @@
+Write a function clamp_add that takes two unsigned 8-bit numbers a and b and returns their sum,
+saturated at 255: if a + b is larger than 255, return 255 instead. It never traps.

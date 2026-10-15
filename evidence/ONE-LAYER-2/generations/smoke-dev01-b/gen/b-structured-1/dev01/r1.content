@@ -1,0 +1,26 @@
+```json
+{
+  "functions": [
+    {
+      "name": "clamp_add",
+      "params": ["u8", "u8"],
+      "ret": "u8",
+      "locals": ["u8"],
+      "blocks": [
+        [
+          {"op": "add", "dst": 2, "a": 0, "b": 1},
+          {"op": "br", "to": 1}
+        ],
+        [
+          {"op": "const", "dst": 3, "value": 255},
+          {"op": "cbr", "cond": 2, "then": 0, "else": 1},
+          {"op": "ret", "a": 3}
+        ],
+        [
+          {"op": "ret", "a": 2}
+        ]
+      ]
+    }
+  ]
+}
+```

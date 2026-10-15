@@ -1,0 +1,4 @@
+set	task	rounds	prompt_tokens	completion_tokens_r1	completion_tokens_r2	finish_r1	finish_r2	wall_s	check_r1	check_r2	candidate_sha256
+b-text-1	dev01	1	1665	54	-	stop	-	4.229	OK	-	526a02f16ccdf87cb7289ed7e0cd17b7689f2cf61295faa29276e6ae1bf219b1
+b-bytes-1	dev01	2	4013	248	249	stop	stop	35.172	REFUSED decoder: OVERSIZED (a count or length is over the format's limits)	REFUSED decoder: OVERSIZED (a count or length is over the format's limits)	975844b6507116eacf40df0ddba275d9d3d89a465e3f7218a044170728bc7ff4
+b-structured-1	dev01	2	3799	184	184	stop	stop	25.952	REFUSED step: function clamp_add block 1 op 0 (const): "dst" is register 3 but this function has registers 0..2	REFUSED step: function clamp_add block 1 op 1 (cbr): br, cbr and ret end a block: this one is followed by more ops	-

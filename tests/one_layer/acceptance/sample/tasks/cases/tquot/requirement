@@ -1,0 +1,5 @@
+# SAMPLE task (public, not sealed)
+kind task
+entry quot
+params u16 u16
+ret u16

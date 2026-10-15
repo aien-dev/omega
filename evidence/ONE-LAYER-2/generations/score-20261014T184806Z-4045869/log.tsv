@@ -1,0 +1,3 @@
+a-text-1	dev01	2	3414	51	54	stop	stop	4.804	REFUSED compiler: SYNTAX at line 2: expected :, found '='	OK	8f627cb6dfbd9459b5c7890f6e59cc5c8399a0673882f403a875ff7d32590a5d
+a-bytes-1	dev01	2	4032	274	274	stop	stop	22.289	REFUSED decoder: OVERSIZED (a count or length is over the format's limits)	REFUSED decoder: OVERSIZED (a count or length is over the format's limits)	de46c835fa1c4bfaaad32acc88a0de8ee63eec727a56e5cd0980799a7b1d6ba7
+a-structured-1	dev01	2	3710	192	210	stop	stop	16.588	REFUSED step: function clamp_add block 0 op 1 (gt): "b" is register 255 but this function has registers 0..3	REFUSED step: function clamp_add block 0 op 1 (const): a bool value is true, false, 0 or 1	-

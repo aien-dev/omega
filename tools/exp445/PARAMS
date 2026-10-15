@@ -1,0 +1,24 @@
+# exp445 generation parameters, frozen by docs/one_layer/EXP445_PROTOCOL.md before any held-out generation.
+# run.sh reads these; a command-line override is recorded in meta.txt as protocol=OVERRIDDEN and makes
+# the run invalid for score.sh. Only the configurations named here can run.
+attempts=3
+max_tokens=3072
+temperature=0.7
+top_p=0.8
+seed_base=445000
+timeout_s=900
+retries=2
+arms=text,bytes,structured
+heldout_tasks=60
+# configurations: model id at the endpoint, endpoint, extra JSON fields merged into every request
+config.A.model=qwen3-30b-a3b-instruct-2507
+config.A.base_url=http://127.0.0.1:18091/v1
+config.A.extra={}
+config.B.model=qwen3-8b
+config.B.base_url=http://127.0.0.1:18097/v1
+config.B.extra={"chat_template_kwargs":{"enable_thinking":false}}
+# weights: the frozen sha256 list of each configuration's model files (protocol section 9), checked in
+# models_root by check_weights.sh into every run dir before generation
+models_root=/home/drakestapleton/models
+config.A.weights=tools/exp445/weights.A.sha256
+config.B.weights=tools/exp445/weights.B.sha256
