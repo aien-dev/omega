@@ -1751,7 +1751,7 @@ static int oracle(char *src, int mode) {
     if (!*U || U[0] == '-' || isdigit((unsigned char)U[0])) {
         for (int k = 0; k < NBREAKS; k++) bp[nb++] = i128_of(BREAKS[k]);
         unsigned long long lens = 0; /* bit L-1: an array of length L is in scope */
-        for (int i = 0; i < S0.nnames; i++) { Ty t = regs[names[i].reg]; if (t.ref != R_NONE) lens |= 1ull << (t.len - 1); }
+        for (int i = 0; i < S0.nnames; i++) { Ty t = S0r[S0n[i].reg]; if (t.ref != R_NONE) lens |= 1ull << (t.len - 1); }
         for (int L = 1; L <= 64; L++) if (lens >> (L - 1) & 1) bp[nb++] = L;
         qsort(bp, (size_t)nb, sizeof bp[0], cmp128);
         int m = 0;
@@ -1784,8 +1784,10 @@ static int oracle(char *src, int mode) {
     int sp = *U ? legal(U, NULL, 1) : any;
     any |= sp;
     if (!any) {
-        if (*U) legal(U, NULL, 1);
-        else legal(NULL, NULL, 1);
+        /* a defect in the complete words is the prefix's own; otherwise the unfinished word U cannot
+         * be finished into anything that leads on */
+        if (*U && (legal(NULL, NULL, 1) || g_phase)) { legal(U, NULL, 1); g_phase = 1; }
+        else if (!*U) legal(NULL, NULL, 1);
         rc = refuse();
         goto out;
     }

@@ -182,8 +182,8 @@ rewrite. Whether models write Omegese reliably is not measured yet.
 prints what may come next. It is **exact**: an item is printed if and only if some text that starts
 with it turns the prefix into a program `omegese emit` accepts. Nothing that can still lead to an
 accepted program is missing (within the limits in 6.4), and nothing printed leads to a dead end. When no text can, it prints one
-`REFUSED omegese: ...` line and exits 1: a defect already in the prefix gets the reason `emit` would
-give; otherwise the line says `no text after this prefix makes a program emit accepts` with the reason the
+`REFUSED omegese: ...` line and exits 1: a defect in its complete words gets the reason `emit` would
+give; otherwise (also when the word being written cannot be finished) the line says `no text after this prefix makes a program emit accepts` with the reason the
 nearest attempt failed.
 
 How it decides. The prefix is split into its complete lines, the complete words of the last line, and
@@ -212,8 +212,8 @@ with exactly one line starting `REFUSED omegese: `. Let U be the word still bein
 
 | line | meaning |
 |---|---|
-| `word X` | finish the current word as X (X starts with U): a fixed word, a visible name, or a function |
-| `newname E1 E2 ...` | finish the current word as any new name: a letter or `_`, then letters, digits or `_`, at most 63 characters, starting with U, not a reserved word, and not one of E1 E2 ... (the names in use that start with U; the list may be empty) |
+| `word X` | finish the current word as X (X starts with U): a fixed word, a visible name, a function, or a name written earlier on the same line (a new parameter) |
+| `newname E1 E2 ...` | finish the current word as any new name: a letter or `_`, then letters, digits or `_`, at most 63 characters, starting with U, not a reserved word, and not one of E1 E2 ... (the visible names, functions and names earlier on the line that start with U; the list may be empty) |
 | `number LO HI` | finish the current word as a number v with LO <= v <= HI whose decimal text starts with U |
 | `(` | an opening bracket (it also ends the current word) |
 | `)` | a closing bracket (it also ends the current word) |
@@ -261,20 +261,24 @@ by any program in the suite or the fuzz.
   two numbers in one op, extra words, `new` inside a value, lines after trap);
 - review fixes: a conversion of a typed number converts it (`ret long int 5`, `uchar int 300`); a for
   count in brackets lowers exactly as the bare count and has the same limit;
-- `omegese next` on 43 prefixes, red before green (the open-type list after a binary op, a typed second
+- `omegese next` on 59 prefixes, red before green (the open-type list after a binary op, a typed second
   value, a bracket waiting for `)`, a `ret` that must read the names its path leaves unread, a cut
-  inside a word, number intervals, `-0`, the `--machine` lines, `complete`, refusals as soon as a
-  prefix is wrong);
+  inside a word, the exact number range of every scalar type and of trap codes, array lengths, loop
+  bounds and counts, a minus sign where none fits, `-0`, the `--machine` lines including the 6.2
+  example and the new-name exclusion list, `complete`, refusals as soon as a prefix is wrong);
 - next oracle: at all 2199 word boundaries of the 63 accepted programs in the suite, the real next
   word, and the end of input at the end, are legal;
 - completeness: 126 single-word mutants of those programs (a word dropped, doubled, or replaced by a
   number, a name, a fresh name or a fixed word): `emit` accepts a mutant if and only if every word of
   it was legal when it was written (2519 word boundaries);
-- soundness fuzz: 40 random walks of up to 25 legal items from random cut points; the legal set is
+- soundness fuzz: 40 random walks of up to 25 legal items from random cut points (a number item is
+  tried at its ends and at a random value inside); the legal set is
   never empty, a word picked stays legal after each of its first characters, and `omegese complete`
   then finishes the walk into a program `emit` accepts within a bounded number of lines;
 - truncation fuzz: all 2799 byte prefixes of the nested, trial and coverage programs through `emit`,
-  `next` and `next --machine`, which must answer (accept or refuse with a reason) and never crash;
+  `next` and `next --machine`, which must answer (accept or refuse with a reason) and never crash; at
+  the 2698 prefixes of accepted programs, `next` must also allow the byte that follows (the whole
+  word it belongs to) and `complete` must finish the prefix into a program `emit` accepts;
 - loop guard negative control: the dev04 op list without the hidden counter increment passes
   omega_emit and is REJECTED by checker2 (`C2-LOOP-UNBOUNDED`);
 - tokenizer gate, when `OMEGESE_TOKCOUNT` (a counter: `<tool> <tokenizer.json> words <word>...`

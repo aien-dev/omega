@@ -13,7 +13,8 @@
 #  5. next oracle: every word of every accepted program is legal where it is written;
 #  6. completeness: single-word mutants (OMEGESE_MUTANTS per program): emit accepts iff every word legal;
 #  7. soundness fuzz (OMEGESE_WALKS walks of OMEGESE_STEPS items) closed by omegese complete; then the
-#     truncation fuzz: every byte prefix through emit, next and next --machine answers, never crashes.
+#     truncation fuzz: every byte prefix through emit, next and next --machine answers, never crashes,
+#     allows the byte that follows, and is finished by complete.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
@@ -291,7 +292,23 @@ nxeq 'fn f a uint to uint\nx = new uint 4 0\nx = new uint ' 'number: 4..4'
 nxeq 'fn f a uint to uint\nx = new uint 4 0\nx = new uint 4' 'number: 4..4\nwords: ( (space)'
 nxcase 'fn f a uint to uint\nx = new uint 4 0\nx = new uint 1' 'REFUSED omegese: line 3: *own uint 1 but the name holds own uint 4*' 'a length no number extends: not refused'
 nxeq 'fn f a short to short\nret add a -' 'number: -32768..32767'
-nxeq 'fn f a short to short\nret add a -0' 'REFUSED omegese: line 2: '"'"'-0'"'"' is not a number (digits, an optional minus sign, no leading zeros, no -0)'
+nxeq 'fn f a short to short\nret add a -0' 'REFUSED omegese: line 2: no text after this prefix makes a program emit accepts ('"'"'-0'"'"' is not a number (digits, an optional minus sign, no leading zeros, no -0))'
+# the number ranges each slot allows: every scalar type, a minus sign where none fits, and the fixed
+# limits (trap codes, array lengths, loop bounds and counts)
+nxnum() { # <prefix> <lo..hi> <what>: the number line is exactly that interval
+  nxk=$((nxk + 1))
+  local got; got="$(nx "$1")"$'\n'
+  [[ $got == *"number: $2"$'\n'* ]] || bad "next $3: got '$got'"
+}
+for tr in uchar:0..255 ushort:0..65535 uint:0..4294967295 ulong:0..18446744073709551615 byte:-128..127 \
+          short:-32768..32767 int:-2147483648..2147483647 long:-9223372036854775808..9223372036854775807; do
+  nxnum "fn f a ${tr%%:*} to ${tr%%:*}\\nret add a " "${tr#*:}" "range of ${tr%%:*}"
+done
+nxcase 'fn f a uint to uint\nret add a -' 'REFUSED omegese: line 2: no text after this prefix*' 'a minus sign in an unsigned slot: not refused'
+nxnum 'fn f a uint to uint\ntrap ' '1..14' 'trap codes'
+nxnum 'fn f a uint to uint\nx = new uint ' '1..64' 'array lengths'
+nxnum 'fn f a uint to uint\nwhile lt a 3 bound ' '1..1000000' 'loop bounds'
+nxnum 'fn f a uint to uint\nfor i uint ' '0..1000000' 'loop counts'
 # the machine form: one item per line
 nxm() { printf '%b' "$1" > "$T/p"; "$G" next --machine "$T/p" || true; }
 nxk=$((nxk + 1)); got="$(nxm 'fn f a uint to uint\nx = new uint 4 0\nre')"
@@ -300,6 +317,12 @@ nxk=$((nxk + 1)); got="$(nxm 'fn f a uint b ulong to uint\nret a\nend\n')"
 [ "$got" = "$(printf 'word fn\nspace\nnewline\neof')" ] || bad "next --machine after a function: got '$got'"
 nxk=$((nxk + 1)); got="$(nxm 'fn f a uint b ulong to uint\nx = add a')"
 [ "$got" = "$(printf 'word add\nword and\nword a\n(\nspace')" ] || bad "next --machine inside a name: got '$got'"
+nxk=$((nxk + 1)); got="$(nxm 'fn f a uint to uint\n')"
+[ "$got" = "$(printf 'word if\nword while\nword for\nword ret\nword trap\nword a\nnewname a f\nspace\nnewline')" ] || bad "next --machine at a line start (OMEGESE.md 6.2): got '$got'"
+nxk=$((nxk + 1)); got="$(nxm 'fn f ab uint b uint to uint\nfor abc uint 3\nx = add abc a')"
+[ "$got" = "$(printf 'word add\nword and\nword ab\nword abc')" ] || bad "next --machine, names that extend the word: got '$got'"
+nxk=$((nxk + 1)); got="$(nxm 'fn f ab uint b uint to uint\nfor abc uint 3\na')"
+[ "$got" = "$(printf 'word ab\nnewname ab abc\n(\nspace')" ] || bad "next --machine, a new name that extends names in use: got '$got'"
 # complete: the witness text, which emit accepts after the prefix
 nxk=$((nxk + 1)); got="$(printf 'fn f a uint to uint\nx = new uint 4 0\nif gt a 2\ny = add a 1\nret ' > "$T/p"; "$G" complete "$T/p")"
 [ "$got" = "$(printf ' y\nend\nx = x\nret 0\nend')" ] || bad "complete inside an if: got '$got'"
@@ -746,7 +769,8 @@ fi
 #    Oracle: at every word boundary of every accepted program (dev, nested, trial-2, coverage, refusal
 #    controls) the word that follows is legal, and eof is legal at the end. Truncation fuzz: every
 #    byte prefix of the nested, trial-2 and coverage programs goes through emit and next and ends with
-#    exit 0 or 1 (no crash; the suite also runs on an ASan/UBSan build).
+#    exit 0 or 1 (no crash; the suite also runs on an ASan/UBSan build); for accepted programs next
+#    must also allow the byte that follows, and complete must finish the prefix into an accepted program.
 FIXEDW=" $("$G" words | tr '\n' ' ')u8 u16 u32 u64 i8 i16 i32 i64 "
 dec_le() { # <a> <b>: a <= b, for canonical decimal integers of any size
   local a="$1" b="$2" x y
@@ -886,6 +910,16 @@ for ((wk = 0; wk < ${OMEGESE_WALKS:-40}; wk++)); do
       newname*) for ((q = 0; q < 9; q++)); do x="n$RANDOM"; mallowed "$items" "$x" && break; done ;;
       number*) read -r _ lo hi <<< "$it"; c=()
                for v in "$lo" "$hi" 0 1 -1 9 100; do dec_le "$lo" "$v" && dec_le "$v" "$hi" && c+=("$v"); done
+               # and a random value inside: by arithmetic when the interval fits, else random digits
+               if [ ${#lo} -le 17 ] && [ ${#hi} -le 17 ]; then
+                 c+=("$((lo + (RANDOM << 30 | RANDOM << 15 | RANDOM) % (hi - lo + 1)))")
+               else
+                 for ((q = 0; q < 9; q++)); do
+                   v=$((1 + RANDOM % 9)); for ((d = RANDOM % 20; d > 0; d--)); do v+=$((RANDOM % 10)); done
+                   [[ $lo == -* ]] && ((RANDOM % 2)) && v="-$v"
+                   dec_le "$lo" "$v" && dec_le "$v" "$hi" && { c+=("$v"); break; }
+                 done
+               fi
                x="${c[RANDOM % ${#c[@]}]}" ;;
       *) bad "soundness: unknown item '$it'"; ok=0; break ;;
     esac
@@ -907,21 +941,42 @@ for ((wk = 0; wk < ${OMEGESE_WALKS:-40}; wk++)); do
   nwalk=$((nwalk + 1))
 done
 echo "soundness fuzz: $nwalk/${OMEGESE_WALKS:-40} random walks ($nstep legal items picked) never met an empty set and closed into accepted programs"
-nf=0
+nf=0 nfs=0
+WC=$'[^ \t\r\n()]'
 for f in "$ROOT"/tests/one_layer/omegese/nested/*.omegese "$ROOT"/tests/one_layer/omegese/trial2/*.omegese "$T"/c*.omegese; do
   s="$(cat "$f")"$'\n'
+  # an accepted program: every byte prefix must also be open (next exit 0), allow the byte that
+  # follows (the whole word it belongs to, a space, a newline, a bracket or the end), and be finished
+  # by `omegese complete` into a program emit accepts. A refused one (trial2/dev07): no crash only.
+  full=0; printf '%s' "$s" > "$T/p"; "$G" emit "$T/p" "$T/p.json" > /dev/null 2>&1 && full=1
   for ((i = 0; i <= ${#s}; i++)); do
     printf '%s' "${s:0:i}" > "$T/p"
     rc=0; "$G" emit "$T/p" "$T/p.json" > /dev/null 2>&1 || rc=$?
     [ "$rc" -le 1 ] || { bad "emit exit $rc on byte prefix $i of $(basename "$f")"; break; }
     rc=0; "$G" next "$T/p" > /dev/null 2>&1 || rc=$?
     [ "$rc" -le 1 ] || { bad "next exit $rc on byte prefix $i of $(basename "$f")"; break; }
-    rc=0; "$G" next --machine "$T/p" > /dev/null 2>&1 || rc=$?
+    rc=0; items="$("$G" next --machine "$T/p" 2>&1)" || rc=$?
     [ "$rc" -le 1 ] || { bad "next --machine exit $rc on byte prefix $i of $(basename "$f")"; break; }
     nf=$((nf + 1))
+    [ "$full" = 1 ] || continue
+    [ "$rc" -eq 0 ] || { bad "byte prefix $i of $(basename "$f") refused: $items"; break; }
+    c="${s:i:1}"
+    case "$c" in
+      "") w=EOF ;;
+      " "|$'\t') w=space ;;
+      $'\n') w=NL ;;
+      "("|")") w="$c" ;;
+      *) [[ ${s:0:i} =~ ($WC*)$ ]]; w="${BASH_REMATCH[1]}"; [[ ${s:i} =~ ^($WC*) ]]; w+="${BASH_REMATCH[1]}" ;;
+    esac
+    if [ "$w" = space ]; then [[ $'\n'"$items"$'\n' == *$'\nspace\n'* ]]
+    else mallowed "$items" "$w"; fi || { bad "byte prefix $i of $(basename "$f"): the next byte ('$w') is not allowed"; break; }
+    rc=0; "$G" complete "$T/p" > "$T/p.c" 2>&1 || rc=$?
+    { [ "$rc" -eq 0 ] && cat "$T/p" "$T/p.c" > "$T/pc.omegese" && "$G" emit "$T/pc.omegese" "$T/p.json" > /dev/null 2>&1; } \
+      || { bad "byte prefix $i of $(basename "$f"): complete does not finish it into an accepted program"; break; }
+    nfs=$((nfs + 1))
   done
 done
-echo "truncation fuzz: $nf byte prefixes through emit, next and next --machine, exit 0 or 1"
+echo "truncation fuzz: $nf byte prefixes through emit, next and next --machine, exit 0 or 1; at the $nfs prefixes of accepted programs, next allows the byte that follows and complete finishes into a program emit accepts"
 if [ "${OMEGESE_SANITIZED:-0}" = 1 ]; then
   if [ -s "$T/san.log" ]; then bad "sanitizer reports: $(grep -m3 -E '^==|ERROR|runtime error' "$T/san.log")"
   else echo "sanitizers: no ASan or UBSan report in the whole run"; fi

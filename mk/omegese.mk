@@ -4,7 +4,7 @@
 #
 # omegese        build/omegese/omegese
 # test-omegese   tools/omegese/test_omegese.sh twice: on the -O2 build, then on an ASan and UBSan build with
-#              smaller fuzz counts, whose negative control is two canary builds (a heap over-read and a
+#              smaller fuzz counts, whose negative control is two canary builds (a read after free and a
 #              signed overflow) that must be caught. The script checks the dev programs (omegese ->
 #              omega_emit -> checker2 ACCEPT), refusals with reasons, the loop-guard negative control, the
 #              exact next oracle (completeness, soundness and truncation fuzz) and, when OMEGESE_TOKCOUNT
