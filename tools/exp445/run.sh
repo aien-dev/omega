@@ -109,6 +109,8 @@ weights_ok "$OUT" "$WLIST" "$FMODEL" ||
 DEVC="$ROOT/tests/one_layer/exp445/dev/tasks/cases" G0T="$(kv g0_task)"
 W0="$(mktemp -d "${TMPDIR:-/tmp}/exp445-run.XXXXXXXX")"; trap 'rm -rf "$W0"' EXIT
 system_prompt "$HERE/arms" omegese "$(kv heldout_prompt_mode)" > "$W0/g0.system" || die "cannot build the omegese prompt"
+fl="$(g0_failed "$CONFIG" "$SERVER" "$(sha256sum "$PARAMS" | cut -d" " -f1)")"
+[ -z "$fl" ] || die "a G0 FAIL for config $CONFIG on this server and PARAMS is in $(g0_ledger) ($(cut -f1,5,6 <<< "$fl" | tr "\t" " ")): nothing in that configuration runs (protocol 13.4)"
 why="$(g0_check "$OUT/g0" "$CONFIG" "$FMODEL" "$FBASE" "$EXTRA" "$SERVER" "$(sha256sum "$PARAMS" | cut -d" " -f1)" "$(kv g0_gate_sha256)" "$W0/g0.system" \
   "$(user_msg "$DEVC/$G0T/requirement" "$DEVC/$G0T/prompt")" "$(kv max_tokens)" "$(kv temperature)" "$(kv top_p)" "$(kv seed_base)" \
   "$(ls "$DEVC" | LC_ALL=C sort | awk -v t="$G0T" '$0 == t { print NR }')" "$(kv g0_seeds)")" ||

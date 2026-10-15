@@ -21,7 +21,9 @@
 # score.sh refuses a run, without a G0 PASS for the same configuration, server and PARAMS (reader.sh
 # g0_check re-derives it). A G0 record is never overwritten: after a FAIL nothing runs in that run dir
 # (13.4). A transport failure (the gate exits 2 or runs out of time, or the repeat gets no response) writes
-# no record and exits 2: it says nothing about the sampler. EXP445_PARAMS names another PARAMS file (tests only).
+# no record and exits 2: it says nothing about the sampler. Every verdict is appended to the G0 ledger (reader.sh
+# g0_ledger); with a FAIL there for this configuration, server and PARAMS, g0.sh and run.sh refuse in any
+# run dir. EXP445_PARAMS names another PARAMS file (tests only).
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
@@ -56,6 +58,9 @@ DEV="$ROOT/tests/one_layer/exp445/dev/tasks/cases"
 [ -f "$DEV/$TASK/requirement" ] && [ -f "$DEV/$TASK/prompt" ] || die "no dev task $TASK"
 TI="$(ls "$DEV" | LC_ALL=C sort | awk -v t="$TASK" '$0 == t { print NR }')"
 . "$HERE/reader.sh"
+PSHA="$(sha256sum "$PARAMS" | cut -d" " -f1)"
+fl="$(g0_failed "$CONFIG" "$SERVER" "$PSHA")"
+[ -z "$fl" ] || die "a G0 FAIL for config $CONFIG on this server and PARAMS is in $(g0_ledger) ($(cut -f1,5,6 <<< "$fl" | tr "\t" " ")): nothing in that configuration runs (protocol 13.4)"
 mkdir -p "$OUT"; OUT="$(realpath -e "$OUT")"
 D="$OUT/g0"
 [ ! -e "$D" ] || die "$D exists: a G0 record is never overwritten; after a G0 FAIL nothing runs in this run dir (protocol 13.4)"
@@ -93,5 +98,7 @@ if g0_pass "$der" "$N"; then v=PASS; else v=FAIL; fi
 } > "$W/verdict.txt"
 (cd "$W" && g0_files . | tr '\n' '\0' | xargs -0 sha256sum) > "$W/SHA256SUMS"
 mv "$W" "$D"; trap - EXIT
+mkdir -p "$(dirname "$(g0_ledger)")"
+printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$(date -u +%Y%m%dT%H%M%SZ)" "$CONFIG" "$SERVER" "$PSHA" "$v" "$D" "$(sha256sum < "$D/SHA256SUMS" | cut -d" " -f1)" >> "$(g0_ledger)"
 echo "g0.sh: config $CONFIG: $der: G0 $v (record in $D)"
 [ "$v" = PASS ]

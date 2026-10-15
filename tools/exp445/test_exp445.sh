@@ -209,6 +209,7 @@ sed "s|^config\.A\.base_url=.*|config.A.base_url=$URL2|" "$TP" > "$T/PARAMS2"
 sed -e 's/^attempts=.*/attempts=2/' -e 's/^heldout_tasks=.*/heldout_tasks=4/' -e 's/^futility_max=.*/futility_max=3/' "$TP" > "$T/PARAMSH"
 sed 's/^futility_max=.*/futility_max=2/' "$T/PARAMSH" > "$T/PARAMSC"
 export EXP445_PARAMS="$TP"
+export EXP445_G0_LEDGER="$T/g0-ledger.tsv"   # the tests never write the real ledger
 cw() { "$HERE/check_weights.sh" "$1" "$2" > /dev/null; }
 g0() { "$HERE/g0.sh" --config "$1" --out "$2" > /dev/null 2>&1; }
 prep() { cw "$1" "$2" && g0 "$1" "$2"; }
@@ -278,7 +279,7 @@ refuse "g0.sh over an existing G0 record" "exists: a G0 record is never overwrit
 # the same answer for every seed: PASS only when the reported p_repeat makes it plausible (p_repeat^7 >= 0.01)
 g0case() { # g0case <name> <sampling.json or -> <expect PASS|FAIL> <derived> [gate.txt line grep]
   local d="$T/g0c$((++G0N))"; if [ "$2" = - ]; then rm -f "$A2/sampling.json"; else printf '%s\n' "$2" > "$A2/sampling.json"; fi
-  EXP445_PARAMS="$T/PARAMS2" cw A "$d"; local e=0; EXP445_PARAMS="$T/PARAMS2" "$HERE/g0.sh" --config A --out "$d" > /dev/null 2>&1 || e=$?
+  EXP445_PARAMS="$T/PARAMS2" cw A "$d"; local e=0; EXP445_G0_LEDGER="$d.ledger" EXP445_PARAMS="$T/PARAMS2" "$HERE/g0.sh" --config A --out "$d" > /dev/null 2>&1 || e=$?
   [ "$e" = "$([ "$3" = PASS ] && echo 0 || echo 1)" ] && [ "$(tail -1 "$d/g0/verdict.txt")" = "G0 $3" ] && grep -qx "derived=$4" "$d/g0/verdict.txt" &&
     { [ -z "${5:-}" ] || grep -q -- "$5" "$d/g0/gate/gate.txt"; } && ok "G0 $3 (exit $e): $1" || { bad "G0 case: $1"; grep derived "$d/g0/verdict.txt"; tail -3 "$d/g0/gate/gate.txt"; }
   G0LAST="$d"
@@ -287,6 +288,14 @@ G0N=0
 g0case "identical answers, p_repeat 0.5 (0.5^7 < 0.01): the seed looks ignored" - FAIL 'gate=FAIL distinct=1/8 repeat_identical=yes sampled_own_seed=9/9' 'gate d FAIL identical replies with p_repeat^7=0.0078125 < 0.01'
 g0case "identical answers, p_repeat 0.51 (0.51^7 = 0.00897 < 0.01), boundary" '{"p_repeat": 0.51}' FAIL 'gate=FAIL distinct=1/8 repeat_identical=yes sampled_own_seed=9/9' 'gate d FAIL identical'
 g0case "identical answers, p_repeat 0.52 (0.52^7 = 0.0103 >= 0.01): a confident model; distinct 1/8 recorded, not gated" '{"p_repeat": 0.52}' PASS 'gate=PASS distinct=1/8 repeat_identical=yes sampled_own_seed=9/9' 'gate d PASS identical replies explained by confidence'
+# the G0 ledger: a FAIL bars the configuration on that server and PARAMS in every run dir (13.4)
+[ "$(cut -f2,3,5 "$T/g0c1.ledger")" = "$(printf 'A\tfake445 test server A\tFAIL')" ] && [ "$(cut -f6 "$T/g0c1.ledger")" = "$T/g0c1/g0" ] &&
+  ok "G0 ledger: the FAIL appended (config, server, PARAMS sha, verdict, record dir, SHA256SUMS sha)" || bad "G0 ledger line: $(cat "$T/g0c1.ledger")"
+refuse "g0.sh in a new run dir after a G0 FAIL for the same config, server and PARAMS" "a G0 FAIL for config A on this server and PARAMS is in" \
+  env EXP445_G0_LEDGER="$T/g0c1.ledger" EXP445_PARAMS="$T/PARAMS2" "$HERE/g0.sh" --config A --out "$T/g0again"
+[ ! -e "$T/g0again" ] && ok "  nothing written by the refused G0" || bad "refused G0 wrote files"
+refuse "run.sh on a run dir with a G0 PASS while the ledger holds a FAIL for that config" "a G0 FAIL for config A on this server and PARAMS is in" \
+  env EXP445_G0_LEDGER="$T/g0c1.ledger" EXP445_PARAMS="$T/PARAMS2" "$HERE/run.sh" --config A --tasks "$T/pub" --out "$T/g0c3"
 g0case "a server that ignores the seed (reports seed 0, the stage S mutant)" '{"ignore_seed": true, "p_repeat": 0.9}' FAIL 'gate=FAIL distinct=1/8 repeat_identical=yes sampled_own_seed=0/9' 'gate d FAIL a reply was not sampled with its own seed'
 g0case "a server that forces greedy decoding (reports mode greedy, the stage S mutant)" '{"force_greedy": true, "p_repeat": 0.9}' FAIL 'gate=FAIL distinct=1/8 repeat_identical=yes sampled_own_seed=0/9' 'gate b 0/4 FAIL'
 g0case "the gate's own replays differ (gates a and c fail) while dev01's identical answers are confident (gate d passes)" '{"vary_untasked": true, "p_repeat": 0.9}' FAIL 'gate=FAIL distinct=1/8 repeat_identical=yes sampled_own_seed=9/9' '^gate a 0/4 FAIL'
@@ -371,7 +380,7 @@ grep -qx 'prompt_mode=one' "$FBO/meta.txt" && grep -qx 'protocol=PARAMS' "$FBO/m
 mut_make() { rm -rf "$T/mut"; mkdir -p "$T/mut"; cp "$HERE/run.sh" "$HERE/PARAMS" "$HERE/reader.sh" "$HERE/g0.sh" "$HERE/sampling-gate.sh" "$T/mut/"; cp -R "$HERE/arms" "$T/mut/arms"
   sed -i "s|^ROOT=.*|ROOT=\"$ROOT\"|" "$T/mut/run.sh" "$T/mut/g0.sh"; cp "$T/mut/$1" "$T/mut/$1.orig"; sed -i "$2" "$T/mut/$1"
   if cmp -s "$T/mut/$1.orig" "$T/mut/$1"; then bad "mutant: sed changed nothing in $1 ($2)"; return 1; fi; }
-mut_run() { mut_make "$2" "$3" || return 1; rm -rf "$T/mr"; cw "${4:-A}" "$T/mr"; "$T/mut/g0.sh" --config "${4:-A}" --out "$T/mr" > /dev/null 2>&1 || true
+mut_run() { mut_make "$2" "$3" || return 1; rm -rf "$T/mr"; cw "${4:-A}" "$T/mr"; EXP445_G0_LEDGER="$T/mut.ledger" "$T/mut/g0.sh" --config "${4:-A}" --out "$T/mr" > /dev/null 2>&1 || true
   "$T/mut/run.sh" --config "${4:-A}" --tasks "$T/pub" --out "$T/mr" --only dev01,dev02,dev03 > /dev/null 2>&1 || true; }
 R0="$R"; R="$T/mr"
 M="no repair round"; mut_run norepair run.sh 's/if \[ "\$k1" != OK \] \&\& ask/if false \&\& ask/' && { [ "$(lg a-text-1 dev02 11)" = OK ] && bad "mutant survived: $M" || ok "  mutant caught: $M"; }

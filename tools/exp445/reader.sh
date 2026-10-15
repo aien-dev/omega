@@ -121,6 +121,13 @@ a1_rows_sha() { tail -n +2 "$1" | awk -F'\t' '$1 ~ /-1$/' | LC_ALL=C sort | sha2
 # prompt.system.txt, rK.req.json for K = 1 .. g0_seeds + 1 (the last repeats the seed of the first), gate/
 # (the stage S gate's output: gate.txt and every reply; d-rK.json is the reply to rK.req.json), the
 # repeat's rK.transport and rK.resp.json, verdict.txt and SHA256SUMS.
+# G0 ledger (13.4: on FAIL nothing in that configuration runs). g0.sh appends every verdict to one ledger
+# (EXP445_G0_LEDGER, default evidence/ONE-LAYER-2/g0-ledger.tsv, committed with the runs): UTC time, config,
+# server, params_sha256, PASS or FAIL, the record's directory, the sha256 of its SHA256SUMS. g0.sh and run.sh
+# refuse a configuration whose server and PARAMS have a FAIL there, whatever run directory holds it.
+g0_ledger() { echo "${EXP445_G0_LEDGER:-$ROOT/evidence/ONE-LAYER-2/g0-ledger.tsv}"; }
+# g0_failed <config> <server> <params sha256>: prints the first FAIL line for them (nothing when none)
+g0_failed() { local l; l="$(g0_ledger)"; if [ -f "$l" ]; then awk -F'\t' -v c="$1" -v s="$2" -v p="$3" '$2 == c && $3 == s && $4 == p && $5 == "FAIL" { print; exit }' "$l"; fi; }
 # g0_files <g0 dir>: the hashed files (gate/ included), sorted
 g0_files() { (cd "$1" && find . -type f ! -path ./SHA256SUMS -printf '%P\n' | LC_ALL=C sort); }
 # g0_seed <seed_base> <k> <task index>: the seed of G0 request k (request g0_seeds + 1 uses k = 1)
