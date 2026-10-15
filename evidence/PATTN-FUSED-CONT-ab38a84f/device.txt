@@ -1,0 +1,6 @@
+start 2026-10-15T02:50:26Z omega=ab38a84fe638240b11bfbb8f26d891d1f3ccd36e branch=fix/omega-preexisting-nits dirty=1 physics=/home/drakestapleton/workspace/pkv514-pins/physics physics_commit=6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf
+Linux spark-b87b 7.0.0-1019-nvidia #19~24.04.2-Ubuntu SMP PREEMPT_DYNAMIC Sun Sep  6 18:35:11 UTC 2 aarch64 aarch64 aarch64 GNU/Linux
+NVIDIA GB10, 580.173.02
+               total        used        free      shared  buff/cache   available
+Mem:             121          53          50           3          23          68
+end 2026-10-15T02:51:57Z
