@@ -91,6 +91,9 @@ done
 WLIST="$(kv "config.$CONFIG.weights")"; case "$WLIST" in /*|"") ;; *) WLIST="$ROOT/$WLIST" ;; esac
 [[ "$MAXT" =~ ^[0-9]+$ ]] && [ "$MAXT" -gt 0 ] || die "max_tokens must be a positive integer (PARAMS or --max-tokens)"
 [[ "$ATTEMPTS" =~ ^[1-9]$ ]] || die "attempts 1..9"
+[[ "$RETRIES" =~ ^[0-9]$ ]] || die "retries must be 0..9 (PARAMS)"
+[[ "$TIMEOUT" =~ ^[1-9][0-9]*$ ]] || die "timeout_s must be a positive integer (PARAMS)"
+[[ "${EXP445_TEST_BACKOFF_S:-5}" =~ ^[0-9]+$ ]] || die "EXP445_TEST_BACKOFF_S must be an integer (the retry pause, reader.sh ask)"
 cfg="$(echo "$CONFIG" | tr 'A-Z' 'a-z')"
 [ -d "$TASKS/tasks/cases" ] || die "$TASKS/tasks/cases missing (use ola.sh tasks-public)"
 [ -z "$(find "$TASKS/tasks/cases" -path "*/hidden*" -print -quit)" ] || die "$TASKS contains hidden files: the driver must see only requirement + prompt"
@@ -123,6 +126,8 @@ why="$(g0_check "$OUT/g0" "$CONFIG" "$FMODEL" "$FBASE" "$EXTRA" "$SERVER" "$(sha
   die "no G0 PASS for config $CONFIG and this server in $OUT/g0: $why (run tools/exp445/g0.sh --config $CONFIG --out $OUT; protocol 13.4)"
 mkdir -p "$OUT/prompts" "$OUT/gen" "$OUT/cands"
 OUT="$(realpath -e "$OUT")"
+# one driver per run dir: a second run.sh on the same --out would interleave tries and log rows
+exec 9> "$OUT/.lock"; flock -n 9 || die "another run.sh holds $OUT (lock $OUT/.lock)"
 
 # ---- system prompts, one per arm ----------------------------------------------------------------------
 for arm in ${ARMS//,/ }; do

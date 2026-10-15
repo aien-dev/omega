@@ -1,0 +1,8 @@
+sim copy: ran, peak 12 registers, 0 wrong, 0 written past the end
+round trip 1 (96 MB, cached device buffer): rc OK, 0 wrong words
+round trip 2 (rewritten by the GPU over cached lines): rc OK, 0 wrong words
+bw uncached distinct: rc OK, median 2008.7 us, 200.5 GB/s, 0 wrong
+bw uncached same-1MB: rc OK, median 2758.6 us, 36.5 GB/s, 0 wrong
+bw cached   distinct: rc OK, median 5406.0 us, 74.5 GB/s, 0 wrong
+bw cached   same-1MB: rc OK, median 2226.1 us, 45.2 GB/s, 0 wrong
+GPU_PF_MEM: PASS

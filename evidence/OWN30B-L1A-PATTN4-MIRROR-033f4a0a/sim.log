@@ -1,0 +1,38 @@
+codegen warps 4 mode 0: 917 instructions, 120 registers (declared 128, 128 threads -> 16384 of 65536), 16 placeholders patched
+codegen warps 4 mode 1: 174 instructions, 56 registers (declared 64, 128 threads -> 8192 of 65536), 0 placeholders patched
+codegen warps 4 mode 2: 782 instructions, 124 registers (declared 128, 128 threads -> 16384 of 65536), 16 placeholders patched
+codegen warps 8 mode 0: 866 instructions, 120 registers (declared 128, 256 threads -> 32768 of 65536), 16 placeholders patched
+codegen warps 8 mode 1: 174 instructions, 56 registers (declared 64, 256 threads -> 16384 of 65536), 0 placeholders patched
+codegen warps 8 mode 2: 731 instructions, 124 registers (declared 128, 256 threads -> 32768 of 65536), 16 placeholders patched
+codegen warps 8 APPEND + mirror: 187 instructions, 56 registers
+sim one token at position 0                  W=8: ok bad=0 worst=0.000 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim 5 tokens from 0 (partial CTA)            W=8: ok bad=0 worst=0.257 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim 19 tokens from 37, warps 4               W=4: ok bad=0 worst=0.112 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim 19 tokens from 37, sharp q (x4)          W=8: ok bad=0 worst=0.107 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim 64 tokens from 100 (full chunk)          W=8: ok bad=0 worst=0.067 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim 70 tokens from 0 (two chunks)            W=8: ok bad=0 worst=0.291 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim 33 tokens from 200, warps 4              W=4: ok bad=0 worst=0.051 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim split: one token at position 0           W=8: ok bad=0 worst=0.000 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim split: 5 tokens from 0                   W=8: ok bad=0 worst=0.255 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim split: 19 tokens from 37, warps 4        W=4: ok bad=0 worst=0.108 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim split: 70 tokens from 0                  W=8: ok bad=0 worst=0.276 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim split: 141 tokens from 37, sharp q       W=8: ok bad=0 worst=0.117 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim mirror: 5 tokens from 0                  W=8: ok bad=0 worst=0.227 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim mirror: 19 tokens from 37, warps 4       W=4: ok bad=0 worst=0.095 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim mirror: 141 tokens from 37, sharp q      W=8: ok bad=0 worst=0.126 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim mirror: 45 tokens from 300               W=8: ok bad=0 worst=0.042 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim fused mutant 1 at 24 tokens from 40: caught (bad=1083432 worst=41.538 rows: k 7851 v 0 words differ from the emulation (max 34162 ulp))
+sim fused mutant 2 at 24 tokens from 40: caught (bad=65059 worst=33.577 rows: k 0 v 0 words differ from the emulation (max 0 ulp))
+sim fused mutant 3 at 24 tokens from 40: caught (bad=1000000 worst=0.083 rows: k 12288 v 12288 words differ from the emulation (max 49195 ulp))
+sim fused mutant 4 at 24 tokens from 40: caught (bad=53792 worst=183.288 rows: k 0 v 0 words differ from the emulation (max 0 ulp))
+sim split mutant 1 at 24 tokens from 40: caught (bad=1083432 worst=41.538 rows: k 7851 v 0 words differ from the emulation (max 34162 ulp))
+sim split mutant 2 at 24 tokens from 40: caught (bad=75048 worst=66.804 rows: k 0 v 0 words differ from the emulation (max 0 ulp))
+sim split mutant 3 at 24 tokens from 40: caught (bad=1000000 worst=0.083 rows: k 12288 v 12288 words differ from the emulation (max 49195 ulp))
+sim split mutant 4 at 24 tokens from 40: caught (bad=53792 worst=183.288 rows: k 0 v 0 words differ from the emulation (max 0 ulp))
+sim mirror mutant 1 at 24 tokens from 40: caught (bad=1083432 worst=41.538 rows: k 7851 v 0 words differ from the emulation (max 34162 ulp))
+sim mirror mutant 2 at 24 tokens from 40: caught (bad=75048 worst=66.804 rows: k 0 v 0 words differ from the emulation (max 0 ulp))
+sim mirror mutant 3 at 24 tokens from 40: caught (bad=1000000 worst=0.083 rows: k 12288 v 12288 words differ from the emulation (max 49195 ulp))
+sim mirror mutant 4 at 24 tokens from 40: caught (bad=53792 worst=183.288 rows: k 0 v 0 words differ from the emulation (max 0 ulp))
+sim: 10233092 warp issues in total
+gpu_prefill_attn_test: 97 checks, 0 failed: PASS
+exit 0

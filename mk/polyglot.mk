@@ -2,7 +2,7 @@
 # Owner: lane F (verifier/bench). Other lanes ask F to add their sources.
 #
 # ---------------------------------------------------------------------------
-# LANE HOOK CONTRACT (B1 asm, B2 encoder, B3 Mojo): put a file mk/polyglot-<lane>.mk
+# LANE HOOK CONTRACT (B1 asm, B2 encoder): put a file mk/polyglot-<lane>.mk
 # next to this one. It is picked up automatically. In it, only APPEND to these:
 #
 #   POLYGLOT_LANE_SRCS     += src/polyglot/omx_asm.c src/polyglot/asm/x.S
@@ -13,7 +13,7 @@
 #       The source path you give in omx_candidate.source must be one of these
 #       paths so the bench can find the object of each candidate.
 #   POLYGLOT_LANE_OBJS     += path/to/prebuilt.o   (objects your own rules build,
-#       e.g. Mojo; linked into both plain and sanitizer binaries as they are)
+#       linked into both plain and sanitizer binaries as they are)
 #   POLYGLOT_LANE_MANIFEST += <source-path>=<object-path>   (for prebuilt objects:
 #       lets the bench digest and size them; compile time is then recorded as
 #       null with a reason)
@@ -25,7 +25,7 @@
 # in src/polyglot/omx_lang.c:
 #   const omx_candidate omx_lane_asm[] = {...};
 #   const size_t omx_lane_asm_count = sizeof omx_lane_asm / sizeof omx_lane_asm[0];
-# (omx_lane_encoder / omx_lane_mojo likewise). Guard your mk file with
+# (omx_lane_encoder likewise). Guard your mk file with
 # `ifndef POLYGLOT_<LANE>_MK` because the top-level Makefile may include it twice.
 # Lists here are de-duplicated with $(sort), so a double += is harmless.
 #
@@ -83,9 +83,9 @@ PG_TOOLCHAIN_DEFS = -DOMX_C_O2_TOOLCHAIN='"gcc $(PG_GCC_VER) $(PG_O2_FLAGS)"' \
 PG_COMMON_SRCS := src/polyglot/omx_lang.c src/polyglot/omx_bench.c src/sha256.c
 
 # Lanes that predate this contract are picked up by their own variables:
-# B1 asm (PGA_ASM + omx_asm.c), B3 Mojo (OMX_MOJO_SRCS, OMX_MOJO_OBJS).
-PG_LANE_SRCS = $(sort $(POLYGLOT_LANE_SRCS) $(if $(PGA_ASM),src/polyglot/omx_asm.c $(PGA_ASM)) $(OMX_MOJO_SRCS))
-PG_LANE_PREBUILT = $(sort $(POLYGLOT_LANE_OBJS) $(OMX_MOJO_OBJS))
+# B1 asm (PGA_ASM + omx_asm.c).
+PG_LANE_SRCS = $(sort $(POLYGLOT_LANE_SRCS) $(if $(PGA_ASM),src/polyglot/omx_asm.c $(PGA_ASM)))
+PG_LANE_PREBUILT = $(sort $(POLYGLOT_LANE_OBJS))
 PG_LANE_OBJS_PLAIN = $(addprefix $(PG_OUT)/lane/,$(addsuffix .o,$(PG_LANE_SRCS)))
 PG_LANE_OBJS_ASAN = $(addprefix $(PG_OUT)/asan/lane/,$(addsuffix .o,$(PG_LANE_SRCS)))
 PG_O2_OBJS := $(patsubst src/algebra/%.c,$(PG_OUT)/o2/%.o,$(PG_MA_SRCS))
@@ -152,8 +152,6 @@ $(PG_MANIFEST): $$(PG_PLAIN_OBJS) $$(MAKEFILE_LIST)
 		'$(CC) $(PG_LANE_CFLAGS) -c -o @OUT@ $(s)' >> $@;)
 	@$(foreach e,$(sort $(POLYGLOT_LANE_MANIFEST)),printf '%s\tlane\t%s\t-\n' \
 		'$(word 1,$(subst =, ,$(e)))' '$(word 2,$(subst =, ,$(e)))' >> $@;)
-	@$(if $(OMX_MOJO_OBJS),printf '%s\tlane\t%s\t%s\n' '$(OMX_MOJO_SRC)' '$(OMX_MOJO_KOBJ)' \
-		'$(MOJO) build --emit object -o @OUT@.o $(OMX_MOJO_SRC)' >> $@)
 
 # ---- targets ----
 test-polyglot: $(PG_VERIFY) $(PG_VERIFY_ASAN) $(PG_BENCH)

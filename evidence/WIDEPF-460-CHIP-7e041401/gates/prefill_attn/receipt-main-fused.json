@@ -1,0 +1,9 @@
+{"test": "gpu_prefill_attn", "points": [
+  {"pos0": 0, "m": 1, "gate2_rows_k_diff": 0, "gate2_rows_v_diff": 0, "gate2_out_worst": 0.0000, "decode_loop_chip_ms": 2.1158, "decode_loop_call_ms": 2.4014},
+  {"pos0": 37, "m": 19, "gate2_rows_k_diff": 0, "gate2_rows_v_diff": 0, "gate2_out_worst": 0.1339, "decode_loop_chip_ms": 41.1390, "decode_loop_call_ms": 41.2620},
+  {"pos0": 0, "m": 64, "prefill_chip_ms_median": 1.9410, "prefill_call_ms_median": 2.4219, "useful_tflops": 0.018},
+  {"pos0": 0, "m": 64, "gate2_rows_k_diff": 0, "gate2_rows_v_diff": 0, "gate2_out_worst": 0.2307, "decode_loop_chip_ms": 108.8676, "decode_loop_call_ms": 109.2665},
+  {"pos0": 100, "m": 70, "gate2_rows_k_diff": 0, "gate2_rows_v_diff": 0, "gate2_out_worst": 0.0862, "decode_loop_chip_ms": 121.4397, "decode_loop_call_ms": 121.9089},
+  {"pos0": 200, "m": 64, "gate2_rows_k_diff": 0, "gate2_rows_v_diff": 0, "gate2_out_worst": 0.0613, "decode_loop_chip_ms": 126.5063, "decode_loop_call_ms": 127.3472},
+  {}
+], "checks": 121, "failed": 0}

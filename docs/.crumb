@@ -93,8 +93,8 @@
           "purpose": "Directory docs/osc. Purpose not yet described by a human."
         },
         {
-          "digest": "4229246f2ec98403252caafc8fe7ad1fac5950accff0c94ffdaecb4a2341a32c",
-          "last_commit": "5901baa5",
+          "digest": "ffe2e59267bcc6597fdadad5fc7c54e32bbc0f0e409dae9af3ddd3ba49a0d8ad",
+          "last_commit": "61c09411",
           "name": "polyglot",
           "purpose": "Directory docs/polyglot. Purpose not yet described by a human."
         },
@@ -117,21 +117,21 @@
           "purpose": "Directory docs/train. Purpose not yet described by a human."
         },
         {
-          "digest": "a34f126f92a0ec36794a17c3c4834101c44bc9b0f6e412894e3f152598133638",
-          "last_commit": "5901baa5",
+          "digest": "b6ed9ddbc50071409ece5b2a6510f57184defcba5ffc7103f1dfe24ae440ef67",
+          "last_commit": "b7a788e8",
           "name": "turing",
           "purpose": "Directory docs/turing. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:bd77c6d04a64e013d571cb019c3ae53a6bd44997d0999ccaf3075f20f2cf58a4",
-      "compiled_at": "2026-10-15T16:48:21Z",
+      "children_root": "sha256:75e94efdf68de6fd562a544862b5033af55021631da72ef33d19522830bb40ec",
+      "compiled_at": "2026-10-15T18:53:23Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:8528f074b9790f056b67986b80d692bb7ab83da77e23ed535f978871b5350f14",
+      "digest": "sha256:5810f3fd1c5404913573cbbae4526206a2cdd0ae96e9ff89dd894c5c063be5c4",
       "evidence_files": 34,
       "evidence_root": "sha256:589d8b3706e6d7a202ab20b278dac5fc5bafc973f1c2a867b2668aa7210b65cc",
       "files": 125,
-      "generated_at_commit": "5b52b653c03811e963965b75302c27e6da3e7fc6",
-      "source_tree": "sha256:2e4efa5a2e37421f156564aaed339bea95e022b69fb625e09ff361bcc8864c43"
+      "generated_at_commit": "038a3a528322bff06250f257c9e181b4bf9866a8",
+      "source_tree": "sha256:46ea6852836de4a1be0d925a7e5574e3a116b3c08f983f8d9889050e577ac8bf"
     },
     "owner_lane": "",
     "provenance": {

@@ -1,0 +1,6 @@
+chip gateup: 3600 tokens, M 28800 rows, 128 segments, 510 tiles, grid 12 x 510, rt 4 ct 2 warps 8, declared 128 registers
+chip bit-identity: 0 of 393216 sampled outputs (256 rows) differ from the emulation (bit-identical)
+chip second call: identical
+TCGEMM gateup (medians of 9): chip 20743.4 us, call 95369.5 us; 8.74 TFLOPS; weights streamed 1604 MB (77.3 GB/s), activations gathered 1604 MB, output 177 MB; total 163.2 GB/s
+chip: PASS
+GPU_TCGEMM: PASS

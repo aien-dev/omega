@@ -1,0 +1,1 @@
+{"layers":2,"vocab":151936,"pos":300,"reps":3,"red":1,"cached_weights":0,"A":{"token":62700,"runner_up":107672,"gap":0.0414081,"launches":13},"C":{"token":70886,"launches":22,"submits":1},"A_vs_C":{"tok_same":0,"logit_max_abs":2.55477,"logit_scale":6.03418,"x_max_rel":0.540449,"hidden_max_rel":0.507762,"tol_rel":0.0001},"checks":6,"failed":2,"verdict":"FAIL"}

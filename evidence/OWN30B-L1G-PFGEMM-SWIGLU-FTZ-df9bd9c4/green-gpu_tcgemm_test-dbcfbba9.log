@@ -1,0 +1,28 @@
+placeholder patch self-test: ok (SHFL.BFLY x2, SHFL.DOWN x1, F2FP.BF16.F32.PACK_AB x1 match the oracle bits)
+shape k 2048 rt 4 ct 2 warps 8: rc 0, 539 instructions, peak 124, declared 128, shared 16384, span 128: ok
+shape k 768 rt 4 ct 2 warps 8: rc 0, 539 instructions, peak 124, declared 128, shared 16384, span 128: ok
+shape k 4096 rt 4 ct 2 warps 8: rc 0, 539 instructions, peak 124, declared 128, shared 16384, span 128: ok
+shape k 2048 rt 4 ct 1 warps 8: rc 0, 392 instructions, peak 88, declared 96, shared 16384, span 64: ok
+shape k 2048 rt 2 ct 2 warps 4: rc 0, 411 instructions, peak 96, declared 104, shared 8192, span 64: ok
+shape k 2048 rt 4 ct 2 warps 4: rc -1, 0 instructions, peak 0, declared 8, shared 16384, span 64: REFUSED
+shape k 768 rt 4 ct 2 warps 4: rc -1, 0 instructions, peak 0, declared 8, shared 16384, span 64: REFUSED
+emulation vs double oracle: worst |err| / sum|terms| = 2.46e-07 (ok, bound 1e-6)
+host-only: PASS
+sim E 3 n 256 k 256 M 40 rt 4 ct 2 warps 8 order 0: ok 0 of 10240 differ from the emulation, 0 unwritten (bit-identical)
+sim E 3 n 256 k 256 M 40 rt 4 ct 2 warps 8 order 1: ok 0 of 10240 differ from the emulation, 0 unwritten (bit-identical)
+sim E 2 n 128 k 384 M 70 rt 4 ct 2 warps 8 order 0: ok 0 of 8960 differ from the emulation, 0 unwritten (bit-identical)
+sim E 2 n 128 k 384 M 70 rt 4 ct 2 warps 8 order 1: ok 0 of 8960 differ from the emulation, 0 unwritten (bit-identical)
+sim E 4 n 128 k 128 M 37 rt 2 ct 2 warps 4 order 0: ok 0 of 4736 differ from the emulation, 0 unwritten (bit-identical)
+sim E 4 n 128 k 128 M 37 rt 2 ct 2 warps 4 order 1: ok 0 of 4736 differ from the emulation, 0 unwritten (bit-identical)
+sim E 2 n 256 k 256 M 20 rt 4 ct 1 warps 8 order 0: ok 0 of 5120 differ from the emulation, 0 unwritten (bit-identical)
+sim E 2 n 256 k 256 M 20 rt 4 ct 1 warps 8 order 1: ok 0 of 5120 differ from the emulation, 0 unwritten (bit-identical)
+sim E 2 n 128 k 256 M 33 rt 1 ct 4 warps 4 order 0: ok 0 of 4224 differ from the emulation, 0 unwritten (bit-identical)
+sim E 2 n 128 k 256 M 33 rt 1 ct 4 warps 4 order 1: ok 0 of 4224 differ from the emulation, 0 unwritten (bit-identical)
+sim E 1 n 512 k 256 M 64 rt 4 ct 2 warps 8 order 0: ok 0 of 32768 differ from the emulation, 0 unwritten (bit-identical)
+sim E 1 n 512 k 256 M 64 rt 4 ct 2 warps 8 order 1: ok 0 of 32768 differ from the emulation, 0 unwritten (bit-identical)
+sim mutant 1: caught (6400 of 6400 differ)
+sim mutant 2: caught (6400 of 6400 differ)
+sim mutant 3: caught (6144 of 6400 differ)
+sim mutant 4: caught (6400 of 6400 differ)
+sim: PASS
+GPU_TCGEMM: PASS

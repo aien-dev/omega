@@ -1,0 +1,5 @@
+lm_head fp8 vs bf16 argmax study (real lm_head.weight, 1000 random hidden states = gaussian x model.norm.weight, seed 20261013)
+argmax agreement: 931 of 1000 (93.10%); bf16 argmax within fp8 top-5: 1000 of 1000
+logit rms relative difference, worst over states: 0.0284
+agreement by bf16 top1-top2 logit gap: <0.05: 30/66 disagree, <0.2: 36/154, <1: 3/490, >=1: 0/290
+chip medians: bf16 kernel 2920.9 us, fp8 kernel 1545.7 us

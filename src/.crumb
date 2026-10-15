@@ -133,8 +133,8 @@
           "purpose": "PD-0 hidden-equation benchmark (Physics-0 Discovery Engine cut 1): world, oracle, scorer, ladder"
         },
         {
-          "digest": "c43b60db4a5183a3ca59c2e24a0978f463e8ac3aa7a2ed0c54947eb085c4eb9e",
-          "last_commit": "3ef4f69c",
+          "digest": "a79103ff25b5fbeac2ab22f451166d742ff45a90b46bad2caa4cf2790ea6a17b",
+          "last_commit": "61c09411",
           "name": "polyglot",
           "purpose": "Directory src/polyglot. Purpose not yet described by a human."
         },
@@ -181,15 +181,15 @@
           "purpose": "Directory src/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:93f32e91c5b498226d6ef4a040e3fbd2873dfb1f8b2405c26ea63b3a63df5f22",
-      "compiled_at": "2026-10-14T18:36:27Z",
+      "children_root": "sha256:15012a017b26a269feb256b64875ece2912f5f82c57804baafa3777c4fcb80b9",
+      "compiled_at": "2026-10-15T11:15:35Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:3b6e68a896d400c0805cc613b9af28ef6709f372a993ba22d48664d550c2557d",
+      "digest": "sha256:42a96c360953b645922127fd4ffa949555afcafff940be66c4fb63747b4040ae",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 474,
-      "generated_at_commit": "4fa52370f177d268e4248955dc7adec53519e215",
-      "source_tree": "sha256:bef71447164a7d4e733a93ff8c4d1d0619feccead590b0f9c990cde6a1d756e3"
+      "files": 533,
+      "generated_at_commit": "61c09411331e992ebb9882a50412f938c6bb687f",
+      "source_tree": "sha256:a584000944d548208e8a51718f60e7464e35fce835e84990d00dbcab5098e9d8"
     },
     "owner_lane": "",
     "provenance": {

@@ -1,5 +1,9 @@
 # POLYGLOT agent ownership
 
+> **Lane B3 (Mojo) removed on 2026-10-15.** Modular MAX and Mojo were dropped from AIEN, and the Mojo lane's source,
+> build rules and test were deleted from this repo. Mojo text below is the original design record, kept unchanged;
+> the Mojo receipts stay in `evidence/`.
+
 Lead orchestrator: session ff5a6f (Opus 5.5). Branch `feat/polyglot-0` in `~/workspace/omega-polyglot`, based on
 omega main 4b217aa (mixed-algebra #78). All workers run on Opus 5.5 unless marked (Sonnet 5.5 = supervised trial). Fable reviews
 the plan and the final result once each; it does not implement. No agent certifies its own work.

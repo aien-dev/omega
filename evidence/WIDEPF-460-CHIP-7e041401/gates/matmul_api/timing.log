@@ -1,0 +1,3 @@
+PASS timing 1x2048x8192 upload_ms=236.8 ok_calls=100 median_ms=2.659 p90_ms=2.696 min_ms=0.309 max_ms=3.526 chip_ns_mean=2199504 grid=64x1 e2e_first=2.36603e-07 e2e_last=2.36603e-07 repeat_mismatch=0
+PASS timing 1x8192x2048 upload_ms=184.0 ok_calls=100 median_ms=2.806 p90_ms=2.908 min_ms=0.514 max_ms=3.537 chip_ns_mean=2483395 grid=64x1 e2e_first=5.21488e-07 e2e_last=5.21488e-07 repeat_mismatch=0
+PASS: 4 checks, 0 failed

@@ -242,6 +242,8 @@ g0_check() {
 }
 
 # ---- transport, shared by run.sh and g0.sh (globals BASE, TIMEOUT, RETRIES and die() come from the caller)
+# Before try K (K >= 1) of a round the driver pauses K x 5 s (EXP445_TEST_BACKOFF_S replaces the 5; tests
+# set 0), so a short server hiccup does not use up every try at once; timing only, nothing recorded depends on it.
 # ask <gen dir> <round> <request json>: one round, committed to disk as soon as it is received.
 # Writes rN.req.json, then per try a transport line (rN.transport.tmp) and the body (rN.resp.json on
 # success, rN.err.K.json otherwise); renaming rN.transport.tmp to rN.transport commits the round. A
@@ -249,7 +251,7 @@ g0_check() {
 ask() {
   local d="$1" r="$2" q="$3" p="$1/r$2" k e out code t t0 body lb msg
   if [ -f "$p.req.json" ]; then [ "$(cat "$p.req.json")" = "$q" ] || die "$p.req.json differs from the request this run sends: resume refused"
-  else printf '%s\n' "$q" > "$p.req.json.tmp"; mv "$p.req.json.tmp" "$p.req.json"; fi
+  else printf '%s\n' "$q" > "$p.req.json.tmp" || die "cannot write $p.req.json.tmp"; mv "$p.req.json.tmp" "$p.req.json" || die "cannot commit $p.req.json"; fi
   if [ ! -f "$p.transport" ]; then
     touch "$p.transport.tmp"
     lb="$(tail -n 1 "$p.transport.tmp" | sed -n 's/.* body=\([^ ]*\).*/\1/p')"
@@ -258,6 +260,7 @@ ask() {
     if [ "$lb" != "r$r.resp.json" ]; then
       k="$(wc -l < "$p.transport.tmp")"
       while [ "$k" -le "$RETRIES" ]; do
+        [ "$k" -eq 0 ] || sleep $((k * ${EXP445_TEST_BACKOFF_S:-5}))
         t0="$EPOCHREALTIME"
         if out="$(curl -sS -m "$TIMEOUT" -o "$p.try" -w '%{http_code} %{time_total}' -H 'Content-Type: application/json' \
                    --data-binary @"$p.req.json" "$BASE/chat/completions" 2> "$p.curl.err")"; then e=0; else e=$?; fi
@@ -267,13 +270,13 @@ ask() {
         if [ "$e" = 0 ] && [ "$code" = 200 ] && resp_ok "$p.try"; then body="r$r.resp.json"
         elif [ -s "$p.try" ]; then body="r$r.err.$k.json"; else body=none; rm -f "$p.try"; fi
         msg="$(tr '\n\t' '  ' < "$p.curl.err")"; rm -f "$p.curl.err"
-        echo "try=$k http=$code curl_exit=$e time_s=$t body=$body msg=$msg" >> "$p.transport.tmp"
-        [ "$body" = none ] || mv "$p.try" "$d/$body"
+        echo "try=$k http=$code curl_exit=$e time_s=$t body=$body msg=$msg" >> "$p.transport.tmp" || die "cannot write $p.transport.tmp"
+        [ "$body" = none ] || mv "$p.try" "$d/$body" || die "cannot keep $d/$body"
         [ "$body" = "r$r.resp.json" ] && break
         k=$((k + 1))
       done
     fi
-    mv "$p.transport.tmp" "$p.transport"
+    mv "$p.transport.tmp" "$p.transport" || die "cannot commit $p.transport"
   fi
   round_ok "$p"
 }

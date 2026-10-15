@@ -1,0 +1,3 @@
+qmma-probe exit 0: /tmp/wl1g-frozen-omega/gpu_qmma_probe_test --save /tmp/wl1g-frozen/evidence/OWN30B-L1G-QMMA-PFGEMM-c742aa13/qmma-words.bin
+qmma-probe-seed2 exit 0: /tmp/wl1g-frozen-omega/gpu_qmma_probe_test --no-peak
+pfgemm-chip exit 1: /tmp/wl1g-frozen-omega/gpu_pfgemm_test --chip --tokens 3600 --reps 7

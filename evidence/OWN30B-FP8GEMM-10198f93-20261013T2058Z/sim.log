@@ -1,0 +1,11 @@
+sim k 2048 n 40 lane 16 mt 8 warps 16 grid 2: ok 0 of 600 outputs differ from the emulation (bit-identical)
+sim k 4096 n 20 lane 16 mt 8 warps 16 grid 1: ok 0 of 220 outputs differ from the emulation (bit-identical)
+sim k 1024 n 33 lane 16 mt 8 warps 16 grid 2: ok 0 of 99 outputs differ from the emulation (bit-identical)
+sim k 768 n 130 lane 8 mt 8 warps 16 grid 2: ok 0 of 2730 outputs differ from the emulation (bit-identical)
+sim k 768 n 24 lane 8 mt 8 warps 8 grid 1: ok 0 of 264 outputs differ from the emulation (bit-identical)
+sim k 2048 n 16 lane 16 mt 4 warps 16 grid 1: ok 0 of 160 outputs differ from the emulation (bit-identical)
+sim mutant 1: caught 600 of 600 outputs differ from the emulation
+sim mutant 2: caught 600 of 600 outputs differ from the emulation
+sim mutant 3: caught 600 of 600 outputs differ from the emulation
+sim: 3444454 warp issues in total
+gpu_fp8gemm_test: 9 checks, 0 failed: PASS

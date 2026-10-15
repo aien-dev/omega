@@ -1,0 +1,14 @@
+ROUTER chip k 2048 e 128 t 16 rows 2048: 0 of 262144 differ from the host loop; median 0.315 ms
+ROUTER chip mutant 1: caught
+ROUTER chip mutant 2: caught
+ROUTER chip k 2048 e 128 t 16 rows 37: 0 of 4736 differ from the host loop; median 0.295 ms
+ROUTER chip mutant 1: caught
+ROUTER chip mutant 2: caught
+COMBINE chip h 2048 top_k 8 rows 2048: 0 of 4194304 differ from the host loop; median 0.807 ms
+COMBINE chip mutant 1: caught
+COMBINE chip mutant 2: caught
+COMBINE chip h 2048 top_k 8 rows 7: 0 of 14336 differ from the host loop; median 0.008 ms
+COMBINE chip mutant 1: caught
+COMBINE chip mutant 2: caught
+GPU_PFHOST: PASS
+rc=0

@@ -1,0 +1,5 @@
+omega 7e041401b9e79e7c9ccbd2b15f386d9fa1206fdd dirty=0 physics 6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf dirty=0 start 2026-10-15T03:54:22Z
+matmul_api rc=0 start=2026-10-15T03:54:22Z end=2026-10-15T03:55:16Z verdict: GPU_MATMUL_API_CHIP: PASS
+prefill_attn rc=0 start=2026-10-15T03:55:16Z end=2026-10-15T03:56:47Z verdict: GPU_PREFILL_ATTN_CHIP: PASS
+l1g rc=0 start=2026-10-15T03:56:47Z end=2026-10-15T04:04:11Z verdict: L1G_CHIP: PASS
+end 2026-10-15T04:04:11Z

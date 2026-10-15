@@ -1,0 +1,12 @@
+spec k 2048 rt 8 ct 2 warps 16 aqn 1 epi 0 direct 0: built, 798 instructions, peak 120, declared 128 -> fits
+spec k 2048 rt 8 ct 2 warps 16 aqn 1 epi 1 direct 0: built, 994 instructions, peak 120, declared 128 -> fits
+spec k 768 rt 8 ct 2 warps 16 aqn 1 epi 0 direct 1: built, 795 instructions, peak 120, declared 128 -> fits
+spec k 4096 rt 8 ct 2 warps 16 aqn 1 epi 0 direct 0: built, 798 instructions, peak 120, declared 128 -> fits
+spec k 2048 rt 8 ct 2 warps 16 aqn 2 epi 0 direct 0: built, 798 instructions, peak 124, declared 128 -> fits
+spec k 2048 rt 8 ct 2 warps 16 aqn 2 epi 1 direct 0: built, 994 instructions, peak 124, declared 128 -> fits
+spec k 768 rt 8 ct 2 warps 16 aqn 2 epi 0 direct 1: built, 795 instructions, peak 124, declared 128 -> fits
+spec k 2048 rt 4 ct 2 warps 8 aqn 2 epi 0 direct 0: built, 550 instructions, peak 92, declared 96 -> fits
+SWIGLU layout + emulation vs double oracle on the original weights: worst relative error 0.00379 (bf16 output: < 1e-2 expected)
+SWIGLU reference vs chip-observed MUFU.RCP flush window: 0/6 match; control g -87 -> a73e (nonzero), g -89 -> 8000 (-0): FAIL
+GPU_PFGEMM: FAIL
+exit 1

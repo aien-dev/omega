@@ -1,0 +1,270 @@
+codegen warps 4 mode 0: 917 instructions, 120 registers (declared 128, 128 threads -> 16384 of 65536), 16 placeholders patched
+codegen warps 4 mode 1: 174 instructions, 56 registers (declared 64, 128 threads -> 8192 of 65536), 0 placeholders patched
+codegen warps 4 mode 2: 782 instructions, 124 registers (declared 128, 128 threads -> 16384 of 65536), 16 placeholders patched
+codegen warps 8 mode 0: 866 instructions, 120 registers (declared 128, 256 threads -> 32768 of 65536), 16 placeholders patched
+codegen warps 8 mode 1: 174 instructions, 56 registers (declared 64, 256 threads -> 16384 of 65536), 0 placeholders patched
+codegen warps 8 mode 2: 731 instructions, 124 registers (declared 128, 256 threads -> 32768 of 65536), 16 placeholders patched
+codegen warps 8 APPEND + mirror: 187 instructions, 56 registers
+gpu_prefill_attn_test: 69 checks, 0 failed: PASS
+codegen warps 4 mode 0: 917 instructions, 120 registers (declared 128, 128 threads -> 16384 of 65536), 16 placeholders patched
+codegen warps 4 mode 1: 174 instructions, 56 registers (declared 64, 128 threads -> 8192 of 65536), 0 placeholders patched
+codegen warps 4 mode 2: 782 instructions, 124 registers (declared 128, 128 threads -> 16384 of 65536), 16 placeholders patched
+codegen warps 8 mode 0: 866 instructions, 120 registers (declared 128, 256 threads -> 32768 of 65536), 16 placeholders patched
+codegen warps 8 mode 1: 174 instructions, 56 registers (declared 64, 256 threads -> 16384 of 65536), 0 placeholders patched
+codegen warps 8 mode 2: 731 instructions, 124 registers (declared 128, 256 threads -> 32768 of 65536), 16 placeholders patched
+codegen warps 8 APPEND + mirror: 187 instructions, 56 registers
+sim one token at position 0                  W=8: ok bad=0 worst=0.000 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim 5 tokens from 0 (partial CTA)            W=8: ok bad=0 worst=0.257 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim 19 tokens from 37, warps 4               W=4: ok bad=0 worst=0.112 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim 19 tokens from 37, sharp q (x4)          W=8: ok bad=0 worst=0.107 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim 64 tokens from 100 (full chunk)          W=8: ok bad=0 worst=0.067 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim 70 tokens from 0 (two chunks)            W=8: ok bad=0 worst=0.291 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim 33 tokens from 200, warps 4              W=4: ok bad=0 worst=0.051 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim split: one token at position 0           W=8: ok bad=0 worst=0.000 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim split: 5 tokens from 0                   W=8: ok bad=0 worst=0.255 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim split: 19 tokens from 37, warps 4        W=4: ok bad=0 worst=0.108 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim split: 70 tokens from 0                  W=8: ok bad=0 worst=0.276 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim split: 141 tokens from 37, sharp q       W=8: ok bad=0 worst=0.117 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim mirror: 5 tokens from 0                  W=8: ok bad=0 worst=0.227 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim mirror: 19 tokens from 37, warps 4       W=4: ok bad=0 worst=0.095 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim mirror: 141 tokens from 37, sharp q      W=8: ok bad=0 worst=0.126 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim mirror: 45 tokens from 300               W=8: ok bad=0 worst=0.042 rows: k 0 v 0 words differ from the emulation (max 0 ulp)
+sim fused mutant 1 at 24 tokens from 40: caught (bad=1083432 worst=41.538 rows: k 7851 v 0 words differ from the emulation (max 34162 ulp))
+sim fused mutant 2 at 24 tokens from 40: caught (bad=65059 worst=33.577 rows: k 0 v 0 words differ from the emulation (max 0 ulp))
+sim fused mutant 3 at 24 tokens from 40: caught (bad=1000000 worst=0.083 rows: k 12288 v 12288 words differ from the emulation (max 49195 ulp))
+sim fused mutant 4 at 24 tokens from 40: caught (bad=53792 worst=183.288 rows: k 0 v 0 words differ from the emulation (max 0 ulp))
+sim split mutant 1 at 24 tokens from 40: caught (bad=1083432 worst=41.538 rows: k 7851 v 0 words differ from the emulation (max 34162 ulp))
+sim split mutant 2 at 24 tokens from 40: caught (bad=75048 worst=66.804 rows: k 0 v 0 words differ from the emulation (max 0 ulp))
+sim split mutant 3 at 24 tokens from 40: caught (bad=1000000 worst=0.083 rows: k 12288 v 12288 words differ from the emulation (max 49195 ulp))
+sim split mutant 4 at 24 tokens from 40: caught (bad=53792 worst=183.288 rows: k 0 v 0 words differ from the emulation (max 0 ulp))
+sim mirror mutant 1 at 24 tokens from 40: caught (bad=1083432 worst=41.538 rows: k 7851 v 0 words differ from the emulation (max 34162 ulp))
+sim mirror mutant 2 at 24 tokens from 40: caught (bad=75048 worst=66.804 rows: k 0 v 0 words differ from the emulation (max 0 ulp))
+sim mirror mutant 3 at 24 tokens from 40: caught (bad=1000000 worst=0.083 rows: k 12288 v 12288 words differ from the emulation (max 49195 ulp))
+sim mirror mutant 4 at 24 tokens from 40: caught (bad=53792 worst=183.288 rows: k 0 v 0 words differ from the emulation (max 0 ulp))
+sim: 10233092 warp issues in total
+gpu_prefill_attn_test: 97 checks, 0 failed: PASS
+cache alloc (1 layer, 32768 positions): rc=OK 338.6 ms ()
+chip context 1024             rc=OK        bad=0 worst=0.000 rows=ok (0 one-ulp k flips) grid=4x4 per_split=256 depth=4 kv_bytes=2097152 fill=0.1ms chip_med=81.2us (25.8 GB/s) call_med=83.8us reps=3
+gpu_decode_attn_test: 4 checks, 0 failed: PASS
+baseline exit 0 (recorded)
+codegen warps 4 mode 0: 917 instructions, 120 registers (declared 128, 128 threads -> 16384 of 65536), 16 placeholders patched
+codegen warps 4 mode 1: 174 instructions, 56 registers (declared 64, 128 threads -> 8192 of 65536), 0 placeholders patched
+codegen warps 4 mode 2: 782 instructions, 124 registers (declared 128, 128 threads -> 16384 of 65536), 16 placeholders patched
+codegen warps 8 mode 0: 866 instructions, 120 registers (declared 128, 256 threads -> 32768 of 65536), 16 placeholders patched
+codegen warps 8 mode 1: 174 instructions, 56 registers (declared 64, 256 threads -> 16384 of 65536), 0 placeholders patched
+codegen warps 8 mode 2: 731 instructions, 124 registers (declared 128, 256 threads -> 32768 of 65536), 16 placeholders patched
+codegen warps 8 APPEND + mirror: 187 instructions, 56 registers
+path: split APPEND + ATTEND, ATTEND reads the GPU-cached K/V mirror, warps 8, warm 0, dev buffers session (uncached)
+chip pos0     0 m     1: parity bad=0 worst=0.000; rows vs emulation k 0 (max 0 ulp) v 0; chunks 2 grid 1x4 x256 thr; chip 0.221 ms call 11.390 ms
+  gate 2 vs 1 decode steps: rows k 0 v 0 differ; outputs worst 0.000 of tol; decode loop chip 0.106 ms call 0.341 ms
+chip pos0    37 m    19: parity bad=0 worst=0.134; rows vs emulation k 0 (max 0 ulp) v 0; chunks 2 grid 3x4 x256 thr; chip 0.285 ms call 4.131 ms
+  gate 2 vs 19 decode steps: rows k 0 v 0 differ; outputs worst 0.134 of tol; decode loop chip 1.966 ms call 2.055 ms
+chip pos0     0 m    64: parity bad=0 worst=0.231; rows vs emulation k 0 (max 0 ulp) v 0; chunks 2 grid 8x4 x256 thr; chip 0.214 ms call 1.889 ms
+  reps chip ms (in order, 0 untimed warm calls first): 0.209 0.208 0.208 0.207 0.207 0.207 0.207 0.207 0.206
+  slowest rep, per launch ms (2 launches): 0.106 0.103
+  timing prefill pos0 0 m 64: chip median 0.207 ms (min 0.206) call median 0.396 ms; 0.16 useful TFLOPS on chip time
+  gate 2 vs 64 decode steps: rows k 0 v 0 differ; outputs worst 0.231 of tol; decode loop chip 6.696 ms call 6.856 ms
+  speed: prefill 0.207 ms vs decode loop 6.696 ms chip time: 32.4x
+chip pos0   100 m    70: parity bad=0 worst=0.086; rows vs emulation k 1 (max 1 ulp) v 0; chunks 2 grid 9x4 x256 thr; chip 0.311 ms call 1.926 ms
+  gate 2 vs 70 decode steps: rows k 0 v 0 differ; outputs worst 0.086 of tol; decode loop chip 7.338 ms call 7.517 ms
+chip pos0   200 m    64: parity bad=0 worst=0.061; rows vs emulation k 0 (max 0 ulp) v 0; chunks 2 grid 8x4 x256 thr; chip 0.280 ms call 1.069 ms
+  gate 2 vs 64 decode steps: rows k 0 v 0 differ; outputs worst 0.061 of tol; decode loop chip 6.727 ms call 6.883 ms
+chip pos0     0 m   512: parity bad=0 worst=0.237; rows vs emulation k 2 (max 1 ulp) v 0; chunks 2 grid 64x4 x256 thr; chip 0.522 ms call 8.243 ms
+  reps chip ms (in order, 0 untimed warm calls first): 0.416 0.414 0.516 0.414 0.413 0.413 0.413 0.413 0.516
+  slowest rep, per launch ms (2 launches): 0.107 0.410
+  timing prefill pos0 0 m 512: chip median 0.414 ms (min 0.413) call median 2.277 ms; 5.19 useful TFLOPS on chip time
+  gate 2 vs 512 decode steps: rows k 0 v 0 differ; outputs worst 0.237 of tol; decode loop chip 52.947 ms call 55.995 ms
+  speed: prefill 0.414 ms vs decode loop 52.947 ms chip time: 127.8x
+chip pos0  4032 m    64: parity bad=0 worst=0.011; rows vs emulation k 0 (max 0 ulp) v 0; chunks 2 grid 8x4 x256 thr; chip 0.554 ms call 5.496 ms
+  reps chip ms (in order, 0 untimed warm calls first): 0.414 0.413 0.413 0.411 0.415 0.414 0.411 0.412 0.411
+  slowest rep, per launch ms (2 launches): 0.108 0.308
+  timing prefill pos0 4032 m 64: chip median 0.413 ms (min 0.411) call median 0.603 ms; 10.33 useful TFLOPS on chip time
+  gate 2 vs 64 decode steps: rows k 0 v 0 differ; outputs worst 0.011 of tol; decode loop chip 19.885 ms call 20.109 ms
+  speed: prefill 0.413 ms vs decode loop 19.885 ms chip time: 48.2x
+chip pos0     0 m  2048: parity bad=0 worst=0.247; rows vs emulation k 8 (max 1 ulp) v 0; chunks 4 grid 128x4 x256 thr; chip 2.061 ms call 24.678 ms
+  reps chip ms (in order, 0 untimed warm calls first): 2.171 2.157 2.154 2.669 2.153 2.053 2.152 3.171 2.256
+  slowest rep, per launch ms (4 launches): 0.105 0.715 0.207 2.144
+  timing prefill pos0 0 m 2048: chip median 2.157 ms (min 2.053) call median 9.765 ms; 15.94 useful TFLOPS on chip time
+chip dev pos0   100 m    70: outputs vs host entry: 0 unwritten, 0 differ; rows k 0 v 0 differ; launches 2 grid 9x4; chip 0.271 ms call 0.757 ms
+chip dev pos0     0 m  2048: outputs vs host entry: 0 unwritten, 0 differ; rows k 0 v 0 differ; launches 2 grid 256x4; chip 2.024 ms call 3.696 ms
+  dev reps chip ms: 2.064 2.041 1.939 2.045 2.041 1.937 2.036 2.241 1.938
+  timing dev pos0 0 m 2048: chip median 2.041 ms (min 1.937) call median 2.042 ms; 16.84 useful TFLOPS on chip time
+chip dev pos0  4096 m  1500: outputs vs host entry: 0 unwritten, 0 differ; rows k 0 v 0 differ; launches 2 grid 188x4; chip 3.726 ms call 6.700 ms
+  dev reps chip ms: 3.597 3.466 3.465 3.465 3.463 3.465 3.466 3.463 3.437
+  timing dev pos0 4096 m 1500: chip median 3.465 ms (min 3.437) call median 3.466 ms; 34.38 useful TFLOPS on chip time
+chip continuation (prefill 300, decode 5, prefill 64, rewrite, prefill 32): mirror valid 369; outputs differ mirror vs none: 0; stale control 32768 differ (must be > 0); after invalidate 0 differ
+chip mutant 1: caught (rc OK, bad 83432, worst 41.54, rows k 7851 v 0)
+chip mutant 2: caught (rc OK, bad 75048, worst 66.80, rows k 0 v 0)
+chip mutant 3: caught (rc OK, bad 0, worst 0.08, rows k 12288 v 12288)
+chip mutant 4: caught (rc OK, bad 53792, worst 183.29, rows k 0 v 0)
+gpu_prefill_attn_test: 164 checks, 0 failed: PASS
+codegen warps 4 mode 0: 917 instructions, 120 registers (declared 128, 128 threads -> 16384 of 65536), 16 placeholders patched
+codegen warps 4 mode 1: 174 instructions, 56 registers (declared 64, 128 threads -> 8192 of 65536), 0 placeholders patched
+codegen warps 4 mode 2: 782 instructions, 124 registers (declared 128, 128 threads -> 16384 of 65536), 16 placeholders patched
+codegen warps 8 mode 0: 866 instructions, 120 registers (declared 128, 256 threads -> 32768 of 65536), 16 placeholders patched
+codegen warps 8 mode 1: 174 instructions, 56 registers (declared 64, 256 threads -> 16384 of 65536), 0 placeholders patched
+codegen warps 8 mode 2: 731 instructions, 124 registers (declared 128, 256 threads -> 32768 of 65536), 16 placeholders patched
+codegen warps 8 APPEND + mirror: 187 instructions, 56 registers
+path: split APPEND + ATTEND, ATTEND reads the GPU-cached K/V mirror, warps 4, warm 0, dev buffers session (uncached)
+chip pos0     0 m     1: parity bad=0 worst=0.000; rows vs emulation k 0 (max 0 ulp) v 0; chunks 2 grid 1x4 x128 thr; chip 0.222 ms call 11.383 ms
+  gate 2 vs 1 decode steps: rows k 0 v 0 differ; outputs worst 0.000 of tol; decode loop chip 0.105 ms call 0.353 ms
+chip pos0    37 m    19: parity bad=0 worst=0.134; rows vs emulation k 0 (max 0 ulp) v 0; chunks 2 grid 5x4 x128 thr; chip 0.281 ms call 4.119 ms
+  gate 2 vs 19 decode steps: rows k 0 v 0 differ; outputs worst 0.134 of tol; decode loop chip 1.964 ms call 2.047 ms
+chip pos0     0 m    64: parity bad=0 worst=0.231; rows vs emulation k 0 (max 0 ulp) v 0; chunks 2 grid 16x4 x128 thr; chip 0.213 ms call 1.783 ms
+  reps chip ms (in order, 0 untimed warm calls first): 0.210 0.207 0.207 0.208 0.207 0.207 0.208 0.207 0.207
+  slowest rep, per launch ms (2 launches): 0.105 0.105
+  timing prefill pos0 0 m 64: chip median 0.207 ms (min 0.207) call median 0.394 ms; 0.16 useful TFLOPS on chip time
+  gate 2 vs 64 decode steps: rows k 0 v 0 differ; outputs worst 0.231 of tol; decode loop chip 6.549 ms call 6.700 ms
+  speed: prefill 0.207 ms vs decode loop 6.549 ms chip time: 31.6x
+chip pos0   100 m    70: parity bad=0 worst=0.086; rows vs emulation k 1 (max 1 ulp) v 0; chunks 2 grid 18x4 x128 thr; chip 0.285 ms call 1.704 ms
+  gate 2 vs 70 decode steps: rows k 0 v 0 differ; outputs worst 0.086 of tol; decode loop chip 7.670 ms call 7.884 ms
+chip pos0   200 m    64: parity bad=0 worst=0.061; rows vs emulation k 0 (max 0 ulp) v 0; chunks 2 grid 16x4 x128 thr; chip 0.278 ms call 1.095 ms
+  gate 2 vs 64 decode steps: rows k 0 v 0 differ; outputs worst 0.061 of tol; decode loop chip 6.623 ms call 6.803 ms
+chip dev pos0   100 m    70: outputs vs host entry: 0 unwritten, 0 differ; rows k 0 v 0 differ; launches 2 grid 18x4; chip 0.271 ms call 0.797 ms
+chip continuation (prefill 300, decode 5, prefill 64, rewrite, prefill 32): mirror valid 369; outputs differ mirror vs none: 0; stale control 32768 differ (must be > 0); after invalidate 0 differ
+chip mutant 1: caught (rc OK, bad 83432, worst 41.54, rows k 7851 v 0)
+chip mutant 2: caught (rc OK, bad 75048, worst 66.80, rows k 0 v 0)
+chip mutant 3: caught (rc OK, bad 0, worst 0.08, rows k 12288 v 12288)
+chip mutant 4: caught (rc OK, bad 53792, worst 183.29, rows k 0 v 0)
+gpu_prefill_attn_test: 127 checks, 0 failed: PASS
+warps 4 exit 0 (informational)
+codegen warps 4 mode 0: 917 instructions, 120 registers (declared 128, 128 threads -> 16384 of 65536), 16 placeholders patched
+codegen warps 4 mode 1: 174 instructions, 56 registers (declared 64, 128 threads -> 8192 of 65536), 0 placeholders patched
+codegen warps 4 mode 2: 782 instructions, 124 registers (declared 128, 128 threads -> 16384 of 65536), 16 placeholders patched
+codegen warps 8 mode 0: 866 instructions, 120 registers (declared 128, 256 threads -> 32768 of 65536), 16 placeholders patched
+codegen warps 8 mode 1: 174 instructions, 56 registers (declared 64, 256 threads -> 16384 of 65536), 0 placeholders patched
+codegen warps 8 mode 2: 731 instructions, 124 registers (declared 128, 256 threads -> 32768 of 65536), 16 placeholders patched
+codegen warps 8 APPEND + mirror: 187 instructions, 56 registers
+path: fused 64-token chunks, warps 8, warm 0, dev buffers session (uncached)
+chip pos0     0 m     1: parity bad=0 worst=0.000; rows vs emulation k 0 (max 0 ulp) v 0; chunks 1 grid 1x4 x256 thr; chip 0.218 ms call 0.532 ms
+  gate 2 vs 1 decode steps: rows k 0 v 0 differ; outputs worst 0.000 of tol; decode loop chip 0.107 ms call 0.316 ms
+chip pos0    37 m    19: parity bad=0 worst=0.134; rows vs emulation k 0 (max 0 ulp) v 0; chunks 1 grid 3x4 x256 thr; chip 0.108 ms call 0.451 ms
+  gate 2 vs 19 decode steps: rows k 0 v 0 differ; outputs worst 0.134 of tol; decode loop chip 1.944 ms call 2.023 ms
+chip pos0     0 m    64: parity bad=0 worst=0.231; rows vs emulation k 0 (max 0 ulp) v 0; chunks 1 grid 8x4 x256 thr; chip 0.208 ms call 0.901 ms
+  reps chip ms (in order, 0 untimed warm calls first): 0.209 0.106 0.106 0.106 0.105 0.105 0.105 0.105 0.189
+  slowest rep, per launch ms (1 launches): 0.209
+  timing prefill pos0 0 m 64: chip median 0.106 ms (min 0.105) call median 0.295 ms; 0.32 useful TFLOPS on chip time
+  gate 2 vs 64 decode steps: rows k 0 v 0 differ; outputs worst 0.231 of tol; decode loop chip 6.545 ms call 6.886 ms
+  speed: prefill 0.106 ms vs decode loop 6.545 ms chip time: 61.9x
+chip pos0   100 m    70: parity bad=0 worst=0.086; rows vs emulation k 1 (max 1 ulp) v 0; chunks 2 grid 8x4 x256 thr; chip 0.315 ms call 0.717 ms
+  gate 2 vs 70 decode steps: rows k 0 v 0 differ; outputs worst 0.086 of tol; decode loop chip 7.191 ms call 7.521 ms
+chip pos0   200 m    64: parity bad=0 worst=0.061; rows vs emulation k 0 (max 0 ulp) v 0; chunks 1 grid 8x4 x256 thr; chip 0.208 ms call 0.568 ms
+  gate 2 vs 64 decode steps: rows k 0 v 0 differ; outputs worst 0.061 of tol; decode loop chip 6.622 ms call 6.983 ms
+chip dev pos0   100 m    70: outputs vs host entry: 0 unwritten, 0 differ; rows k 0 v 0 differ; launches 2 grid 8x4; chip 0.312 ms call 0.314 ms
+FAIL: continuation: mirror view valid 0 (want 369) stride 0
+FAIL: negative control: a foreign rewrite without invalidate must show (stale mirror), 0 outputs differ
+chip continuation (prefill 300, decode 5, prefill 64, rewrite, prefill 32): mirror valid 0; outputs differ mirror vs none: 0; stale control 0 differ (must be > 0); after invalidate 0 differ
+chip mutant 1: caught (rc OK, bad 83432, worst 41.54, rows k 7851 v 0)
+chip mutant 2: caught (rc OK, bad 75048, worst 66.80, rows k 0 v 0)
+chip mutant 3: caught (rc OK, bad 0, worst 0.08, rows k 12288 v 12288)
+chip mutant 4: caught (rc OK, bad 53792, worst 183.29, rows k 0 v 0)
+gpu_prefill_attn_test: 127 checks, 2 failed: FAIL
+codegen warps 4 mode 0: 917 instructions, 120 registers (declared 128, 128 threads -> 16384 of 65536), 16 placeholders patched
+codegen warps 4 mode 1: 174 instructions, 56 registers (declared 64, 128 threads -> 8192 of 65536), 0 placeholders patched
+codegen warps 4 mode 2: 782 instructions, 124 registers (declared 128, 128 threads -> 16384 of 65536), 16 placeholders patched
+codegen warps 8 mode 0: 866 instructions, 120 registers (declared 128, 256 threads -> 32768 of 65536), 16 placeholders patched
+codegen warps 8 mode 1: 174 instructions, 56 registers (declared 64, 256 threads -> 16384 of 65536), 0 placeholders patched
+codegen warps 8 mode 2: 731 instructions, 124 registers (declared 128, 256 threads -> 32768 of 65536), 16 placeholders patched
+codegen warps 8 APPEND + mirror: 187 instructions, 56 registers
+path: fused 64-token chunks, warps 8, warm 0, dev buffers session (uncached)
+chip pos0     0 m  2048: parity bad=0 worst=0.247; rows vs emulation k 8 (max 1 ulp) v 0; chunks 32 grid 8x4 x256 thr; chip 6.434 ms call 20.709 ms
+  reps chip ms (in order, 0 untimed warm calls first): 7.202 7.007 6.792 6.707 7.228 6.395 6.689 6.608 6.599 6.612 7.107 6.611 6.504 7.098 6.506
+  slowest rep, per launch ms (32 launches): 0.105 0.105 0.105 0.105 0.105 0.104 0.206 0.207 0.205 0.212 0.207 0.206 0.207 0.206 0.206 0.206 0.205 0.206 0.206 0.206 0.206 0.206 0.307 0.409 0.308 0.309 0.309 0.410 0.310 0.307 0.308 0.318
+  timing prefill pos0 0 m 2048: chip median 6.689 ms (min 6.395) call median 13.286 ms; 5.14 useful TFLOPS on chip time
+chip dev pos0     0 m  2048: outputs vs host entry: 0 unwritten, 0 differ; rows k 0 v 0 differ; launches 32 grid 8x4; chip 7.292 ms call 7.309 ms
+  dev reps chip ms: 6.874 6.848 6.853 6.855 6.832 7.397 6.925 6.814 7.738 6.860 6.967 7.171 7.062 7.071 7.750
+  timing dev pos0 0 m 2048: chip median 6.925 ms (min 6.814) call median 6.943 ms; 4.96 useful TFLOPS on chip time
+chip dev pos0  4096 m  1500: outputs vs host entry: 0 unwritten, 0 differ; rows k 0 v 0 differ; launches 24 grid 8x4; chip 12.244 ms call 12.256 ms
+  dev reps chip ms: 12.278 12.237 12.863 13.053 12.346 12.250 12.162 12.763 12.960 11.959 12.056 12.158 12.353 12.952 12.035
+  timing dev pos0 4096 m 1500: chip median 12.278 ms (min 11.959) call median 12.293 ms; 9.70 useful TFLOPS on chip time
+chip pos0  4032 m    64: parity bad=0 worst=0.011; rows vs emulation k 0 (max 0 ulp) v 0; chunks 1 grid 8x4 x256 thr; chip 0.934 ms call 1.357 ms
+  reps chip ms (in order, 0 untimed warm calls first): 0.415 0.410 0.413 0.411 0.410 0.411 0.410 0.410 0.410 0.410 0.410 0.409 0.410 0.410 0.411
+  slowest rep, per launch ms (1 launches): 0.415
+  timing prefill pos0 4032 m 64: chip median 0.410 ms (min 0.409) call median 0.596 ms; 10.39 useful TFLOPS on chip time
+chip dev pos0  4096 m    64: outputs vs host entry: 0 unwritten, 0 differ; rows k 0 v 0 differ; launches 1 grid 8x4; chip 0.419 ms call 0.420 ms
+  dev reps chip ms: 0.420 0.410 0.410 0.412 0.410 0.411 0.410 0.410 0.412 0.410 0.410 0.410 0.409 0.411 0.409
+  timing dev pos0 4096 m 64: chip median 0.410 ms (min 0.409) call median 0.411 ms; 10.56 useful TFLOPS on chip time
+gpu_prefill_attn_test: 103 checks, 0 failed: PASS
+fused-cold exit 0 (informational)
+codegen warps 4 mode 0: 917 instructions, 120 registers (declared 128, 128 threads -> 16384 of 65536), 16 placeholders patched
+codegen warps 4 mode 1: 174 instructions, 56 registers (declared 64, 128 threads -> 8192 of 65536), 0 placeholders patched
+codegen warps 4 mode 2: 782 instructions, 124 registers (declared 128, 128 threads -> 16384 of 65536), 16 placeholders patched
+codegen warps 8 mode 0: 866 instructions, 120 registers (declared 128, 256 threads -> 32768 of 65536), 16 placeholders patched
+codegen warps 8 mode 1: 174 instructions, 56 registers (declared 64, 256 threads -> 16384 of 65536), 0 placeholders patched
+codegen warps 8 mode 2: 731 instructions, 124 registers (declared 128, 256 threads -> 32768 of 65536), 16 placeholders patched
+codegen warps 8 APPEND + mirror: 187 instructions, 56 registers
+path: fused 64-token chunks, warps 8, warm 5, dev buffers session (uncached)
+chip pos0     0 m  2048: parity bad=0 worst=0.247; rows vs emulation k 8 (max 1 ulp) v 0; chunks 32 grid 8x4 x256 thr; chip 7.140 ms call 21.731 ms
+  reps chip ms (in order, 5 untimed warm calls first): 6.930 6.713 6.712 7.221 6.511 7.060 6.802 6.809 6.790 7.121 6.800 7.006 6.812 6.808 6.710
+  slowest rep, per launch ms (32 launches): 0.105 0.104 0.104 0.110 0.105 0.206 0.208 0.205 0.206 0.207 0.206 0.206 0.205 0.207 0.206 0.210 0.207 0.207 0.206 0.208 0.208 0.207 0.206 0.307 0.409 0.308 0.307 0.308 0.411 0.308 0.307 0.310
+  timing prefill pos0 0 m 2048: chip median 6.808 ms (min 6.511) call median 13.459 ms; 5.05 useful TFLOPS on chip time
+chip dev pos0     0 m  2048: outputs vs host entry: 0 unwritten, 0 differ; rows k 0 v 0 differ; launches 32 grid 8x4; chip 7.376 ms call 7.392 ms
+  dev reps chip ms: 6.767 7.479 6.872 6.871 6.973 6.947 6.796 6.968 6.870 6.866 6.970 7.783 7.579 6.975 6.972
+  timing dev pos0 0 m 2048: chip median 6.968 ms (min 6.767) call median 6.983 ms; 4.93 useful TFLOPS on chip time
+chip dev pos0  4096 m  1500: outputs vs host entry: 0 unwritten, 0 differ; rows k 0 v 0 differ; launches 24 grid 8x4; chip 12.476 ms call 12.487 ms
+  dev reps chip ms: 12.271 12.853 12.266 12.311 13.206 12.190 12.476 12.986 12.294 12.464 11.957 12.060 13.216 12.126 12.547
+  timing dev pos0 4096 m 1500: chip median 12.311 ms (min 11.957) call median 12.326 ms; 9.67 useful TFLOPS on chip time
+chip pos0  4032 m    64: parity bad=0 worst=0.011; rows vs emulation k 0 (max 0 ulp) v 0; chunks 1 grid 8x4 x256 thr; chip 0.634 ms call 1.108 ms
+  reps chip ms (in order, 5 untimed warm calls first): 0.409 0.405 0.410 0.410 0.410 0.409 0.410 0.410 0.410 0.411 0.409 0.410 0.409 0.410 0.411
+  slowest rep, per launch ms (1 launches): 0.411
+  timing prefill pos0 4032 m 64: chip median 0.410 ms (min 0.405) call median 0.598 ms; 10.40 useful TFLOPS on chip time
+chip dev pos0  4096 m    64: outputs vs host entry: 0 unwritten, 0 differ; rows k 0 v 0 differ; launches 1 grid 8x4; chip 0.419 ms call 0.420 ms
+  dev reps chip ms: 0.409 0.409 0.410 0.413 0.410 0.411 0.408 0.409 0.409 0.410 0.412 0.409 0.412 0.410 0.409
+  timing dev pos0 4096 m 64: chip median 0.410 ms (min 0.408) call median 0.410 ms; 10.56 useful TFLOPS on chip time
+gpu_prefill_attn_test: 103 checks, 0 failed: PASS
+fused-warm5 exit 0 (informational)
+codegen warps 4 mode 0: 917 instructions, 120 registers (declared 128, 128 threads -> 16384 of 65536), 16 placeholders patched
+codegen warps 4 mode 1: 174 instructions, 56 registers (declared 64, 128 threads -> 8192 of 65536), 0 placeholders patched
+codegen warps 4 mode 2: 782 instructions, 124 registers (declared 128, 128 threads -> 16384 of 65536), 16 placeholders patched
+codegen warps 8 mode 0: 866 instructions, 120 registers (declared 128, 256 threads -> 32768 of 65536), 16 placeholders patched
+codegen warps 8 mode 1: 174 instructions, 56 registers (declared 64, 256 threads -> 16384 of 65536), 0 placeholders patched
+codegen warps 8 mode 2: 731 instructions, 124 registers (declared 128, 256 threads -> 32768 of 65536), 16 placeholders patched
+codegen warps 8 APPEND + mirror: 187 instructions, 56 registers
+path: split APPEND + ATTEND, ATTEND reads the GPU-cached K/V mirror, warps 8, warm 0, dev buffers session (uncached)
+chip pos0     0 m  2048: parity bad=0 worst=0.247; rows vs emulation k 8 (max 1 ulp) v 0; chunks 4 grid 128x4 x256 thr; chip 2.068 ms call 30.827 ms
+  reps chip ms (in order, 0 untimed warm calls first): 2.171 2.058 2.157 2.253 2.049 3.584 2.156 2.158 2.154 2.048 2.149 2.049 2.046 2.128 2.144
+  slowest rep, per launch ms (4 launches): 0.209 2.043 0.105 1.228
+  timing prefill pos0 0 m 2048: chip median 2.149 ms (min 2.046) call median 9.310 ms; 16.00 useful TFLOPS on chip time
+chip dev pos0     0 m  2048: outputs vs host entry: 0 unwritten, 0 differ; rows k 0 v 0 differ; launches 2 grid 256x4; chip 1.954 ms call 3.324 ms
+  dev reps chip ms: 1.953 2.041 1.940 2.045 2.038 1.937 1.938 1.941 1.938 1.937 1.929 2.040 2.037 2.036 2.138
+  timing dev pos0 0 m 2048: chip median 1.953 ms (min 1.929) call median 1.955 ms; 17.60 useful TFLOPS on chip time
+chip dev pos0  4096 m  1500: outputs vs host entry: 0 unwritten, 0 differ; rows k 0 v 0 differ; launches 2 grid 188x4; chip 3.927 ms call 6.602 ms
+  dev reps chip ms: 3.793 3.567 3.464 3.450 3.567 3.668 3.565 3.466 3.466 3.466 3.529 3.871 3.665 3.464 3.523
+  timing dev pos0 4096 m 1500: chip median 3.529 ms (min 3.450) call median 3.530 ms; 33.75 useful TFLOPS on chip time
+chip pos0  4032 m    64: parity bad=0 worst=0.011; rows vs emulation k 0 (max 0 ulp) v 0; chunks 2 grid 8x4 x256 thr; chip 1.915 ms call 6.864 ms
+  reps chip ms (in order, 0 untimed warm calls first): 0.415 0.414 0.411 0.411 0.412 0.411 0.412 0.411 0.413 0.411 0.412 0.415 0.411 0.413 0.413
+  slowest rep, per launch ms (2 launches): 0.106 0.309
+  timing prefill pos0 4032 m 64: chip median 0.412 ms (min 0.411) call median 0.604 ms; 10.35 useful TFLOPS on chip time
+chip dev pos0  4096 m    64: outputs vs host entry: 0 unwritten, 0 differ; rows k 0 v 0 differ; launches 2 grid 8x4; chip 0.560 ms call 2.908 ms
+  dev reps chip ms: 0.418 0.412 0.410 0.410 0.410 0.411 0.411 0.411 0.410 0.410 0.411 0.410 0.410 0.410 0.411
+  timing dev pos0 4096 m 64: chip median 0.410 ms (min 0.410) call median 0.411 ms; 10.55 useful TFLOPS on chip time
+gpu_prefill_attn_test: 103 checks, 0 failed: PASS
+split-cold exit 0 (informational)
+codegen warps 4 mode 0: 917 instructions, 120 registers (declared 128, 128 threads -> 16384 of 65536), 16 placeholders patched
+codegen warps 4 mode 1: 174 instructions, 56 registers (declared 64, 128 threads -> 8192 of 65536), 0 placeholders patched
+codegen warps 4 mode 2: 782 instructions, 124 registers (declared 128, 128 threads -> 16384 of 65536), 16 placeholders patched
+codegen warps 8 mode 0: 866 instructions, 120 registers (declared 128, 256 threads -> 32768 of 65536), 16 placeholders patched
+codegen warps 8 mode 1: 174 instructions, 56 registers (declared 64, 256 threads -> 16384 of 65536), 0 placeholders patched
+codegen warps 8 mode 2: 731 instructions, 124 registers (declared 128, 256 threads -> 32768 of 65536), 16 placeholders patched
+codegen warps 8 APPEND + mirror: 187 instructions, 56 registers
+path: split APPEND + ATTEND, ATTEND reads the GPU-cached K/V mirror, warps 8, warm 5, dev buffers session (uncached)
+chip pos0     0 m  2048: parity bad=0 worst=0.247; rows vs emulation k 8 (max 1 ulp) v 0; chunks 4 grid 128x4 x256 thr; chip 2.060 ms call 30.460 ms
+  reps chip ms (in order, 5 untimed warm calls first): 2.052 2.156 2.050 2.053 2.152 3.888 2.359 2.116 2.153 2.162 2.224 2.151 2.054 2.139 2.157
+  slowest rep, per launch ms (4 launches): 0.105 0.716 0.210 2.858
+  timing prefill pos0 0 m 2048: chip median 2.152 ms (min 2.050) call median 9.329 ms; 15.97 useful TFLOPS on chip time
+chip dev pos0     0 m  2048: outputs vs host entry: 0 unwritten, 0 differ; rows k 0 v 0 differ; launches 2 grid 256x4; chip 2.050 ms call 3.434 ms
+  dev reps chip ms: 2.085 2.218 1.998 2.132 2.039 2.038 2.038 1.940 1.938 2.041 2.135 2.260 1.951 2.156 2.101
+  timing dev pos0 0 m 2048: chip median 2.041 ms (min 1.938) call median 2.042 ms; 16.85 useful TFLOPS on chip time
+chip dev pos0  4096 m  1500: outputs vs host entry: 0 unwritten, 0 differ; rows k 0 v 0 differ; launches 2 grid 188x4; chip 3.773 ms call 6.720 ms
+  dev reps chip ms: 3.498 3.590 3.491 3.506 3.721 3.668 3.483 3.522 3.593 3.487 3.822 3.567 3.555 3.548 3.484
+  timing dev pos0 4096 m 1500: chip median 3.548 ms (min 3.483) call median 3.552 ms; 33.57 useful TFLOPS on chip time
+chip pos0  4032 m    64: parity bad=0 worst=0.011; rows vs emulation k 0 (max 0 ulp) v 0; chunks 2 grid 8x4 x256 thr; chip 0.661 ms call 6.531 ms
+  reps chip ms (in order, 5 untimed warm calls first): 0.413 0.414 0.415 0.413 0.411 0.412 0.412 0.411 0.412 0.411 0.412 0.414 0.410 0.412 0.412
+  slowest rep, per launch ms (2 launches): 0.107 0.308
+  timing prefill pos0 4032 m 64: chip median 0.412 ms (min 0.410) call median 0.604 ms; 10.35 useful TFLOPS on chip time
+chip dev pos0  4096 m    64: outputs vs host entry: 0 unwritten, 0 differ; rows k 0 v 0 differ; launches 2 grid 8x4; chip 0.560 ms call 3.324 ms
+  dev reps chip ms: 0.410 0.411 0.411 0.412 0.411 0.411 0.411 0.411 0.410 0.410 0.411 0.409 0.409 0.411 0.411
+  timing dev pos0 4096 m 64: chip median 0.411 ms (min 0.409) call median 0.412 ms; 10.54 useful TFLOPS on chip time
+gpu_prefill_attn_test: 103 checks, 0 failed: PASS
+split-warm5 exit 0 (informational)
+GPU_PREFILL_ATTN_CHIP: FAIL

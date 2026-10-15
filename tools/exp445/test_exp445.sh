@@ -208,7 +208,7 @@ printf 'config.B.base_url=%s\nconfig.B.extra={"chat_template_kwargs":{"enable_th
 sed "s|^config\.A\.base_url=.*|config.A.base_url=$URL2|" "$TP" > "$T/PARAMS2"
 sed -e 's/^attempts=.*/attempts=2/' -e 's/^heldout_tasks=.*/heldout_tasks=4/' -e 's/^futility_max=.*/futility_max=3/' "$TP" > "$T/PARAMSH"
 sed 's/^futility_max=.*/futility_max=2/' "$T/PARAMSH" > "$T/PARAMSC"
-export EXP445_PARAMS="$TP"
+export EXP445_PARAMS="$TP" EXP445_TEST_BACKOFF_S=0
 export EXP445_G0_LEDGER="$T/g0-ledger.tsv"   # the tests never write the real ledger
 cw() { "$HERE/check_weights.sh" "$1" "$2" > /dev/null; }
 g0() { "$HERE/g0.sh" --config "$1" --out "$2" > /dev/null 2>&1; }
@@ -373,6 +373,9 @@ mut_make0() { rm -rf "$T/mg"; mkdir -p "$T/mg"; cp "$HERE/g0.sh" "$HERE/PARAMS" 
 mut_make0; sed -i "s/at_least \"\$chance\" 0.01/at_least \"\$chance\" 0.001/" "$T/mg/sampling-gate.sh"; ! cmp -s "$T/mg/sampling-gate.sh" "$HERE/sampling-gate.sh" || bad "gate mutant: sed changed nothing"
 refuse "g0.sh with an edited sampling gate script" "is not the frozen sampling gate" "$T/mg/g0.sh" --config A --out "$T/g0mg"
 [ ! -e "$T/g0mg/g0" ] && ok "  nothing recorded by the refused G0" || bad "refused G0 wrote a record"
+prep A "$T/locked"
+refuse "driver on a run dir another driver holds (flock)" "another run.sh holds" flock "$T/locked/.lock" "$HERE/run.sh" --config A --tasks "$T/pub" --out "$T/locked" --only dev01
+[ ! -e "$T/locked/log.tsv" ] && ok "  the refused driver wrote no log.tsv" || bad "locked run dir got a log.tsv"
 # a dev run of 3 tasks
 R="$T/gens/run-a"; prep A "$R"
 "$HERE/run.sh" --config A --tasks "$T/pub" --out "$R" --only dev01,dev02,dev03 > /dev/null 2> "$T/run.err" || { bad "run.sh failed"; tail -5 "$T/run.err"; }

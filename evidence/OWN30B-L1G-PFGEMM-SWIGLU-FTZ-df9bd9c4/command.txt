@@ -1,0 +1,5 @@
+baseline: quietlock hold --owner PFGEMM -- flock /tmp/aien-gb10.lock gpu_pfgemm_test --shape-knob 4 16 1 --chip --tokens 3600 --reps 7 --shape gateup
+camera:   PFDBG=1 (same arguments, camera build); camera-main101.txt = the 101 lines of the main comparison (between 'second launch identical' and 'bit-identity'); the later lines in camera-gateup.log are the mutant comparisons
+result:   101/101 differing elements have t = -g*log2e in (126.026840, 127.993935); chip value +-0 with the sign of g*u on all 101; reference values bf16 0x236e..0x243e / 0xa783..0xa7b8 (|act| ~ 2^-56..2^-48, i.e. a subnormal MUFU.RCP result times g*u*2^64)
+red:   gpu_pfgemm_test --host-only at fbbd00c4 (IEEE reference): red-host-only-fbbd00c4.log, exit 1, '0/6 match ... FAIL'
+green: gpu_pfgemm_test (host + sim) at dbcfbba9: green-host-sim-dbcfbba9.log, exit 0; the five other tests that include bw_warp_sim_tc.h: green-*-dbcfbba9.log, all exit 0

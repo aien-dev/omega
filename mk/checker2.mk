@@ -10,7 +10,7 @@
 #   make test-checker2-mutants   negative controls only: each GUARD line removed must fail a test
 ifndef CHECKER2_MK
 CHECKER2_MK := 1
-.PHONY: checker2 test-checker2 test-checker2-lrat test-checker2-unit test-checker2-mutants test-checker2-differential test-checker2-blast-native
+.PHONY: checker2 test-checker2 test-checker2-owner-receipt test-checker2-lrat test-checker2-unit test-checker2-mutants test-checker2-differential test-checker2-blast-native
 C2_DIR = $(OUT_DIR)/checker2
 C2_CFLAGS = -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -O2 -Isrc -Isrc/checker2
 C2_ASAN = -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all
@@ -97,11 +97,15 @@ $(C2_DIR)/test_c2_blast_native: tests/checker2/test_c2_blast_native.c $(C2_CORE)
 test-checker2-blast-native: $(OUT_DIR)/compiler/oscc $(C2_DIR)/test_c2_blast_native
 	sh tests/checker2/blast_native.sh $(OUT_DIR)/compiler/oscc $(C2_DIR)/test_c2_blast_native $(C2_DIR)/blast_native
 
-test-checker2-unit: $(C2_DIR)/test_c2_receipt $(C2_DIR)/test_c2_receipt_asan $(C2_DIR)/test_c2_ir $(C2_DIR)/test_c2_ir_asan test-checker2-differential test-checker2-lrat test-checker2-blast-native
+test-checker2-unit: $(C2_DIR)/test_c2_receipt $(C2_DIR)/test_c2_receipt_asan $(C2_DIR)/test_c2_ir $(C2_DIR)/test_c2_ir_asan test-checker2-differential test-checker2-lrat test-checker2-blast-native test-checker2-owner-receipt
 	./$(C2_DIR)/test_c2_receipt tests/checker2/fixtures
 	./$(C2_DIR)/test_c2_receipt_asan tests/checker2/fixtures
 	./$(C2_DIR)/test_c2_ir $(C2_IRDIR)
 	./$(C2_DIR)/test_c2_ir_asan $(C2_IRDIR)
+
+# positive production case: the receipt signed on Drake's YubiKey (spec section 11; fails PENDING until signed)
+test-checker2-owner-receipt: $(C2_DIR)/checker2
+	sh tests/checker2/owner_receipt.sh $(C2_DIR)/checker2 tests/checker2/fixtures/owner-receipt $(C2_DIR)/owner-receipt
 
 test-checker2-mutants: test-checker2-differential test-checker2-lrat
 	sh tests/checker2/mutants.sh "$(CC)" "$(C2_DIR)/mutants" "$(C2_IRDIR)" "$(C2_DIR)/lrat"

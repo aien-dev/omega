@@ -1,0 +1,83 @@
+host-only: emulation, oracle, budgets
+emulation vs oracle: abs 3.577e-08, scale 63.821
+codegen rows 1 warps  4 depth 8: 266 instructions, 60 registers (declared 64, register file 8192 of 65536)
+codegen rows 1 warps  8 depth 8: 234 instructions, 60 registers (declared 64, register file 16384 of 65536)
+codegen rows 1 warps 16 depth 8: 218 instructions, 60 registers (declared 64, register file 32768 of 65536)
+codegen rows 1 warps 32 depth 8: 210 instructions, 60 registers (declared 64, register file 65536 of 65536)
+gpu_bf16_gemv_test: 185 checks, 0 failed: PASS
+sim k 2048 n 100 rows 1 warps 8 depth 8 grid 2: ok 0 of 100 rows differ from the emulation (bit-identical)
+sim k 2048 n 100 rows 1 warps 8 depth 4 grid 3: ok 0 of 100 rows differ from the emulation (bit-identical)
+sim k 2048 n 64 rows 1 warps 8 depth 1 grid 2: ok 0 of 64 rows differ from the emulation (bit-identical)
+sim k 2048 n 96 rows 2 warps 8 depth 4 grid 2: ok 0 of 96 rows differ from the emulation (bit-identical)
+sim k 2048 n 96 rows 4 warps 8 depth 4 grid 1: ok 0 of 96 rows differ from the emulation (bit-identical)
+sim k 512 n 70 rows 1 warps 8 depth 2 grid 2: ok 0 of 70 rows differ from the emulation (bit-identical)
+sim k 512 n 70 rows 2 warps 4 depth 1 grid 3: ok 0 of 70 rows differ from the emulation (bit-identical)
+sim k 4096 n 40 rows 1 warps 8 depth 16 grid 2: ok 0 of 40 rows differ from the emulation (bit-identical)
+sim mutant 1: caught 64 of 64 rows differ from the emulation
+sim mutant 2: caught 64 of 64 rows differ from the emulation
+sim mutant 3: caught 64 of 64 rows differ from the emulation
+sim: 297068 warp issues in total
+gpu_bf16_gemv_test: 11 checks, 0 failed: PASS
+PASS timing 1x2048x8192 upload_ms=239.1 ok_calls=100 median_ms=0.411 p90_ms=0.479 min_ms=0.297 max_ms=1.026 chip_ns_mean=411717 grid=64x1 e2e_first=2.36603e-07 e2e_last=2.36603e-07 repeat_mismatch=0
+PASS timing 1x8192x2048 upload_ms=105.2 ok_calls=100 median_ms=0.513 p90_ms=0.627 min_ms=0.418 max_ms=1.068 chip_ns_mean=540529 grid=64x1 e2e_first=5.21488e-07 e2e_last=5.21488e-07 repeat_mismatch=0
+PASS: 4 checks, 0 failed
+baseline exit 0 (recorded)
+upload 151936 x 2048 bf16 (622 MB): rc=OK 312 ms ()
+parity: 0 of 151936 rows differ from the f32 emulation (bit compare); worst error vs double oracle 2.36e-08 of the term scale (y -1.416); argmax chip 74730 oracle 74730
+second call: bit-identical
+bf16-x entry: bit-identical to the emulation
+timing (medians of 50, evict 1): rows 1 warps 16 depth 8 ctas 96: chip 2935.1 us = 212.0 GB/s on 622 MB; call 3044.9 us = 204.4 GB/s
+chip mutant 1: caught (4096 of 4096 rows differ)
+chip mutant 2: caught (4096 of 4096 rows differ)
+chip mutant 3: caught (4096 of 4096 rows differ)
+gpu_bf16_gemv_test: 12 checks, 0 failed: PASS
+upload 151936 x 2048 bf16 (622 MB): rc=OK 304 ms ()
+parity: 0 of 151936 rows differ from the f32 emulation (bit compare); worst error vs double oracle 2.36e-08 of the term scale (y -1.416); argmax chip 74730 oracle 74730
+second call: bit-identical
+bf16-x entry: bit-identical to the emulation
+timing (medians of 30, evict 0): rows 1 warps 16 depth 8 ctas 96: chip 2920.3 us = 213.1 GB/s on 622 MB; call 3016.1 us = 206.3 GB/s
+chip mutant 1: caught (4096 of 4096 rows differ)
+chip mutant 2: caught (4096 of 4096 rows differ)
+chip mutant 3: caught (4096 of 4096 rows differ)
+gpu_bf16_gemv_test: 12 checks, 0 failed: PASS
+--no-evict exit 0 (informational)
+upload 151936 x 2048 bf16 (622 MB): rc=OK 302 ms ()
+parity: 0 of 151936 rows differ from the f32 emulation (bit compare); worst error vs double oracle 2.36e-08 of the term scale (y -1.416); argmax chip 74730 oracle 74730
+second call: bit-identical
+bf16-x entry: bit-identical to the emulation
+timing (medians of 30, evict 1): rows 1 warps 16 depth 4 ctas 96: chip 2933.0 us = 212.2 GB/s on 622 MB; call 3039.4 us = 204.8 GB/s
+chip mutant 1: caught (4096 of 4096 rows differ)
+chip mutant 2: caught (4096 of 4096 rows differ)
+chip mutant 3: caught (4096 of 4096 rows differ)
+gpu_bf16_gemv_test: 12 checks, 0 failed: PASS
+--depth 4 exit 0 (informational)
+upload 151936 x 2048 bf16 (622 MB): rc=OK 305 ms ()
+parity: 0 of 151936 rows differ from the f32 emulation (bit compare); worst error vs double oracle 2.36e-08 of the term scale (y -1.416); argmax chip 74730 oracle 74730
+second call: bit-identical
+bf16-x entry: bit-identical to the emulation
+timing (medians of 30, evict 1): rows 1 warps 32 depth 8 ctas 96: chip 3034.5 us = 205.1 GB/s on 622 MB; call 3141.7 us = 198.1 GB/s
+chip mutant 1: caught (4096 of 4096 rows differ)
+chip mutant 2: caught (4096 of 4096 rows differ)
+chip mutant 3: caught (4096 of 4096 rows differ)
+gpu_bf16_gemv_test: 12 checks, 0 failed: PASS
+--warps 32 exit 0 (informational)
+upload 151936 x 2048 bf16 (622 MB): rc=OK 312 ms ()
+parity: 0 of 151936 rows differ from the f32 emulation (bit compare); worst error vs double oracle 2.36e-08 of the term scale (y -1.416); argmax chip 74730 oracle 74730
+second call: bit-identical
+bf16-x entry: bit-identical to the emulation
+timing (medians of 30, evict 1): rows 1 warps 16 depth 8 ctas 48: chip 3028.9 us = 205.5 GB/s on 622 MB; call 3138.6 us = 198.3 GB/s
+chip mutant 1: caught (4096 of 4096 rows differ)
+chip mutant 2: caught (4096 of 4096 rows differ)
+chip mutant 3: caught (4096 of 4096 rows differ)
+gpu_bf16_gemv_test: 12 checks, 0 failed: PASS
+--ctas 48 exit 0 (informational)
+quantised lm_head: weight rms error 0.0265 of weight rms (block-scaled e4m3)
+uploads: bf16 OK, fp8 OK
+state 0: bf16 argmax 68534 (18.378), fp8 argmax 68534 (18.330), margin 3.2326, logit rms rel diff 0.0276
+lm_head fp8 vs bf16 argmax study (real lm_head.weight, 1000 random hidden states = gaussian x model.norm.weight, seed 20261013)
+argmax agreement: 931 of 1000 (93.10%); bf16 argmax within fp8 top-5: 1000 of 1000
+logit rms relative difference, worst over states: 0.0284
+agreement by bf16 top1-top2 logit gap: <0.05: 30/66 disagree, <0.2: 36/154, <1: 3/490, >=1: 0/290
+chip medians: bf16 kernel 2920.9 us, fp8 kernel 1545.7 us
+study exit 0 (informational)
+GPU_BF16_GEMV_CHIP: PASS

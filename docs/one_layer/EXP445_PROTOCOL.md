@@ -103,8 +103,12 @@ arm's from the hex reader or the decoder (a class name and its meaning), the `st
    where `<reason>` is the reader's one-line refusal (`compiler: ...`, `hex: ...`, `decoder: CLASS (meaning)`,
    `step: ...`, `signature: ...`, `backend: ...`). The repair round's candidate is final, accepted
    by the check or not. No second repair.
-5. Transport errors and HTTP 5xx are retried up to `retries=2` times with the same request; a request
-   that still fails ends the generation with no candidate (`no_candidate`, a failure).
+5. A failed try (transport error, any HTTP status other than 200, or a 200 whose body has no usable
+   answer) is retried up to `retries=2` times with the same request, after a pause of K x 5 seconds
+   before try K; a request that still fails ends the generation with no candidate (`no_candidate`, a
+   failure). (This sentence once said "transport errors and HTTP 5xx"; the driver has always retried
+   every failed try, and every run on record retried that way. The pause was added on 2026-10-15;
+   runs before that retried at once.)
 6. Every raw request and response is saved and hashed (`gen/<set>/<task>/SHA256SUMS`, run-level
    `SHA256SUMS`); `log.tsv` holds per generation: rounds, prompt tokens, completion tokens per round,
    finish reasons, wall seconds, check results, candidate sha256.

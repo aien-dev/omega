@@ -1,0 +1,16 @@
+codegen warps 4 mode 0: 917 instructions, 120 registers (declared 128, 128 threads -> 16384 of 65536), 16 placeholders patched
+codegen warps 4 mode 1: 174 instructions, 56 registers (declared 64, 128 threads -> 8192 of 65536), 0 placeholders patched
+codegen warps 4 mode 2: 782 instructions, 124 registers (declared 128, 128 threads -> 16384 of 65536), 16 placeholders patched
+codegen warps 8 mode 0: 866 instructions, 120 registers (declared 128, 256 threads -> 32768 of 65536), 16 placeholders patched
+codegen warps 8 mode 1: 174 instructions, 56 registers (declared 64, 256 threads -> 16384 of 65536), 0 placeholders patched
+codegen warps 8 mode 2: 731 instructions, 124 registers (declared 128, 256 threads -> 32768 of 65536), 16 placeholders patched
+path: split APPEND + ATTEND, warps 8, warm 5
+chip pos0     0 m  2048: parity bad=0 worst=0.247; rows vs emulation k 8 (max 1 ulp) v 0; chunks 4 grid 128x4 x256 thr; chip 9.571 ms call 49.752 ms
+  reps chip ms (in order, 5 untimed warm calls first): 7.135 6.764 4.381 4.387 4.541 4.238 4.408 7.731 4.383 4.394 4.281 5.475 4.543 4.459 4.326
+  slowest rep, per launch ms (4 launches): 0.123 3.067 0.128 4.413
+  timing prefill pos0 0 m 2048: chip median 4.408 ms (min 4.238) call median 23.245 ms; 7.80 useful TFLOPS on chip time
+chip dev pos0     0 m  2048: outputs vs host entry: 0 unwritten, 0 differ; rows k 0 v 0 differ; launches 2 grid 256x4; chip 4.407 ms call 4.419 ms
+  dev reps chip ms: 5.573 4.451 4.346 4.211 4.293 4.446 4.241 4.258 4.251 4.487 4.267 4.369 4.414 4.490 4.299
+  timing dev pos0 0 m 2048: chip median 4.346 ms (min 4.211) call median 4.356 ms; 7.91 useful TFLOPS on chip time
+gpu_prefill_attn_test: 80 checks, 0 failed: PASS
+split-warm5 exit 0 (informational)
