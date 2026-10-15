@@ -1,0 +1,15 @@
+exp445 r3 results, INTERIM: attempt 1 only (harness: RUN VALID; references accepted 60/60; provenance OK; prompt mode many)
+success = harness ACCEPT on hidden inputs of the final candidate; attempt 1 is the pre-registered primary measure; round 1 = accepted without the repair round; 95% Wilson intervals
+
+config a   arm omegese  attempt1 23/60   0.383 [0.271, 0.510]   round 1 only 21/60     any-of-attempts 23/60   0.383 [0.271, 0.510]
+                        completion tokens 11792 total, 196.5 per generation; prompt 6631.2 per generation; wall 641.7 s; repaired 25 (accepted 2)
+config a   arm text     attempt1 34/60   0.567 [0.441, 0.684]   round 1 only 30/60     any-of-attempts 34/60   0.567 [0.441, 0.684]
+                        completion tokens 15803 total, 263.4 per generation; prompt 5965.8 per generation; wall 823.5 s; repaired 16 (accepted 4)
+cost config a: omegese / text mean completion tokens per generation x0.75 (196.5 / 263.4); prompt tokens per generation 6631.2 / 5965.8
+distinct candidates config a arm omegese: 1.00 per task over 1.00 attempts; every attempt identical on 0 of 0 tasks with 2+ attempts
+distinct candidates config a arm text: 1.00 per task over 1.00 attempts; every attempt identical on 0 of 0 tasks with 2+ attempts
+paired attempt 1 config a: both 20, only omegese 3, only text 14, neither 23; exact two-sided McNemar p = 0.012726
+stop rule config a (omegese attempt 1 <= 30): STOP
+
+gate config a: omegese 23/60, text 34/60: FAIL (needs omegese >= 80% and at most 10 points below text)
+GATE NOT EVALUATED: interim score of attempt 1 (Stage 1 stop rule)

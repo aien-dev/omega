@@ -1,0 +1,5 @@
+set=a-omegese-1 accepted=23/60 rejected=37 errors=0 no_candidate=21
+set=a-text-1 accepted=34/60 rejected=26 errors=0 no_candidate=0
+references_accepted=60/60
+replay_identical=yes probes=PASS clean_tree=yes
+RUN VALID
