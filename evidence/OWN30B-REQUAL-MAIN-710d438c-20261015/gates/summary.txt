@@ -1,0 +1,23 @@
+omega 710d438cac6c1159b4ca2b39af49812ce08f554b dirty=0 physics 6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf dirty=0 start 2026-10-15T00:55:00Z
+bf16_gemv rc=0 start=2026-10-15T00:55:00Z end=2026-10-15T00:55:26Z verdict: GPU_BF16_GEMV_CHIP: PASS
+cmdlist rc=0 start=2026-10-15T00:55:26Z end=2026-10-15T00:55:33Z verdict: GPU_CMDLIST_CHIP: PASS
+decode_attn rc=0 start=2026-10-15T00:55:33Z end=2026-10-15T00:55:40Z verdict: GPU_DECODE_ATTN_CHIP: PASS
+decode_graph rc=0 start=2026-10-15T00:55:40Z end=2026-10-15T00:55:42Z verdict: GPU_DECODE_GRAPH_CHIP: PASS
+decode_graph_red rc=0 start=2026-10-15T00:55:42Z end=2026-10-15T00:55:44Z verdict: GPU_DECODE_GRAPH_CHIP_RED: FAILED_AS_EXPECTED
+decode_graph_cached rc=0 start=2026-10-15T00:55:44Z end=2026-10-15T00:55:46Z verdict: GPU_DECODE_GRAPH_CHIP_CACHED: PASS
+fp8 rc=0 start=2026-10-15T00:55:46Z end=2026-10-15T00:55:58Z verdict: GPU_FP8_CHIP: PASS
+fp8_v2 rc=0 start=2026-10-15T00:55:58Z end=2026-10-15T00:56:12Z verdict: GPU_FP8_V2_CHIP: PASS
+fp8gemm rc=0 start=2026-10-15T00:56:12Z end=2026-10-15T00:56:26Z verdict: GPU_FP8GEMM_CHIP: PASS
+l2d_barrier rc=0 start=2026-10-15T00:56:26Z end=2026-10-15T00:56:37Z verdict: GPU_L2D_BARRIER_CHIP: PASS
+l2d_prefetch rc=0 start=2026-10-15T00:56:37Z end=2026-10-15T00:56:51Z verdict: GPU_L2D_PREFETCH_CHIP: PASS
+matmul_api rc=0 start=2026-10-15T00:56:51Z end=2026-10-15T00:57:29Z verdict: GPU_MATMUL_API_CHIP: PASS
+prefill_attn rc=1 start=2026-10-15T00:57:29Z end=2026-10-15T00:58:45Z verdict: GPU_PREFILL_ATTN_CHIP: FAIL
+router rc=0 start=2026-10-15T00:58:45Z end=2026-10-15T00:58:57Z verdict: GPU_ROUTER_CHIP: PASS
+tcgemm rc=0 start=2026-10-15T00:58:57Z end=2026-10-15T01:04:22Z verdict: TCGEMM_CHIP: PASS
+attention rc=0 start=2026-10-15T01:04:22Z end=2026-10-15T01:04:38Z verdict: PASS: 2 checks, 0 failed
+cut4b rc=0 start=2026-10-15T01:04:38Z end=2026-10-15T01:05:43Z verdict: matmul_timing rc=0 :: PASS: 4 checks, 0 failed
+elementwise rc=0 start=2026-10-15T01:05:43Z end=2026-10-15T01:05:43Z verdict: PASS: 35 checks, 0 failed
+reconv rc=126 start=2026-10-15T01:05:43Z end=2026-10-15T01:05:43Z verdict: 
+l1g rc=1 start=2026-10-15T01:05:43Z end=2026-10-15T01:12:53Z verdict: L1G_CHIP: FAIL
+end 2026-10-15T01:12:53Z
+reconv-sh rc=0 PASS: 235 checks, 0 failed

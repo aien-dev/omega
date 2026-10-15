@@ -1,0 +1,85 @@
+gateup 128 r1: chip bit-identity: 0 of 393216 sampled outputs (256 rows) differ from the emulation (bit-identical)
+gateup 128 r1: chip mutant 1: caught (1572864 of 1572864 differ)
+gateup 128 r1: chip mutant 2: caught (1572864 of 1572864 differ)
+gateup 128 r1: chip mutant 3: caught (1560576 of 1572864 differ)
+gateup 128 r1: chip mutant 4: caught (1572864 of 1572864 differ)
+gateup 128 r1: TCGEMM gateup (medians of 9): chip 2738.8 us, call 4014.6 us; 2.35 TFLOPS; weights streamed 403 MB (147.0 GB/s), activations gathered 403 MB, output 6 MB; total 296.3 GB/s
+gateup 128 r2: chip bit-identity: 0 of 393216 sampled outputs (256 rows) differ from the emulation (bit-identical)
+gateup 128 r2: TCGEMM gateup (medians of 9): chip 3068.9 us, call 4340.0 us; 2.10 TFLOPS; weights streamed 403 MB (131.2 GB/s), activations gathered 403 MB, output 6 MB; total 264.5 GB/s
+gateup 128 r3: chip bit-identity: 0 of 393216 sampled outputs (256 rows) differ from the emulation (bit-identical)
+gateup 128 r3: TCGEMM gateup (medians of 9): chip 2765.3 us, call 4089.6 us; 2.33 TFLOPS; weights streamed 403 MB (145.6 GB/s), activations gathered 403 MB, output 6 MB; total 293.5 GB/s
+gateup 128 r4: chip bit-identity: 0 of 393216 sampled outputs (256 rows) differ from the emulation (bit-identical)
+gateup 128 r4: TCGEMM gateup (medians of 9): chip 2693.3 us, call 3965.7 us; 2.39 TFLOPS; weights streamed 403 MB (149.5 GB/s), activations gathered 403 MB, output 6 MB; total 301.3 GB/s
+gateup 128 r5: chip bit-identity: 0 of 393216 sampled outputs (256 rows) differ from the emulation (bit-identical)
+gateup 128 r5: TCGEMM gateup (medians of 9): chip 3698.1 us, call 4999.2 us; 1.74 TFLOPS; weights streamed 403 MB (108.9 GB/s), activations gathered 403 MB, output 6 MB; total 219.5 GB/s
+down 128 r1: chip bit-identity: 0 of 524288 sampled outputs (256 rows) differ from the emulation (bit-identical)
+down 128 r1: chip mutant 1: caught (2097152 of 2097152 differ)
+down 128 r1: chip mutant 2: caught (2097152 of 2097152 differ)
+down 128 r1: chip mutant 3: caught (2080768 of 2097152 differ)
+down 128 r1: chip mutant 4: caught (2097152 of 2097152 differ)
+down 128 r1: TCGEMM down (medians of 9): chip 1635.4 us, call 3179.7 us; 1.97 TFLOPS; weights streamed 200 MB (122.1 GB/s), activations gathered 200 MB, output 8 MB; total 249.4 GB/s
+down 128 r2: chip bit-identity: 0 of 524288 sampled outputs (256 rows) differ from the emulation (bit-identical)
+down 128 r2: TCGEMM down (medians of 9): chip 1430.1 us, call 2933.0 us; 2.25 TFLOPS; weights streamed 200 MB (139.7 GB/s), activations gathered 200 MB, output 8 MB; total 285.2 GB/s
+down 128 r3: chip bit-identity: 0 of 524288 sampled outputs (256 rows) differ from the emulation (bit-identical)
+down 128 r3: TCGEMM down (medians of 9): chip 1427.7 us, call 2967.4 us; 2.26 TFLOPS; weights streamed 200 MB (139.9 GB/s), activations gathered 200 MB, output 8 MB; total 285.7 GB/s
+down 128 r4: chip bit-identity: 0 of 524288 sampled outputs (256 rows) differ from the emulation (bit-identical)
+down 128 r4: TCGEMM down (medians of 9): chip 1627.9 us, call 3180.0 us; 1.98 TFLOPS; weights streamed 200 MB (122.7 GB/s), activations gathered 200 MB, output 8 MB; total 250.6 GB/s
+down 128 r5: chip bit-identity: 0 of 524288 sampled outputs (256 rows) differ from the emulation (bit-identical)
+down 128 r5: TCGEMM down (medians of 9): chip 1437.5 us, call 2944.4 us; 2.24 TFLOPS; weights streamed 200 MB (139.0 GB/s), activations gathered 200 MB, output 8 MB; total 283.7 GB/s
+gateup 3600 r1: chip bit-identity: 0 of 393216 sampled outputs (256 rows) differ from the emulation (bit-identical)
+gateup 3600 r1: chip mutant 1: caught (44236800 of 44236800 differ)
+gateup 3600 r1: chip mutant 2: caught (44236800 of 44236800 differ)
+gateup 3600 r1: chip mutant 3: caught (44236798 of 44236800 differ)
+gateup 3600 r1: chip mutant 4: caught (44236795 of 44236800 differ)
+gateup 3600 r1: TCGEMM gateup (medians of 9): chip 19030.9 us, call 57362.2 us; 9.52 TFLOPS; weights streamed 1604 MB (84.3 GB/s), activations gathered 1604 MB, output 177 MB; total 177.9 GB/s
+gateup 3600 r2: chip bit-identity: 0 of 393216 sampled outputs (256 rows) differ from the emulation (bit-identical)
+gateup 3600 r2: TCGEMM gateup (medians of 9): chip 19130.6 us, call 57279.3 us; 9.47 TFLOPS; weights streamed 1604 MB (83.9 GB/s), activations gathered 1604 MB, output 177 MB; total 177.0 GB/s
+gateup 3600 r3: chip bit-identity: 0 of 393216 sampled outputs (256 rows) differ from the emulation (bit-identical)
+gateup 3600 r3: TCGEMM gateup (medians of 9): chip 19641.5 us, call 56998.2 us; 9.23 TFLOPS; weights streamed 1604 MB (81.7 GB/s), activations gathered 1604 MB, output 177 MB; total 172.4 GB/s
+gateup 3600 r4: chip bit-identity: 0 of 393216 sampled outputs (256 rows) differ from the emulation (bit-identical)
+gateup 3600 r4: TCGEMM gateup (medians of 9): chip 19098.9 us, call 56418.0 us; 9.49 TFLOPS; weights streamed 1604 MB (84.0 GB/s), activations gathered 1604 MB, output 177 MB; total 177.3 GB/s
+gateup 3600 r5: chip bit-identity: 0 of 393216 sampled outputs (256 rows) differ from the emulation (bit-identical)
+gateup 3600 r5: TCGEMM gateup (medians of 9): chip 19156.6 us, call 56142.1 us; 9.46 TFLOPS; weights streamed 1604 MB (83.7 GB/s), activations gathered 1604 MB, output 177 MB; total 176.7 GB/s
+down 3600 r1: chip bit-identity: 0 of 524288 sampled outputs (256 rows) differ from the emulation (bit-identical)
+down 3600 r1: chip mutant 1: caught (58982400 of 58982400 differ)
+down 3600 r1: chip mutant 2: caught (58982400 of 58982400 differ)
+down 3600 r1: chip mutant 3: caught (58982400 of 58982400 differ)
+down 3600 r1: chip mutant 4: caught (58982387 of 58982400 differ)
+down 3600 r1: TCGEMM down (medians of 9): chip 13118.1 us, call 57213.4 us; 6.91 TFLOPS; weights streamed 805 MB (61.4 GB/s), activations gathered 805 MB, output 236 MB; total 140.8 GB/s
+down 3600 r2: chip bit-identity: 0 of 524288 sampled outputs (256 rows) differ from the emulation (bit-identical)
+down 3600 r2: TCGEMM down (medians of 9): chip 12482.1 us, call 55534.8 us; 7.26 TFLOPS; weights streamed 805 MB (64.5 GB/s), activations gathered 805 MB, output 236 MB; total 147.9 GB/s
+down 3600 r3: chip bit-identity: 0 of 524288 sampled outputs (256 rows) differ from the emulation (bit-identical)
+down 3600 r3: TCGEMM down (medians of 9): chip 12922.6 us, call 57256.6 us; 7.01 TFLOPS; weights streamed 805 MB (62.3 GB/s), activations gathered 805 MB, output 236 MB; total 142.9 GB/s
+down 3600 r4: chip bit-identity: 0 of 524288 sampled outputs (256 rows) differ from the emulation (bit-identical)
+down 3600 r4: TCGEMM down (medians of 9): chip 12455.2 us, call 55452.2 us; 7.27 TFLOPS; weights streamed 805 MB (64.7 GB/s), activations gathered 805 MB, output 236 MB; total 148.3 GB/s
+down 3600 r5: chip bit-identity: 0 of 524288 sampled outputs (256 rows) differ from the emulation (bit-identical)
+down 3600 r5: TCGEMM down (medians of 9): chip 12462.7 us, call 55552.5 us; 7.27 TFLOPS; weights streamed 805 MB (64.6 GB/s), activations gathered 805 MB, output 236 MB; total 148.2 GB/s
+qkv 3600 r1: chip bit-identity: 0 of 1310720 sampled outputs (256 rows) differ from the emulation (bit-identical)
+qkv 3600 r1: chip mutant 1: caught (18432000 of 18432000 differ)
+qkv 3600 r1: chip mutant 2: caught (18432000 of 18432000 differ)
+qkv 3600 r1: chip mutant 3: caught (18432000 of 18432000 differ)
+qkv 3600 r1: chip mutant 4: caught (18431997 of 18432000 differ)
+qkv 3600 r1: TCGEMM qkv (medians of 9): chip 6706.0 us, call 26440.3 us; 11.26 TFLOPS; weights streamed 598 MB (89.1 GB/s), activations gathered 598 MB, output 74 MB; total 189.2 GB/s
+qkv 3600 r2: chip bit-identity: 0 of 1310720 sampled outputs (256 rows) differ from the emulation (bit-identical)
+qkv 3600 r2: TCGEMM qkv (medians of 9): chip 6227.0 us, call 25514.5 us; 12.12 TFLOPS; weights streamed 598 MB (96.0 GB/s), activations gathered 598 MB, output 74 MB; total 203.8 GB/s
+qkv 3600 r3: chip bit-identity: 0 of 1310720 sampled outputs (256 rows) differ from the emulation (bit-identical)
+qkv 3600 r3: TCGEMM qkv (medians of 9): chip 6148.5 us, call 25862.0 us; 12.28 TFLOPS; weights streamed 598 MB (97.2 GB/s), activations gathered 598 MB, output 74 MB; total 206.4 GB/s
+qkv 3600 r4: chip bit-identity: 0 of 1310720 sampled outputs (256 rows) differ from the emulation (bit-identical)
+qkv 3600 r4: TCGEMM qkv (medians of 9): chip 6740.0 us, call 26409.6 us; 11.20 TFLOPS; weights streamed 598 MB (88.7 GB/s), activations gathered 598 MB, output 74 MB; total 188.3 GB/s
+qkv 3600 r5: chip bit-identity: 0 of 1310720 sampled outputs (256 rows) differ from the emulation (bit-identical)
+qkv 3600 r5: TCGEMM qkv (medians of 9): chip 6643.3 us, call 26207.9 us; 11.36 TFLOPS; weights streamed 598 MB (90.0 GB/s), activations gathered 598 MB, output 74 MB; total 191.0 GB/s
+o 3600 r1: chip bit-identity: 0 of 524288 sampled outputs (256 rows) differ from the emulation (bit-identical)
+o 3600 r1: chip mutant 1: caught (7372800 of 7372800 differ)
+o 3600 r1: chip mutant 2: caught (7372800 of 7372800 differ)
+o 3600 r1: chip mutant 3: caught (7372800 of 7372800 differ)
+o 3600 r1: chip mutant 4: caught (7372800 of 7372800 differ)
+o 3600 r1: TCGEMM o (medians of 9): chip 4108.5 us, call 22746.0 us; 14.70 TFLOPS; weights streamed 478 MB (116.4 GB/s), activations gathered 478 MB, output 29 MB; total 239.9 GB/s
+o 3600 r2: chip bit-identity: 0 of 524288 sampled outputs (256 rows) differ from the emulation (bit-identical)
+o 3600 r2: TCGEMM o (medians of 9): chip 3884.0 us, call 22116.5 us; 15.55 TFLOPS; weights streamed 478 MB (123.1 GB/s), activations gathered 478 MB, output 29 MB; total 253.8 GB/s
+o 3600 r3: chip bit-identity: 0 of 524288 sampled outputs (256 rows) differ from the emulation (bit-identical)
+o 3600 r3: TCGEMM o (medians of 9): chip 3790.1 us, call 22110.9 us; 15.94 TFLOPS; weights streamed 478 MB (126.2 GB/s), activations gathered 478 MB, output 29 MB; total 260.1 GB/s
+o 3600 r4: chip bit-identity: 0 of 524288 sampled outputs (256 rows) differ from the emulation (bit-identical)
+o 3600 r4: TCGEMM o (medians of 9): chip 3784.3 us, call 22210.0 us; 15.96 TFLOPS; weights streamed 478 MB (126.3 GB/s), activations gathered 478 MB, output 29 MB; total 260.5 GB/s
+o 3600 r5: chip bit-identity: 0 of 524288 sampled outputs (256 rows) differ from the emulation (bit-identical)
+o 3600 r5: TCGEMM o (medians of 9): chip 4090.6 us, call 22542.8 us; 14.77 TFLOPS; weights streamed 478 MB (116.9 GB/s), activations gathered 478 MB, output 29 MB; total 241.0 GB/s
+TCGEMM_CHIP: PASS

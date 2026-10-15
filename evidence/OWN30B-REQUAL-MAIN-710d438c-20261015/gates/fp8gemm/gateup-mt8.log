@@ -1,0 +1,13 @@
+== gateup: 128 experts, n 1536, k 2048, 64 tokens x top-8
+upload 403 MB: rc=OK 308 ms
+parity vs per-row GEMV (512 calls, 26 ms): 0 of 786432 outputs differ (bit-identical)
+4 sampled outputs: 0 differ from the host emulation, worst relative error vs the double oracle 1.62e-08
+second call: bit-identical
+chip mutant 1: caught (786432 of 786432 outputs differ)
+chip mutant 2: caught (786432 of 786432 outputs differ)
+chip mutant 3: caught (784896 of 786432 outputs differ)
+GEMM (medians of 9, evict 1): mt 8 warps 16 ctas 2 x 126 segments, 512 rows, up to 2 passes: chip 5701.4 us, call 6367.5 us; streams 409 MB (distinct experts 396 MB) = 71.7 GB/s on streamed, 69.5 GB/s on distinct
+per-token grouped GEMV baseline (64 tokens, medians of 9): chip 9467.8 us, call 10048.1 us => GEMM is 1.66x faster (chip), 1.58x (call)
+per token: GEMM chip 89.1 us/token, call 99.5 us/token
+gpu_fp8gemm_test: 9 checks, 0 failed: PASS
+--shape gateup --mt 8 exit 0 (informational)

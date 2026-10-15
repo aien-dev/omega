@@ -1,0 +1,15 @@
+cache alloc (1 layer, 32768 positions): rc=OK 339.9 ms ()
+chip context 1                rc=OK        bad=0 worst=0.000 rows=ok (1 one-ulp k flips) grid=1x4 per_split=1024 depth=4 kv_bytes=2048 fill=0.0ms chip_med=41.0us (0.0 GB/s) call_med=43.3us reps=20
+chip context 7                rc=OK        bad=0 worst=0.000 rows=ok (0 one-ulp k flips) grid=1x4 per_split=1024 depth=4 kv_bytes=14336 fill=0.0ms chip_med=45.1us (0.3 GB/s) call_med=47.2us reps=20
+chip context 256              rc=OK        bad=0 worst=0.000 rows=ok (0 one-ulp k flips) grid=1x4 per_split=1024 depth=4 kv_bytes=524288 fill=0.0ms chip_med=70.4us (7.4 GB/s) call_med=72.5us reps=20
+chip context 301 sharp q      rc=OK        bad=0 worst=0.000 rows=ok (0 one-ulp k flips) grid=1x4 per_split=1024 depth=4 kv_bytes=616448 fill=0.0ms chip_med=88.1us (7.0 GB/s) call_med=90.2us reps=20
+chip context 301 sharp q      mutant 1: caught (rc=OK bad=3630 worst=25.864)
+chip context 301 sharp q      mutant 2: caught (rc=OK bad=3773 worst=40.263)
+chip context 301 sharp q      mutant 3: caught (rc=OK bad=820 worst=6.838)
+chip context 301 sharp q      mutant 4: inert (1 split, the combine is not exercised)
+chip context 1024             rc=OK        bad=0 worst=0.000 rows=ok (0 one-ulp k flips) grid=1x4 per_split=1024 depth=4 kv_bytes=2097152 fill=0.1ms chip_med=175.9us (11.9 GB/s) call_med=178.2us reps=20
+chip context 4096             rc=OK        bad=0 worst=0.000 rows=ok (0 one-ulp k flips) grid=4x4 per_split=1024 depth=4 kv_bytes=8388608 fill=0.2ms chip_med=188.6us (44.5 GB/s) call_med=190.8us reps=20
+chip context 8192             rc=OK        bad=0 worst=0.000 rows=ok (0 one-ulp k flips) grid=8x4 per_split=1024 depth=4 kv_bytes=16777216 fill=0.6ms chip_med=234.8us (71.4 GB/s) call_med=237.1us reps=20
+chip context 32768            rc=OK        bad=0 worst=0.000 rows=ok (0 one-ulp k flips) grid=32x4 per_split=1024 depth=4 kv_bytes=67108864 fill=2.8ms chip_med=760.3us (88.3 GB/s) call_med=762.4us reps=20
+gpu_decode_attn_test: 28 checks, 0 failed: PASS
+per-split 1024 exit 0 (informational)

@@ -1,0 +1,8 @@
+qmma-probe: GPU_QMMA_PROBE: PASS
+qmma-probe-seed2: GPU_QMMA_PROBE: PASS
+pfgemm-chip: GPU_PFGEMM: FAIL
+qgemm-chip: GPU_QGEMM: PASS
+qgemm-cached: GPU_QGEMM: PASS
+qgemm-cached-wait0-gateup: GPU_QGEMM: PASS
+qgemm-cached-wait0-down: GPU_QGEMM: PASS
+L1G_CHIP: FAIL

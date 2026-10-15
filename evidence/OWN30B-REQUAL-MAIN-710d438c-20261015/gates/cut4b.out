@@ -1,0 +1,9 @@
+elementwise rc=0 :: PASS: 35 checks, 0 failed
+elementwise_timing rc=0 :: PASS: 4 checks, 0 failed
+attention_sim rc=0 :: PASS: 219 checks, 0 failed
+attention rc=0 :: PASS: 219 checks, 0 failed
+attention_timing rc=0 :: PASS: 2 checks, 0 failed
+matmul rc=0 :: PASS: 25 checks, 0 failed
+matmul_timing rc=0 :: PASS: 4 checks, 0 failed
+PROBE_GPU_OPEN: negative_control_exit=127 first_call_failures=0/90 (details /home/drakestapleton/workspace/requal-0c63/omega-gates/cut4b/FB1-CUT4B-710d438c/probe/failures.txt)
+FB1-CUT4B chip gate failed_steps=0 probe_rc=0 receipt=/home/drakestapleton/workspace/requal-0c63/omega-gates/cut4b/FB1-CUT4B-710d438c

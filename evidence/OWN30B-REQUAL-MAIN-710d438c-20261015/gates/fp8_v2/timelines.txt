@@ -1,0 +1,8 @@
+fp8 knobs: variant 1 barrier 0 (wfi+inval_all) cta_budget 0 shape 0/0/0 cached 0
+TIMELINE (2 layers, pos 300): norm x1 31.3 us qkv x2 136.0 us attn x2 144.4 us o_proj x2 121.7 us res_add x2 10.0 us router x2 56.3 us gate_up x2 339.5 us swiglu x2 36.0 us down x2 197.8 us combine_norm x2 68.8 us lm_head x1 2887.0 us argmax x2 16.2 us
+fp8 knobs: variant 1 barrier 0 (wfi+inval_all) cta_budget 0 shape 0/0/0 cached 0
+TIMELINE (2 layers, pos 300): norm x1 15.8 us qkv x2 151.0 us attn x2 146.6 us o_proj x2 118.0 us res_add x2 9.7 us router x2 48.2 us gate_up x2 295.0 us swiglu x2 7.0 us down x2 176.1 us combine_norm x2 19.2 us lm_head x1 2920.5 us argmax x2 15.7 us
+fp8 knobs: variant 2 barrier 0 (wfi+inval_all) cta_budget 0 shape 0/0/0 cached 0
+TIMELINE (2 layers, pos 300): norm x1 11.7 us qkv x2 181.9 us attn x2 144.6 us o_proj x2 127.8 us res_add x2 10.2 us router x2 49.3 us gate_up x2 332.5 us swiglu x2 6.3 us down x2 246.6 us combine_norm x2 19.2 us lm_head x1 2943.2 us argmax x2 14.7 us
+fp8 knobs: variant 2 barrier 0 (wfi+inval_all) cta_budget 0 shape 0/0/0 cached 0
+TIMELINE (2 layers, pos 300): norm x1 9.3 us qkv x2 217.8 us attn x2 228.7 us o_proj x2 159.0 us res_add x2 14.5 us router x2 90.7 us gate_up x2 420.9 us swiglu x2 8.3 us down x2 260.5 us combine_norm x2 25.1 us lm_head x1 2925.3 us argmax x2 15.5 us

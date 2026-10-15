@@ -1,0 +1,8 @@
+created=2026-10-15T00:49:42Z
+host=spark-b87b kernel=7.0.0-1019-nvidia
+driver=580.173.02, NVIDIA GB10
+physics=e95e3ed dirty=0
+omega=ce42e62f dirty=127
+# CORRECTION (worker OWN30B requal): the lines above are the scaffold defaults (~/workspace/physics, ~/omega), NOT what this repro uses.
+repro_omega=710d438cac6c1159b4ca2b39af49812ce08f554b dirty=0 path=~/workspace/omega-requal-main (omega main; src identical to 62833658, diff 62833658..710d438c touches only checker2 files)
+repro_physics=6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf dirty=0 (omega physics.lock)

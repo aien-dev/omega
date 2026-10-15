@@ -1,0 +1,4 @@
+cache alloc (1 layer, 32768 positions): rc=OK 338.6 ms ()
+chip context 1024             rc=OK        bad=0 worst=0.000 rows=ok (0 one-ulp k flips) grid=4x4 per_split=256 depth=4 kv_bytes=2097152 fill=0.1ms chip_med=81.2us (25.8 GB/s) call_med=83.8us reps=3
+gpu_decode_attn_test: 4 checks, 0 failed: PASS
+baseline exit 0 (recorded)
