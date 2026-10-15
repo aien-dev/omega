@@ -93,14 +93,14 @@
           "purpose": "Directory docs/osc. Purpose not yet described by a human."
         },
         {
-          "digest": "4229246f2ec98403252caafc8fe7ad1fac5950accff0c94ffdaecb4a2341a32c",
-          "last_commit": "5901baa5",
+          "digest": "ffe2e59267bcc6597fdadad5fc7c54e32bbc0f0e409dae9af3ddd3ba49a0d8ad",
+          "last_commit": "61c09411",
           "name": "polyglot",
           "purpose": "Directory docs/polyglot. Purpose not yet described by a human."
         },
         {
           "digest": "46d3e2d59a468271e044ccd2398eb32345df6436c15eb6d8c703953c838023a9",
-          "last_commit": "0f6d7151",
+          "last_commit": "dd67f6bd",
           "name": "reservoir",
           "purpose": "Reservoir reference and contracts (omega#440): RESERVOIR_REFERENCE.md pins the authors' paper an"
         },
@@ -117,21 +117,21 @@
           "purpose": "Directory docs/train. Purpose not yet described by a human."
         },
         {
-          "digest": "a34f126f92a0ec36794a17c3c4834101c44bc9b0f6e412894e3f152598133638",
-          "last_commit": "5901baa5",
+          "digest": "5a40af56cd2c64c9385f545dd780d69e6c5425441a5abb25c6fa6971d411a2d3",
+          "last_commit": "61c09411",
           "name": "turing",
           "purpose": "Directory docs/turing. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:bd77c6d04a64e013d571cb019c3ae53a6bd44997d0999ccaf3075f20f2cf58a4",
-      "compiled_at": "2026-10-14T17:04:09Z",
+      "children_root": "sha256:a6002196d76c6050469daa920b09e9fdaef09308d3824231e9e77ccb225ee9da",
+      "compiled_at": "2026-10-15T11:15:35Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:26ad30306af327e06a46a0b30e06fa9726c95a627772ebcf31eb54a824ec5366",
+      "digest": "sha256:43c30faf9c70381bedfde80f2d10bbd11695143bc99b28c5780c920f6031f5cc",
       "evidence_files": 34,
       "evidence_root": "sha256:589d8b3706e6d7a202ab20b278dac5fc5bafc973f1c2a867b2668aa7210b65cc",
       "files": 123,
-      "generated_at_commit": "ee2a3833b3abab5df585bd7e089f764c6dd273e9",
-      "source_tree": "sha256:637aaa352dd331f567968c2c14f136e91ac1b7629e3725a1dbfc1bda13ea484e"
+      "generated_at_commit": "61c09411331e992ebb9882a50412f938c6bb687f",
+      "source_tree": "sha256:c81a5a2bf6456bc263cd592beca5a4afbdafc730c30169d80e02b16862a9a8dd"
     },
     "owner_lane": "",
     "provenance": {
