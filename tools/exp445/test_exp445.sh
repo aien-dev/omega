@@ -289,6 +289,18 @@ g0case "identical answers, p_repeat 0.51 (0.51^7 = 0.00897 < 0.01), boundary" '{
 g0case "identical answers, p_repeat 0.52 (0.52^7 = 0.0103 >= 0.01): a confident model; distinct 1/8 recorded, not gated" '{"p_repeat": 0.52}' PASS 'gate=PASS distinct=1/8 repeat_identical=yes sampled_own_seed=9/9' 'gate d PASS identical replies explained by confidence'
 g0case "a server that ignores the seed (reports seed 0, the stage S mutant)" '{"ignore_seed": true, "p_repeat": 0.9}' FAIL 'gate=FAIL distinct=1/8 repeat_identical=yes sampled_own_seed=0/9' 'gate d FAIL a reply was not sampled with its own seed'
 g0case "a server that forces greedy decoding (reports mode greedy, the stage S mutant)" '{"force_greedy": true, "p_repeat": 0.9}' FAIL 'gate=FAIL distinct=1/8 repeat_identical=yes sampled_own_seed=0/9' 'gate b 0/4 FAIL'
+g0case "the gate's own replays differ (gates a and c fail) while dev01's identical answers are confident (gate d passes)" '{"vary_untasked": true, "p_repeat": 0.9}' FAIL 'gate=FAIL distinct=1/8 repeat_identical=yes sampled_own_seed=9/9' '^gate a 0/4 FAIL'
+grep -q '^b p1 distinct=3/3 PASS ' "$G0LAST/g0/gate/gate.txt" && grep -qx 'gate c 0/4 FAIL' "$G0LAST/g0/gate/gate.txt" && grep -q '^gate d PASS identical replies explained by confidence' "$G0LAST/g0/gate/gate.txt" &&
+  ok "  (there gate b passes on distinct replies, gate c fails, gate d passes: G0 needs the whole gate)" || bad "gate a/c failure record"
+# a forged record: the p_repeat 0.5 FAIL with gate.txt's verdict, verdict.txt's derived and G0 lines edited to PASS and every hash redone
+G0X="$T/g0c1"; sed -i '$s/.*/VERDICT PASS/' "$G0X/g0/gate/gate.txt"; (cd "$G0X/g0/gate" && find . -type f ! -name SHA256SUMS | sort | sed 's|^\./||' | xargs sha256sum > SHA256SUMS)
+sed -i -e 's/^derived=gate=FAIL/derived=gate=PASS/' -e 's/^gate_exit=.*/gate_exit=0/' -e '$s/.*/G0 PASS/' "$G0X/g0/verdict.txt"; g0hash "$G0X"
+refuse "run.sh with a forged G0 (gate verdict, gate exit, derived and G0 lines edited, all hashes redone)" "G0 verdict (gate=PASS distinct=1/8 repeat_identical=yes sampled_own_seed=9/9) differs from its raw files (gate=FAIL" \
+  env EXP445_PARAMS="$T/PARAMS2" "$HERE/run.sh" --config A --tasks "$T/pub" --out "$G0X"
+# a transport failure writes no record (exit 2): an endpoint that refuses connections
+sed "s|^config\.A\.base_url=.*|config.A.base_url=http://127.0.0.1:9/v1|" "$TP" > "$T/PARAMSD"
+refuse "g0.sh against an endpoint that does not answer" "the sampling gate could not complete (exit 2" env EXP445_PARAMS="$T/PARAMSD" "$HERE/g0.sh" --config A --out "$T/g0dead"
+[ ! -e "$T/g0dead/g0" ] && ok "  no G0 record written for a transport failure (the run dir can still be gated)" || bad "transport failure wrote a G0 record"
 for s in $(g0seeds); do { echo "Answer for seed $s."; fence "$OMD/dev01.omegese"; } > "$A2/omegese/clamp_add.seed$s"; done
 { echo "Another answer."; fence "$OMD/dev01.omegese"; } > "$A2/omegese/clamp_add.seed446001.again"; rm -f "$A2"/seen.*
 g0case "8 distinct answers, the sampling gate passes, but the repeat of seed 1 differs" - FAIL 'gate=PASS distinct=8/8 repeat_identical=no sampled_own_seed=9/9' '^VERDICT PASS$'

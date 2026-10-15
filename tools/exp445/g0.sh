@@ -20,7 +20,8 @@
 # line G0 PASS or G0 FAIL) and SHA256SUMS. Exit 0 on PASS, 1 on FAIL. run.sh refuses to generate, and
 # score.sh refuses a run, without a G0 PASS for the same configuration, server and PARAMS (reader.sh
 # g0_check re-derives it). A G0 record is never overwritten: after a FAIL nothing runs in that run dir
-# (13.4). EXP445_PARAMS names another PARAMS file (tests only).
+# (13.4). A transport failure (the gate exits 2 or runs out of time, or the repeat gets no response) writes
+# no record and exits 2: it says nothing about the sampler. EXP445_PARAMS names another PARAMS file (tests only).
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
@@ -47,6 +48,7 @@ MODEL="$(kv "config.$CONFIG.model")" BASE="$(kv "config.$CONFIG.base_url")" EXTR
 EXTRA="$(jq -c . <<< "$EXTRA")" || die "config.$CONFIG.extra is not JSON"
 MAXT="$(kv max_tokens)" TEMP="$(kv temperature)" TOPP="$(kv top_p)" SB="$(kv seed_base)" TIMEOUT="$(kv timeout_s)" RETRIES="$(kv retries)"
 TASK="$(kv g0_task)" N="$(kv g0_seeds)" MODE="$(kv heldout_prompt_mode)" GSHA="$(kv g0_gate_sha256)"
+[[ "$TIMEOUT" =~ ^[1-9][0-9]*$ ]] || die "timeout_s must be a positive integer in $PARAMS"
 [[ "$N" =~ ^[1-9][0-9]?$ ]] && [ -n "$TASK" ] && [ -n "$MODE" ] && [ -n "$GSHA" ] || die "g0_task, g0_seeds, g0_gate_sha256, heldout_prompt_mode missing in $PARAMS"
 GATE="$HERE/sampling-gate.sh"
 [ "$(sha256sum < "$GATE" | cut -d' ' -f1)" = "$GSHA" ] || die "$GATE is not the frozen sampling gate (sha256 differs from PARAMS g0_gate_sha256)"
@@ -67,10 +69,16 @@ for k in $(seq 1 $((N + 1))); do
   s="$(g0_seed "$SB" "$([ "$k" -le "$N" ] && echo "$k" || echo 1)" "$TI")"; seeds="$seeds${seeds:+ }$s"
   printf '%s\n' "$(request_json "$MODEL" "$msgs" "$MAXT" "$TEMP" "$TOPP" "$s" "$EXTRA")" > "$W/r$k.req.json"
 done
-# 1 the stage S gate, with the N exp445 requests as its repro requests (exit 0 PASS, 1 FAIL, 2 transport)
-ge=0; (cd "$W" && REDACT_REPRO=0 ./sampling-gate.sh "${BASE%/v1}" "$MODEL" gate $(seq -f 'r%g.req.json' 1 "$N")) > "$W/gate.out" 2>&1 || ge=$?
+# 1 the stage S gate, with the N exp445 requests as its repro requests (exit 0 PASS, 1 FAIL, 2 transport).
+# GREEDY_GOLDEN is not passed in (the gate runs the same way for every caller); the whole gate is bounded
+# by timeout_s per request it sends (4 prompts x 7 + N), since its curl calls have no time limit
+base="${BASE%/}"; base="${base%/v1}"
+ge=0; (cd "$W" && timeout "$(( (28 + N) * TIMEOUT ))" env -u GREEDY_GOLDEN REDACT_REPRO=0 ./sampling-gate.sh "$base" "$MODEL" gate $(seq -f 'r%g.req.json' 1 "$N")) > "$W/gate.out" 2>&1 || ge=$?
+# a transport failure (gate exit 2, or the time limit) says nothing about the sampler: no record is written
+[ "$ge" = 0 ] || [ "$ge" = 1 ] || die "the sampling gate could not complete (exit $ge: $(tail -n 2 "$W/gate.out" | tr '\n' ' ')); no G0 record written, rerun when the server answers"
 # 2 the repeat of the first seed
 ask "$W" "$((N + 1))" "$(cat "$W/r$((N + 1)).req.json")" || true
+round_ok "$W/r$((N + 1))" || die "the repeat of seed 1 got no response ($(tail -n 1 "$W/r$((N + 1)).transport" 2> /dev/null)); no G0 record written, rerun when the server answers"
 der="$(g0_derive "$W" "$N")"
 if g0_pass "$der" "$N"; then v=PASS; else v=FAIL; fi
 {

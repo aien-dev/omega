@@ -133,7 +133,7 @@ meta="$OUT/meta.txt"
   echo "max_tokens_per_round=$MAXT"; echo "repair_rounds=1"; echo "temperature=$TEMP"; echo "top_p=$TOPP"; echo "seed_base=$SEED"
   echo "timeout_s=$TIMEOUT"; echo "retries=$RETRIES"; echo "order=attempt,task,arm"
   echo "protocol=$([ -z "$over" ] && echo PARAMS || echo "OVERRIDDEN:$over")"
-  echo "commit=$(git -C "$ROOT" rev-parse HEAD)$([ -z "$(git -C "$ROOT" status --porcelain -- tools tests/one_layer docs/one_layer src/compiler src/sha256.c mk/omega-emit.mk mk/omegese.mk Makefile)" ] || echo -dirty)"
+  echo "commit=$(git -C "$ROOT" rev-parse HEAD)$(st="$(git -C "$ROOT" status --porcelain -- tools tests/one_layer docs/one_layer src/compiler src/sha256.c mk/omega-emit.mk mk/omegese.mk Makefile)" && [ -z "$st" ] || echo -dirty)"
   echo "params_sha256=$(sha256sum "$PARAMS" | cut -d" " -f1)"; echo "g0_sha256=$(sha256sum < "$OUT/g0/SHA256SUMS" | cut -d" " -f1)"
   for arm in ${ARMS//,/ }; do echo "prompt_${arm}_sha256=$(sha256sum "$OUT/prompts/$arm.system.txt" | cut -d' ' -f1)"; done
   echo "tasks=${#ids[@]}"

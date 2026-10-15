@@ -203,7 +203,7 @@ for r in "${runs[@]}"; do
   weights_ok "$r" "$wl" "$FM" || inval "$r: weights.check / server.json missing or not all OK for config $c (tools/exp445/check_weights.sh)"
   why="$(g0_check "$r/g0" "$c" "$FM" "$(kv "config.$c.base_url")" "$FX" "$FS" "$params_sha" "$(kv g0_gate_sha256)" "$W/g0.system" "$G0U" "$MT" "$TT" "$TP" "$SB" "$G0I" \
     "$(kv g0_seeds)")" || inval "$r: no G0 PASS for config $c and its server: $why"
-  [ "$(mv_ g0_sha256)" = "$(sha256sum < "$r/g0/SHA256SUMS" 2> /dev/null | cut -d" " -f1)" ] || inval "$r: the G0 record is not the one this run was generated under (meta.txt g0_sha256)"
+  [ -n "$(mv_ g0_sha256)" ] && [ "$(mv_ g0_sha256)" = "$(sha256sum < "$r/g0/SHA256SUMS" 2> /dev/null | cut -d" " -f1)" ] || inval "$r: the G0 record is not the one this run was generated under (meta.txt g0_sha256)"
   for arm in ${ARMS//,/ }; do
     [ "$(mv_ "prompt_${arm}_sha256")" = "$(sha256sum < "$W/prompt.$arm.$rm_" | cut -d' ' -f1)" ] &&
       cmp -s "$r/prompts/$arm.system.txt" "$W/prompt.$arm.$rm_" || inval "$r: arm $arm prompt differs from the current arm documents and $rm_ examples"
@@ -346,8 +346,8 @@ allcfg="$(echo "$NAMED" | tr 'A-Z,' 'a-z\n' | LC_ALL=C sort | paste -sd,)"
 scored="$(echo "$CONFIGS" | tr 'A-Z,' 'a-z\n' | LC_ALL=C sort | paste -sd,)"
 gl="" g=1
 for c in $(awk -F'\t' 'NR > 1 { print $1 }' "$OUT/results.tsv" | LC_ALL=C sort -u); do
-  read -r o n < <(awk -F'\t' -v c="$c" '$1 == c && $2 == "omegese" { split($4, q, "/"); print q[1], q[2] }' "$OUT/results.tsv")
-  read -r t nt < <(awk -F'\t' -v c="$c" '$1 == c && $2 == "text" { split($4, q, "/"); print q[1], q[2] }' "$OUT/results.tsv")
+  o="" n="" t="" nt=""; read -r o n < <(awk -F'\t' -v c="$c" '$1 == c && $2 == "omegese" { split($4, q, "/"); print q[1], q[2] }' "$OUT/results.tsv") || true
+  read -r t nt < <(awk -F'\t' -v c="$c" '$1 == c && $2 == "text" { split($4, q, "/"); print q[1], q[2] }' "$OUT/results.tsv") || true
   if gate_config "${o:-0}" "${t:-0}" "${n:-0}"; then p=PASS; else p=FAIL g=0; fi
   gl="${gl}gate config $c: omegese ${o:-0}/${n:-0}, text ${t:-0}/${nt:-0}: $p (needs omegese >= 80% and at most 10 points below text)"$'\n'
 done

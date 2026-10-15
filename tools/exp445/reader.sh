@@ -127,11 +127,44 @@ g0_files() { (cd "$1" && find . -type f ! -path ./SHA256SUMS -printf '%P\n' | LC
 g0_seed() { seed_of "$1" "$2" "$3"; }
 # g0_reply <g0 dir> <k> <seeds>: the reply file of request k (the gate's for k <= seeds, the repeat's after)
 g0_reply() { if [ "$2" -le "$3" ]; then echo "$1/gate/d-r$2.json"; elif round_ok "$1/r$2"; then echo "$1/r$2.resp.json"; else echo "$1/none"; fi; }
+# g0_gate_audit <gate dir> <seeds>: checks the stage S gate's record against its own kept replies, so its
+# VERDICT line cannot be edited alone (g0_check also needs gate_exit=0): its SHA256SUMS verifies; gate.txt reads
+# "gate a 4/4 PASS", "gate b 4/4 PASS", "gate c 4/4 PASS", "gate d PASS ..." and "VERDICT PASS"; and the
+# kept replies agree: (a) each replay pair identical, (b) each spread triple sampled with its own seeds and
+# distinct or p_repeat^2 >= 0.01, (c) each greedy pair identical, (d) every repro reply sampled with its own
+# seed and the replies distinct or min p_repeat^(seeds-1) >= 0.01 (the gate's own rules, sampling-gate.sh).
+# Prints PASS or FAIL.
+g0_gate_audit() {
+  local g="$1" n="$2" i s h u p
+  dg() { jq -j '.choices[0].message.content' "$g/$1.json" 2> /dev/null | sha256sum | cut -d' ' -f1; }
+  fd() { jq -r ".usage.aien_sampling.$2 // empty" "$g/$1.json" 2> /dev/null; }
+  ge() { awk -v x="$1" -v y="$2" 'BEGIN { exit !(x != "" && x >= y) }'; }
+  local ok=1
+  (cd "$g" && sha256sum -c --quiet --strict SHA256SUMS > /dev/null 2>&1) || ok=0
+  for i in a b c; do grep -qx "gate $i 4/4 PASS" "$g/gate.txt" 2> /dev/null || ok=0; done
+  grep -q "^gate d PASS " "$g/gate.txt" 2> /dev/null || ok=0
+  [ "$(tail -n 1 "$g/gate.txt" 2> /dev/null)" = "VERDICT PASS" ] || ok=0
+  [ "$ok" = 1 ] || { echo FAIL; return; }
+  for i in 1 2 3 4; do
+    [ -f "$g/a-p$i-r1.json" ] && [ "$(dg "a-p$i-r1")" = "$(dg "a-p$i-r2")" ] || { echo FAIL; return; }
+    [ -f "$g/c-p$i-s1.json" ] && [ "$(dg "c-p$i-s1")" = "$(dg "c-p$i-s2")" ] || { echo FAIL; return; }
+    for s in 1 2 3; do [ "$(fd "b-p$i-s$s" mode)" = sampled ] && [ "$(fd "b-p$i-s$s" seed)" = "$s" ] || { echo FAIL; return; }; done
+    u="$(for s in 1 2 3; do dg "b-p$i-s$s"; done | sort -u | wc -l)" p="$(fd "b-p$i-s1" p_repeat)"
+    [ "$u" -ge 2 ] || ge "$(awk -v p="$p" 'BEGIN { printf "%.6g", p * p }')" 0.01 || { echo FAIL; return; }
+  done
+  p=1
+  for i in $(seq 1 "$n"); do
+    [ "$(fd "d-r$i" mode)" = sampled ] && [ "$(fd "d-r$i" seed)" = "$(jq -r .seed "$g/../r$i.req.json" 2> /dev/null)" ] || { echo FAIL; return; }
+    h="$(fd "d-r$i" p_repeat)"; [ -n "$h" ] || { echo FAIL; return; }; ge "$h" "$p" || p="$h"
+  done
+  u="$(for i in $(seq 1 "$n"); do dg "d-r$i"; done | sort -u | wc -l)"
+  if [ "$u" -ge 2 ] || ge "$(awk -v p="$p" -v k="$n" 'BEGIN { printf "%.6g", p ^ (k - 1) }')" 0.01; then echo PASS; else echo FAIL; fi
+}
 # g0_derive <g0 dir> <seeds>: "gate=PASS|FAIL distinct=D/N repeat_identical=yes|no sampled_own_seed=S/N+1",
 # from the raw files: the gate's verdict line, the replies' exact content and their sampling records
 g0_derive() {
   local d="$1" n="$2" k f s=0 u rep=no g=FAIL a b
-  [ "$(tail -n 1 "$d/gate/gate.txt" 2> /dev/null)" = "VERDICT PASS" ] && g=PASS
+  [ "$(g0_gate_audit "$d/gate" "$n")" = PASS ] && g=PASS
   for k in $(seq 1 $((n + 1))); do f="$(g0_reply "$d" "$k" "$n")"
     if [ -f "$f" ] && jq -e --argjson s "$(jq '.seed' "$d/r$k.req.json")" \
          '.usage.aien_sampling.mode == "sampled" and .usage.aien_sampling.seed == $s and (.choices[0].message.content | type == "string")' "$f" > /dev/null 2>&1; then
@@ -152,6 +185,7 @@ g0_check() {
   local d="$1" cfg="$2" model="$3" base="$4" extra="$5" server="$6" psha="$7" gsha="$8" sysf="$9" user="${10}"
   local mt="${11}" tt="${12}" tp="${13}" sb="${14}" ti="${15}" n="${16}" k s msgs v der
   v="$d/verdict.txt"
+  [ -n "$gsha" ] && [ -n "$psha" ] || { echo "no frozen gate or PARAMS sha256 to check G0 against"; return 1; }
   [ -f "$v" ] && [ -f "$d/SHA256SUMS" ] || { echo "no G0 record in $d (run tools/exp445/g0.sh first)"; return 1; }
   (cd "$d" && sha256sum -c --quiet --strict SHA256SUMS > /dev/null 2>&1) || { echo "G0 SHA256SUMS does not verify"; return 1; }
   [ "$(g0_files "$d")" = "$(awk '{ print substr($0, 67) }' "$d/SHA256SUMS" | LC_ALL=C sort)" ] || { echo "G0 SHA256SUMS does not list exactly the G0 files"; return 1; }
@@ -170,6 +204,7 @@ g0_check() {
   der="$(g0_derive "$d" "$n")"
   [ "$(gv derived)" = "$der" ] || { echo "G0 verdict ($(gv derived)) differs from its raw files ($der)"; return 1; }
   if g0_pass "$der" "$n"; then
+    [ "$(gv gate_exit)" = 0 ] || { echo "G0 verdict records gate exit $(gv gate_exit), not 0"; return 1; }
     [ "$(tail -n 1 "$v")" = "G0 PASS" ] || { echo "G0 verdict line is not G0 PASS"; return 1; }
     return 0
   fi

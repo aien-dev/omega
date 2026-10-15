@@ -15,7 +15,8 @@
  * / 4 + 1; an answer longer than max_tokens * 4 bytes is cut there with finish_reason "length".
  * Usage also carries aien_sampling {mode, seed, p_repeat, kept, sampled_tokens} as aien-serve-http
  * reports it (stage S); <answers_dir>/sampling.json sets p_repeat (default 0.5) or makes it act like
- * the stage S mutants ("ignore_seed": true, "force_greedy": true), for the G0 tests.
+ * the stage S mutants ("ignore_seed": true, "force_greedy": true), and "vary_untasked": true numbers the
+ * answers to prompts with no task entry (the gate's own prompts: replays then differ), for the G0 tests.
  * Every request body is appended to <answers_dir>/requests.log (one line each). GET .../models answers
  * <answers_dir>/models.json (an empty model list when missing) and is not logged.
  */
@@ -161,6 +162,20 @@ int main(int argc, char **argv)
         }
         if (!ans) ans = slurp(ap, &an);
         if (!ans) { ans = strdup("I cannot do this."); an = strlen(ans); }
+        if (!entry[0]) { /* a prompt with no task (the stage S gate's own): sampling.json "vary_untasked": true numbers each answer */
+            char vp[4096];
+            snprintf(vp, sizeof vp, "%s/sampling.json", argv[2]);
+            size_t vn = 0;
+            char *vj = slurp(vp, &vn);
+            if (vj && strstr(vj, "\"vary_untasked\": true")) {
+                static unsigned long untasked;
+                char *nb = malloc(an + 32);
+                an = (size_t)sprintf(nb, "%.*s #%lu", (int)an, ans, ++untasked);
+                free(ans);
+                ans = nb;
+            }
+            free(vj);
+        }
         if (!strncmp(ans, "@@500", 5)) {
             const char *e = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\nContent-Length: 27\r\nConnection: close\r\n\r\n{\"error\":\"fake 500 error\"}\n";
             send_all(c, e, strlen(e));
