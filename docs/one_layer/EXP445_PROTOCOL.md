@@ -222,6 +222,18 @@ tools/exp445/run.sh --config B --tasks <pub> --out evidence/ONE-LAYER-2/generati
 tools/exp445/score.sh <tasks.tar> <TASKS.sha256> evidence/ONE-LAYER-2/generations/<run-a> evidence/ONE-LAYER-2/generations/<run-b>
 ```
 
+Revision r3 (section 13), per configuration and run directory:
+
+```
+tools/exp445/check_weights.sh A <run>
+tools/exp445/g0.sh --config A --out <run>                      # G0 (13.4); run.sh refuses without a PASS
+tools/exp445/run.sh --config A --tasks <pub> --out <run> [--prompt-mode many|one]   # Stage 0: both modes
+# Stage 1 (held-out): run.sh stops after attempt 1; then
+tools/exp445/score.sh --interim --configs A <tasks.tar> <TASKS.sha256> <run>        # writes futility.txt
+tools/exp445/run.sh --config A --tasks <pub> --out <run> --futility <score dir>/futility.txt
+tools/exp445/score.sh --configs A <tasks.tar> <TASKS.sha256> <run>
+```
+
 Dry-run tests of the driver and the validity check (fake local endpoint, no model): `make test-exp445`.
 
 ## 12. Revisions

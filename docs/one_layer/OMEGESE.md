@@ -213,7 +213,16 @@ The same suite also runs against a build with AddressSanitizer and UndefinedBeha
    (dev07) has one value too many and is still refused, with its place. Rerun owed.
 2. The mask inside our own engine: `omegese next` as a table on the GPU, one lookup per token;
    positions with one legal word need no model step.
-3. A pre-registered held-out comparison under a new protocol revision.
+3. A pre-registered held-out comparison: exp445 revision r3 (`docs/one_layer/EXP445_PROTOCOL.md`
+   section 13), Omegese against OSC text. The `omegese` arm's system prompt is
+   `tools/exp445/arms/common.md`, then `tools/exp445/arms/omegese.md` (the language and a word card:
+   every fixed word on one line with what it does), then the worked examples
+   (`tools/exp445/arms/examples/`, built by `reader.sh system_prompt`): 14 dev-style tasks in the
+   many-shot mode, the r2 single example (`clamp_sub`) in the one-shot mode (Stage 0 only). The `text`
+   arm gets the same tasks with the program in OSC. `make test-exp445` checks every example in both
+   forms (reader, back end, the sealed harness on its own inputs), that the word card is exactly
+   `omegese words`, the one-token gate on every word of the examples, and that no example shares an
+   entry name with a held-out task.
 
 ## 8. Prior art (quick search, not exhaustive)
 
