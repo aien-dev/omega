@@ -1,0 +1,11 @@
+{"functions": [
+  {"name": "gcd", "params": ["u32", "u32"], "ret": "u32", "locals": ["u64", "u64", "u64", "u32", "bool", "u64", "bool", "u32"],
+   "blocks": [
+    [{"op": "const", "dst": 2, "value": 0}, {"op": "const", "dst": 3, "value": 1}, {"op": "const", "dst": 5, "value": 0}, {"op": "const", "dst": 7, "value": 100}, {"op": "mov", "dst": 4, "a": 2}, {"op": "br", "to": 1}],
+    [{"op": "ne", "dst": 6, "a": 1, "b": 5}, {"op": "cbr", "cond": 6, "then": 2, "else": 5}],
+    [{"op": "ge", "dst": 8, "a": 4, "b": 7}, {"op": "cbr", "cond": 8, "then": 3, "else": 4}],
+    [{"op": "trap", "code": 4}, {"op": "br", "to": 5}],
+    [{"op": "rem", "dst": 9, "a": 0, "b": 1}, {"op": "mov", "dst": 0, "a": 1}, {"op": "mov", "dst": 1, "a": 9}, {"op": "br", "to": 1}],
+    [{"op": "ret", "a": 0}]
+   ]}
+]}
