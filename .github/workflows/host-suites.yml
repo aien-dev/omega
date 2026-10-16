@@ -145,6 +145,8 @@ jobs:
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-gpu-wait-mutants
       - name: GPU code buffer prefetch tail (host-only, NO_TAIL mutant must die, source scan)
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-gpu-code-alloc
+      - name: MUFU flush rule (host-only, helper + every warp simulator, omega #462)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-mufu-ftz
 
   train:
     runs-on: ubuntu-24.04-arm

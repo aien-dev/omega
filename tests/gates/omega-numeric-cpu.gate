@@ -1,5 +1,5 @@
 # tests/gates/omega-numeric-cpu.gate
-# Mirrors hosted: host-suites.yml numeric-cpu: test-numeric-cpu test-numeric-qualify test-e1-combine test-chipwait-campaign test-gpu-wait test-gpu-wait-mutants test-gpu-code-alloc (hosted 63 s)
+# Mirrors hosted: host-suites.yml numeric-cpu: test-numeric-cpu test-numeric-qualify test-e1-combine test-chipwait-campaign test-gpu-wait test-gpu-wait-mutants test-gpu-code-alloc test-mufu-ftz (hosted 63 s before test-mufu-ftz)
 gate: OMEGA-NUMERIC-CPU
 manifest_version: 2
 owner: omega
@@ -12,6 +12,13 @@ inputs:
   - tests/test_omega_numeric.c
   - tests/numeric_oracle.h
   - tests/run_numeric_gates.sh
+  - tests/bw_mufu_ftz.h
+  - tests/bw_mufu_ftz_test.c
+  - tests/bw_warp_sim.h
+  - tests/bw_warp_sim_k.h
+  - tests/bw_warp_sim_pa.h
+  - tests/bw_warp_sim_tc.h
+  - tests/bw_hmma_model.h
   - tools/
   - tests/gates/
 run:
