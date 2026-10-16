@@ -1,0 +1,1 @@
+Write a function hex_digits that takes an unsigned 32-bit number n and returns how many hexadecimal (base 16) digits it has; n = 0 has 1 digit.

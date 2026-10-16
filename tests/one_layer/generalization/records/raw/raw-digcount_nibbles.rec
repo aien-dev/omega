@@ -1,0 +1,32 @@
+gen-record 1
+id raw-digcount_nibbles
+kind raw
+split corpus
+family gs1-0f1c0e4d3df8946d
+entry digcount_nibbles
+params u32
+ret u32
+signature fn digcount_nibbles n uint to uint
+desc four times the number of decimal digits of n, with a digcount helper
+receipt b750ca164953cc90454cfde2b91c2676c01d7e1a565221d480ae03d8f627c8af
+validity verified
+ancestry digcount_nibbles 6ce9611b18235437727db8122382ccf8986749561efac3b7f5dd9ce170023fd7
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/digcount_nibbles/desc 41ff6b1e77c719357497b2af8f0d7c27666a1e26a0269b9d7970dded5cf0373b
+source tests/one_layer/generalization/corpus/tasks/digcount_nibbles/expected 0d8fe28ac8e85c02bf2cfc0c68e48240ca16d6973383941baa77e82d9e2de2be
+source tests/one_layer/generalization/corpus/tasks/digcount_nibbles/inputs ece1c3013a246102bc0d90c58b3c8d0abaa7353bcd578f11be914ece5b3481e9
+source tests/one_layer/generalization/corpus/tasks/digcount_nibbles/requirement 227bfb26aba3c06cca0ace61d3b217b6efb59f8aa57b36f5ceedae2598f97bba
+source tests/one_layer/generalization/corpus/tasks/digcount_nibbles/solution.omegese 6ce9611b18235437727db8122382ccf8986749561efac3b7f5dd9ce170023fd7
+body
+fn digcount n uint to uint
+c = uint 1
+while ge n 10 bound 20
+c = add c 1
+n = div n 10
+end
+ret c
+end
+fn digcount_nibbles n uint to uint
+ret mul digcount n 4
+end

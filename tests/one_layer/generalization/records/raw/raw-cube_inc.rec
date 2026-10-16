@@ -1,0 +1,27 @@
+gen-record 1
+id raw-cube_inc
+kind raw
+split corpus
+family gs1-914c49ff2fb4acbd
+entry cube_inc
+params u32
+ret u32
+signature fn cube_inc x uint to uint
+desc cube of x plus one, with a cube helper
+receipt 8bff18d594c0f84553d54652935d05386979c38b8adec575f5f24d5b37e8c041
+validity verified
+ancestry cube_inc b00c5cc72ff16b410ebeafca59023ab710b7771311635185a50454816bbb75c8
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/cube_inc/desc 0d6f4af2f60750328aae0bdbb1ea439b57270479e68fbd59ce58c0c957061421
+source tests/one_layer/generalization/corpus/tasks/cube_inc/expected 189689962ef1c12007a573c876d1ce9ba39d4fc29a3d15f0ff0bf8c88d49ccae
+source tests/one_layer/generalization/corpus/tasks/cube_inc/inputs 37cb89346d71471b405dac603c2eec3f37a887a9b9615394bbd5f4c0d9f6d538
+source tests/one_layer/generalization/corpus/tasks/cube_inc/requirement 48364f8f4d10c8b634468a278376713af714d9572a2ecd0814948185e3979ac2
+source tests/one_layer/generalization/corpus/tasks/cube_inc/solution.omegese b00c5cc72ff16b410ebeafca59023ab710b7771311635185a50454816bbb75c8
+body
+fn cube x uint to uint
+ret mul mul x x x
+end
+fn cube_inc x uint to uint
+ret add cube x 1
+end

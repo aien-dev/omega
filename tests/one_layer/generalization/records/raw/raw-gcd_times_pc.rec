@@ -1,0 +1,39 @@
+gen-record 1
+id raw-gcd_times_pc
+kind raw
+split corpus
+family gs1-0846032659bd1c21
+entry gcd_times_pc
+params u32 u32
+ret u32
+signature fn gcd_times_pc a uint b uint to uint
+desc gcd of a and b times the one-bit count of b, with gcd and popcnt helpers
+receipt 2b4bc1a486b92590cf0303e568bbb1a6db4de20fe8ee54e77f39b81d45a6f132
+validity verified
+ancestry gcd_times_pc 41800bd38df097304cf1ce838da9ec6c9e3de52656d13029aa41d6df2baf577d
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/gcd_times_pc/desc b8c53b4f8981a5db4e78367f290d9f68db694e70c8691ace5149ae08711502f2
+source tests/one_layer/generalization/corpus/tasks/gcd_times_pc/expected be19d33f116fad2301afac1a24fc71532fffa58c719788eda0d85a986989a561
+source tests/one_layer/generalization/corpus/tasks/gcd_times_pc/inputs d37fc01949d400da2dc361c0f4a830956f8e91c9ddc32b1e3cce83600f2e323a
+source tests/one_layer/generalization/corpus/tasks/gcd_times_pc/requirement 577474d5c02134a7a5c09fa4c932737d923534fa6362f357a3fbbadd804f7fb8
+source tests/one_layer/generalization/corpus/tasks/gcd_times_pc/solution.omegese 41800bd38df097304cf1ce838da9ec6c9e3de52656d13029aa41d6df2baf577d
+body
+fn gcd a uint b uint to uint
+while ne b 0 bound 100
+t = rem a b
+a = b
+b = t
+end
+ret a
+end
+fn popcnt x uint to uint
+c = uint 0
+for i uint 32
+c = add c and shr x i 1
+end
+ret c
+end
+fn gcd_times_pc a uint b uint to uint
+ret mul gcd a b popcnt b
+end

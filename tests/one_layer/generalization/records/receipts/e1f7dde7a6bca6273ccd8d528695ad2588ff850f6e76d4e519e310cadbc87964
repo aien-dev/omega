@@ -1,0 +1,9 @@
+gen-receipt 1
+record raw-avg_inc
+tool tools/gen/abstract/extract 09c1b424bf715321a35f8730405f860460f8e62dd31abb5607e1e7956a312968
+tool tools/gen/abstract/genabs.sh a90f07483fe62ae5e7ec9ae55bdb904a106bb5402f96906e4d6cb70b080d18d7
+tool tools/gen/abstract/gabs.c 16023e76cb19000eebb4c341692a831ad3d8d12093a4ecf2ed3e5c189532bf38
+solution_ir 1ccbc751a3e9fc385321016b4698ddab0fa1523172efa46cfcc14dbb08800cfc
+checker2 ACCEPT
+x445 check oscir OK
+tests inputs=00a3c184bc10f8e932e6257c0e18949f3ef88d0d265aabde624778e601099bad expected=93367918f586eb71bdba2d7f5304894662acee47ee34456775bfc91d80470534 ACCEPT n=8

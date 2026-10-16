@@ -1,0 +1,10 @@
+fn dist(a: u32, b: u32) -> u32 {
+    if a < b { return b - a; }
+    return a - b;
+}
+fn sum_dists(n: u32, c: u32) -> u32 {
+    let mut s: u32 = 0;
+    let mut i: u32 = 0;
+    while i < n bound 100000 { s = s + dist(i, c); i = i + 1; }
+    return s;
+}

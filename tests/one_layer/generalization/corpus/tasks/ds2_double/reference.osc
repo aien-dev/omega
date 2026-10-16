@@ -1,0 +1,12 @@
+fn digsum(n: u32) -> u32 {
+    let mut x: u32 = n;
+    let mut s: u32 = 0;
+    while x > 0 bound 20 { s = s + x % 10; x = x / 10; }
+    return s;
+}
+fn ds2(n: u32) -> u32 {
+    return digsum(digsum(n));
+}
+fn ds2_double(n: u32) -> u32 {
+    return ds2(n) * 2;
+}

@@ -1,0 +1,31 @@
+gen-record 1
+id raw-popcnt_odd
+kind raw
+split corpus
+family gs1-0f1c0e4d3df8946d
+entry popcnt_odd
+params u32
+ret bool
+signature fn popcnt_odd x uint to bool
+desc true when a 32-bit x has an odd number of one bits, with a popcnt helper
+receipt 62fdf59b9fe1102dbd9914349a636515c2df3f8eac59abe2aa15e6096408a7c2
+validity verified
+ancestry popcnt_odd 478df43357e6202a1f1ddde6ba4f5749807d62a046471ff4e9373c9543df402a
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/popcnt_odd/desc f3c95b233a31d38a8e8a08b45d755276a297e49d09651931a16515215921acbe
+source tests/one_layer/generalization/corpus/tasks/popcnt_odd/expected 98be99e679d4fe2c55bb72afa808a849177703bf71c763c996c8a7697fe3219a
+source tests/one_layer/generalization/corpus/tasks/popcnt_odd/inputs 54e6997ffc24f2540e786b010a4f6aaad6a39c3057629c6993fa06d659fe05dc
+source tests/one_layer/generalization/corpus/tasks/popcnt_odd/requirement 48b26a59ac9cafbce70caf72e3ca3a5f4ebfda5e1362513be80ae082e4c8f99f
+source tests/one_layer/generalization/corpus/tasks/popcnt_odd/solution.omegese 478df43357e6202a1f1ddde6ba4f5749807d62a046471ff4e9373c9543df402a
+body
+fn popcnt x uint to uint
+c = uint 0
+for i uint 32
+c = add c and shr x i 1
+end
+ret c
+end
+fn popcnt_odd x uint to bool
+ret eq rem popcnt x 2 1
+end

@@ -1,0 +1,24 @@
+gen-record 1
+id raw-weighted4
+kind raw
+split probe
+family gs1-4e11c90734b5114d
+entry weighted4
+params u32 u32 u32 u32
+ret u64
+signature fn weighted4 a uint b uint c uint d uint to ulong
+desc a + 2b + 3c + 4d as a 64-bit number
+receipt 264567c9c6c8bd8775caf22b70808eede2c03dab8685d62bc4826952fc2a2d55
+validity verified
+ancestry weighted4 26595c247248e94960f652bb827ebec1c5a2f724e03b6321d0f2c20ba18b9eea
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/weighted4/desc 211493f9f63e1fc4bfb8105ad0c08243b39d726f3f443a053b45872d86e011f5
+source tests/one_layer/generalization/corpus/tasks/weighted4/expected c10fbc23386e576011503b8c711c46bc80799b6b88a5a0bc40bd30c8449b725a
+source tests/one_layer/generalization/corpus/tasks/weighted4/inputs c6168be7ebbb1df8439083f8c1b68f20b07daa0911c1d0ab1800e1431da8b775
+source tests/one_layer/generalization/corpus/tasks/weighted4/requirement 7a4d7872ff558fb088ed4995eb8c96b951088d7ddb6b4cc4738626d759fd3daf
+source tests/one_layer/generalization/corpus/tasks/weighted4/solution.omegese 26595c247248e94960f652bb827ebec1c5a2f724e03b6321d0f2c20ba18b9eea
+body
+fn weighted4 a uint b uint c uint d uint to ulong
+ret add add add ulong a mul ulong b 2 mul ulong c 3 mul ulong d 4
+end

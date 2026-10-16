@@ -1,0 +1,155 @@
+#!/usr/bin/env bash
+# tools/gen/abstract/extract [--root <repo>] <build dir> <out records dir>
+#
+# GEN-3 (aien-spark/omega#478) deterministic abstraction extractor. Reads only the public corpus
+# (tests/one_layer/generalization/corpus: tasks/, META, PROBES, specs/) and writes a record set
+# (RECORD_SCHEMA.md section 5) to <out records dir>, replacing raw/, abstraction/, receipts/, MANIFEST,
+# SET.sha256 and REJECTIONS there:
+#   1. every corpus task (extraction and probe tasks) gets a raw record: its whole solution, after the reader
+#      chain, x445 check and the harness runner on its public tests pass (a failure is fatal: the corpus is bad)
+#   2. the solutions of the extraction tasks (all tasks not named in PROBES) are split into functions; each
+#      helper (every function but the entry) is canonicalised (omegese emit, names -> fn<k>_, omega_emit) and
+#      fingerprinted; identical and alpha-equivalent helpers fall into one group
+#   3. a group becomes an abstraction record only if, in this order: its helper calls no other function (v1),
+#      it occurs in >= 2 distinct extraction tasks with distinct solutions, its fingerprint differs from every
+#      whole corpus solution, its name (the most common one, ties to the byte-smallest) is unique and has a
+#      spec file specs/<name>.spec, checker2 accepts it, and every functional check passes (property on
+#      generated inputs, the stated example, every counterexample). Every other group is a line in REJECTIONS.
+# The same inputs give byte-identical output (no clock, no randomness, sorted, C locale).
+# Records are suggestions shown to a model, never trusted code.
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$HERE/genabs.sh"
+ROOT="$(cd "$HERE/../../.." && pwd)"
+if [ "${1:-}" = --root ]; then ROOT="$(cd "$2" && pwd)"; shift 2; fi
+[ $# -eq 2 ] || { echo "usage: extract [--root <repo>] <build dir> <out records dir>" >&2; exit 2; }
+B="$(cd "$1" && pwd)"
+mkdir -p "$2"; OUT="$(cd "$2" && pwd)"
+W="$(mktemp -d "${TMPDIR:-/tmp}/gen-extract.XXXXXXXX")"
+trap 'rm -rf "$W"' EXIT
+ga_init "$B" "$ROOT" "$W" || exit 2
+CR="$ROOT/$GA_CORPUS"
+die() { echo "extract: $*" >&2; exit 1; }
+
+ga_scan || die "corpus scan failed"
+rm -rf "$OUT/raw" "$OUT/abstraction" "$OUT/receipts" "$OUT/MANIFEST" "$OUT/SET.sha256" "$OUT/REJECTIONS" "$OUT/PREFIX" "$OUT/C.MANIFEST" "$OUT/D.MANIFEST"
+mkdir -p "$OUT/raw" "$OUT/abstraction" "$OUT/receipts"
+
+# put_receipt: write GA_RCPT under receipts/<its sha256>, print the id
+put_receipt() {
+  local id; id="$(ga_shas "$GA_RCPT")"
+  printf '%s' "$GA_RCPT" > "$OUT/receipts/$id"
+  echo "$id"
+}
+src_line() { echo "source $1 $(ga_sha "$ROOT/$1")"; }
+
+# ---- 1. raw records ------------------------------------------------------------------------------------------
+declare -A SPLIT SOLSHA SOLFP
+while read -r _ t split ssha sfp; do
+  SPLIT[$t]="$split" SOLSHA[$t]="$ssha" SOLFP[$t]="$sfp"
+  d="$CR/tasks/$t"
+  ga_raw_checks "raw-$t" "$d" "$W/raw.$t" || die "corpus task $t fails its own checks: $GA_ERR"
+  rc="$(put_receipt)"
+  fam="$(ga_meta_token "$t")" || die "$GA_ERR"
+  {
+    echo "gen-record 1"; echo "id raw-$t"; echo "kind raw"; echo "split $split"; echo "family $fam"
+    echo "entry $t"
+    echo "params$(sed -n 's/^params//p' "$d/requirement")"
+    echo "ret $(sed -n 's/^ret //p' "$d/requirement")"
+    echo "signature $(grep '^fn ' "$d/solution.omegese" | tail -n 1)"
+    echo "desc $(cat "$d/desc")"
+    echo "receipt $rc"; echo "validity verified"; echo "ancestry $t $ssha"
+    for f in META PROBES "tasks/$t/desc" "tasks/$t/expected" "tasks/$t/inputs" "tasks/$t/requirement" "tasks/$t/solution.omegese"; do
+      src_line "$GA_CORPUS/$f"
+    done | sort
+    echo "body"; cat "$d/solution.omegese"
+  } > "$OUT/raw/raw-$t.rec"
+done < <(grep '^S ' "$W/scan")
+
+# ---- 2. helper groups (extraction tasks only) -------------------------------------------------------------
+# key: the fingerprint of a leaf helper, or "nonleaf:<name>" for a helper that calls another function
+: > "$W/groups"
+while read -r _ t k name calls fp file; do
+  [ "${SPLIT[$t]}" = corpus ] || continue
+  if [ "$fp" = - ]; then key="nonleaf:$name"; else key="$fp"; fi
+  echo "$key $t $name $calls $file" >> "$W/groups"
+done < <(grep '^H ' "$W/scan")
+sort -o "$W/groups" "$W/groups"
+
+# group name: the most common helper name, ties to the byte-smallest
+gname() { awk -v k="$1" '$1 == k { print $3 }' "$W/groups" | sort | uniq -c | sort -k1,1nr -k2,2 | awk 'NR == 1 { print $2 }'; }
+: > "$W/rej"; : > "$W/cand"
+for key in $(cut -d' ' -f1 "$W/groups" | sort -u); do
+  name="$(gname "$key")"
+  tasks="$(awk -v k="$key" '$1 == k { print $2 }' "$W/groups" | sort -u)"
+  tlist="$(printf '%s\n' "$tasks" | paste -sd, -)"
+  fp16=-; case "$key" in nonleaf:*) ;; *) fp16="${key:0:16}";; esac
+  rej() { echo "$name $fp16 $tlist $*" >> "$W/rej"; }
+  case "$key" in nonleaf:*) rej "calls $(awk -v k="$key" '$1 == k { print $4; exit }' "$W/groups"): v1 extracts leaf helpers only"; continue;; esac
+  nt="$(printf '%s\n' "$tasks" | wc -l)"
+  [ "$nt" -ge 2 ] || { rej "single-source: occurs in 1 extraction task"; continue; }
+  nd="$(for t in $tasks; do echo "${SOLSHA[$t]}"; done | sort -u | wc -l)"
+  [ "$nd" -ge 2 ] || { rej "single-source: the tasks share one solution digest"; continue; }
+  same="$(grep '^S ' "$W/scan" | awk -v f="$key" '$5 == f { print $2; exit }')"
+  [ -z "$same" ] || { rej "identical to the whole corpus solution of $same"; continue; }
+  echo "$key $name" >> "$W/cand"
+done
+# a name chosen by two surviving groups is ambiguous: both are rejected
+for key in $(cut -d' ' -f1 "$W/cand"); do
+  name="$(awk -v k="$key" '$1 == k { print $2 }' "$W/cand")"
+  tlist="$(awk -v k="$key" '$1 == k { print $2 }' "$W/groups" | sort -u | paste -sd, -)"
+  rej() { echo "$name ${key:0:16} $tlist $*" >> "$W/rej"; }
+  [ "$(awk -v n="$name" '$2 == n' "$W/cand" | wc -l)" = 1 ] || { rej "name collision: another helper group has the name $name"; continue; }
+  spec="$GA_CORPUS/specs/$name.spec"
+  [ -f "$ROOT/$spec" ] || { rej "no spec file $spec (pre, post, example, limits are stated by the corpus author)"; continue; }
+  # representative body: the occurrence named <name> in the byte-smallest task
+  rep="$(awk -v k="$key" -v n="$name" '$1 == k && $3 == n { print $5; exit }' "$W/groups")"
+  id="abs-${key:0:16}"
+  if ! ga_abs_checks "$id" "$rep" "$ROOT/$spec" "$W/abs.$name"; then rej "$GA_ERR"; continue; fi
+  GA_RCPT+="$(awk -v k="$key" '$1 == k { print "occurs " $2 " " $3 }' "$W/groups")"$'\n'
+  rc="$(put_receipt)"
+  ga_params "$(head -n 1 "$rep")"
+  fams="$(for t in $(awk -v k="$key" '$1 == k { print $2 }' "$W/groups" | sort -u); do ga_meta_token "$t"; done | sort -u | paste -sd' ' -)"
+  {
+    echo "gen-record 1"; echo "id $id"; echo "kind abstraction"; echo "split corpus"; echo "family $fams"
+    echo "entry $name"; echo "params$GA_REQP"; echo "ret $(ga_req "$GA_RET")"; echo "signature $(head -n 1 "$rep")"
+    sed -n 's/^desc /desc /p' "$ROOT/$spec"
+    echo "receipt $rc"; echo "validity verified"
+    for t in $(awk -v k="$key" '$1 == k { print $2 }' "$W/groups" | sort -u); do echo "ancestry $t ${SOLSHA[$t]}"; done
+    { src_line "$GA_CORPUS/META"; src_line "$GA_CORPUS/PROBES"; src_line "$spec"
+      for t in $(awk -v k="$key" '$1 == k { print $2 }' "$W/groups" | sort -u); do src_line "$GA_CORPUS/tasks/$t/solution.omegese"; done; } | sort
+    sed -n 's/^pre /pre STATED+TESTED /p; s/^post /post STATED+TESTED /p' "$ROOT/$spec"
+    grep '^example ' "$ROOT/$spec"; grep '^limit ' "$ROOT/$spec"; grep '^counter ' "$ROOT/$spec" || true
+    echo "fingerprint $key"
+    grep '^S ' "$W/scan" | awk '{ print "differs " $2 " " $5 }'
+    echo "body"; cat "$rep"
+  } > "$OUT/abstraction/$id.rec"
+done
+sort "$W/rej" > "$OUT/REJECTIONS"
+
+# ---- 3. manifest --------------------------------------------------------------------------------------------
+(cd "$OUT" && sha256sum raw/*.rec abstraction/*.rec) > "$W/manifest"
+LC_ALL=C sort -k2,2 "$W/manifest" > "$OUT/MANIFEST"
+(cd "$OUT" && sha256sum MANIFEST) > "$OUT/SET.sha256"
+
+# ---- 4. the 14-task B prefix and the C/D candidate pools (docs/one_layer/GEN_PROTOCOL_V1.md section 3) ----
+# prefix pick: corpus tasks ordered by family signature (famsig canon, byte order) then task id; walk the
+# families round robin in signature order, taking each family's lowest unused task id, until 14 are taken.
+# C.MANIFEST = the raw records minus the prefix tasks; D.MANIFEST = the abstraction records minus those whose
+# ancestry lies entirely within the prefix. Both are MANIFEST lines (genret manifest format, same directory).
+grep -v '^#' "$CR/META" | tail -n +2 | while read -r t _ _ _ _ _ _ _ s; do
+  echo "$("$GA_FAMSIG" canon "$s") $t"
+done | sort > "$W/famorder"
+awk -v want=14 '{ if (!($1 in n)) fam[nf++] = $1; id[$1, n[$1]++] = $2 }
+  END { for (r = 0; got < want; r++) { more = 0
+          for (f = 0; f < nf && got < want; f++) if (r < n[fam[f]]) { print id[fam[f], r]; got++; more = 1 }
+          if (!more) break } }' "$W/famorder" > "$OUT/PREFIX"
+[ "$(wc -l < "$OUT/PREFIX")" = 14 ] || die "fewer than 14 corpus tasks for the prefix"
+awk 'NR == FNR { p["raw/raw-" $1 ".rec"] = 1; next } $2 ~ /^raw\// && !($2 in p)' "$OUT/PREFIX" "$OUT/MANIFEST" > "$OUT/C.MANIFEST"
+while read -r h f; do
+  case "$f" in abstraction/*) ;; *) continue;; esac
+  outside="$(sed -n '/^body$/q; s/^ancestry \([^ ]*\) .*/\1/p' "$OUT/$f" | grep -vxF -f "$OUT/PREFIX" || true)"
+  if [ -n "$outside" ]; then echo "$h  $f"; fi
+done < "$OUT/MANIFEST" > "$OUT/D.MANIFEST"
+echo "extract: raw=$(ls "$OUT/raw" | wc -l) abstraction=$(ls "$OUT/abstraction" | wc -l) rejected=$(wc -l < "$OUT/REJECTIONS") set=$(cut -c1-64 "$OUT/SET.sha256")"
+echo "extract: prefix=$(paste -sd, "$OUT/PREFIX") C=$(wc -l < "$OUT/C.MANIFEST") D=$(wc -l < "$OUT/D.MANIFEST")"

@@ -1,0 +1,29 @@
+gen-record 1
+id raw-hex_digits
+kind raw
+split probe
+family gs1-ba9ca1a3efe1e1c9
+entry hex_digits
+params u32
+ret u32
+signature fn hex_digits n uint to uint
+desc number of hexadecimal digits of n (1 for n = 0)
+receipt 11e24d34a37e9674836544236213ebe70054967fcd8f2821a29fcb1a60f7d5ab
+validity verified
+ancestry hex_digits 237867e5afbac6444c42f1523b3ecb0233951d5a67950f9b0ff4aa6f51755b19
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/hex_digits/desc 819f2c12a8d5f313bc892b66af7c99090f9ddff87d5bc24b1505c4e6fe8e73f9
+source tests/one_layer/generalization/corpus/tasks/hex_digits/expected 66a3a4ae9f6d4bc97054dc014b4ada083a08fd14fe87065fbd753ed873043bf1
+source tests/one_layer/generalization/corpus/tasks/hex_digits/inputs 6b640b97454e24a78d5ae76dd03490163f1bbfea8a70c900a905b6e28572a241
+source tests/one_layer/generalization/corpus/tasks/hex_digits/requirement febb4cf043a46578a4c7ea4d6c73d412772398422a8c8a53b649ce643ab234bc
+source tests/one_layer/generalization/corpus/tasks/hex_digits/solution.omegese 237867e5afbac6444c42f1523b3ecb0233951d5a67950f9b0ff4aa6f51755b19
+body
+fn hex_digits n uint to uint
+c = uint 1
+while ge n 16 bound 10
+c = add c 1
+n = div n 16
+end
+ret c
+end

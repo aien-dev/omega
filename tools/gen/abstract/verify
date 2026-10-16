@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# tools/gen/abstract/verify [--root <repo>] [--receipts <dir>] <build dir> <record file>...
+#
+# GEN-3 (aien-spark/omega#478): re-derives each record from the pinned corpus and prints `VERIFIED <id>` or
+# `BLOCKED <id> <reason>` per record (exit 0 when all are verified, 1 otherwise; 2 on a usage or tool error).
+# Receipts are read from --receipts, else from receipts/ next to the record's raw/ or abstraction/ directory.
+# The first failing check is the reason:
+#   1  recheck --root --receipts: the schema, every source digest, the receipt file exists and hashes to its id
+#   raw: the task exists, split and family agree with PROBES and META, params/ret/desc/body are the task's own,
+#        then the reader chain, x445 check and the harness runner on the task's public tests
+#   abstraction: the body passes the reader chain (invalid IR), its canonical fingerprint is the stated one,
+#        every ancestry task is an extraction task with that solution digest and contains this helper, the
+#        helper occurs in >= 2 of them (single source), it equals no whole corpus solution, the differs lines
+#        and families are the recomputed ones, desc/pre/post/example/limits/counters are the spec file's, and the
+#        property, example and counterexample checks pass
+#   last the receipt is rebuilt from the checks just run and must equal the receipt file byte for byte (a
+#        receipt that hashes to its name but was not produced by these checks is a fake)
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$HERE/genabs.sh"
+ROOT="$(cd "$HERE/../../.." && pwd)"
+RDOPT=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --root) ROOT="$(cd "$2" && pwd)"; shift 2 ;;
+    --receipts) RDOPT="$(cd "$2" && pwd)"; shift 2 ;;
+    *) break ;;
+  esac
+done
+[ $# -ge 2 ] || { echo "usage: verify [--root <repo>] [--receipts <dir>] <build dir> <record file>..." >&2; exit 2; }
+B="$(cd "$1" && pwd)"; shift
+W="$(mktemp -d "${TMPDIR:-/tmp}/gen-verify.XXXXXXXX")"
+trap 'rm -rf "$W"' EXIT
+ga_init "$B" "$ROOT" "$W" || exit 2
+CR="$ROOT/$GA_CORPUS"
+ga_scan || { echo "verify: corpus scan failed" >&2; exit 2; }
+declare -A SPLIT SOLSHA SOLFP
+while read -r _ t split ssha sfp; do SPLIT[$t]="$split" SOLSHA[$t]="$ssha" SOLFP[$t]="$sfp"; done < <(grep '^S ' "$W/scan")
+
+# verify_one <record>: runs in a subshell; `blocked` ends only that record
+verify_one() {
+REC="$1"
+[ -f "$REC" ] || { echo "BLOCKED ? no record file $REC"; exit 1; }
+RD="${RDOPT:-$(cd "$(dirname "$REC")/.." && pwd)/receipts}"
+ID="$(sed -n '2s/^id //p' "$REC")"; [ -n "$ID" ] || ID="?"
+blocked() { echo "BLOCKED $ID $*"; exit 1; }
+
+# 1. format, sources, receipt file
+out="$("$B/gen_abstract/recheck" --root "$ROOT" --receipts "$RD" "$REC" 2>&1)" || blocked "recheck: ${out#REFUSED }"
+
+hdr() { sed '/^body$/q' "$REC" | sed -n "s/^$1 //p"; }
+sed '1,/^body$/d' "$REC" > "$W/body.omegese"
+KIND="$(hdr kind)" RCPT_ID="$(hdr receipt)"
+
+if [ "$KIND" = raw ]; then
+  t="${ID#raw-}" d="$CR/tasks/${ID#raw-}"
+  [ -n "${SPLIT[$t]:-}" ] || blocked "no corpus task $t"
+  [ "$(hdr split)" = "${SPLIT[$t]}" ] || blocked "split is not the task's (PROBES says ${SPLIT[$t]})"
+  [ "$(hdr family)" = "$(ga_meta_token "$t")" ] || blocked "family is not the token of the task's META shape"
+  [ "$(sed -n '/^body$/q; /^params/p' "$REC")" = "$(sed -n '/^params/p' "$d/requirement")" ] || blocked "params differ from the task requirement"
+  [ "$(hdr ret)" = "$(sed -n 's/^ret //p' "$d/requirement")" ] || blocked "ret differs from the task requirement"
+  [ "$(hdr desc)" = "$(cat "$d/desc")" ] || blocked "desc differs from the task's desc file"
+  cmp -s "$W/body.omegese" "$d/solution.omegese" || blocked "body is not the task's solution"
+  ga_raw_checks "$ID" "$d" "$W/raw" || blocked "check failed: $GA_ERR"
+else
+  ga_chain "$W/body.omegese" "$W/b" || blocked "invalid IR: $GA_ERR"
+  fp="$(ga_fp "$W/body.omegese" "$W/bfp")" || blocked "invalid IR: $GA_ERR"
+  [ "$fp" = "$(hdr fingerprint)" ] || blocked "fingerprint does not match the body (types or code changed)"
+  occ="$(grep '^H ' "$W/scan" | awk -v f="$fp" '$6 == f { print $2 }' | while read -r t; do if [ "${SPLIT[$t]}" = corpus ]; then echo "$t"; fi; done | sort -u)"
+  while read -r t s; do
+    [ "${SPLIT[$t]:-}" = corpus ] || blocked "ancestry task $t is not an extraction task (unknown or a probe)"
+    [ "$s" = "${SOLSHA[$t]}" ] || blocked "ancestry digest of $t is stale"
+    printf '%s\n' "$occ" | grep -qx "$t" || blocked "ancestry task $t does not contain this helper (single-source or forged ancestry)"
+  done < <(hdr ancestry)
+  [ "$(printf '%s\n' "$occ" | grep -c .)" -ge 2 ] || blocked "single-source helper: it occurs in fewer than 2 extraction tasks"
+  [ "$(hdr ancestry | cut -d' ' -f1)" = "$occ" ] || blocked "ancestry is not the set of extraction tasks that contain this helper"
+  same="$(grep '^S ' "$W/scan" | awk -v f="$fp" '$5 == f { print $2; exit }')"
+  [ -z "$same" ] || blocked "helper is identical to the whole corpus solution of $same"
+  [ "$(hdr differs)" = "$(grep '^S ' "$W/scan" | awk '{ print $2 " " $5 }')" ] || blocked "differs lines are not the recomputed corpus solution fingerprints"
+  [ "$(hdr family)" = "$(for t in $occ; do ga_meta_token "$t"; done | sort -u | paste -sd' ' -)" ] || blocked "family is not the set of ancestry META tokens"
+  name="$(hdr entry)" spec="$CR/specs/$(hdr entry).spec"
+  [ -f "$spec" ] || blocked "no spec file for $name"
+  for k in desc example limit counter; do
+    [ "$(hdr "$k")" = "$(sed -n "s/^$k //p" "$spec")" ] || blocked "$k lines differ from the spec file"
+  done
+  for k in pre post; do
+    [ "$(hdr "$k")" = "STATED+TESTED $(sed -n "s/^$k //p" "$spec")" ] || blocked "$k differs from the spec file"
+  done
+  # the checks run on the record's own stated lines
+  { hdr desc | sed 's/^/desc /'; hdr pre | sed 's/^STATED+TESTED /pre /'; hdr post | sed 's/^STATED+TESTED /post /'
+    hdr example | sed 's/^/example /'; hdr limit | sed 's/^/limit /'; hdr counter | sed 's/^/counter /'; } > "$W/stated"
+  ga_abs_checks "$ID" "$W/body.omegese" "$W/stated" "$W/abs" || blocked "functional check failed: $GA_ERR"
+  GA_RCPT+="$(grep '^H ' "$W/scan" | awk -v f="$fp" '$6 == f { print $2 " " $4 }' | while read -r t n; do if [ "${SPLIT[$t]}" = corpus ]; then echo "occurs $t $n"; fi; done | sort)"$'\n'
+fi
+printf '%s' "$GA_RCPT" | cmp -s - "$RD/$RCPT_ID" || blocked "receipt does not match the re-run checks (fake or stale receipt)"
+echo "VERIFIED $ID"
+}
+rc=0
+for r in "$@"; do ( verify_one "$r" ) || rc=1; done
+exit "$rc"

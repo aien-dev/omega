@@ -1,0 +1,15 @@
+fn digsum(n: u32) -> u32 {
+    let mut x: u32 = n;
+    let mut s: u32 = 0;
+    while x > 0 bound 20 { s = s + x % 10; x = x / 10; }
+    return s;
+}
+fn digcount(n: u32) -> u32 {
+    let mut x: u32 = n;
+    let mut c: u32 = 1;
+    while x >= 10 bound 20 { c = c + 1; x = x / 10; }
+    return c;
+}
+fn ds_plus_dc(n: u32) -> u32 {
+    return digsum(n) + digcount(n);
+}

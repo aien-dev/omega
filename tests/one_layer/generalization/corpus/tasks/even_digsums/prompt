@@ -1,0 +1,1 @@
+Write a function even_digsums that takes an unsigned 32-bit number n and returns how many i from 0 to n - 1 have an even sum of decimal digits. The result is 0 when n is 0. Inputs always have n <= 100000. Write and use a helper function digsum(n) that returns the sum of the decimal digits of n (0 for n = 0).

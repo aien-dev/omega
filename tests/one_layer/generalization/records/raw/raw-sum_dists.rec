@@ -1,0 +1,36 @@
+gen-record 1
+id raw-sum_dists
+kind raw
+split corpus
+family gs1-3d0ef38f5f721c9d
+entry sum_dists
+params u32 u32
+ret u32
+signature fn sum_dists n uint c uint to uint
+desc sum over i below n of the distance between i and c, with a dist helper
+receipt ffe57e59ebc1bfc0a271de4916a43b7a01201fd805ccac8f9f6ed3ba90b7aedd
+validity verified
+ancestry sum_dists 7c94e9348429e7768cd6262fde3af52fe70a6156b39343663bff054ecfc78021
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/sum_dists/desc 051b80e68f9678753b4e77740726aa36bbd37ba7b2cae084db5d3f4bd986e1a9
+source tests/one_layer/generalization/corpus/tasks/sum_dists/expected 43a313eeb51bbc8f1cefc6973fdc9d7fd4dabc19cdf35835a082c19184bb6d3f
+source tests/one_layer/generalization/corpus/tasks/sum_dists/inputs 5f9a9e7bd36bbd3d41d454a64d2468e13013e4d41dad87041698b9647cb78b53
+source tests/one_layer/generalization/corpus/tasks/sum_dists/requirement f6122f53df3c071d6a8353bb90fa990b87cb75d5769b052954d901d8f0b91b9c
+source tests/one_layer/generalization/corpus/tasks/sum_dists/solution.omegese 7c94e9348429e7768cd6262fde3af52fe70a6156b39343663bff054ecfc78021
+body
+fn dist a uint b uint to uint
+if lt a b
+ret sub b a
+end
+ret sub a b
+end
+fn sum_dists n uint c uint to uint
+s = uint 0
+i = uint 0
+while lt i n bound 100000
+s = add s dist i c
+i = add i 1
+end
+ret s
+end

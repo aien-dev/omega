@@ -1,0 +1,21 @@
+fn popcnt x uint to uint
+c = uint 0
+for i uint 32
+c = add c and shr x i 1
+end
+ret c
+end
+fn digsum n uint to uint
+s = uint 0
+while gt n 0 bound 20
+s = add s rem n 10
+n = div n 10
+end
+ret s
+end
+fn big_pc_small_ds x uint to uint
+if ge x 1000
+ret popcnt x
+end
+ret digsum x
+end

@@ -1,0 +1,38 @@
+gen-record 1
+id raw-sum4_mod
+kind raw
+split corpus
+family gs1-26858760cef06893
+entry sum4_mod
+params u32 u32 u32 u32 u32
+ret u32
+signature fn sum4_mod a uint b uint c uint d uint m uint to uint
+desc sum of four values modulo m, with a sum4 helper over a 4-value sequence
+receipt 73a10f4a2b8704a492d0b02e16a99827af561f99f4343c5ba66ae8fc34f41f96
+validity verified
+ancestry sum4_mod 8c7a517aafde98e0703e977bfde942a48fa12df111d61212f7618def17f43230
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/sum4_mod/desc 7492a86e0acf9f4da38c86b4c23c86eade3a687d37bbb6432aca7477a84c34fa
+source tests/one_layer/generalization/corpus/tasks/sum4_mod/expected 3056d440a29d165c44c9993a4a7dce44f9d0f1f3dd562ebac10085d87f4d8c59
+source tests/one_layer/generalization/corpus/tasks/sum4_mod/inputs 2c7f1184bda66616e26dba58118309727fe90a088b9e89290c09a59153e49dd3
+source tests/one_layer/generalization/corpus/tasks/sum4_mod/requirement cf1452b0cc9a0aabc9b25a9a268c075dc2d5780cb12e6adf1c213e56bbcaeca7
+source tests/one_layer/generalization/corpus/tasks/sum4_mod/solution.omegese 8c7a517aafde98e0703e977bfde942a48fa12df111d61212f7618def17f43230
+body
+fn sum4 v view uint 4 to ulong
+s = ulong 0
+for i uint 4
+s = add s ulong get v i
+end
+ret s
+end
+fn sum4_mod a uint b uint c uint d uint m uint to uint
+v = new uint 4 0
+put v 0 a
+put v 1 b
+put v 2 c
+put v 3 d
+r = uint rem sum4 v ulong m
+free v
+ret r
+end

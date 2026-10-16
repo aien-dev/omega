@@ -1,0 +1,1 @@
+Write a function weighted4 that takes four unsigned 32-bit numbers a, b, c, d and returns a + 2*b + 3*c + 4*d as an unsigned 64-bit number.

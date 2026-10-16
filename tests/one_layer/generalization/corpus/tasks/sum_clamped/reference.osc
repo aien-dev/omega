@@ -1,0 +1,11 @@
+fn clamp(x: u32, lo: u32, hi: u32) -> u32 {
+    if x < lo { return lo; }
+    if x > hi { return hi; }
+    return x;
+}
+fn sum_clamped(n: u32, lo: u32, hi: u32) -> u32 {
+    let mut s: u32 = 0;
+    let mut i: u32 = 0;
+    while i < n bound 100000 { s = s + clamp(i, lo, hi); i = i + 1; }
+    return s;
+}

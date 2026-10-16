@@ -1,0 +1,10 @@
+fn sat8(x: u32) -> u8 {
+    if x > 255 { return 255; }
+    return x as u8;
+}
+fn sum_sat(n: u32, k: u32) -> u32 {
+    let mut s: u32 = 0;
+    let mut i: u32 = 0;
+    while i < n bound 100000 { s = s + (sat8(i * k) as u32); i = i + 1; }
+    return s;
+}

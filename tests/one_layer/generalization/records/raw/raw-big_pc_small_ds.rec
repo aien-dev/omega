@@ -1,0 +1,42 @@
+gen-record 1
+id raw-big_pc_small_ds
+kind raw
+split corpus
+family gs1-8f56ab3ea4340fe8
+entry big_pc_small_ds
+params u32
+ret u32
+signature fn big_pc_small_ds x uint to uint
+desc one-bit count of x if x >= 1000, else its digit sum, with popcnt and digsum helpers
+receipt 50eef55c9191028f356a8ec4dca86a6e34cbcad145a37c72472c16a5635f7ad5
+validity verified
+ancestry big_pc_small_ds 34b1df549be18fb3564220e742529892077d336b77410c52047869b17aa1da3a
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/big_pc_small_ds/desc 2c3e2140bc69c4668bb5cc8f89035cfad4cef14606d7149fee6cbe0a217cedc1
+source tests/one_layer/generalization/corpus/tasks/big_pc_small_ds/expected 6029875671ae6ed595ddeeb34522cf870f1f760a30c2038eda91ba8b8d7987f8
+source tests/one_layer/generalization/corpus/tasks/big_pc_small_ds/inputs 7934e29c171e226bceb46b76306d32fd5eec6171f00b9d857e999c73ea3fe7d9
+source tests/one_layer/generalization/corpus/tasks/big_pc_small_ds/requirement 52d5efd66b95af5be5afb5c26ed65cfd739dbf7756ab9e165fac05b498e26ffa
+source tests/one_layer/generalization/corpus/tasks/big_pc_small_ds/solution.omegese 34b1df549be18fb3564220e742529892077d336b77410c52047869b17aa1da3a
+body
+fn popcnt x uint to uint
+c = uint 0
+for i uint 32
+c = add c and shr x i 1
+end
+ret c
+end
+fn digsum n uint to uint
+s = uint 0
+while gt n 0 bound 20
+s = add s rem n 10
+n = div n 10
+end
+ret s
+end
+fn big_pc_small_ds x uint to uint
+if ge x 1000
+ret popcnt x
+end
+ret digsum x
+end

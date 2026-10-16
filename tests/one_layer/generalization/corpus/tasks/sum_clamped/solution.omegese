@@ -1,0 +1,18 @@
+fn clamp x uint lo uint hi uint to uint
+if lt x lo
+ret lo
+end
+if gt x hi
+ret hi
+end
+ret x
+end
+fn sum_clamped n uint lo uint hi uint to uint
+s = uint 0
+i = uint 0
+while lt i n bound 100000
+s = add s clamp i lo hi
+i = add i 1
+end
+ret s
+end

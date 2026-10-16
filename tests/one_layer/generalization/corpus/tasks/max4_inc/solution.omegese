@@ -1,0 +1,19 @@
+fn max4 v view uint 4 to uint
+m = get v 0
+for i uint 4
+if gt get v i m
+m = get v i
+end
+end
+ret m
+end
+fn max4_inc a uint b uint c uint d uint to uint
+v = new uint 4 0
+put v 0 a
+put v 1 b
+put v 2 c
+put v 3 d
+r = max4 v
+free v
+ret add r 1
+end

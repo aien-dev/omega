@@ -1,0 +1,17 @@
+fn second_max(a: u32, b: u32, c: u32, d: u32) -> u32 {
+    let v: own [u32; 4] = alloc(0);
+    v[0] = a;
+    v[1] = b;
+    v[2] = c;
+    v[3] = d;
+    let mut m: u32 = 0;
+    for i in 0 .. 4 { if v[i] > m { m = v[i]; } }
+    let mut n: u32 = 0;
+    let mut s: u32 = 0;
+    for j in 0 .. 4 {
+        if v[j] == m { n = n + 1; }
+        if v[j] < m && v[j] > s { s = v[j]; }
+    }
+    if n >= 2 { return m; }
+    return s;
+}

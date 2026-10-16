@@ -1,0 +1,3 @@
+fn weighted4 a uint b uint c uint d uint to ulong
+ret add add add ulong a mul ulong b 2 mul ulong c 3 mul ulong d 4
+end

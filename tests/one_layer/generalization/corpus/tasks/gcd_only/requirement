@@ -1,0 +1,5 @@
+# GEN-3 public corpus task (exemplar family), not a held-out task
+kind task
+entry gcd_only
+params u32 u32
+ret u32

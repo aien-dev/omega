@@ -1,0 +1,39 @@
+gen-record 1
+id raw-pc_times_dc
+kind raw
+split corpus
+family gs1-0846032659bd1c21
+entry pc_times_dc
+params u32
+ret u32
+signature fn pc_times_dc x uint to uint
+desc one-bit count of x times its decimal digit count, with popcnt and digcount helpers
+receipt 0c35b70853587312e715059607b78b28242058f0660d1065de7e10b5add39250
+validity verified
+ancestry pc_times_dc b178217a298a86afb60ca5e6de2d5c8b51d654d16215db7eb3732613f7a6a894
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/pc_times_dc/desc 6f9cdf491d5a9274f47cd6f638201eff16d19d32c4bbf8091c33e06ba9e18c8d
+source tests/one_layer/generalization/corpus/tasks/pc_times_dc/expected ab3b86104cc7dcfeefd30ce15629a9ad0c8f221e595124e4f967a6673c22ac02
+source tests/one_layer/generalization/corpus/tasks/pc_times_dc/inputs 8f56b2cf42642d9a91d5974ca00f97353ea5818b1d1ce5c2a23efa7bd0a7dd5e
+source tests/one_layer/generalization/corpus/tasks/pc_times_dc/requirement 8d324008d61992ecf0e292fc56875b6b438d20129f446839a5d2f3d7d84194dc
+source tests/one_layer/generalization/corpus/tasks/pc_times_dc/solution.omegese b178217a298a86afb60ca5e6de2d5c8b51d654d16215db7eb3732613f7a6a894
+body
+fn popcnt x uint to uint
+c = uint 0
+for i uint 32
+c = add c and shr x i 1
+end
+ret c
+end
+fn digcount n uint to uint
+c = uint 1
+while ge n 10 bound 20
+c = add c 1
+n = div n 10
+end
+ret c
+end
+fn pc_times_dc x uint to uint
+ret mul popcnt x digcount x
+end

@@ -1,0 +1,33 @@
+gen-record 1
+id raw-clamp_sum
+kind raw
+split corpus
+family gs1-4fce2bcffb708703
+entry clamp_sum
+params u32 u32
+ret u32
+signature fn clamp_sum a uint b uint to uint
+desc sum of a and b limited to 10..100 with a clamp helper
+receipt ec797c99656ff8d158c540c96a72e4b72fe34986cdb21cf9dc80f43b436d9309
+validity verified
+ancestry clamp_sum 1ac3a275e14084decd20e203fbc53bbc83f226517f9dcd7a47aacad7ca2a1bac
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/clamp_sum/desc 2ee8e1dbf6e59bc4720f95b1e27fb12a28a70a8d1cf2e78cd5c060a86d20fb96
+source tests/one_layer/generalization/corpus/tasks/clamp_sum/expected 23baf72405ac2bb058dbb14b5386cc2cfa421bb6367b62c0a343cfebb4c335c6
+source tests/one_layer/generalization/corpus/tasks/clamp_sum/inputs 38017ab7a89767094a9bb81c93c044e9046e8bb3260bd5d2d1ae0179960ee886
+source tests/one_layer/generalization/corpus/tasks/clamp_sum/requirement 43312ad8f73128a4b00ba0d8ef865e4e820c52bd6dcf5201a9e4e17e023ee2ee
+source tests/one_layer/generalization/corpus/tasks/clamp_sum/solution.omegese 1ac3a275e14084decd20e203fbc53bbc83f226517f9dcd7a47aacad7ca2a1bac
+body
+fn clamp x uint lo uint hi uint to uint
+if lt x lo
+ret lo
+end
+if gt x hi
+ret hi
+end
+ret x
+end
+fn clamp_sum a uint b uint to uint
+ret clamp add a b 10 100
+end

@@ -1,0 +1,3 @@
+fn zero_bits8 x uint to uint
+ret sub 8 popcnt x
+end

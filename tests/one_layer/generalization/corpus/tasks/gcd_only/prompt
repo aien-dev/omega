@@ -1,0 +1,1 @@
+Write a function gcd_only that takes two unsigned 32-bit numbers a and b and returns their greatest common divisor, computed by repeated remainders: while b is not 0, replace (a, b) by (b, a mod b); then return a. So gcd_only(a, 0) = a and gcd_only(0, 0) = 0.

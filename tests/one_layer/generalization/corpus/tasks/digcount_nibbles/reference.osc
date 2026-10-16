@@ -1,0 +1,9 @@
+fn digcount(n: u32) -> u32 {
+    let mut x: u32 = n;
+    let mut c: u32 = 1;
+    while x >= 10 bound 20 { c = c + 1; x = x / 10; }
+    return c;
+}
+fn digcount_nibbles(n: u32) -> u32 {
+    return digcount(n) * 4;
+}

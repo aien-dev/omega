@@ -1,0 +1,24 @@
+gen-record 1
+id raw-ceil_avg
+kind raw
+split probe
+family gs1-4e11c90734b5114d
+entry ceil_avg
+params u32 u32
+ret u32
+signature fn ceil_avg a uint b uint to uint
+desc average of a and b rounded up, overflow-free
+receipt dbca217bccce3b397185e767edcb5497c59abb2e65c897e1dd8259eb0d6c719e
+validity verified
+ancestry ceil_avg c5c7c1400f557bb0c27aeda9d5eff2cb3f6158f15ad534507e228ed7eaf23ac2
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/ceil_avg/desc 6a5a332662c085cd03ce3dafe7cb90bc3dee7f23cb4b33130a78cb6acb905a9f
+source tests/one_layer/generalization/corpus/tasks/ceil_avg/expected d5e608b606ab51bd0fc0e7804622009de5d432bc6be5a143bf989184f549e228
+source tests/one_layer/generalization/corpus/tasks/ceil_avg/inputs 44c652963e72dab96ec441c07d766597ed407e7a2b3fe24917ef752433f7d918
+source tests/one_layer/generalization/corpus/tasks/ceil_avg/requirement 477b93bda403ed0e5fc2424b9a258c0cb35a2f0a7be0aa81a42c307fd9605c85
+source tests/one_layer/generalization/corpus/tasks/ceil_avg/solution.omegese c5c7c1400f557bb0c27aeda9d5eff2cb3f6158f15ad534507e228ed7eaf23ac2
+body
+fn ceil_avg a uint b uint to uint
+ret add add div a 2 div b 2 div add add rem a 2 rem b 2 1 2
+end

@@ -1,0 +1,1 @@
+Write a function avg_inc that takes two unsigned 32-bit numbers a and b and returns their average rounded down, plus one. Write and use a helper function avg2(a, b) that returns the average of a and b rounded down, computed without any intermediate overflow as a/2 + b/2 + (a mod 2 + b mod 2)/2. Unsigned 32-bit arithmetic wraps around modulo 2^32 (it never traps).

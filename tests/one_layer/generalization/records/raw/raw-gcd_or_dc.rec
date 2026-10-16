@@ -1,0 +1,43 @@
+gen-record 1
+id raw-gcd_or_dc
+kind raw
+split corpus
+family gs1-8f56ab3ea4340fe8
+entry gcd_or_dc
+params u32 u32
+ret u32
+signature fn gcd_or_dc a uint b uint to uint
+desc gcd of a and b if a > b, else the digit count of b, with gcd and digcount helpers
+receipt 6d2b43d6c1c68ebc9c906eae723dbdde47a979608e6b0d116f91626fed9f2f2b
+validity verified
+ancestry gcd_or_dc c05bde2fbb018eea3e2888245c308976be45e8d91b7b7fce26128673d64c85e9
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/gcd_or_dc/desc eae91b3043b7b85fcdc85525d705e53ab874ac059612ab23ea32df7a50aa331d
+source tests/one_layer/generalization/corpus/tasks/gcd_or_dc/expected 2831e6925c42e2a116f366281982b1abaf0b94421e2f9b8e71d1ebec7c6373fa
+source tests/one_layer/generalization/corpus/tasks/gcd_or_dc/inputs ecb0c952593666d2bf3ee50b2fcb5395a8c907a4ae8016773c13eb4935d26b6b
+source tests/one_layer/generalization/corpus/tasks/gcd_or_dc/requirement 2984ddba05c1d3bc7b1b03716203e9a169cd8b5a583472e4ac71f5f54c1e44ab
+source tests/one_layer/generalization/corpus/tasks/gcd_or_dc/solution.omegese c05bde2fbb018eea3e2888245c308976be45e8d91b7b7fce26128673d64c85e9
+body
+fn gcd a uint b uint to uint
+while ne b 0 bound 100
+t = rem a b
+a = b
+b = t
+end
+ret a
+end
+fn digcount n uint to uint
+c = uint 1
+while ge n 10 bound 20
+c = add c 1
+n = div n 10
+end
+ret c
+end
+fn gcd_or_dc a uint b uint to uint
+if gt a b
+ret gcd a b
+end
+ret digcount b
+end

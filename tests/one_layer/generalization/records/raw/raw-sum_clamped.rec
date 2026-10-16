@@ -1,0 +1,39 @@
+gen-record 1
+id raw-sum_clamped
+kind raw
+split corpus
+family gs1-3d0ef38f5f721c9d
+entry sum_clamped
+params u32 u32 u32
+ret u32
+signature fn sum_clamped n uint lo uint hi uint to uint
+desc sum over i below n of i limited to lo..hi, with a clamp helper
+receipt 9af17b671e83d363ccfaa4f8a9763db486bd613be468e586a4ac1b4c2c4f36f3
+validity verified
+ancestry sum_clamped ce7b08d98042d37504c2da8f472394284444ea48fa1136af6423418a403c4601
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/sum_clamped/desc 3e187514ad19f098e1edd60bb97c07b0482324b09956d48aac1966b6ee030045
+source tests/one_layer/generalization/corpus/tasks/sum_clamped/expected 65ca4d34753cab97ffcdae233244c31d9a27ae0c0573444e7b421f9f1080bc9f
+source tests/one_layer/generalization/corpus/tasks/sum_clamped/inputs 0d5aac8d2db6a1f4150e985f9b7701e09b83defcc5f9a0d68fef79b59674d79c
+source tests/one_layer/generalization/corpus/tasks/sum_clamped/requirement 1825ff1060a70561f2ca2ba1986aa3d4a09fe633df9f650329ebfac858322cec
+source tests/one_layer/generalization/corpus/tasks/sum_clamped/solution.omegese ce7b08d98042d37504c2da8f472394284444ea48fa1136af6423418a403c4601
+body
+fn clamp x uint lo uint hi uint to uint
+if lt x lo
+ret lo
+end
+if gt x hi
+ret hi
+end
+ret x
+end
+fn sum_clamped n uint lo uint hi uint to uint
+s = uint 0
+i = uint 0
+while lt i n bound 100000
+s = add s clamp i lo hi
+i = add i 1
+end
+ret s
+end

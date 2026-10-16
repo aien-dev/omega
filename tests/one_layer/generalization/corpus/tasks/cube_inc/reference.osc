@@ -1,0 +1,6 @@
+fn cube(x: u32) -> u32 {
+    return x * x * x;
+}
+fn cube_inc(x: u32) -> u32 {
+    return cube(x) + 1;
+}

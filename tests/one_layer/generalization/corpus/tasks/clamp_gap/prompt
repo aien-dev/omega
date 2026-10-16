@@ -1,0 +1,1 @@
+Write a function clamp_gap that takes four unsigned 32-bit numbers a, b, lo, hi and returns the distance between a and b (the larger minus the smaller) limited to the range lo..hi. Inputs always have lo <= hi. Write and use a helper function absdiff(a, b) for the distance and a helper function clamp(x, lo, hi) that limits x to lo..hi.

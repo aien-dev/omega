@@ -1,0 +1,14 @@
+gen-receipt 1
+record abs-04ce4511e6da3b97
+tool tools/gen/abstract/extract 09c1b424bf715321a35f8730405f860460f8e62dd31abb5607e1e7956a312968
+tool tools/gen/abstract/genabs.sh a90f07483fe62ae5e7ec9ae55bdb904a106bb5402f96906e4d6cb70b080d18d7
+tool tools/gen/abstract/gabs.c 16023e76cb19000eebb4c341692a831ad3d8d12093a4ecf2ed3e5c189532bf38
+helper_ir e8359d1aa2bc966a74051162437ce872d19fd819912f9b152e06bf5ba12f8843
+checker2 ACCEPT
+pre true
+post and and and and ge res get v 0 ge res get v 1 ge res get v 2 ge res get v 3 or or or eq res get v 0 eq res get v 1 eq res get v 2 eq res get v 3
+example 2 9 9 1 -> 9
+property inputs=be07ed5f92cb10b47b71cd6eda9bd87f12024065f3afe01c0852700fb342921b expected=23c04e4d3c8d5abea295504bcdab63f60f7d857852a0fe95e049676f6dfc65e4 ACCEPT n=256
+example inputs=4dd82f3a6592f818338dfd44a0515022491d811cfc232e4768a0be1c34e00f4a expected=2e6d31a5983a91251bfae5aefa1c0a19d8ba3cf601d0e8a706b4cfa9661a6b8a ACCEPT n=1
+occurs max4_half max4
+occurs max4_inc max4

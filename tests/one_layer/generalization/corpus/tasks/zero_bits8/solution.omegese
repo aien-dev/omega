@@ -1,0 +1,7 @@
+fn zero_bits8 x uint to uint
+c = uint 0
+for i uint 8
+c = add c sub 1 and shr x i 1
+end
+ret c
+end

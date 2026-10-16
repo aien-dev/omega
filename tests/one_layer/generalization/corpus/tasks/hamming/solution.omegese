@@ -1,0 +1,10 @@
+fn popcnt x uint to uint
+c = uint 0
+for i uint 32
+c = add c and shr x i 1
+end
+ret c
+end
+fn hamming x uint y uint to uint
+ret popcnt xor x y
+end

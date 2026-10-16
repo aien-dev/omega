@@ -1,0 +1,31 @@
+gen-record 1
+id raw-hamming
+kind raw
+split probe
+family gs1-0f1c0e4d3df8946d
+entry hamming
+params u32 u32
+ret u32
+signature fn hamming x uint y uint to uint
+desc number of differing bits of x and y, with a popcnt helper
+receipt 4708e7f059ba2aae89b926238eaeab368b14fa3b6de63c4300443c390bd84973
+validity verified
+ancestry hamming ce769d385d785a4bd1f853fb5a552e23f3a42959e778fc6d46d03ad2e65c9af8
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/hamming/desc 58a7d87fd99d086854d0c42186bd9bd695fc713a93a1eb38dc93668a4a4bdec1
+source tests/one_layer/generalization/corpus/tasks/hamming/expected 209fa5980bd869963a3396321f31b8b363b97a91b51fb73462934c61fabf8629
+source tests/one_layer/generalization/corpus/tasks/hamming/inputs 780a8034605abc7c2a56496622ddad126da2828c5ee686345a0aef2050d6db10
+source tests/one_layer/generalization/corpus/tasks/hamming/requirement dc468d7c1d6b8469e3db508573ff97e5e8978dcd96e0c0fa45e626d1a04db0e5
+source tests/one_layer/generalization/corpus/tasks/hamming/solution.omegese ce769d385d785a4bd1f853fb5a552e23f3a42959e778fc6d46d03ad2e65c9af8
+body
+fn popcnt x uint to uint
+c = uint 0
+for i uint 32
+c = add c and shr x i 1
+end
+ret c
+end
+fn hamming x uint y uint to uint
+ret popcnt xor x y
+end

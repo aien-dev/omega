@@ -1,0 +1,1 @@
+Write a function ds2_double that takes an unsigned 32-bit number n and returns twice the digit sum of the digit sum of n. Write and use a helper function digsum(n) that returns the sum of the decimal digits of n, and a helper function ds2(n) that returns digsum(digsum(n)) by calling digsum.

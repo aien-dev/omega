@@ -1,0 +1,8 @@
+fn popcnt(x: u32) -> u32 {
+    let mut c: u32 = 0;
+    for i in 0 .. 32 { c = c + ((x >> i) & 1); }
+    return c;
+}
+fn popcnt_odd(x: u32) -> bool {
+    return popcnt(x) % 2 == 1;
+}

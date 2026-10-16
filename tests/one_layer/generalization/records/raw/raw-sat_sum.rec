@@ -1,0 +1,30 @@
+gen-record 1
+id raw-sat_sum
+kind raw
+split corpus
+family gs1-4fce2bcffb708703
+entry sat_sum
+params u32 u32
+ret u8
+signature fn sat_sum a uint b uint to uchar
+desc sum of a and b saturated to 8 bits with a sat8 helper
+receipt 0ece226070e2286692a5945648a516aa1cb5920dc2d20e3fd48ec9a9bebc4817
+validity verified
+ancestry sat_sum c39e9534cda5f8c1e3a6cecb082de8ea17bc3997da9d3e4cddf2e674e5b0f1c2
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/sat_sum/desc 80b7fe727fee1b6a5a1d2f31fccade552815b54b2c517ae9f89f2c40889dff22
+source tests/one_layer/generalization/corpus/tasks/sat_sum/expected 2f26972106236359349c2f14bff0ec65c9f6e7dd0666a04a03a80a5aab0c4d7c
+source tests/one_layer/generalization/corpus/tasks/sat_sum/inputs af257cc3388113d61fef88fb9bd55044348f88bb84b4b3416757d29d422f68cb
+source tests/one_layer/generalization/corpus/tasks/sat_sum/requirement 2dc8eae98cf82cffff10c2c1c711bcc15844b63c1c36e173592d311561b651b5
+source tests/one_layer/generalization/corpus/tasks/sat_sum/solution.omegese c39e9534cda5f8c1e3a6cecb082de8ea17bc3997da9d3e4cddf2e674e5b0f1c2
+body
+fn sat8 x uint to uchar
+if gt x 255
+ret 255
+end
+ret uchar x
+end
+fn sat_sum a uint b uint to uchar
+ret sat8 add a b
+end

@@ -1,0 +1,32 @@
+gen-record 1
+id raw-digsum_scaled
+kind raw
+split corpus
+family gs1-0f1c0e4d3df8946d
+entry digsum_scaled
+params u32 u32
+ret u32
+signature fn digsum_scaled n uint k uint to uint
+desc decimal digit sum of n times k, with a digsum helper
+receipt 32f6c82d5371235978db834affdee63a08ab03c3d7daa472ee041b45bfda889a
+validity verified
+ancestry digsum_scaled 503e83d26b00d6dded3bd847a9bcab94b56cedb0fae5ee5bb861e9101740fc79
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/digsum_scaled/desc 2fcbd279e216ee0f81b88dc836a6066e3766fe8acc62830717b0e15a0c298f57
+source tests/one_layer/generalization/corpus/tasks/digsum_scaled/expected 32bc266368a9526773a959d8d8e216b436b263bc7114612a12150e5b013e42c9
+source tests/one_layer/generalization/corpus/tasks/digsum_scaled/inputs 06fdabb3e2da0c7f2e8e1bf374fcdfc01ae60c55810d8435d68f7e95f9cae02d
+source tests/one_layer/generalization/corpus/tasks/digsum_scaled/requirement cb42b6a48638f3850a496adadf114bf56fbec46e4d2dbae903cdda34e41c4c0d
+source tests/one_layer/generalization/corpus/tasks/digsum_scaled/solution.omegese 503e83d26b00d6dded3bd847a9bcab94b56cedb0fae5ee5bb861e9101740fc79
+body
+fn digsum n uint to uint
+s = uint 0
+while gt n 0 bound 20
+s = add s rem n 10
+n = div n 10
+end
+ret s
+end
+fn digsum_scaled n uint k uint to uint
+ret mul digsum n k
+end

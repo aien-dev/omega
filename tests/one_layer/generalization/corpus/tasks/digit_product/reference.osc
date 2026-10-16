@@ -1,0 +1,7 @@
+fn digit_product(n: u32) -> u32 {
+    if n == 0 { return 0; }
+    let mut x: u32 = n;
+    let mut p: u32 = 1;
+    while x > 0 bound 20 { p = p * (x % 10); x = x / 10; }
+    return p;
+}

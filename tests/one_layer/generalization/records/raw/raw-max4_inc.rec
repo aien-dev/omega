@@ -1,0 +1,40 @@
+gen-record 1
+id raw-max4_inc
+kind raw
+split corpus
+family gs1-e1685db81ca50ecd
+entry max4_inc
+params u32 u32 u32 u32
+ret u32
+signature fn max4_inc a uint b uint c uint d uint to uint
+desc largest of four values plus one, with a max4 helper over a 4-value sequence
+receipt a5f8f7851484b59d1f50f9b80d693ce2f8d6b0253e7b628866395f7dc54a35bc
+validity verified
+ancestry max4_inc 47c57c40d54a1daaecce038b059219f0276056e3063f820948342048b51f0da3
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/max4_inc/desc 1055dcdeb510de2078125b8946f3c3b6fe812fb78a480ee604dd5632b24b1385
+source tests/one_layer/generalization/corpus/tasks/max4_inc/expected 8072005b20578cc9e528ceb0b7943a56525f9d2e2e3c3a6db1c755b614cc2858
+source tests/one_layer/generalization/corpus/tasks/max4_inc/inputs c23e42597afb3326cebe01e8c07876aa006d976b3a74495a9c44011622600e31
+source tests/one_layer/generalization/corpus/tasks/max4_inc/requirement c2ed74b87cd3238fda0e27a4eaf494027ec8a52ea788e0141d5d463def5b37a8
+source tests/one_layer/generalization/corpus/tasks/max4_inc/solution.omegese 47c57c40d54a1daaecce038b059219f0276056e3063f820948342048b51f0da3
+body
+fn max4 v view uint 4 to uint
+m = get v 0
+for i uint 4
+if gt get v i m
+m = get v i
+end
+end
+ret m
+end
+fn max4_inc a uint b uint c uint d uint to uint
+v = new uint 4 0
+put v 0 a
+put v 1 b
+put v 2 c
+put v 3 d
+r = max4 v
+free v
+ret add r 1
+end

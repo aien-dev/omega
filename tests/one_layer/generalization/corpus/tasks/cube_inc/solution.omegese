@@ -1,0 +1,6 @@
+fn cube x uint to uint
+ret mul mul x x x
+end
+fn cube_inc x uint to uint
+ret add cube x 1
+end

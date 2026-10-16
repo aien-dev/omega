@@ -1,0 +1,40 @@
+gen-record 1
+id raw-ds_plus_dc
+kind raw
+split corpus
+family gs1-0846032659bd1c21
+entry ds_plus_dc
+params u32
+ret u32
+signature fn ds_plus_dc n uint to uint
+desc digit sum of n plus its digit count, with digsum and digcount helpers
+receipt d814ae865ceb697ff7c22cf3a19f90c840586b1546aca4499c3de4d909a3c4cc
+validity verified
+ancestry ds_plus_dc 173c1926c91bc1f34a4088f556a9fe8a2e82dcf0f3ea08eb64b2d5213e0bca0b
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/ds_plus_dc/desc 8fd7be3dbe9f399405e7bff1f7f932c35f969849c307cdb3f6770b0324304d40
+source tests/one_layer/generalization/corpus/tasks/ds_plus_dc/expected ff62d7f0e53643c1e76bcf888382f18ca2d440a081f04547c1d7ccefe23eeb9c
+source tests/one_layer/generalization/corpus/tasks/ds_plus_dc/inputs b48c95ba549a12c6906024bf8501ccde5f855914df8351d3bdaf4cd7460c0d89
+source tests/one_layer/generalization/corpus/tasks/ds_plus_dc/requirement 36ce647c950432917b6fc6f03d13f84dd0612890495f088811f98df06472eed9
+source tests/one_layer/generalization/corpus/tasks/ds_plus_dc/solution.omegese 173c1926c91bc1f34a4088f556a9fe8a2e82dcf0f3ea08eb64b2d5213e0bca0b
+body
+fn digsum n uint to uint
+s = uint 0
+while gt n 0 bound 20
+s = add s rem n 10
+n = div n 10
+end
+ret s
+end
+fn digcount n uint to uint
+c = uint 1
+while ge n 10 bound 20
+c = add c 1
+n = div n 10
+end
+ret c
+end
+fn ds_plus_dc n uint to uint
+ret add digsum n digcount n
+end

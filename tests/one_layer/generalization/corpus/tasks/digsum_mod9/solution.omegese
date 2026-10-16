@@ -1,0 +1,11 @@
+fn digsum n uint to uint
+s = uint 0
+while gt n 0 bound 20
+s = add s rem n 10
+n = div n 10
+end
+ret s
+end
+fn digsum_mod9 n uint to uint
+ret rem digsum n 9
+end

@@ -1,0 +1,1 @@
+gcd of a and b if a > b, else the digit count of b, with gcd and digcount helpers

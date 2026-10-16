@@ -1,0 +1,36 @@
+gen-record 1
+id raw-sum_sat
+kind raw
+split corpus
+family gs1-3d0ef38f5f721c9d
+entry sum_sat
+params u32 u32
+ret u32
+signature fn sum_sat n uint k uint to uint
+desc sum over i below n of i times k saturated to 255, with a sat8 helper
+receipt a665f7639a895c1c1a8129c4e2f7fa40863f91806d9ae28854e4e5e336b53003
+validity verified
+ancestry sum_sat 46b5e13917c08c5a4201d3bc5c5616ca98741529405de42f7f31dce1aa368df3
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/sum_sat/desc de4fb102d4df3d9ffea04f6eec558959a8345bb56a7405a6d9737a55d1c78fe7
+source tests/one_layer/generalization/corpus/tasks/sum_sat/expected b3970ca301c0b38026f242b5964dd7e82e43ec2ca6de3796f4da228aae6486a1
+source tests/one_layer/generalization/corpus/tasks/sum_sat/inputs 46e236add9385d5f087b9db8fa57c2888d407cc018587af84abad120bdfd85df
+source tests/one_layer/generalization/corpus/tasks/sum_sat/requirement 938e694f4660623e9d35f50e124ada3b54fbd8fc057f036c33c19cbd34daa75e
+source tests/one_layer/generalization/corpus/tasks/sum_sat/solution.omegese 46b5e13917c08c5a4201d3bc5c5616ca98741529405de42f7f31dce1aa368df3
+body
+fn sat8 x uint to uchar
+if gt x 255
+ret 255
+end
+ret uchar x
+end
+fn sum_sat n uint k uint to uint
+s = uint 0
+i = uint 0
+while lt i n bound 100000
+s = add s uint sat8 mul i k
+i = add i 1
+end
+ret s
+end

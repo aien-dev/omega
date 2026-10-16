@@ -1,0 +1,3 @@
+fn ceil_avg a uint b uint to uint
+ret avg2 a b
+end

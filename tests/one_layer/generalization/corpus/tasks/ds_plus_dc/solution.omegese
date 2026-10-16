@@ -1,0 +1,19 @@
+fn digsum n uint to uint
+s = uint 0
+while gt n 0 bound 20
+s = add s rem n 10
+n = div n 10
+end
+ret s
+end
+fn digcount n uint to uint
+c = uint 1
+while ge n 10 bound 20
+c = add c 1
+n = div n 10
+end
+ret c
+end
+fn ds_plus_dc n uint to uint
+ret add digsum n digcount n
+end

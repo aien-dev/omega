@@ -1,0 +1,1 @@
+Write a function digsum_mod9 that takes an unsigned 32-bit number n and returns the sum of its decimal digits modulo 9. Write and use a helper function digsum(n) that returns the sum of the decimal digits of n (0 for n = 0).

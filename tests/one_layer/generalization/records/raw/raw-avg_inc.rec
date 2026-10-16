@@ -1,0 +1,27 @@
+gen-record 1
+id raw-avg_inc
+kind raw
+split corpus
+family gs1-914c49ff2fb4acbd
+entry avg_inc
+params u32 u32
+ret u32
+signature fn avg_inc a uint b uint to uint
+desc average of a and b rounded down plus one, with an overflow-free avg2 helper
+receipt e1f7dde7a6bca6273ccd8d528695ad2588ff850f6e76d4e519e310cadbc87964
+validity verified
+ancestry avg_inc e34d765d09b44d4ec5fd213a30b7f34bed75b0afd7989a8d0d799b2dfedf9257
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/avg_inc/desc e458b1fb0cc3e0c16c5b5ac6277d1c72985da11c51a39d9d68cbce4807e3fc61
+source tests/one_layer/generalization/corpus/tasks/avg_inc/expected 93367918f586eb71bdba2d7f5304894662acee47ee34456775bfc91d80470534
+source tests/one_layer/generalization/corpus/tasks/avg_inc/inputs 00a3c184bc10f8e932e6257c0e18949f3ef88d0d265aabde624778e601099bad
+source tests/one_layer/generalization/corpus/tasks/avg_inc/requirement cbcb49e3512c41d3cda909c53359b7bb73d6647dc19645d895d49eae3c34b4f2
+source tests/one_layer/generalization/corpus/tasks/avg_inc/solution.omegese e34d765d09b44d4ec5fd213a30b7f34bed75b0afd7989a8d0d799b2dfedf9257
+body
+fn avg2 a uint b uint to uint
+ret add add div a 2 div b 2 div add rem a 2 rem b 2 2
+end
+fn avg_inc a uint b uint to uint
+ret add avg2 a b 1
+end

@@ -1,0 +1,8 @@
+fn hex_digits n uint to uint
+c = uint 1
+while ge n 16 bound 10
+c = add c 1
+n = div n 16
+end
+ret c
+end

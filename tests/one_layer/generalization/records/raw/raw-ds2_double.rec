@@ -1,0 +1,35 @@
+gen-record 1
+id raw-ds2_double
+kind raw
+split corpus
+family gs1-3efff586df7d2792
+entry ds2_double
+params u32
+ret u32
+signature fn ds2_double n uint to uint
+desc twice the digit sum of the digit sum of n, with digsum and ds2 helpers
+receipt a51e3d713fe281e3063db6d3d69e9d0f2769d48fc28887c02e796f7498e30f13
+validity verified
+ancestry ds2_double 5714c7ca5d2edbeefbd6b01301e2783812d1fe1b9be8155bddb2835b7f52b048
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/ds2_double/desc b616a38f74ef650c2244e1ab7d8c744031460683941ed7423924ab6c04bb2753
+source tests/one_layer/generalization/corpus/tasks/ds2_double/expected 1711944f49141889aaf483325d2a2463e708e9c92e2851feb9c527e6e2e67397
+source tests/one_layer/generalization/corpus/tasks/ds2_double/inputs 51ffc7b8a4203c2339a4a8336468e7ad531323fa89b23bbc53fd9b0615ab538d
+source tests/one_layer/generalization/corpus/tasks/ds2_double/requirement 2b6768dfbd9a4b989caa65416e558ceb081704b56e938e1f8c140a474ccefc5b
+source tests/one_layer/generalization/corpus/tasks/ds2_double/solution.omegese 5714c7ca5d2edbeefbd6b01301e2783812d1fe1b9be8155bddb2835b7f52b048
+body
+fn digsum n uint to uint
+s = uint 0
+while gt n 0 bound 20
+s = add s rem n 10
+n = div n 10
+end
+ret s
+end
+fn ds2 n uint to uint
+ret digsum digsum n
+end
+fn ds2_double n uint to uint
+ret mul ds2 n 2
+end

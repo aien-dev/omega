@@ -1,0 +1,1 @@
+Write a function cube_inc that takes an unsigned 32-bit number x and returns x * x * x + 1. Write and use a helper function cube(x) that returns x * x * x. Unsigned 32-bit arithmetic wraps around modulo 2^32 (it never traps).

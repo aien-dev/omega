@@ -1,0 +1,3 @@
+fn wrap_range x uint lo uint hi uint to uint
+ret add lo rem x sub hi lo
+end

@@ -1,0 +1,40 @@
+gen-record 1
+id raw-max4_half
+kind raw
+split corpus
+family gs1-e1685db81ca50ecd
+entry max4_half
+params u32 u32 u32 u32
+ret u32
+signature fn max4_half a uint b uint c uint d uint to uint
+desc half of the largest of four values, with a max4 helper over a 4-value sequence
+receipt b787640954115033e5db8ae1f2019766331b1ac272af63ad072575292a46d80b
+validity verified
+ancestry max4_half e650e484d0b4b4157749e91103233a49e1940e720a7ec84753bf2236372ba1b1
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/max4_half/desc d383742f54fc533dbc76a956193f9f03b9711802e5267eaeb2dbd0318fb11d8d
+source tests/one_layer/generalization/corpus/tasks/max4_half/expected a9608d990b8dda087b1dbfa621ec0e9bcb4568381f2c7e6dfae9c469014bd2a0
+source tests/one_layer/generalization/corpus/tasks/max4_half/inputs a47eaf3117e546375bca66544528926ce45933baf259a4aef1503ec6bfb9c374
+source tests/one_layer/generalization/corpus/tasks/max4_half/requirement 4d94228c876b6e84f98a76ffb42ae1488a0767eb2673d98e0a9d1b21582468e8
+source tests/one_layer/generalization/corpus/tasks/max4_half/solution.omegese e650e484d0b4b4157749e91103233a49e1940e720a7ec84753bf2236372ba1b1
+body
+fn max4 v view uint 4 to uint
+m = get v 0
+for i uint 4
+if gt get v i m
+m = get v i
+end
+end
+ret m
+end
+fn max4_half a uint b uint c uint d uint to uint
+v = new uint 4 0
+put v 0 a
+put v 1 b
+put v 2 c
+put v 3 d
+r = max4 v
+free v
+ret div r 2
+end

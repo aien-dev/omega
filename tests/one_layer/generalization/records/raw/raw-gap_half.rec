@@ -1,0 +1,30 @@
+gen-record 1
+id raw-gap_half
+kind raw
+split corpus
+family gs1-4fce2bcffb708703
+entry gap_half
+params u32 u32
+ret u32
+signature fn gap_half x uint y uint to uint
+desc half the distance between x and y, rounded down, with a gap helper
+receipt 54f44dd374e9a95e70d73aefa95ad823fbca47f564d9cc62cab1d0ffab83f2d9
+validity verified
+ancestry gap_half 37e5fd88e1438798ff980961a45184872e9cf79fdfe5099d7595eb77a9104b85
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/gap_half/desc 4e7d78b87333d1fcc8e97b862ad09b488c2290c72192222f5b0d83d1fc7e2480
+source tests/one_layer/generalization/corpus/tasks/gap_half/expected c90afa9cbf79e9a38e1281ad86e0e46e54c8097c3a175f01c21175335128fad3
+source tests/one_layer/generalization/corpus/tasks/gap_half/inputs d65093cff7204737af2ab9c53f475db3c40df0dc7c60a4f5d7b2b33fc24cf0df
+source tests/one_layer/generalization/corpus/tasks/gap_half/requirement 9d6c3072b90667ab1a5c886e3ecd3f90bc3ee8c43d4df1e53f0d9e30b56f0406
+source tests/one_layer/generalization/corpus/tasks/gap_half/solution.omegese 37e5fd88e1438798ff980961a45184872e9cf79fdfe5099d7595eb77a9104b85
+body
+fn gap p uint q uint to uint
+if gt p q
+ret sub p q
+end
+ret sub q p
+end
+fn gap_half x uint y uint to uint
+ret div gap x y 2
+end

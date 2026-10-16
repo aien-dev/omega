@@ -1,0 +1,28 @@
+gen-record 1
+id raw-zero_bits8
+kind raw
+split probe
+family gs1-ba9ca1a3efe1e1c9
+entry zero_bits8
+params u32
+ret u32
+signature fn zero_bits8 x uint to uint
+desc number of zero bits among the lowest 8 bits of x
+receipt 61610379a0d8ed04253cf713cee0aecdc923002b5bc165f2613d9459772e45c5
+validity verified
+ancestry zero_bits8 b1941f2ef8a30640099b47fafecc5c4f01cac7a68866841484745b8db1eed8d8
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/zero_bits8/desc fbb40271dabb9d5e1ed524e72c89c5e3ec31bbe6c6c4720743ef2c16d61a7637
+source tests/one_layer/generalization/corpus/tasks/zero_bits8/expected 86b90a159621fc5830a97c29b2fbc8307127df1d467bee58ca23669e237b273c
+source tests/one_layer/generalization/corpus/tasks/zero_bits8/inputs 6e89344463b3ee26b699106820a6f2a93ecf070e8f90a1b74abbd2edf603a96c
+source tests/one_layer/generalization/corpus/tasks/zero_bits8/requirement 1369d33bcc23996dbad2039778f448c99e07b349ba5c011a4b06b3d44e0758d0
+source tests/one_layer/generalization/corpus/tasks/zero_bits8/solution.omegese b1941f2ef8a30640099b47fafecc5c4f01cac7a68866841484745b8db1eed8d8
+body
+fn zero_bits8 x uint to uint
+c = uint 0
+for i uint 8
+c = add c sub 1 and shr x i 1
+end
+ret c
+end

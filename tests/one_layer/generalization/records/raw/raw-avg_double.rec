@@ -1,0 +1,27 @@
+gen-record 1
+id raw-avg_double
+kind raw
+split corpus
+family gs1-914c49ff2fb4acbd
+entry avg_double
+params u32 u32
+ret u32
+signature fn avg_double a uint b uint to uint
+desc twice the average of a and b rounded down, with an overflow-free avg2 helper
+receipt 3f45ed299d08b9facf2f587e37e538a8bfcaae8525066323bf8d6c5772c9af4c
+validity verified
+ancestry avg_double ac7c4d41503e44ba6b346e72429e994ac0ccf763a2718270ae69530ed1791a72
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/avg_double/desc ad94b0f89174338dc42cbedac2b6f7eec7b34f5c772d35e9dad1957acbf13db7
+source tests/one_layer/generalization/corpus/tasks/avg_double/expected 5860dbe40357934124abdb4f1725bb69d99dba67cbb98ec866d38df1fade6af5
+source tests/one_layer/generalization/corpus/tasks/avg_double/inputs c485dca299df9e40e68cd2c9e7d14aaca195455d7d231569cfd99aeebc34384f
+source tests/one_layer/generalization/corpus/tasks/avg_double/requirement af6a58c55e7c64a106c8d57474db53367bde0ad1eba58411ef97534e6753fb39
+source tests/one_layer/generalization/corpus/tasks/avg_double/solution.omegese ac7c4d41503e44ba6b346e72429e994ac0ccf763a2718270ae69530ed1791a72
+body
+fn avg2 a uint b uint to uint
+ret add add div a 2 div b 2 div add rem a 2 rem b 2 2
+end
+fn avg_double a uint b uint to uint
+ret mul avg2 a b 2
+end

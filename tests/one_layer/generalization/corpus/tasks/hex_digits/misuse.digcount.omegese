@@ -1,0 +1,3 @@
+fn hex_digits n uint to uint
+ret digcount n
+end

@@ -1,0 +1,9 @@
+fn gap p uint q uint to uint
+if gt p q
+ret sub p q
+end
+ret sub q p
+end
+fn gap_half x uint y uint to uint
+ret div gap x y 2
+end

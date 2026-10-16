@@ -1,0 +1,1 @@
+Write a function big_pc_small_ds that takes an unsigned 32-bit number x and returns the number of its one bits when x is at least 1000, and the sum of its decimal digits otherwise. Write and use a helper function popcnt(x) that returns how many of the 32 bits of x are 1. Write and use a helper function digsum(n) that returns the sum of the decimal digits of n (0 for n = 0).

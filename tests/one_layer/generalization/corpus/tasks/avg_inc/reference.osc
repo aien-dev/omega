@@ -1,0 +1,6 @@
+fn avg2(a: u32, b: u32) -> u32 {
+    return a / 2 + b / 2 + (a % 2 + b % 2) / 2;
+}
+fn avg_inc(a: u32, b: u32) -> u32 {
+    return avg2(a, b) + 1;
+}

@@ -1,0 +1,40 @@
+gen-record 1
+id raw-even_digsums
+kind raw
+split probe
+family gs1-82d4148189ae07ed
+entry even_digsums
+params u32
+ret u32
+signature fn even_digsums n uint to uint
+desc count of i below n whose decimal digit sum is even, with a digsum helper
+receipt f93e5496dd9b04e836179c08abc104426c5671aa260e1c25ba6b1021b6fc0eb3
+validity verified
+ancestry even_digsums 4d68931c71ce40d1d250c8c7877bd9f5f007df2a34633ee7bc9301e557e571ec
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/even_digsums/desc c2db7190d61d4ebfa36948563f724cdab244528cbcb3d4ea7d2012bd0d5adbc9
+source tests/one_layer/generalization/corpus/tasks/even_digsums/expected 2b769e453d56c2c1a38e88dbdcac6f99e84a287882cbf0444f57f19104485d19
+source tests/one_layer/generalization/corpus/tasks/even_digsums/inputs 569ea79b1d94478bb073e0d4009fe7dc89b62a44fdb7e7a92cd0e62c75fa84ab
+source tests/one_layer/generalization/corpus/tasks/even_digsums/requirement 5b1098aba35034893853e6f0e4685bd5fdb4da7d2e46435a351275ffa93ea860
+source tests/one_layer/generalization/corpus/tasks/even_digsums/solution.omegese 4d68931c71ce40d1d250c8c7877bd9f5f007df2a34633ee7bc9301e557e571ec
+body
+fn digsum n uint to uint
+s = uint 0
+while gt n 0 bound 20
+s = add s rem n 10
+n = div n 10
+end
+ret s
+end
+fn even_digsums n uint to uint
+c = uint 0
+i = uint 0
+while lt i n bound 100000
+if eq rem digsum i 2 0
+c = add c 1
+end
+i = add i 1
+end
+ret c
+end

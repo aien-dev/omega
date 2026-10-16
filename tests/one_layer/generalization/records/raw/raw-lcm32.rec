@@ -1,0 +1,35 @@
+gen-record 1
+id raw-lcm32
+kind raw
+split corpus
+family gs1-bfbc216c16d692e1
+entry lcm32
+params u32 u32
+ret u32
+signature fn lcm32 a uint b uint to uint
+desc least common multiple of a and b (0 if either is 0), with a gcd helper
+receipt d1fcc4b9e8cbf182f8d6126dc485713949632687a283b8a039a390bb13b19d7b
+validity verified
+ancestry lcm32 4c4e8d7e3bf018c2d6f9428659a76ed8dca67c9742feac385102e5cfe9e179c9
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/lcm32/desc d066976f7571b4f457b68dd63dca09151dac08cfa8ac8d67c9764838cae985d9
+source tests/one_layer/generalization/corpus/tasks/lcm32/expected 8ce5048c3416c5cceb23e509c93ae781a532a452fc19254a17e32e9a086f3828
+source tests/one_layer/generalization/corpus/tasks/lcm32/inputs f1ce751d44bfcb7f4570dbaea8d64be01c097049ced423b6b7a6a7f86250541e
+source tests/one_layer/generalization/corpus/tasks/lcm32/requirement 476e5a978fbeeb1091eea7111639f018038c11c22f12bcca16f829b5e0c1b147
+source tests/one_layer/generalization/corpus/tasks/lcm32/solution.omegese 4c4e8d7e3bf018c2d6f9428659a76ed8dca67c9742feac385102e5cfe9e179c9
+body
+fn gcd a uint b uint to uint
+while ne b 0 bound 100
+t = rem a b
+a = b
+b = t
+end
+ret a
+end
+fn lcm32 a uint b uint to uint
+if or eq a 0 eq b 0
+ret 0
+end
+ret mul div a gcd a b b
+end

@@ -1,0 +1,1 @@
+Write a function digcount_nibbles that takes an unsigned 32-bit number n and returns 4 times the number of decimal digits of n. Write and use a helper function digcount(n) that returns how many decimal digits n has (1 for n = 0).

@@ -1,0 +1,1 @@
+gcd of a and b times the one-bit count of b, with gcd and popcnt helpers

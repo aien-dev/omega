@@ -1,0 +1,1 @@
+Write a function digit_product that takes an unsigned 32-bit number n and returns the product of its decimal digits; for n = 0 the result is 0. The product always fits in 32 bits.

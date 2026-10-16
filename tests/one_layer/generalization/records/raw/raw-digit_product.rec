@@ -1,0 +1,32 @@
+gen-record 1
+id raw-digit_product
+kind raw
+split probe
+family gs1-f09a4caeb1d003e9
+entry digit_product
+params u32
+ret u32
+signature fn digit_product n uint to uint
+desc product of the decimal digits of n (0 for n = 0)
+receipt 7a5a17c4409344555b35ca15f644f0cd277051fad9a323ebb4f19d36b7e5cc74
+validity verified
+ancestry digit_product eca3a65d0afabb580c0632502c993650173f83de13a9c37e1bd1ec865ac0891e
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/digit_product/desc 6cf2b574ef70ddfa52cc1bf847e1865d43c809b6280cb620dde7211e49a77775
+source tests/one_layer/generalization/corpus/tasks/digit_product/expected 11f12882f08011df3f3639958a93c6251fbb715f919ecdccc93c67303d8aacc1
+source tests/one_layer/generalization/corpus/tasks/digit_product/inputs e3fc9ec8363f18501177659654d51c1890485a0c6e2d4c0cd4d6a480011c67f3
+source tests/one_layer/generalization/corpus/tasks/digit_product/requirement 55fee3f7d733a65c0549d205845902ba8e0034bd62570b70b1064dabb9fca808
+source tests/one_layer/generalization/corpus/tasks/digit_product/solution.omegese eca3a65d0afabb580c0632502c993650173f83de13a9c37e1bd1ec865ac0891e
+body
+fn digit_product n uint to uint
+if eq n 0
+ret 0
+end
+p = uint 1
+while gt n 0 bound 20
+p = mul p rem n 10
+n = div n 10
+end
+ret p
+end

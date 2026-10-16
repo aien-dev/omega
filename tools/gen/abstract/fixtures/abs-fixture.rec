@@ -1,0 +1,33 @@
+gen-record 1
+id abs-0123456789abcdef
+kind abstraction
+split corpus
+family gs1-2ea72f444887b374 gs1-ba9ca1a3efe1e1c9
+entry clampv
+params u32 u32 u32
+ret u32
+signature fn clampv x uint lo uint hi uint to uint
+desc Clamp x into lo..hi: lo when x < lo, hi when x > hi, else x.
+receipt 29abb914a9d61bcaf98faf8e387d29b83dec42b310b0fe1857b9ce465cc28b2d
+validity unverified
+ancestry fx_a ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb
+ancestry fx_b 3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d
+source tools/gen/abstract/fixtures/source.txt bac2644401bdcf656e47f30de59c684ff80d9fde59a6248da97fb448d5ce8776
+pre STATED+TESTED le lo hi
+post STATED+TESTED and ge res lo le res hi
+example 12 3 9 -> 9
+limit Needs lo <= hi; with lo > hi it returns lo or hi without ordering them.
+counter 5 9 3 -> 9
+fingerprint 0123456789abcdef01627ca9fbac32f5c8530fb1903cc4db02258717921a4881
+differs fx_a ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb
+differs fx_b 3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d
+body
+fn clampv x uint lo uint hi uint to uint
+if lt x lo
+ret lo
+end
+if gt x hi
+ret hi
+end
+ret x
+end

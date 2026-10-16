@@ -1,0 +1,39 @@
+gen-record 1
+id raw-clamp_gap
+kind raw
+split probe
+family gs1-7ad660d4733ae3cc
+entry clamp_gap
+params u32 u32 u32 u32
+ret u32
+signature fn clamp_gap a uint b uint lo uint hi uint to uint
+desc distance between a and b limited to lo..hi, with absdiff and clamp helpers
+receipt 4421dbb8144ae3e22afc089c7db65dc18951c69b2cd7839da1e1bc702e556e4b
+validity verified
+ancestry clamp_gap 1cd39ad43e8ee6e43d986e579cc8bf82f2309a8a6f74def703730bba333abe91
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/clamp_gap/desc 15f1bebd1b6d4014290091b1ab06287fc4f84e9f3e32ca86fba10d5a0f25cc35
+source tests/one_layer/generalization/corpus/tasks/clamp_gap/expected 8ef1065047496280903cd14dffb720c7009bd1da31d04b5e409581582085a9e9
+source tests/one_layer/generalization/corpus/tasks/clamp_gap/inputs 97124059c7173bcb83c3e772c58afc1633638c564d4e573b437e528f5849213a
+source tests/one_layer/generalization/corpus/tasks/clamp_gap/requirement bc4f21ed659b4155015a73ea652c9e9f7d79063588fa3b2d7627c35d928d0732
+source tests/one_layer/generalization/corpus/tasks/clamp_gap/solution.omegese 1cd39ad43e8ee6e43d986e579cc8bf82f2309a8a6f74def703730bba333abe91
+body
+fn clamp x uint lo uint hi uint to uint
+if lt x lo
+ret lo
+end
+if gt x hi
+ret hi
+end
+ret x
+end
+fn absdiff a uint b uint to uint
+if gt a b
+ret sub a b
+end
+ret sub b a
+end
+fn clamp_gap a uint b uint lo uint hi uint to uint
+ret clamp absdiff a b lo hi
+end

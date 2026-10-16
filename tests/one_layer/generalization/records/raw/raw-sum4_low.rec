@@ -1,0 +1,38 @@
+gen-record 1
+id raw-sum4_low
+kind raw
+split corpus
+family gs1-26858760cef06893
+entry sum4_low
+params u32 u32 u32 u32
+ret u32
+signature fn sum4_low a uint b uint c uint d uint to uint
+desc low 16 bits of the sum of four values, with a sum4 helper over a 4-value sequence
+receipt df0e942b000c7af6527e36821e4442c5f84f2dfdb71110e4281dad78294c94fb
+validity verified
+ancestry sum4_low 56269ec25c560454e8b2dc496f6542ce13a267d8d81a9cdfd035a473df6e8886
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/sum4_low/desc c2665806ccfb2795b185d351438b8a625410c0bf36284ffb38766166d5f59f81
+source tests/one_layer/generalization/corpus/tasks/sum4_low/expected eec62c06e165ec11f2b4ab9082c28b165ebdf30a0eb186cbaa3b4d5532d35192
+source tests/one_layer/generalization/corpus/tasks/sum4_low/inputs 8073d9074d5dc5cc4e0a5255a2fb194d8114bcf737d5b255f9b88da5675748ea
+source tests/one_layer/generalization/corpus/tasks/sum4_low/requirement de17cd11745804cfffa6d9136380f8101f966aeba51d1269168c5ccb775bacf7
+source tests/one_layer/generalization/corpus/tasks/sum4_low/solution.omegese 56269ec25c560454e8b2dc496f6542ce13a267d8d81a9cdfd035a473df6e8886
+body
+fn sum4 v view uint 4 to ulong
+s = ulong 0
+for i uint 4
+s = add s ulong get v i
+end
+ret s
+end
+fn sum4_low a uint b uint c uint d uint to uint
+v = new uint 4 0
+put v 0 a
+put v 1 b
+put v 2 c
+put v 3 d
+r = uint and sum4 v 65535
+free v
+ret r
+end

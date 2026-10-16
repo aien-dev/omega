@@ -1,0 +1,1 @@
+Write a function sum4_avg that takes four unsigned 32-bit numbers a, b, c, d and returns their sum divided by 4, rounded down, as an unsigned 32-bit number. Put a, b, c, d in that order into a sequence of four unsigned 32-bit numbers and pass it to a helper function sum4(v) that returns the sum of the four values of v as an unsigned 64-bit number; write and use that helper.
