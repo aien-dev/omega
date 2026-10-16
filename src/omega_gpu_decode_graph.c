@@ -226,7 +226,16 @@ static int submit_now(OmegaGpuDecodeGraph *g) {
         uint64_t tmp[OMEGA_GPU_CMDLIST_MAX_LAUNCHES + 1];
         int cnt = omega_gpu_cmdlist_stamps(g->cl, tmp, OMEGA_GPU_CMDLIST_MAX_LAUNCHES + 1);
         if (cnt < 0) rc = -1;
-        else { const int from = g->n_stamp == 0 ? 0 : 1; for (int i = from; i < cnt; i++) g->stamp[g->n_stamp++] = tmp[i]; }
+        else {
+            const int from = g->n_stamp == 0 ? 0 : 1;
+            const uint32_t room = (uint32_t)(sizeof g->stamp / sizeof g->stamp[0]) - g->n_stamp;
+            if (cnt > from && (uint32_t)(cnt - from) > room) { /* more launches this token than the timeline holds */
+                omega_gpu_session_set_error("decode graph: timeline full (more launches per token than OMEGA_GPU_CMDLIST_MAX_LAUNCHES)");
+                rc = -1;
+            } else {
+                for (int i = from; i < cnt; i++) g->stamp[g->n_stamp++] = tmp[i];
+            }
+        }
     }
     g->tagged_in_list = 0;
     omega_gpu_cmdlist_reset(g->cl);

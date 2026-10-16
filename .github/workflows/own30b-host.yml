@@ -1,0 +1,80 @@
+name: OWN-30B host tiers
+
+# omega#456: the OWN-30B engine's host tiers that no workflow ran. Every test runs in
+# --host-only or --sim mode (host model and warp simulator); none opens a GPU, and the
+# runner is NOT the Spark, so nothing here is a chip or hardware result. The chip gates
+# stay tools/run_*_chip.sh under the GB10 lock on the Spark.
+#
+# Coverage of this file:
+#   own30b-host   test-gpu-{bf16-gemv,cmdlist,decode-attn,decode-graph,elementwise,fp8,
+#                 fp8gemm,gpr-boundary,matmul-api,moe-window,reconv,router,tern},
+#                 test-gpu-prefill-host (tc_probe, qmma_probe, pf_mem, tcgemm,
+#                 prefill_attn, pfgemm, qgemm, pfhost), check-own30b-decode-profile
+#                 (tools/own30b_decode_profile.c with -Werror), and
+#                 tools/require_physics_pin.sh (accepts the pin, refuses a bad checkout).
+# nvdisasm is not installed on the runner: tests with a listing check print "skipped"
+# for it here and run it on the Spark. test-gpu-attention runs in host-suites-3.yml.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - 'Makefile'
+      - 'mk/**'
+      - 'physics.lock'
+      - 'src/**'
+      - 'tests/gpu_*'
+      - 'tests/bw_*'
+      - 'tools/own30b_decode_profile.c'
+      - 'tools/require_physics_pin.sh'
+      - 'tools/run_*_chip.sh'
+      - '.github/workflows/own30b-host.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  own30b-host:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read pinned Physics
+        id: pins
+        run: |
+          sha=$(tr -d '[:space:]' < physics.lock)
+          test -n "$sha"
+          echo "physics=$sha" >> "$GITHUB_OUTPUT"
+      - name: Checkout pinned Physics
+        uses: actions/checkout@v4
+        with:
+          repository: aien-spark/physics
+          ref: ${{ steps.pins.outputs.physics }}
+          path: physics-src
+      - name: Keep Physics checkout out of Omega tree status
+        run: echo 'physics-src/' >> .git/info/exclude
+      - name: Physics pin check (chip runners call it first)
+        run: |
+          tools/require_physics_pin.sh "$GITHUB_WORKSPACE/physics-src"
+          if tools/require_physics_pin.sh /nonexistent 2>refuse.log; then echo "a missing checkout was accepted"; exit 1; fi
+          grep -q 'REFUSED' refuse.log
+      - name: Build libomega_gpu.a (pinned Physics, lock check on)
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+        run: make -j"$(nproc)" check-physics-lock build/libomega_gpu.a
+      - name: Host tiers
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+        run: |
+          set -e
+          for t in check-own30b-decode-profile test-gpu-bf16-gemv test-gpu-cmdlist test-gpu-decode-attn \
+                   test-gpu-decode-graph test-gpu-elementwise test-gpu-fp8 test-gpu-fp8gemm test-gpu-gpr-boundary \
+                   test-gpu-matmul-api test-gpu-moe-window test-gpu-reconv test-gpu-router test-gpu-tern \
+                   test-gpu-prefill-host; do
+            echo "::group::make $t"
+            make -j"$(nproc)" "$t"
+            echo "::endgroup::"
+          done
