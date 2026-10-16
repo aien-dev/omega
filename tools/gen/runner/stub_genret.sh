@@ -8,8 +8,11 @@
 #     validity verified, --exclude-family, fence), checked in manifest order;
 #   - ranking: manifest order (score column 0), then the contract's k / cap walk (beyond_k, cap_bytes);
 #   - rendering (the one heading H for both kinds, blocks), outputs, receipt keys (section 8 order) and exit
-#     codes as the contract; recheck_source_sha256 is 64 zeros (the stub compiles in no recheck source);
-#   - --mode empty selects nothing; irrelevant and length-matched are refused (usage) by the stub.
+#     codes as the contract; recheck_source_sha256 is 64 zeros (the stub compiles in no recheck source), or
+#     $GEN_STUB_RECHECK_SOURCE (tests: "unverified" as genret_anyrecheck prints);
+#   - $GEN_STUB_PROVIDER set: a provider=<it> receipt line (tests: cortex-interop, the Cortex adapter's mark);
+#   - --mode empty selects nothing; length-matched pads as section 6 (in the stub's rank order); irrelevant is
+#     refused (usage) by the stub.
 # `version` prints "genret-cli-v3 stub" (the runner refuses a stub outside test mode).
 set -euo pipefail
 fatal() { echo "genret: FATAL $1 ${2:-}" >&2; exit 2; }
@@ -31,11 +34,13 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$CORPUS" ] && [ -n "$RC" ] && [ -n "$RCH" ] && [ -n "$MSHA" ] && [ -n "$KIND" ] && [ -n "$K" ] && [ -n "$CAP" ] && [ -n "$REQ" ] && [ -n "$PR" ] && [ -n "$OUT" ] || fatal usage "missing option"
 MODE="${MODE:-normal}"
-case "$MODE" in normal|empty) ;; *) fatal usage "the stub implements --mode normal and empty only" ;; esac
-[ -z "$TB" ] || fatal usage "--target-bytes only with --mode length-matched"
+case "$MODE" in normal|empty|length-matched) ;; *) fatal usage "the stub implements --mode normal, empty and length-matched" ;; esac
+if [ "$MODE" = length-matched ]; then [[ "$TB" =~ ^[1-9][0-9]{0,6}$ ]] || fatal usage "--target-bytes 1..cap with --mode length-matched"
+else [ -z "$TB" ] || fatal usage "--target-bytes only with --mode length-matched"; fi
 case "$KIND" in raw|abstraction) ;; *) fatal usage "--kind raw|abstraction" ;; esac
 [[ "$K" =~ ^[1-9][0-9]?$ ]] && [ "$K" -le 64 ] || fatal usage "--k 1..64"
 [[ "$CAP" =~ ^[1-9][0-9]{0,6}$ ]] && [ "$CAP" -le 1048576 ] || fatal usage "--cap-bytes 1..1048576"
+[ -z "$TB" ] || [ "$TB" -le "$CAP" ] || fatal usage "--target-bytes must be <= --cap-bytes"
 [[ "$MSHA" =~ ^[0-9a-f]{64}$ ]] || fatal usage "--manifest-sha256"
 [[ "$RCH" =~ ^[0-9a-f]{64}$ ]] || fatal usage "--recheck-sha256"
 [ ! -e "$OUT" ] || fatal out_exists "$OUT"
@@ -55,7 +60,12 @@ tok() { tr 'A-Z' 'a-z' | tr -c 'a-z0-9' '\n' | grep . || true; }
 { grep -E '^(entry|params|ret)( |$)' "$REQ" | sed -E 's/^(entry|params|ret) ?//'; cat "$PR"; } | tok | LC_ALL=C sort -u > "$W/query.txt"
 H=$'\nVerified reference code from earlier tasks, most relevant first.\n'
 hv() { awk -v k="$1" '$0 == "body" { exit } index($0, k " ") == 1 { print substr($0, length(k) + 2); exit } $0 == k { print ""; exit }' "$2"; }
-: > "$W/suffix.txt"; : > "$W/sel"; : > "$W/exc"
+: > "$W/suffix.txt"; : > "$W/sel"; : > "$W/exc"; : > "$W/padc"
+render() { # render <record file> <position> > block (contract section 6)
+  local f="$1" pl=params p b d; for p in $(hv params "$f"); do pl="$pl $p"; done
+  b="$(sed -n '/^body$/,$p' "$f" | tail -n +2; echo x)"; b="${b%x}"; d="$(hv desc "$f")"
+  printf '\nRecord %d.\n\nentry %s\n%s\nret %s\n\n%s\n\n```\n%s```\n' "$2" "$(hv entry "$f")" "$pl" "$(hv ret "$f")" "$d" "$b"
+}
 n=0 stop=""
 while read -r dig path; do
   f="$CD/$path"
@@ -95,9 +105,25 @@ while read -r dig path; do
       printf '%d\t%s\t%s\t0\t%d\ttop\n' "$i" "$id" "$dig" "$(wc -c < "$W/block")" >> "$W/sel"
     fi
   fi
+  case "$why" in beyond_k|cap_bytes) [ "$MODE" != length-matched ] || printf '%s\t%s\t%s\n' "$f" "$id" "$dig" >> "$W/padc" ;; esac
   if [ -n "$why" ]; then sc=0; case "$why" in kind:*|split:*|validity:*|family_excluded:*|poisoned:*) sc=- ;; esac
     printf '%s\t%s\t%s\t%s\n' "$id" "$dig" "$sc" "$why" >> "$W/exc"; fi
 done < "$CORPUS"
+PAD=- PR=- UB=- GAP=-
+if [ "$MODE" = length-matched ]; then # contract section 6: pads in rank order, whole records, never past cap
+  UB="$(wc -c < "$W/suffix.txt")" PAD=none PR=c_not_shorter pc=0
+  if [ "$UB" -lt "$TB" ]; then PR=exhausted
+    while IFS=$'\t' read -r pf pid pdig; do
+      render "$pf" $((n + 1)) > "$W/block"; hb=0; [ "$n" = 0 ] && hb="$(printf '%s' "$H" | wc -c)"
+      [ $(( $(wc -c < "$W/suffix.txt") + hb + $(wc -c < "$W/block") )) -le "$CAP" ] || continue
+      [ "$n" = 0 ] && printf '%s' "$H" >> "$W/suffix.txt"; cat "$W/block" >> "$W/suffix.txt"; n=$((n + 1)) pc=$((pc + 1))
+      printf '%d\t%s\t%s\t0\t%d\tpad\n' "$n" "$pid" "$pdig" "$(wc -c < "$W/block")" >> "$W/sel"
+      awk -F'\t' -v i="$pid" '$1 != i' "$W/exc" > "$W/exc.n"; mv "$W/exc.n" "$W/exc"
+      if [ "$(wc -c < "$W/suffix.txt")" -ge "$TB" ]; then PR=reached; break; fi
+    done < "$W/padc"; [ "$pc" = 0 ] || PAD=$pc
+  fi
+  GAP=$(( $(wc -c < "$W/suffix.txt") - TB ))
+fi
 mkdir "$W/o"
 { printf 'rank\tid\tdigest\tscore\tbytes\trole\n'; cat "$W/sel"; } > "$W/o/selected.tsv"
 { printf 'id\tdigest\tscore\treason\n'; LC_ALL=C sort -t$'\t' -k1,1 "$W/exc"; } > "$W/o/excluded.tsv"
@@ -105,10 +131,10 @@ cp "$W/suffix.txt" "$W/query.txt" "$W/o/"
 s() { sha256sum < "$1" | cut -d' ' -f1; }
 ex="-"; [ "${#EXF[@]}" = 0 ] || ex="$(IFS=,; echo "${EXF[*]}")"
 {
-  echo "contract=genret-cli-v3"; echo "mode=$MODE"; echo "kind=$KIND"; echo "k=$K"; echo "cap_bytes=$CAP"; echo "target_bytes=-"
-  echo "exclude_family=$ex"; echo "manifest_sha256=$MSHA"; echo "recheck_sha256=$RCH"; echo "recheck_source_sha256=$(printf "%064d" 0)"; echo "requirement_sha256=$(s "$REQ")"; echo "prompt_sha256=$(s "$PR")"
+  echo "contract=genret-cli-v3"; [ -z "${GEN_STUB_PROVIDER:-}" ] || echo "provider=$GEN_STUB_PROVIDER"; echo "mode=$MODE"; echo "kind=$KIND"; echo "k=$K"; echo "cap_bytes=$CAP"; echo "target_bytes=${TB:--}"
+  echo "exclude_family=$ex"; echo "manifest_sha256=$MSHA"; echo "recheck_sha256=$RCH"; echo "recheck_source_sha256=${GEN_STUB_RECHECK_SOURCE:-$(printf "%064d" 0)}"; echo "requirement_sha256=$(s "$REQ")"; echo "prompt_sha256=$(s "$PR")"
   echo "query_sha256=$(s "$W/o/query.txt")"; echo "records=$(grep -c . "$CORPUS")"; echo "indexed=$(($(grep -c . "$CORPUS") - $(awk -F'\t' '$3 == "-"' "$W/exc" | grep -c . || true)))"
-  echo "total_tokens=0"; echo "selected=$n"; echo "pad=-"; echo "pad_reason=-"; echo "unpadded_bytes=-"; echo "suffix_bytes=$(wc -c < "$W/o/suffix.txt")"; echo "length_gap=-"; echo "suffix_sha256=$(s "$W/o/suffix.txt")"
+  echo "total_tokens=0"; echo "selected=$n"; echo "pad=$PAD"; echo "pad_reason=$PR"; echo "unpadded_bytes=$UB"; echo "suffix_bytes=$(wc -c < "$W/o/suffix.txt")"; echo "length_gap=$GAP"; echo "suffix_sha256=$(s "$W/o/suffix.txt")"
   echo "selected_sha256=$(s "$W/o/selected.tsv")"; echo "excluded_sha256=$(s "$W/o/excluded.tsv")"
 } > "$W/o/receipt.txt"
 (cd "$W/o" && sha256sum selected.tsv excluded.tsv suffix.txt query.txt receipt.txt) > "$W/o/SHA256SUMS"

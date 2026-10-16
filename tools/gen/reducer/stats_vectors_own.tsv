@@ -15,3 +15,8 @@ mcnemar1	9 1	0.010742	11/1024 rounded
 wilson4	7 10	0.7000 0.3968 0.8922	x445 wilson (tools/exp445/test_exp445.sh)
 wilson4	0 60	0.0000 0.0000 0.0602	x445 wilson
 wilson4	60 60	1.0000 0.9398 1.0000	x445 wilson
+lenmatch	1706 1962	256 256.00 matched	GEN_PROTOCOL_V1 section 10: 15% of 1706 = 255.9, the 256 B floor applies
+lenmatch	2000 1699	-301 300.00 unmatched	15% of 2000 = 300, a gap of -301 is outside
+lenmatch	0 300	300 256.00 unmatched	D selected nothing (target 0): only the 256 B floor
+lenset	10 5	AVAILABLE	5 of 10 matched = 50%: AVAILABLE
+lenset	9 4	UNAVAILABLE	4 of 9 < 50%

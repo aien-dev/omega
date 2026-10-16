@@ -4,9 +4,9 @@
 # tests only (GEN_TEST=1). Paths are relative to the repository root.
 revision=gen-v1-draft
 protocol=PLACEHOLDER docs/one_layer/GEN_PROTOCOL_V1.md
-# protocol.json (omega.gen.protocol.v1, gen/protocol 23804298): run.sh checks every setting below against it
+# protocol.json (omega.gen.protocol.v1, gen/protocol 7eb8534c): run.sh checks every setting below against it
 protocol_json=PLACEHOLDER tests/one_layer/generalization/protocol.json
-protocol_json_sha256=d4d9942e340ffa79dfe9a7cc9744d6479e3ea4460f8fee9f143865569cd69a1b
+protocol_json_sha256=a28142baeeb3d7218ddd3baea6bcaf2ae48de5e6eb1975a38845c008737ee0b8
 # model pin: configuration <config> of the EXP445 PARAMS (model id, endpoint, request extra, server, weights)
 exp445_params=tools/exp445/PARAMS
 config=A
@@ -32,13 +32,16 @@ examples_many=many.list
 # built by make gen-retrieval, which writes its sha256 to recheck_sha256_file (passed as --recheck-sha256)
 provider=PLACEHOLDER build/gen_retrieval/genret
 provider_contract=genret-cli-v3
-provider_contract_sha256=ee21d714d911cf1cc459cba00805cceb9354b02bf8d6974e4d96c5c5dd01a3ac
+provider_contract_sha256=48006271d18394c40daf96120eaa20fbe3908d9a12b08cab7994ee02a6351e9d
 corpus_manifest_raw=PLACEHOLDER tests/one_layer/generalization/corpus/raw/records/MANIFEST
 corpus_manifest_raw_sha256=PLACEHOLDER
 corpus_manifest_abstraction=PLACEHOLDER tests/one_layer/generalization/corpus/abstraction/records/MANIFEST
 corpus_manifest_abstraction_sha256=PLACEHOLDER
 recheck=PLACEHOLDER build/gen_retrieval/recheck
 recheck_sha256_file=PLACEHOLDER build/gen_retrieval/recheck.sha256
+# the recheck.c genret was built from (mk/gen-retrieval.mk GENRET_RECHECK_SHA256, gen/retrieval 4a48b613); every
+# provider receipt must name it (genret_anyrecheck test builds say "unverified" and are refused)
+recheck_source_sha256=05cec285f7b7b2be68b1db1287661513e7e4715da44909065bdd0829daac02b6
 retrieval_mode=normal
 k=3
 cap_bytes=4096

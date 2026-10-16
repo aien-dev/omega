@@ -21,6 +21,7 @@
  *   @@500ONCE\n<rest>     HTTP 500 the first time this file is used, then <rest>
  *   @@SLEEP <s>\n<rest>   sleep <s> seconds, then <rest> (the client's timeout fires first in tests)
  *   @@SLEEPONCE <s>\n<rest>  the sleep only the first time
+ *   @@SAMPLEDMODE\n<rest>  report mode "sampled" whatever the temperature (a server that broke greedy)
  * <answers>/sampling.json (optional), as fake445 plus GEN knobs:
  *   "p_repeat": x             reported p_repeat (default 0.5)
  *   "ignore_seed": true       report seed 0 (broken seeding)
@@ -207,6 +208,7 @@ int main(int argc, char **argv)
                 memmove(ans, ans + 10, an - 10 + 1); an -= 10; continue;
             }
             if (!strncmp(ans, "@@500", 5)) { fail500 = 1; break; }
+            if (!strncmp(ans, "@@SAMPLEDMODE\n", 14)) { greedy = 0; memmove(ans, ans + 14, an - 14 + 1); an -= 14; continue; }
             int so = !strncmp(ans, "@@SLEEPONCE ", 12);
             if (so || !strncmp(ans, "@@SLEEP ", 8)) {
                 char *nl = strchr(ans, '\n');

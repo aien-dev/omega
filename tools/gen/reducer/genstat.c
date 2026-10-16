@@ -120,6 +120,8 @@ typedef struct {
     int lift[3], pok[3];
     const char *dec;
     char code[128], detail[256];
+    long kmax, kmin;
+    int floor, ceiling;
 } Decision;
 
 static void decide(Decision *D, int valid)
@@ -135,16 +137,22 @@ static void decide(Decision *D, int valid)
         D->pok[x] = 20 * D->pnum[x] < ((u128)1 << m); /* p < 0.05 exactly (p = 1 when m = 0) */
     }
     long ab = D->k[0] - D->k[1];
+    D->kmax = D->k[0]; D->kmin = D->k[0];
+    for (int i = 1; i < 4; i++) { if (D->k[i] > D->kmax) D->kmax = D->k[i]; if (D->k[i] < D->kmin) D->kmin = D->k[i]; }
+    D->floor = D->kmax <= 3; D->ceiling = D->kmin >= D->n - 3;
     if (!valid) {
         D->dec = "INVALID"; strcpy(D->code, "validity_failure");
         snprintf(D->detail, sizeof D->detail, "a validity check failed");
     } else if (ab > 2) {
         D->dec = "INVALID"; strcpy(D->code, "sanity_a_minus_b_gt_2");
         snprintf(D->detail, sizeof D->detail, "B solved %ld fewer tasks than A (more than 2): the many-shot prefix is invalid", ab);
+    } else if (D->floor || D->ceiling) { /* GEN_PROTOCOL_V1 section 9 (v2): too hard or too easy to compare */
+        D->dec = "INCONCLUSIVE"; snprintf(D->code, sizeof D->code, "%s%s%s", D->floor ? "floor" : "", D->floor && D->ceiling ? "," : "", D->ceiling ? "ceiling" : "");
+        snprintf(D->detail, sizeof D->detail, "max successes over A..D %ld (floor <= 3), min %ld (ceiling >= n - 3 = %ld)", D->kmax, D->kmin, D->n - 3);
     } else if (D->lift[0] && D->pok[0] && D->lift[1] && D->pok[1] && D->lift[2] && D->pok[2]) {
         D->dec = "PASS"; strcpy(D->code, "all_controls_lift_and_p");
         snprintf(D->detail, sizeof D->detail, "D beats A, B and C each by at least 10 points with one-sided exact McNemar p < 0.05");
-    } else if (D->hi95[2] < 0.10L) {
+    } else if ((double)D->hi95[2] < 0.10) { /* compared on the full double, never the 6-decimal receipt value */
         D->dec = "FAIL"; strcpy(D->code, "newcombe95_hi_D-C_below_delta");
         snprintf(D->detail, sizeof D->detail, "upper bound of the 95%% Newcombe paired interval for D-C is %.6Lf, below 0.10", D->hi95[2]);
     } else {
@@ -210,6 +218,17 @@ static int cmd_paired(const char *path)
 }
 
 /* ---- vectors: check every row of a stats vector file (Agent A, tests/one_layer/generalization/stats_vectors.tsv) */
+/* length-matched ablation (GEN_PROTOCOL_V1 section 10; dev-only, never in the verdict or run validity):
+ * gap = C suffix_bytes - target_bytes (D's realised bytes); matched iff |gap| <= max(256 B, 15% of target), in
+ * integers: 100 |gap| <= max(25600, 15 target); a set is AVAILABLE iff 2 matched >= tasks. */
+static int lm_matched(long target, long suffix, long *gap)
+{
+    *gap = suffix - target;
+    long ag = *gap < 0 ? -*gap : *gap, lim = 15 * target > 25600 ? 15 * target : 25600;
+    return 100 * ag <= lim;
+}
+static void lm_tol(long target, char *out, size_t n) { long t = 15 * target > 25600 ? 15 * target : 25600; snprintf(out, n, "%ld.%02ld", t / 100, t % 100); }
+static const char *lm_status(long matched, long tasks) { return 2 * matched >= tasks ? "AVAILABLE" : "UNAVAILABLE"; }
 static int vbad;
 static void vreal(const char *id, const char *what, const char *want, long double got)
 {
@@ -245,7 +264,7 @@ static int cmd_vectors(const char *path)
     FILE *f = fopen(path, "r");
     if (!f) { fprintf(stderr, "genstat: cannot read %s\n", path); return 2; }
     static char line[8192];
-    int rows = 0, kinds[4] = {0, 0, 0, 0};
+    int rows = 0, kinds[6] = {0, 0, 0, 0, 0, 0};
     while (fgets(line, sizeof line, f)) {
         if (line[0] == '#' || line[0] == '\n') continue;
         line[strcspn(line, "\n")] = 0;
@@ -300,10 +319,19 @@ static int cmd_vectors(const char *path)
             vlong(id, "a_minus_b", fl[42], D.k[0] - D.k[1]);
             vstr(id, "verdict", fl[43], D.dec);
             /* fl[44], the reason string, is informative only (Agent A) */
+        } else if (!strcmp(fl[0], "lenmatch") && nf == 7) {
+            kinds[4]++;
+            long gap; char tol[32];
+            int m = lm_matched(atol(fl[2]), atol(fl[3]), &gap);
+            lm_tol(atol(fl[2]), tol, sizeof tol);
+            vlong(id, "length_gap", fl[4], gap); vstr(id, "tolerance_bytes", fl[5], tol); vstr(id, "class", fl[6], m ? "matched" : "unmatched");
+        } else if (!strcmp(fl[0], "lenset") && nf == 6) {
+            kinds[5]++;
+            vlong(id, "unmatched", fl[4], atol(fl[2]) - atol(fl[3])); vstr(id, "status", fl[5], lm_status(atol(fl[3]), atol(fl[2])));
         } else { printf("FAIL %s: unknown record kind or field count (%s, %d fields)\n", id, fl[0], nf); vbad++; }
     }
     fclose(f);
-    printf("vectors %s: %d rows (wilson %d, mcnemar1 %d, newcombe %d, verdict %d), %d failures\n", vbad ? "FAIL" : "PASS", rows, kinds[0], kinds[1], kinds[2], kinds[3], vbad);
+    printf("vectors %s: %d rows (wilson %d, mcnemar1 %d, newcombe %d, verdict %d, lenmatch %d, lenset %d), %d failures\n", vbad ? "FAIL" : "PASS", rows, kinds[0], kinds[1], kinds[2], kinds[3], kinds[4], kinds[5], vbad);
     return vbad ? 1 : 0;
 }
 
@@ -339,6 +367,18 @@ int main(int argc, char **argv)
     }
     if (argc == 3 && !strcmp(argv[1], "paired")) return cmd_paired(argv[2]);
     if (argc == 3 && !strcmp(argv[1], "vectors")) return cmd_vectors(argv[2]);
-    fprintf(stderr, "usage: genstat wilson <k> <n> [z] | mcnemar1 <b> <c> | mcnemar1x <b> <c> | newcombe <a> <b> <c> <d> [z] | paired <matrix.tsv> | vectors <stats_vectors.tsv>\n");
+    if (argc == 4 && !strcmp(argv[1], "lenmatch")) { /* lenmatch <target_bytes> <suffix_bytes>: gap tolerance class */
+        long g; char tol[32];
+        if (num_arg(argv[2], 0, 1048576, &a) || num_arg(argv[3], 0, 1048576, &b)) { fprintf(stderr, "genstat: lenmatch target suffix (bytes)\n"); return 2; }
+        int m = lm_matched(a, b, &g); lm_tol(a, tol, sizeof tol);
+        printf("%ld %s %s\n", g, tol, m ? "matched" : "unmatched");
+        return 0;
+    }
+    if (argc == 4 && !strcmp(argv[1], "lenset")) { /* lenset <tasks> <matched>: AVAILABLE | UNAVAILABLE */
+        if (num_arg(argv[2], 1, NMAX, &a) || num_arg(argv[3], 0, a, &b)) { fprintf(stderr, "genstat: lenset tasks matched\n"); return 2; }
+        printf("%s\n", lm_status(b, a));
+        return 0;
+    }
+    fprintf(stderr, "usage: genstat wilson <k> <n> [z] | mcnemar1 <b> <c> | mcnemar1x <b> <c> | newcombe <a> <b> <c> <d> [z] | paired <matrix.tsv> | vectors <stats_vectors.tsv> | lenmatch <target> <suffix> | lenset <tasks> <matched>\n");
     return 2;
 }

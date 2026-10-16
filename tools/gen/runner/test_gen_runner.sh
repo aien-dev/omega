@@ -34,9 +34,9 @@ refuse() { local l="$1" m="$2"; shift 2; if "$@" > "$T/ref.out" 2> "$T/ref.err";
 
 # ---- 1. statistics ---------------------------------------------------------------------------------------
 SV="$ROOT/tools/gen/reducer/testdata/stats_vectors.tsv"
-[ "$(sha "$SV")" = 523f90438c5c8a30277f684041515535c5f73cb5661c5b6e48f8ca3179dad430 ] &&
-  ok "Agent A's stats_vectors.tsv is the frozen file (gen/protocol c3c4fc9e, sha256 523f9043...)" || bad "stats_vectors.tsv sha256"
-o="$("$GS" vectors "$SV" 2>&1)"; [[ "$o" == "vectors PASS: 90 rows "*", 0 failures" ]] && ok "genstat: $o" || bad "genstat vectors on Agent A's file: $o"
+[ "$(sha "$SV")" = b5a9347c477d4930070579fbb7472784219593bb5c8ea512098f09380b1e4400 ] &&
+  ok "Agent A's stats_vectors.tsv is the frozen file v2 (gen/protocol 7eb8534c, sha256 b5a9347c...)" || bad "stats_vectors.tsv sha256"
+o="$("$GS" vectors "$SV" 2>&1)"; [[ "$o" == "vectors PASS: 114 rows "*", 0 failures" ]] && ok "genstat: $o" || bad "genstat vectors on Agent A's file: $o"
 nown=0 fown=0
 while IFS=$'\t' read -r cmd args want src; do
   case "$cmd" in ""|"#"*) continue ;; esac
@@ -46,6 +46,9 @@ done < "$ROOT/tools/gen/reducer/stats_vectors_own.tsv"
 sed "0,/0.0601718521/s//0.0611718521/" "$SV" > "$T/sv.mut"
 if cmp -s "$SV" "$T/sv.mut"; then bad "vector mutant was not made"
 elif "$GS" vectors "$T/sv.mut" > /dev/null 2>&1; then bad "genstat accepted a changed vector"; else ok "  (negative control: one changed Wilson vector value fails)"; fi
+sed "s/^lenmatch\tl03\t\(.*\)\tmatched$/lenmatch\tl03\t\1\tunmatched/" "$SV" > "$T/sv.mut2"
+if cmp -s "$SV" "$T/sv.mut2"; then bad "lenmatch mutant was not made"
+elif "$GS" vectors "$T/sv.mut2" > /dev/null 2>&1; then bad "genstat accepted a changed lenmatch class"; else ok "  (negative control: lenmatch l03 matched -> unmatched fails)"; fi
 mism=0; for n in 1 7 20 41 60; do for k in $(seq 0 "$n"); do [ "$("$GS" wilson4 "$k" "$n")" = "$("$X" wilson "$k" "$n")" ] || mism=$((mism + 1)); done; done
 [ "$mism" = 0 ] && ok "genstat wilson4 = x445 wilson on every k for n in 1 7 20 41 60" || bad "wilson4 vs x445: $mism mismatches"
 
@@ -82,8 +85,8 @@ rec "$CA" abstraction abs-count_above gs1-3333333333333333 count_above
 (cd "$CR" && sha256sum raw/raw-power_mod.rec raw/raw-hash_step.rec) > "$CR/MANIFEST"; sha "$CR/MANIFEST" > "$CR/SET.sha256"
 (cd "$CA" && sha256sum abstraction/abs-sum_squares3.rec abstraction/abs-count_above.rec) > "$CA/MANIFEST"; sha "$CA/MANIFEST" > "$CA/SET.sha256"
 PJT="$HERE/testdata/protocol.json"
-[ "$(sha "$PJT")" = d4d9942e340ffa79dfe9a7cc9744d6479e3ea4460f8fee9f143865569cd69a1b ] &&
-  ok "testdata/protocol.json is Agent A's frozen protocol.json (gen/protocol 23804298, sha256 d4d9942e...)" || bad "testdata/protocol.json sha256"
+[ "$(sha "$PJT")" = a28142baeeb3d7218ddd3baea6bcaf2ae48de5e6eb1975a38845c008737ee0b8 ] &&
+  ok "testdata/protocol.json is Agent A's frozen protocol.json (gen/protocol 7eb8534c, sha256 a28142ba...)" || bad "testdata/protocol.json sha256"
 cat > "$T/recheck" <<'EOF'
 #!/bin/sh
 # test stand-in for Agent D's recheck: OK <id> for every record whose receipt file exists
@@ -129,7 +132,7 @@ gp() { # gp <out file> [sed expressions...]
   local o="$1"; shift
   sed -e "s|^exp445_params=.*|exp445_params=$T/E445|" -e "s|^protocol=.*|protocol=-|" -e "s|^examples_dir=.*|examples_dir=$EXD|" \
       -e "s|^provider=.*|provider=$HERE/stub_genret.sh|" -e "s|^corpus_manifest_raw=.*|corpus_manifest_raw=$CR/MANIFEST|" \
-      -e "s|^corpus_manifest_raw_sha256=.*|corpus_manifest_raw_sha256=$(cat "$CR/SET.sha256")|" -e "s|^recheck=.*|recheck=$T/recheck|" -e "s|^recheck_sha256_file=.*|recheck_sha256_file=$T/recheck.sha256|" \
+      -e "s|^corpus_manifest_raw_sha256=.*|corpus_manifest_raw_sha256=$(cat "$CR/SET.sha256")|" -e "s|^recheck=.*|recheck=$T/recheck|" -e "s|^recheck_sha256_file=.*|recheck_sha256_file=$T/recheck.sha256|" -e "s|^recheck_source_sha256=.*|recheck_source_sha256=$(printf %064d 0)|" \
       -e "s|^corpus_manifest_abstraction=.*|corpus_manifest_abstraction=$CA/MANIFEST|" -e "s|^corpus_manifest_abstraction_sha256=.*|corpus_manifest_abstraction_sha256=$(cat "$CA/SET.sha256")|" \
       -e "s|^protocol_json=.*|protocol_json=$PJT|" -e "s|^provider_contract_sha256=.*|provider_contract_sha256=$(printf '%064d' 0)|" \
       -e "s|^famsig=.*|famsig=$T/famsig|" -e "s|^dev_meta=.*|dev_meta=$T/devmeta|" -e "s|^dev_tasks=.*|dev_tasks=$T/src|" \
@@ -237,12 +240,24 @@ GEN_TEST_KILL=after-log:c-1:devgen03 "$RUN" --tasks "$T/pub" --out "$o" > /dev/n
   [ "$(cut -f1,2 "$o/log.tsv" | sort | uniq -d | wc -l)" = 0 ] && [ "$(cut -f1-8,10-25,27- "$o/log.tsv" | grep -v '^set' | sort)" = "$(cut -f1-8,10-25,27- "$T/full1/log.tsv" | grep -v '^set' | sort)" ] &&
   ok "interrupted twice (killed mid-generation and after a row), resumed: same $nfull requests as an uninterrupted run, no duplicate row, same rows" ||
   bad "interruption / resume: exits $e1 $e2 $e3, requests $(($(greq) - n0)) vs $nfull: $(tail -n 1 "$T/kill.err")"
-# a request timeout is a transport failure of the round (tries recorded), not a new sample
+# a request timeout is a transport failure of the round (tries recorded), not a new sample; on attempt 1 it makes
+# the run INVALID and the driver stops sending (protocol, GEN-1 review)
 printf '@@SLEEP 7\n' > "$A/B/tri_kind"
-o="$T/tmo"; cw "$o"; "$RUN" --tasks "$T/pub" --out "$o" > /dev/null 2> "$o.err"
-[ "$(lg "$o" b-1 devgen08 10)" = "REQUEST FAILED" ] && [ "$(lg "$o" b-1 devgen08 21)" = 3 ] && [ ! -e "$o/cands/b-1/devgen08" ] &&
-  ok "timeout: 3 tries in one round, REQUEST FAILED, no candidate" || bad "timeout record: $(lg "$o" b-1 devgen08 10) tries $(lg "$o" b-1 devgen08 21)"
+o="$T/tmo"; cw "$o"; nq0="$(grep -cxF -- "$(cat "$R/gen/b-1/devgen08/r1.req.json")" "$A/requests.log")"; "$RUN" --tasks "$T/pub" --out "$o" > /dev/null 2> "$o.err"; e=$?
+[ "$e" != 0 ] && [ "$(lg "$o" b-1 devgen08 10)" = "REQUEST FAILED" ] && [ "$(lg "$o" b-1 devgen08 21)" = 3 ] && [ ! -e "$o/cands/b-1/devgen08" ] &&
+  [ -z "$(lg "$o" c-1 devgen08 1)" ] && grep -q 'run INVALID, no further requests' "$o.err" && (cd "$o" && sha256sum -c --quiet SHA256SUMS) &&
+  ok "attempt-1 timeout: 3 identical tries in one round, REQUEST FAILED, no candidate, run INVALID, nothing sent after it" ||
+  bad "timeout record: exit $e, $(lg "$o" b-1 devgen08 10) tries $(lg "$o" b-1 devgen08 21): $(tail -n 1 "$o.err")"
+q="$(cat "$o/gen/b-1/devgen08/r1.req.json")"; [ "$(grep -cxF -- "$q" "$A/requests.log")" = "$((nq0 + 3))" ] && [ "$(grep -c . "$o/gen/b-1/devgen08/r1.transport")" = 3 ] && ok "  (the 3 tries sent the one recorded request)" || bad "timeout tries"
 rm -f "$A/B/tri_kind"
+"$RUN" --tasks "$T/pub" --out "$o" > /dev/null 2> "$o.err2"; e=$?
+[ "$e" != 0 ] && grep -q 'run INVALID, no further requests' "$o.err2" && [ -z "$(lg "$o" c-1 devgen08 1)" ] && ok "  resume of that run: still refused, nothing sent" || bad "resume after an attempt-1 transport failure: exit $e"
+# an attempt-1 reply that does not report mode=greedy: run INVALID, stops
+{ printf '@@SAMPLEDMODE\n'; cat "$A/D/sum_range"; } > "$A/A/sum_range"
+o="$T/nogr"; cw "$o"; "$RUN" --tasks "$T/pub" --out "$o" > /dev/null 2> "$o.err"; e=$?
+[ "$e" != 0 ] && [ "$(lg "$o" a-1 devgen07 23)" = sampled ] && [ -z "$(lg "$o" b-1 devgen07 1)" ] && grep -q 'run INVALID, no further requests' "$o.err" &&
+  ok "attempt-1 reply with mode=sampled: run INVALID, nothing sent after it" || bad "non-greedy attempt-1 reply: exit $e mode $(lg "$o" a-1 devgen07 23)"
+rm -f "$A/A/sum_range"
 # refusals
 cp -R "$T/pub" "$T/pubh"; mkdir -p "$T/pubh/tasks/cases/devgen01/hidden"; cp "$T/src/tasks/cases/devgen01/hidden/expected" "$T/pubh/tasks/cases/devgen01/hidden/"
 refuse "a task dir holding hidden data" "no hidden data, ever" "$RUN" --tasks "$T/pubh" --out "$T/o-hidden"
@@ -270,6 +285,23 @@ refuse "resume with a changed abstraction record set (manifest)" "resume refused
 refuse "a record set whose MANIFEST is not the pinned one" "not the pinned record set" "$RUN" --tasks "$T/pub" --out "$T/full1"
 cp "$T/rec.bak" "$CA/abstraction/abs-count_above.rec"
 (cd "$CA" && sha256sum abstraction/abs-sum_squares3.rec abstraction/abs-count_above.rec) > "$CA/MANIFEST"; sha "$CA/MANIFEST" > "$CA/SET.sha256"
+# validator pins (genret-cli-v3): an unverified validator source (genret_anyrecheck) or a different one fails the
+# run closed before any generation; a recheck that is not its recheck.sha256 is refused
+for v in unverified "$(printf %063d 0)1"; do o="$T/o-rcs$((++nb))"; cw "$o"
+  refuse "provider receipt recheck_source_sha256=${v:0:12}...: run fails closed" "recheck_source $v vs pinned" env GEN_STUB_RECHECK_SOURCE="$v" "$RUN" --tasks "$T/pub" --out "$o"
+  [ ! -e "$o/log.tsv" ] && [ ! -d "$o/gen" ] && ok "  (no log rows, no generation dir)" || bad "recheck_source refusal left rows or generations in $o"
+done
+cp "$T/recheck.sha256" "$T/recheck.sha256.bak"; printf '%064d\n' 0 > "$T/recheck.sha256"; cw "$T/o-rch"
+refuse "recheck binary is not its recheck.sha256" "is not the sha256 of" "$RUN" --tasks "$T/pub" --out "$T/o-rch"
+cp "$T/recheck.sha256.bak" "$T/recheck.sha256"
+# a receipt from another provider (the Cortex adapter marks provider=cortex-interop): fails closed, no rows
+for pv in cortex-interop other; do o="$T/o-pv-$pv"; cw "$o"
+  refuse "provider receipt provider=$pv: run fails closed" "says provider=$pv" env GEN_STUB_PROVIDER="$pv" "$RUN" --tasks "$T/pub" --out "$o"
+  [ ! -e "$o/log.tsv" ] && [ ! -d "$o/gen" ] && ok "  (no log rows, no generation dir)" || bad "provider=$pv refusal left rows in $o"
+done
+o="$T/o-pv-both"; cw "$o"
+refuse "Cortex adapter receipt (provider=cortex-interop, recheck_source_sha256=unverified): run fails closed" "provider=cortex-interop" env GEN_STUB_PROVIDER=cortex-interop GEN_STUB_RECHECK_SOURCE=unverified "$RUN" --tasks "$T/pub" --out "$o"
+o="$T/o-pv-genret"; cw "$o"; GEN_STUB_PROVIDER=genret GEN_PARAMS="$T/P1" "$RUN" --tasks "$T/pub" --out "$o" > /dev/null 2> "$o.err" && ok "provider=genret receipt line: accepted (control)" || bad "provider=genret refused: $(tail -n 1 "$o.err")"
 # dirty tree: a private clone of the current sources, committed there, then one file changed
 G="$T/clone"; git clone -q --shared "$ROOT" "$G" 2> /dev/null && rm -rf "$G/tools/gen" && cp -R "$ROOT/tools/gen" "$G/tools/" && cp "$ROOT/mk/gen-runner.mk" "$G/mk/" &&
   git -C "$G" add -A tools/gen mk/gen-runner.mk && git -C "$G" -c user.name=test -c user.email=test@invalid commit -qm test --allow-empty

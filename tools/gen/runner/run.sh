@@ -131,6 +131,8 @@ RCK="$(rp "$(pv recheck)")" RCKF="$(rp "$(pv recheck_sha256_file)")"
 RCKH="$(cat "$RCKF" 2> /dev/null || true)"
 [[ "$RCKH" =~ ^[0-9a-f]{64}$ ]] && [ "$(sha "$RCK")" = "$RCKH" ] ||
   die "recheck_sha256_file $RCKF is not the sha256 of $RCK (make gen-retrieval writes both; genret-cli-v3 --recheck-sha256)"
+RCSH="$(kv recheck_source_sha256)"
+[[ "$RCSH" =~ ^[0-9a-f]{64}$ ]] || die "recheck_source_sha256 '$RCSH' (the pinned recheck.c sha256)"
 RMODE="$(kv retrieval_mode)" K="$(kv k)" CAP="$(kv cap_bytes)"
 [ "$K" = 3 ] && [ "$CAP" = 4096 ] && [ "$RMODE" = normal ] || [ "$TEST" = 1 ] || die "k=$K cap_bytes=$CAP retrieval_mode=$RMODE: the preregistered values are k=3 cap_bytes=4096 normal"
 case "$CONTROL" in none) ;; cross-family)
@@ -162,6 +164,9 @@ pjck '[.conditions[1:][] | .prefix_examples] | unique | map(tostring) | join(","
 pjck .retrieval.contract "$PCN"; pjck .retrieval.k "$K"; pjck .retrieval.cap_bytes "$CAP"; pjck .retrieval.mode "$RMODE"; pjck .retrieval.query requirement+prompt
 pjck .generation.primary attempt1_round1_functional; pjck .generation.max_tokens "$MAXT"; pjck .generation.max_rounds 2; pjck .generation.attempts "$ATT"
 pjck .generation.attempt1_temperature "$GTEMP"; pjck .generation.sampled_temperature "$TEMP"; pjck .generation.sampled_top_p "$TOPP"
+mapfile -t G0S < <(jq -r '.gates.g0.seed_values[]? | tostring' "$PJ" 2> /dev/null)
+[ "${#G0S[@]}" = "$G0N" ] && [ "$(printf '%s\n' "${G0S[@]}" | grep -cE '^[0-9]+$')" = "$G0N" ] && [ "$(printf '%s\n' "${G0S[@]}" | sort -u | grep -c .)" = "$G0N" ] ||
+  die "protocol.json .gates.g0.seed_values must hold $G0N distinct integer seeds (G0 seeds s1..s$G0N; the repeat uses s1)"
 pjck .generation.seed_base "$SB"; pjck .generation.seed_attempt_stride 1000; pjck .generation.retries "$RETRIES"
 pjck .generation.retry_pause_s 5; pjck .generation.order attempt,task,condition
 pjck '.generation.sets | join(",")' '<c>-<attempt>,<c>-<attempt>-final'
@@ -184,6 +189,8 @@ make -s -C "$ROOT" PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 omega-emit omeg
 X="$ROOT/build/omega_emit/x445" EMIT="$ROOT/build/omega_emit/omega_emit" G="$ROOT/build/omegese/omegese"
 mkdir -p "$OUT"; OUT="$(realpath -e "$OUT")"
 exec 9> "$OUT/.lock"; flock -n 9 || die "another run.sh holds $OUT"
+# one request in flight per endpoint: every run.sh on this host that targets BASE holds the same lock for its whole run
+exec 8> "${TMPDIR:-/tmp}/gen-endpoint-$(printf %s "$BASE" | sha256sum | cut -c1-16).lock"; flock -n 8 || die "another run.sh is sending to $BASE (one request in flight)"
 W="$(mktemp -d "${TMPDIR:-/tmp}/gen-run.XXXXXXXX")"; trap 'rm -rf "$W"' EXIT
 
 # ---- 2. prompt manifests ----------------------------------------------------------------------------------
@@ -219,10 +226,12 @@ for t in "${IDS[@]}"; do
       "$PROV" "${args[@]}" 2> "$W/prov.err" || die "provider failed closed for $cd $t: $(head -c 300 "$W/prov.err")"
       (cd "$rd/out" && sha256sum -c --quiet --strict SHA256SUMS > /dev/null 2>&1) || die "provider output for $cd $t does not verify its SHA256SUMS"
       rkv() { sed -n "s/^$1=//p" "$rd/out/receipt.txt"; }
+      ! grep -q "^provider=" "$rd/out/receipt.txt" || [ "$(rkv provider)" = genret ] ||
+        die "provider receipt for $cd $t says provider=$(rkv provider | head -n 1) (only genret; cortex-interop receipts are refused); no generation sent"
       [ "$(rkv contract)" = "$PCN" ] && [ "$(rkv mode)" = "$RMODE" ] && [ "$(rkv kind)" = "$kind" ] && [ "$(rkv k)" = "$K" ] &&
-        [ "$(rkv cap_bytes)" = "$CAP" ] && [ "$(rkv manifest_sha256)" = "${CMH[$kind]}" ] && [ "$(rkv recheck_sha256)" = "$RCKH" ] &&
+        [ "$(rkv cap_bytes)" = "$CAP" ] && [ "$(rkv manifest_sha256)" = "${CMH[$kind]}" ] && [ "$(rkv recheck_sha256)" = "$RCKH" ] && [ "$(rkv recheck_source_sha256)" = "$RCSH" ] &&
         [ "$(rkv suffix_sha256)" = "$(sha "$rd/out/suffix.txt")" ] && [ "$(rkv exclude_family)" = "$([ "$CONTROL" = cross-family ] && echo "${EXT[$t]}" || echo -)" ] ||
-        die "provider receipt for $cd $t does not match the call (contract, mode, kind, k, cap, manifest, recheck, family, suffix)"
+        die "provider receipt for $cd $t does not match the call (contract, mode, kind, k, cap, manifest, recheck, recheck_source $(rkv recheck_source_sha256) vs pinned $RCSH, family, suffix); no generation sent"
       suffix="$(cat "$rd/out/suffix.txt"; printf x)"; suffix="${suffix%x}"
       sh="$(blob "$suffix")"
       pc="$PCN" pcs="$PCS" ps="$PSHA" cms="${CMH[$kind]}" md="$RMODE" kk="$K" cap="$CAP" ex="$([ "$CONTROL" = cross-family ] && echo "${EXT[$t]}" || echo -)"
@@ -258,9 +267,9 @@ devsha="$(for t in "${DEVIDS[@]}"; do sha256sum "$DEVD/$t/requirement" "$DEVD/$t
   echo "seed_base=$SB"; echo "timeout_s=$TIMEOUT"; echo "retries=$RETRIES"; echo "repair_rounds=1"; echo "order=attempt,task,condition"
   echo "commit=$COMMIT"; echo "source_sha256=$srcsha"
   echo "prefix_sha256.A=$HA"; echo "prefix_sha256.B=$HB"; echo "examples_sha256=$EXSHA"
-  echo "provider_version=$PVER"; echo "provider_sha256=$PSHA"; echo "provider_contract_sha256=$PCS"; echo "recheck_sha256=$RCKH"; echo "corpus_manifest_sha256.raw=${CMH[raw]}"; echo "corpus_manifest_sha256.abstraction=${CMH[abstraction]}"
+  echo "provider_version=$PVER"; echo "provider_sha256=$PSHA"; echo "provider_contract_sha256=$PCS"; echo "recheck_sha256=$RCKH"; echo "recheck_source_sha256=$RCSH"; echo "corpus_manifest_sha256.raw=${CMH[raw]}"; echo "corpus_manifest_sha256.abstraction=${CMH[abstraction]}"
   echo "retrieval_mode=$RMODE"; echo "k=$K"; echo "cap_bytes=$CAP"; echo "control=$CONTROL"; echo "famsig_sha256=$([ "$CONTROL" = none ] && echo - || sha "$FS")"; echo "dev_meta_sha256=$([ "$CONTROL" = none ] && echo - || sha "$DM")"
-  echo "gate_sha256=$GSHA"; echo "greedy_gate_tasks=$(IFS=,; echo "${GT[*]}")"; echo "g0_task=$G0T"; echo "g0_seeds=$G0N"
+  echo "gate_sha256=$GSHA"; echo "greedy_gate_tasks=$(IFS=,; echo "${GT[*]}")"; echo "g0_task=$G0T"; echo "g0_seeds=$G0N"; echo "g0_seed_values=$(IFS=,; echo "${G0S[*]}")"
   echo "tasks=${#IDS[@]}"; echo "tasks_public_sha256=$(pubsha "$TASKS")"; echo "dev_public_sha256=$devsha"
   echo "manifests_sha256=$(sha "$S/manifests.tsv")"
 } > "$S/meta.txt"
@@ -320,7 +329,7 @@ g0_gate() { # sets G0V to PASS or FAIL; writes gate/g0 once (EXP445 G0 layout an
   ti="$(printf '%s\n' "${DEVIDS[@]}" | awk -v t="$G0T" '$0 == t { print NR }')"
   local msgs; msgs="$(first_msgs "$PFX_B" "$(user_msg "$DEVD/$G0T/requirement" "$DEVD/$G0T/prompt")")"
   for k in $(seq 1 $((G0N + 1))); do
-    s="$(g0_seed "$SB" "$([ "$k" -le "$G0N" ] && echo "$k" || echo 1)" "$ti")"
+    s="${G0S[$(( k <= G0N ? k - 1 : 0 ))]}" # protocol.json gates.g0.seed_values; the repeat = s1
     printf '%s\n' "$(request_json "$MODEL" "$msgs" "$MAXT" "$TEMP" "$TOPP" "$s" "$EXTRA")" > "$w/r$k.req.json"
   done
   base="${BASE%/}"; base="${base%/v1}"
@@ -338,6 +347,11 @@ g0_gate() { # sets G0V to PASS or FAIL; writes gate/g0 once (EXP445 G0 layout an
   mv "$w" "$g"
 }
 
+# protocol (GEN-1 review): every attempt-1 request gets a reply (a transport failure there is no_candidate by
+# transport) and every attempt-1 reply reports mode=greedy; otherwise the run is INVALID and stops sending
+a1bad() { awk -F'\t' 'NR > 1 && $14 == 1 && ($10 == "REQUEST FAILED" || $11 == "REQUEST FAILED" || $23 != "greedy" || ($3 == 2 && $24 != "greedy")) { print $1 " " $2 ": check " $10 " / " $11 ", mode " $23 " / " $24; exit }' "$OUT/log.tsv"; }
+a1stop() { local b; b="$(a1bad)"; [ -z "$b" ] || { run_sums; die "run INVALID, no further requests: attempt-1 reply not greedy or lost to transport ($b)"; }; }
+a1stop
 G0V=""
 for at in $(seq 1 "$ATT"); do
   if [ "$at" -ge 2 ]; then
@@ -386,6 +400,7 @@ for at in $(seq 1 "$ATT"); do
       hook after-log
       gen_sums "$d"
       touch "$d/done"
+      [ "$at" != 1 ] || a1stop
       echo "gen run.sh: $(cut -f1-3,10,11 <<< "$ROW" | tr '\t' ' ')" >&2
     done
   done

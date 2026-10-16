@@ -80,6 +80,8 @@ GTEMP="$(mk greedy_temperature)" GTOPP="$(mk greedy_top_p)" TEMP="$(mk temperatu
 mapfile -t IDS < <(awk -F'\t' '$1 == "A" { print $2 }' "$RUN/manifests.tsv" 2> /dev/null | LC_ALL=C sort)
 N="${#IDS[@]}"
 [ "$N" -gt 0 ] && [ "$N" = "$(mk tasks)" ] || bad "manifests.tsv names $N tasks, meta.txt $(mk tasks)"
+HELDOUT_N=60 # GEN-1 review relay: the held-out split has exactly 60 tasks (UNVERIFIED until GEN_PROTOCOL_V1 is final)
+[ "$TEST" = 1 ] || [ "$N" = "$HELDOUT_N" ] || bad "the run has $N tasks, the held-out split has $HELDOUT_N"
 [ "$(sha "$RUN/manifests.tsv")" = "$(mk manifests_sha256)" ] || bad "manifests.tsv is not the one meta.txt names"
 declare -A MAN TI
 i=0; for t in "${IDS[@]}"; do i=$((i + 1)); TI[$t]=$i; done
@@ -93,6 +95,14 @@ while IFS=$'\t' read -r cd t mh; do
   [ "$ph" = "$want" ] || bad "manifest $cd $t: prefix is not the meta prefix of condition $cd"
   for b in "$ph" "$sh" "$uh"; do [ -f "$RUN/blobs/$b" ] && [ "$(sha "$RUN/blobs/$b")" = "$b" ] || bad "manifest $cd $t: blob $b missing or altered"; done
   if [ "$cd" = A ] || [ "$cd" = B ]; then [ "$sh" = "$(shas "")" ] && [ "$(mfv retrieved)" = - ] || bad "manifest $cd $t carries retrieved material"; fi
+  if [ "$cd" = C ] || [ "$cd" = D ]; then # the provider's own record (genret-cli-v3): verifies, is the manifest's, names the pinned validator
+    ro="$RUN/retrieval/$(tr A-Z a-z <<< "$cd")/$t/out"; rkv() { sed -n "s/^$1=//p" "$ro/receipt.txt" 2> /dev/null; }
+    { [ -f "$ro/SHA256SUMS" ] && (cd "$ro" && sha256sum -c --strict --quiet SHA256SUMS > /dev/null 2>&1) && [ "$(sha "$ro/SHA256SUMS")" = "$(mfv retrieval_sha256)" ] &&
+      [ "$(rkv suffix_sha256)" = "$sh" ]; } || bad "retrieval $cd $t: output missing, altered, or not the manifest's"
+    ! grep -q "^provider=" "$ro/receipt.txt" 2> /dev/null || [ "$(rkv provider)" = genret ] || bad "retrieval $cd $t: provider=$(rkv provider | head -n 1), only genret"
+    [ "$(rkv recheck_sha256)" = "$(mk recheck_sha256)" ] && [ "$(rkv recheck_source_sha256)" = "$(mk recheck_source_sha256)" ] &&
+      [[ "$(mk recheck_source_sha256)" =~ ^[0-9a-f]{64}$ ]] || bad "retrieval $cd $t: validator recheck_source_sha256 '$(rkv recheck_source_sha256)' is not the pinned recheck.c"
+  fi
 done < "$RUN/manifests.tsv"
 for cd in A B C D; do for t in "${IDS[@]}"; do [ -n "${MAN[$cd:$t]:-}" ] || bad "no manifest for $cd $t"; done; done
 
@@ -146,6 +156,10 @@ while IFS=$'\t' read -r -a r; do
   [ -f "$d/r1.req.json" ] && [ "$(cat "$d/r1.req.json")" = "$q" ] || bad "request $s $t round 1 is not the request its manifest, pins and seed rule give"
   [ "${r[29]}" = "$(sed -n 's/^retrieved=//p' "$mf")" ] && [ "${r[30]}" = "$(sed -n 's/^suffix_bytes=//p' "$mf")" ] || bad "log.tsv row $s $t: retrieved / suffix_bytes differ from the manifest"
 done < "$W/rows"
+# protocol (GEN-1 review): every attempt-1 request got a reply, and every attempt-1 reply reports mode=greedy
+awk -F'\t' '$14 == 1 && ($10 == "REQUEST FAILED" || $11 == "REQUEST FAILED") { print "attempt-1 " $1 " " $2 ": no reply (transport): no_candidate by transport" }
+  $14 == 1 && $10 != "REQUEST FAILED" && ($23 != "greedy" || ($3 == 2 && $11 != "REQUEST FAILED" && $24 != "greedy")) { print "attempt-1 " $1 " " $2 ": reply mode " $23 " / " $24 ", not greedy" }' "$W/rows" |
+  while IFS= read -r m; do bad "$m"; done
 
 # ---- harness record ----------------------------------------------------------------------------------------
 sc="$H/score.txt"
@@ -184,6 +198,16 @@ for c in A B C D; do
   k="$(for t in "${IDS[@]}"; do if [ "${V[$(tr A-Z a-z <<< "$c")-1:$t]:-}" = ACCEPT ]; then echo; fi; done | wc -l)"
   [ "$("$GS" wilson4 "$k" "$N")" = "$("$X" wilson "$k" "$N")" ] || bad "genstat wilson4 and x445 wilson disagree at $k/$N"
 done
+
+# outcome class per task x condition, attempt 1 round 1 (GEN-1 review): ACCEPT, REJECT:<reason>, no_candidate
+# (the harness's no_candidate), MISSING (no harness verdict); a MISSING cell makes the run INVALID
+{ printf 'task\tA\tB\tC\tD\n'
+  for t in "${IDS[@]}"; do printf '%s' "$t"
+    for c in a b c d; do v="${V[$c-1:$t]:-}" w="${R[$c-1:$t]:-}"
+      if [ -z "$v" ]; then o=MISSING; elif [ "$v" = ACCEPT ]; then o=ACCEPT; elif [ "$w" = no_candidate ]; then o=no_candidate; else o="REJECT:$w"; fi
+      printf '\t%s' "$o"; [ "$o" != MISSING ] || bad "outcome $c-1 $t: MISSING"
+    done; printf '\n'
+  done; } > "$W/outcomes.tsv"
 
 # ---- aggregate -----------------------------------------------------------------------------------------------
 NB="$(cnt "$W/bad")"
@@ -250,8 +274,8 @@ grep -qP '\t' "$W/aggregate.txt" && die "internal: a tab in aggregate.txt"
   echo "input.harness_score_sha256=$(sha "$sc")"; echo "input.harness_candidates_sha256=$(sha "$H/candidates.sha256" 2> /dev/null || echo -)"
   for s in $(ls "$H/sets" | LC_ALL=C sort); do echo "input.harness_set.$s=$(sha "$H/sets/$s/verdicts.txt" 2> /dev/null || echo -)"; done
   echo "input.grading_receipt_sha256=$([ -n "$GRAD" ] && sha "$GRAD" || echo -)"; echo "input.pins_sha256=$([ -n "$PINS" ] && sha "$PINS" || echo -)"
-  echo "aggregate_sha256=$(sha "$W/aggregate.txt")"
+  echo "outcomes_sha256=$(sha "$W/outcomes.tsv")";   echo "aggregate_sha256=$(sha "$W/aggregate.txt")"
 } > "$W/receipt.txt"
-mkdir -p "$OUT"; cp "$W/aggregate.txt" "$W/receipt.txt" "$OUT/"
+mkdir -p "$OUT"; cp "$W/aggregate.txt" "$W/receipt.txt" "$W/outcomes.tsv" "$OUT/"
 (cd "$OUT" && sha256sum receipt.txt > receipt.sha256)
 echo "gen reduce.sh: verdict $VERDICT ($(sed -n 's/^reason.1=//p' "$OUT/aggregate.txt" | head -c 200)); receipt $OUT/receipt.txt"
