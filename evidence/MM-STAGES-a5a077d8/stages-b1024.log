@@ -1,0 +1,11 @@
+STAGES 8192,768,2304 in=bf16 budget=1024 call_ms=10.835 core_ms=10.835 setup=0.001 pack=2.233 upload=0.000 launch=5.002 chip=4.999 launch_minus_chip=0.003 sync=0.000 copy_out=3.516 tflops_chip=5.799 tflops_call=2.676 chip_share=46.1%
+STAGES 8192,768,2304 in=f32 budget=1024 call_ms=12.583 core_ms=12.583 setup=0.001 pack=3.889 upload=0.000 launch=5.196 chip=5.195 launch_minus_chip=0.002 sync=0.000 copy_out=3.503 tflops_chip=5.581 tflops_call=2.304 chip_share=41.3%
+STAGES 8192,768,768 in=bf16 budget=1024 call_ms=5.682 core_ms=5.682 setup=0.001 pack=2.178 upload=0.000 launch=2.048 chip=2.047 launch_minus_chip=0.001 sync=0.000 copy_out=1.461 tflops_chip=4.721 tflops_call=1.701 chip_share=36.0%
+STAGES 8192,768,768 in=f32 budget=1024 call_ms=6.996 core_ms=6.996 setup=0.001 pack=3.839 upload=0.000 launch=2.045 chip=2.043 launch_minus_chip=0.002 sync=0.000 copy_out=1.110 tflops_chip=4.730 tflops_call=1.381 chip_share=29.2%
+STAGES 8192,768,3072 in=bf16 budget=1024 call_ms=15.769 core_ms=15.769 setup=0.001 pack=2.412 upload=0.000 launch=8.358 chip=8.356 launch_minus_chip=0.002 sync=0.000 copy_out=5.000 tflops_chip=4.626 tflops_call=2.451 chip_share=53.0%
+STAGES 8192,768,3072 in=f32 budget=1024 call_ms=17.077 core_ms=17.077 setup=0.001 pack=4.015 upload=0.001 launch=8.493 chip=8.489 launch_minus_chip=0.004 sync=0.000 copy_out=4.552 tflops_chip=4.554 tflops_call=2.264 chip_share=49.7%
+STAGES 8192,3072,768 in=bf16 budget=1024 call_ms=14.794 core_ms=14.794 setup=0.001 pack=8.081 upload=0.000 launch=5.720 chip=5.718 launch_minus_chip=0.002 sync=0.000 copy_out=0.984 tflops_chip=6.760 tflops_call=2.613 chip_share=38.7%
+STAGES 8192,3072,768 in=f32 budget=1024 call_ms=26.220 core_ms=26.220 setup=0.001 pack=18.995 upload=0.000 launch=5.833 chip=5.831 launch_minus_chip=0.002 sync=0.000 copy_out=1.376 tflops_chip=6.630 tflops_call=1.474 chip_share=22.2%
+STAGES 1024,768,50304 in=bf16 budget=1024 call_ms=26.839 core_ms=26.838 setup=0.001 pack=0.878 upload=0.000 launch=17.855 chip=17.850 launch_minus_chip=0.005 sync=0.000 copy_out=8.157 tflops_chip=4.433 tflops_call=2.948 chip_share=66.5%
+STAGES 1024,768,50304 in=f32 budget=1024 call_ms=27.124 core_ms=27.124 setup=0.001 pack=1.474 upload=0.000 launch=17.554 chip=17.551 launch_minus_chip=0.003 sync=0.000 copy_out=8.150 tflops_chip=4.508 tflops_call=2.917 chip_share=64.7%
+PASS: 410 checks, 0 failed
