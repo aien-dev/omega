@@ -47,82 +47,10 @@ name: Host suites
 #   branch-reuse, r15-*-host, r16-inventory/negative/surface.
 
 on:
+  # Retired from pull requests and pushes on 2026-10-16 (ADR 0033 Decision 11, phase 3): the Spark
+  # runs these gates (tests/gates/) and the required AIEN Verification check verifies its signed
+  # bundle. Kept as a manual trigger so a hosted run is still possible when needed.
   workflow_dispatch:
-  push:
-    branches: [main]
-  pull_request:
-    paths:
-      - 'Makefile'
-      - '.github/workflows/host-suites.yml'
-      - 'src/sha256.*'
-      # searchtrace (links the Omega core and realization)
-      - 'src/searchtrace/**'
-      - 'tests/searchtrace/**'
-      - 'mk/searchtrace.mk'
-      - 'src/omega_*'
-      - 'src/aarch64_*'
-      # estimation
-      - 'src/estimation/**'
-      - 'tests/estimation/**'
-      - 'tools/estimation/**'
-      - 'mk/estimation*.mk'
-      # ans (Inertial Alignment v1, ARCH-0032)
-      - 'src/ans/**'
-      - 'tests/ans/**'
-      - 'mk/ans.mk'
-      - 'docs/ans/**'
-      - 'docs/estimation/EST3C_PROTOCOL_V3.md'
-      - 'docs/estimation/receipts/est3c-v3/**'
-      - 'evidence/R15/raw/**'
-      # numeric (Gate 5 CPU tier)
-      - 'tests/test_omega_numeric.c'
-      - 'tests/numeric_oracle.h'
-      - 'tests/run_numeric_gates.sh'
-      - 'tools/test_numeric_qualify.sh'
-      - 'tools/numeric_*'
-      - 'tools/m19r_qualify.sh'
-      - 'tools/m19r_campaign.sh'
-      - 'tools/chipwait_campaign.sh'
-      - 'tools/test_chipwait_campaign.sh'
-      - 'tools/json_canon.c'
-      - 'tools/e1_*'
-      # chip-tool-selftests (host-only self-tests of chip tooling, omega #425)
-      - 'tools/gate14_combine.sh'
-      - 'tools/test_gate14_combine.sh'
-      - 'tools/window_lane_guard.sh'
-      - 'tests/window_lane_guard_test.sh'
-      - 'tests/test_omega_unwritten_trap.c'
-      - 'tests/test_omega_ldst_gb10.c'
-      # train (M22 optimizer substrate + E5 provenance)
-      - 'src/train/**'
-      - 'tests/train/**'
-      - 'mk/train.mk'
-      # OSC-1 compiler slice + OSC-0B model (compiler job only; see its guard step;
-      # the job also runs on src/aarch64_* changes, already listed above: OSC-2 item 4)
-      - 'src/compiler/**'
-      - 'tests/compiler/**'
-      - 'mk/compiler.mk'
-      # checker2 + signed realization receipts (one-layer stage 3, omega#446); its differential
-      # and LRAT gate also run when the compiler, sha256 or the vendored Ed25519 change
-      - 'src/checker2/**'
-      - 'tests/checker2/**'
-      - 'mk/checker2.mk'
-      - 'spec/one-layer-receipts.md'
-      # one-layer acceptance, exp445-tools and omegese-oracle: each job's changed-path guard below
-      # lists its files; without them here a pull request that touches only those files ran none
-      - 'tests/one_layer/**'
-      - 'mk/one-layer-acceptance.mk'
-      - 'evidence/ONE-LAYER-1/**'
-      - 'src/omega_program*'
-      - 'src/omega_exec*'
-      - 'src/omega_realize*'
-      - 'tools/omega_emit/**'
-      - 'tools/exp445/**'
-      - 'tools/omegese/**'
-      - 'mk/omega-emit.mk'
-      - 'mk/omegese.mk'
-      - 'docs/one_layer/EXP445_PROTOCOL.md'
-      - 'docs/one_layer/OMEGESE.md'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}

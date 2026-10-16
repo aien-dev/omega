@@ -1,49 +1,10 @@
 name: Resident Reaction Host
 
 on:
-  pull_request:
-    paths:
-      - 'src/runtime/**'
-      - 'tests/runtime/**'
-      - 'Makefile'
-      - 'src/omega_matvec_quad.*'
-      - 'src/omega_types.h'
-      - 'src/omega_core.*'
-      - 'src/omega_canonical.*'
-      - 'src/omega_codec.*'
-      - 'src/omega_validate.*'
-      - 'src/visor/visor_effect_request.*'
-      - 'tests/effect/**'
-      - 'src/omega_program.*'
-      - 'src/omega_library.*'
-      - 'src/omega_discovery.*'
-      - 'src/language/**'
-      - 'tests/program/**'
-      - 'mk/program-id.mk'
-      - 'src/omega_realize_synth.*'
-      - 'src/aarch64_decoder.*'
-      - 'src/visor/visor_realization.*'
-      - 'tests/realize/**'
-      - 'mk/program-realize.mk'
-      - 'mk/machine-identity.mk'
-      - 'src/fabric/**'
-      - 'tests/fabric/**'
-      - 'mk/fabric.mk'
-      - 'src/omega_evidence.*'
-      - 'src/sha256.*'
-      - '.github/workflows/rx-host.yml'
-      - 'aienos.lock'
-      - 'argus.lock'
-      - 'tools/r16_authpath.sh'
-      - 'tools/r16_prod_hygiene.sh'
-      - 'tools/r16_prod_refuses.sh'
-      - 'tools/ci_declare_skip.sh'
-  # Every push to main re-tests the merge result, whatever it touched (no path
-  # filter): a merge can break the runtime through files outside the PR filter.
-  push:
-    branches:
-      - main
-      - 'feat/rx-*'
+  # Retired from pull requests and pushes on 2026-10-16 (ADR 0033 Decision 11, phase 3): the Spark
+  # runs these gates (tests/gates/) and the required AIEN Verification check verifies its signed
+  # bundle. Kept as a manual trigger so a hosted run is still possible when needed.
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
