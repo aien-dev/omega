@@ -28,15 +28,17 @@ examples_one=one.list
 examples_many=many.list
 # retrieval: provider_contract only (tools/gen/retrieval/CONTRACT.md; protocol.json retrieval.contract), C = --kind raw
 # over the raw record set, D = --kind abstraction over the abstraction record set (protocol.json record_sets.*);
-# each manifest = a records/MANIFEST, its sha256 = the content of that set's SET.sha256; recheck = D's validator
-provider=PLACEHOLDER build/gen/genret
+# each manifest = a records/MANIFEST, its sha256 = the content of that set's SET.sha256; recheck = D's validator as
+# built by make gen-retrieval, which writes its sha256 to recheck_sha256_file (passed as --recheck-sha256)
+provider=PLACEHOLDER build/gen_retrieval/genret
 provider_contract=genret-cli-v3
-provider_contract_sha256=PLACEHOLDER (genret-cli-v3 CONTRACT.md sha256, pending Agent E)
+provider_contract_sha256=ee21d714d911cf1cc459cba00805cceb9354b02bf8d6974e4d96c5c5dd01a3ac
 corpus_manifest_raw=PLACEHOLDER tests/one_layer/generalization/corpus/raw/records/MANIFEST
 corpus_manifest_raw_sha256=PLACEHOLDER
 corpus_manifest_abstraction=PLACEHOLDER tests/one_layer/generalization/corpus/abstraction/records/MANIFEST
 corpus_manifest_abstraction_sha256=PLACEHOLDER
-recheck=PLACEHOLDER build/gen_abstract/recheck
+recheck=PLACEHOLDER build/gen_retrieval/recheck
+recheck_sha256_file=PLACEHOLDER build/gen_retrieval/recheck.sha256
 retrieval_mode=normal
 k=3
 cap_bytes=4096

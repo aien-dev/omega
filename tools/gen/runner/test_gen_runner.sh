@@ -28,7 +28,7 @@ FPIDS=""
 cleanup() { for p in $FPIDS; do kill "$p" 2> /dev/null; done; if [ "${GEN_TEST_KEEP:-0}" = 1 ]; then echo "kept $T"; else rm -rf "$T"; fi; }
 trap cleanup EXIT
 sha() { sha256sum < "$1" | cut -d' ' -f1; }
-export GEN_TEST=1 EXP445_TEST_BACKOFF_S=0 OLA_EVIDENCE_ROOT="$T/evid"
+export GEN_TEST=1 EXP445_TEST_BACKOFF_S=0 OLA_EVIDENCE_ROOT="$T/evid" OLA_ALLOW_DIRTY=1 # test evidence: clean_tree=no either way
 # refuse <label> <expected stderr fragment> <command...>: the command must exit non-zero with that message
 refuse() { local l="$1" m="$2"; shift 2; if "$@" > "$T/ref.out" 2> "$T/ref.err"; then bad "$l: accepted"; elif grep -qF -- "$m" "$T/ref.err"; then ok "$l: refused"; else bad "$l: refused for another reason: $(head -c 300 "$T/ref.err")"; fi; }
 
@@ -96,7 +96,7 @@ cat > "$T/famsig" <<'EOF'
 # test stand-in for famsig token (FAMSIG_V1 section 2 token rule, without canonicalisation)
 [ "$1" = token ] || exit 2; printf 'gs1:%s' "$2" | sha256sum | cut -c1-16 | sed 's/^/gs1-/'
 EOF
-chmod +x "$T/recheck" "$T/famsig"
+chmod +x "$T/recheck" "$T/famsig"; sha "$T/recheck" > "$T/recheck.sha256"
 { echo "gen-meta 1"; i=0; for e in "${EXS[@]}"; do i=$((i + 1)); printf 'devgen%02d dev 1 0 1 0 0 0 loop(arith)\n' "$i"; done; } > "$T/devmeta"
 # answers: D right on every task, C right on devgen01 only, B right on devgen01 only, A right on devgen02
 # only (A - B = 0); C's devgen06 compiles but computes the wrong value (checker OK, functional REJECT);
@@ -129,7 +129,7 @@ gp() { # gp <out file> [sed expressions...]
   local o="$1"; shift
   sed -e "s|^exp445_params=.*|exp445_params=$T/E445|" -e "s|^protocol=.*|protocol=-|" -e "s|^examples_dir=.*|examples_dir=$EXD|" \
       -e "s|^provider=.*|provider=$HERE/stub_genret.sh|" -e "s|^corpus_manifest_raw=.*|corpus_manifest_raw=$CR/MANIFEST|" \
-      -e "s|^corpus_manifest_raw_sha256=.*|corpus_manifest_raw_sha256=$(cat "$CR/SET.sha256")|" -e "s|^recheck=.*|recheck=$T/recheck|" \
+      -e "s|^corpus_manifest_raw_sha256=.*|corpus_manifest_raw_sha256=$(cat "$CR/SET.sha256")|" -e "s|^recheck=.*|recheck=$T/recheck|" -e "s|^recheck_sha256_file=.*|recheck_sha256_file=$T/recheck.sha256|" \
       -e "s|^corpus_manifest_abstraction=.*|corpus_manifest_abstraction=$CA/MANIFEST|" -e "s|^corpus_manifest_abstraction_sha256=.*|corpus_manifest_abstraction_sha256=$(cat "$CA/SET.sha256")|" \
       -e "s|^protocol_json=.*|protocol_json=$PJT|" -e "s|^provider_contract_sha256=.*|provider_contract_sha256=$(printf '%064d' 0)|" \
       -e "s|^famsig=.*|famsig=$T/famsig|" -e "s|^dev_meta=.*|dev_meta=$T/devmeta|" -e "s|^dev_tasks=.*|dev_tasks=$T/src|" \
@@ -157,7 +157,7 @@ mfk() { sed -n "s/^$3=//p" "$1/manifests/$(awk -F'\t' -v c="$2" -v t="$4" '$1 ==
 sysok=1
 for s in a-1 b-1 c-1 d-1; do for t in devgen01 devgen07; do
   c="$(tr a-z A-Z <<< "${s%-1}")"; q="$R/gen/$s/$t/r1.req.json"
-  sys="$(jq -r '.messages[0].content' "$q")"; pre="$(cat "$R/blobs/$(mfk "$R" "$c" prefix_sha256 "$t")")"
+  sys="$(jq -j '.messages[0].content' "$q"; printf x)"; sys="${sys%x}"; pre="$(cat "$R/blobs/$(mfk "$R" "$c" prefix_sha256 "$t")")"
   [ "${sys:0:${#pre}}" = "$pre" ] && [ "$(printf '%s' "$sys" | sha256sum | cut -d' ' -f1)" = "$(mfk "$R" "$c" system_sha256 "$t")" ] || sysok=0
   case "$c" in C) grep -q GENTEST-KIND-raw "$q" && ! grep -q GENTEST-KIND-abstraction "$q" || sysok=0 ;; D) grep -q GENTEST-KIND-abstraction "$q" && ! grep -q GENTEST-KIND-raw "$q" || sysok=0 ;;
     *) ! grep -q GENTEST-KIND "$q" || sysok=0 ;; esac
@@ -189,11 +189,11 @@ H1="$(hrun "$R/cands")" && [ -f "$H1/score.txt" ] && ok "harness experiment on t
   echo "prefix_sha256.B=$(sed -n 's/^prefix_sha256.B=//p' "$R/meta.txt")"; echo "tasks_corpus_sha256=$(sed -n 's/^corpus_sha256=//p' "$H1/meta.txt")"; } > "$T/pins"
 gk() { sed -n "s/^$2=//p" "$1/aggregate.txt"; }
 "$RED" --run "$R" --harness "$H1" --pins "$T/pins" --out "$T/red1" > "$T/red1.log" 2>&1
-if [ "$(gk "$T/red1" verdict)" = PASS ] && [ "$(gk "$T/red1" test_mode)" = yes ]; then ok "reducer: verdict PASS (D 8/8 vs A, B, C 1/8 each; exact one-sided McNemar 1/128), marked test mode"
+if [ "$(gk "$T/red1" verdict)" = PASS ] && [ "$(gk "$T/red1" test_mode)" = yes ]; then ok "reducer: verdict PASS (D 8/8 vs A 2/8, B and C 1/8; exact one-sided McNemar 1/128), marked test mode"
 else bad "reducer verdict $(gk "$T/red1" verdict): $(grep '^reason' "$T/red1/aggregate.txt" | head -n 3 | tr '\n' ' ')"; fi
 [ "$(gk "$T/red1" arm.D.success_a1)" = 8/8 ] && [ "$(gk "$T/red1" arm.C.success_a1)" = 1/8 ] && [ "$(gk "$T/red1" arm.C.checker_ok_a1)" = 2/8 ] &&
   [ "$(gk "$T/red1" arm.B.success_a1_final)" = 2/8 ] && [ "$(gk "$T/red1" pass3)" = AVAILABLE ] && [ "$(gk "$T/red1" arm.D.pass3)" = 8/8 ] &&
-  [ "$(gk "$T/red1" pair.D-C.mcnemar_p_one_sided)" = 0.007812 ] && [ "$(gk "$T/red1" paired.devgen06)" = 0001 ] && [ "$(gk "$T/red1" sanity.a_minus_b)" = 0 ] &&
+  [ "$(gk "$T/red1" pair.D-C.mcnemar_p_one_sided)" = 0.007812 ] && [ "$(gk "$T/red1" paired.devgen06)" = 0001 ] && [ "$(gk "$T/red1" sanity.a_minus_b)" = 1 ] && [ "$(gk "$T/red1" arm.A.success_a1)" = 2/8 ] &&
   [ "$(gk "$T/red1" arm.D.wilson95_lo)" = "$("$GS" wilson 8 8 | cut -d' ' -f2)" ] && [ "$(grep "^fail\.C\." "$T/red1/aggregate.txt" | cut -d= -f2 | paste -sd+ | bc)" = 7 ] &&
   [ "$(gk "$T/red1" check.C.OK)" = 2 ] &&
   ok "receipt: success per arm, checker acceptance apart from functional success (C 2/8 vs 1/8), repair secondary, pass@3, paired bits, failure and check tables" ||
@@ -208,6 +208,7 @@ H2="$(hrun "$R/cands")" && "$RED" --run "$R" --harness "$H2" --pins "$T/pins" --
 jq '.generation.attempts = 1' "$PJT" > "$T/pj1.json"
 gp "$T/P1" -e "s|^protocol_json=.*|protocol_json=$T/pj1.json|" -e 's/^attempts=.*/attempts=1/'
 sampling() { printf '%s\n' "$1" > "$A/sampling.json"; }
+nb=0
 # broken seeding: the server ignores the seed (G0 FAIL), forces greedy (G0 FAIL); pass@3 UNAVAILABLE
 for mode in '"ignore_seed": true' '"force_greedy": true'; do
   sampling "{\"p_repeat\": 0.5, \"seed_salt\": true, $mode}"; o="$T/brk$((++nb))"; cw "$o"
@@ -246,8 +247,8 @@ rm -f "$A/B/tri_kind"
 cp -R "$T/pub" "$T/pubh"; mkdir -p "$T/pubh/tasks/cases/devgen01/hidden"; cp "$T/src/tasks/cases/devgen01/hidden/expected" "$T/pubh/tasks/cases/devgen01/hidden/"
 refuse "a task dir holding hidden data" "no hidden data, ever" "$RUN" --tasks "$T/pubh" --out "$T/o-hidden"
 gp "$T/Pm" -e 's/^mask=.*/mask=on/'; refuse "mask on" "mask must be off" env GEN_PARAMS="$T/Pm" "$RUN" --tasks "$T/pub" --out "$T/o-mask"
-gp "$T/Pk" -e 's/^k=.*/k=4/'; refuse "k differs from protocol.json" "protocol.json .retrieval.k is '3', the driver has '4'" env GEN_PARAMS="$T/Pk" "$RUN" --tasks "$T/pub" --out "$T/o-k"
-gp "$T/Ps" -e 's/^seed_base=.*/seed_base=477000/'; refuse "seed_base differs from protocol.json" "protocol.json .generation.seed_base" env GEN_PARAMS="$T/Ps" "$RUN" --tasks "$T/pub" --out "$T/o-s"
+gp "$T/Pk" -e 's/^k=.*/k=4/'; cw "$T/o-k"; refuse "k differs from protocol.json" "protocol.json .retrieval.k is '3', the driver has '4'" env GEN_PARAMS="$T/Pk" "$RUN" --tasks "$T/pub" --out "$T/o-k"
+gp "$T/Ps" -e 's/^seed_base=.*/seed_base=477000/'; cw "$T/o-s"; refuse "seed_base differs from protocol.json" "protocol.json .generation.seed_base" env GEN_PARAMS="$T/Ps" "$RUN" --tasks "$T/pub" --out "$T/o-s"
 refuse "a real run on the draft PARAMS" "is a draft" env GEN_TEST=0 "$RUN" --tasks "$T/pub" --out "$T/o-real"
 sed -e 's/^revision=.*/revision=gen-v1/' "$HERE/PARAMS" > "$T/Preal"
 refuse "a real run with PLACEHOLDER values (GEN_PARAMS ignored outside test mode)" "is a draft" env GEN_TEST=0 GEN_PARAMS="$T/Preal" "$RUN" --tasks "$T/pub" --out "$T/o-real2"

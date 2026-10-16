@@ -126,8 +126,11 @@ declare -A CMF CMH
 CMF[raw]="$(rp "$(pv corpus_manifest_raw)")" CMH[raw]="$(pv corpus_manifest_raw_sha256)"
 CMF[abstraction]="$(rp "$(pv corpus_manifest_abstraction)")" CMH[abstraction]="$(pv corpus_manifest_abstraction_sha256)"
 setck "${CMF[raw]}" "${CMH[raw]}"; setck "${CMF[abstraction]}" "${CMH[abstraction]}"
-RCK="$(rp "$(pv recheck)")"
-[ -x "$RCK" ] || die "recheck $RCK is not executable (make gen-abstract builds build/gen_abstract/recheck)"
+RCK="$(rp "$(pv recheck)")" RCKF="$(rp "$(pv recheck_sha256_file)")"
+[ -x "$RCK" ] || die "recheck $RCK is not executable (make gen-retrieval builds build/gen_retrieval/recheck)"
+RCKH="$(cat "$RCKF" 2> /dev/null || true)"
+[[ "$RCKH" =~ ^[0-9a-f]{64}$ ]] && [ "$(sha "$RCK")" = "$RCKH" ] ||
+  die "recheck_sha256_file $RCKF is not the sha256 of $RCK (make gen-retrieval writes both; genret-cli-v3 --recheck-sha256)"
 RMODE="$(kv retrieval_mode)" K="$(kv k)" CAP="$(kv cap_bytes)"
 [ "$K" = 3 ] && [ "$CAP" = 4096 ] && [ "$RMODE" = normal ] || [ "$TEST" = 1 ] || die "k=$K cap_bytes=$CAP retrieval_mode=$RMODE: the preregistered values are k=3 cap_bytes=4096 normal"
 case "$CONTROL" in none) ;; cross-family)
@@ -209,12 +212,17 @@ for t in "${IDS[@]}"; do
     if [ "$cd" = C ] || [ "$cd" = D ]; then
       kind=raw; [ "$cd" = D ] && kind=abstraction
       rd="$S/retrieval/$c/$t"; mkdir -p "$rd"
-      args=(query --corpus "${CMF[$kind]}" --manifest-sha256 "${CMH[$kind]}" --recheck "$RCK" --kind "$kind" --k "$K" --cap-bytes "$CAP" --requirement "$req" --prompt "$pr" --out "$rd/out" --mode "$RMODE")
+      args=(query --corpus "${CMF[$kind]}" --manifest-sha256 "${CMH[$kind]}" --recheck "$RCK" --recheck-sha256 "$RCKH" --kind "$kind" --k "$K" --cap-bytes "$CAP" --requirement "$req" --prompt "$pr" --out "$rd/out" --mode "$RMODE")
       [ "$CONTROL" = cross-family ] && args+=(--exclude-family "${EXT[$t]}")
       printf '%s\n' "${args[@]}" | awk -v a="${CMF[$kind]}" -v b="$req" -v c="$pr" -v d="$rd/out" -v e="$RCK" \
         '{ if ($0 == a) $0 = "<corpus_manifest>"; else if ($0 == b) $0 = "<requirement>"; else if ($0 == c) $0 = "<prompt>"; else if ($0 == d) $0 = "<out>"; else if ($0 == e) $0 = "<recheck>"; print }' > "$rd/argv"
       "$PROV" "${args[@]}" 2> "$W/prov.err" || die "provider failed closed for $cd $t: $(head -c 300 "$W/prov.err")"
       (cd "$rd/out" && sha256sum -c --quiet --strict SHA256SUMS > /dev/null 2>&1) || die "provider output for $cd $t does not verify its SHA256SUMS"
+      rkv() { sed -n "s/^$1=//p" "$rd/out/receipt.txt"; }
+      [ "$(rkv contract)" = "$PCN" ] && [ "$(rkv mode)" = "$RMODE" ] && [ "$(rkv kind)" = "$kind" ] && [ "$(rkv k)" = "$K" ] &&
+        [ "$(rkv cap_bytes)" = "$CAP" ] && [ "$(rkv manifest_sha256)" = "${CMH[$kind]}" ] && [ "$(rkv recheck_sha256)" = "$RCKH" ] &&
+        [ "$(rkv suffix_sha256)" = "$(sha "$rd/out/suffix.txt")" ] && [ "$(rkv exclude_family)" = "$([ "$CONTROL" = cross-family ] && echo "${EXT[$t]}" || echo -)" ] ||
+        die "provider receipt for $cd $t does not match the call (contract, mode, kind, k, cap, manifest, recheck, family, suffix)"
       suffix="$(cat "$rd/out/suffix.txt"; printf x)"; suffix="${suffix%x}"
       sh="$(blob "$suffix")"
       pc="$PCN" pcs="$PCS" ps="$PSHA" cms="${CMH[$kind]}" md="$RMODE" kk="$K" cap="$CAP" ex="$([ "$CONTROL" = cross-family ] && echo "${EXT[$t]}" || echo -)"
@@ -250,7 +258,7 @@ devsha="$(for t in "${DEVIDS[@]}"; do sha256sum "$DEVD/$t/requirement" "$DEVD/$t
   echo "seed_base=$SB"; echo "timeout_s=$TIMEOUT"; echo "retries=$RETRIES"; echo "repair_rounds=1"; echo "order=attempt,task,condition"
   echo "commit=$COMMIT"; echo "source_sha256=$srcsha"
   echo "prefix_sha256.A=$HA"; echo "prefix_sha256.B=$HB"; echo "examples_sha256=$EXSHA"
-  echo "provider_version=$PVER"; echo "provider_sha256=$PSHA"; echo "provider_contract_sha256=$PCS"; echo "recheck_sha256=$(sha "$RCK")"; echo "corpus_manifest_sha256.raw=${CMH[raw]}"; echo "corpus_manifest_sha256.abstraction=${CMH[abstraction]}"
+  echo "provider_version=$PVER"; echo "provider_sha256=$PSHA"; echo "provider_contract_sha256=$PCS"; echo "recheck_sha256=$RCKH"; echo "corpus_manifest_sha256.raw=${CMH[raw]}"; echo "corpus_manifest_sha256.abstraction=${CMH[abstraction]}"
   echo "retrieval_mode=$RMODE"; echo "k=$K"; echo "cap_bytes=$CAP"; echo "control=$CONTROL"; echo "famsig_sha256=$([ "$CONTROL" = none ] && echo - || sha "$FS")"; echo "dev_meta_sha256=$([ "$CONTROL" = none ] && echo - || sha "$DM")"
   echo "gate_sha256=$GSHA"; echo "greedy_gate_tasks=$(IFS=,; echo "${GT[*]}")"; echo "g0_task=$G0T"; echo "g0_seeds=$G0N"
   echo "tasks=${#IDS[@]}"; echo "tasks_public_sha256=$(pubsha "$TASKS")"; echo "dev_public_sha256=$devsha"
@@ -345,7 +353,7 @@ for at in $(seq 1 "$ATT"); do
       [ -f "$d/done" ] && continue
       mkdir -p "$d"
       seed="$(seed_of "$SB" "$at" "${TI[$task]}")"
-      msgs="$(first_msgs "$(sys_of "$cd:$task")" "$user")"
+      sysv="$(sys_of "$cd:$task"; printf x)"; msgs="$(first_msgs "${sysv%x}" "$user")"
       if ask "$d" 1 "$(request_json "$MODEL" "$msgs" "$MAXT" "$tt" "$tp" "$seed" "$EXTRA")"; then
         a1="$(content_of "$d/r1.resp.json")"; printf '%s' "$a1" > "$d/r1.content"
         reader "$X" "$EMIT" omegese "$d/r1.content" "$d/r1" "$req"

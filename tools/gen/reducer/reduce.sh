@@ -181,7 +181,7 @@ for s in "${SETS[@]}"; do
 done
 # cross-check two Wilson programs (x445 = 4 decimals, z 1.959964)
 for c in A B C D; do
-  k="$(for t in "${IDS[@]}"; do [ "${V[$(tr A-Z a-z <<< "$c")-1:$t]:-}" = ACCEPT ] && echo; done | wc -l)"
+  k="$(for t in "${IDS[@]}"; do if [ "${V[$(tr A-Z a-z <<< "$c")-1:$t]:-}" = ACCEPT ]; then echo; fi; done | wc -l)"
   [ "$("$GS" wilson4 "$k" "$N")" = "$("$X" wilson "$k" "$N")" ] || bad "genstat wilson4 and x445 wilson disagree at $k/$N"
 done
 
@@ -233,7 +233,7 @@ if [ "$NB" -gt 0 ]; then VERDICT=INVALID; else VERDICT="$(gv decision)"; fi
     grep '^pair\.\|^sanity\.' "$W/paired"
     for t in "${IDS[@]}"; do echo "paired.$t=$(grep -P "^\Q$t\E\t" "$W/matrix.tsv" | cut -f2- | tr -d '\t')"; done
     for c in A B C D; do l="$(tr A-Z a-z <<< "$c")"
-      for t in "${IDS[@]}"; do [ "${V[$l-1:$t]}" = ACCEPT ] || echo "${R[$l-1:$t]}"; done | LC_ALL=C sort | uniq -c | awk -v c="$c" '{ print "fail." c "." $2 "=" $1 }'
+      for t in "${IDS[@]}"; do [ "${V[$l-1:$t]:-}" = ACCEPT ] || echo "${R[$l-1:$t]:-MISSING}"; done | LC_ALL=C sort | uniq -c | awk -v c="$c" '{ print "fail." c "." $2 "=" $1 }'
     done
     for c in A B C D; do l="$(tr A-Z a-z <<< "$c")"
       awk -F'\t' -v s="$l-1" '$1 == s { k = $10; if (k == "OK") st = "OK"; else if (k == "REQUEST FAILED") st = "request_failed"; else { split(k, w, " "); st = w[2]; sub(/:$/, "", st) } print st }' "$W/rows" |
