@@ -1,14 +1,17 @@
 #!/bin/sh
-# tools/gen/retrieval/test_genret.sh <genret> <recheck> <recheck source>: tests of the GEN-4 file-backed retrieval
-# provider (CONTRACT.md, genret-cli-v3) on the SYNTHETIC record set tools/gen/retrieval/fixtures/corpus/
+# tools/gen/retrieval/test_genret.sh <genret> <genret_anyrecheck> <recheck> <recheck source>: tests of the GEN-4
+# file-backed retrieval provider (CONTRACT.md, genret-cli-v3) on the SYNTHETIC record set tools/gen/retrieval/fixtures/corpus/
 # (Agent D's record schema v1, written by fixtures/make_fixtures.sh) and the fixture queries fixtures/tasks/.
 # CPU only, no network, no hidden data. Scores are re-derived by an independent sh + bc implementation
 # (tokens with tr, counts with grep, integer BM25 and the fixed-point log2 in bc) and the suffix by an
 # independent sh renderer.
 set -eu
-[ $# -eq 3 ] || { echo "usage: test_genret.sh <genret> <recheck> <recheck source>" >&2; exit 2; }
-G="$1" RC="$2" RSRC="$3"
+[ $# -eq 4 ] || { echo "usage: test_genret.sh <genret> <genret_anyrecheck> <recheck> <recheck source>" >&2; exit 2; }
+# <genret> is the production build, bound to <recheck>. <genret_anyrecheck> is the test-only build without
+# that binding; it is used only where a fake validator must run (GRC set).
+G="$1" GA="$2" RC="$3" RSRC="$4"
 case "$G" in /*) ;; *) G="$(pwd)/$G" ;; esac
+case "$GA" in /*) ;; *) GA="$(pwd)/$GA" ;; esac
 case "$RC" in /*) ;; *) RC="$(pwd)/$RC" ;; esac
 HERE="$(cd "$(dirname "$0")" && pwd)"
 FX="$HERE/fixtures"
@@ -133,8 +136,9 @@ t "two excluded families recorded in order" [ "$(rv "$W/famD" exclude_family)" =
 
 # ---- 6 fail closed: integrity problems stop the run, nothing is written --------------------------------
 R="$TK/devq_clamp/requirement" P="$TK/devq_clamp/prompt" O="$W/fx"
+gbin() { if [ -n "${GG:-}" ]; then echo "$GG"; elif [ -n "${GRC:-}" ]; then echo "$GA"; else echo "$G"; fi; }
 gq() { gm="$1" gs="$2" gr="$3" gp="$4"; shift 4
-  "$G" query --corpus "$gm" --manifest-sha256 "$gs" --recheck "${GRC:-$RC}" --recheck-sha256 "${GPIN:-$(rsha "${GRC:-$RC}")}" --kind raw --k 3 --cap-bytes 4096 \
+  "$(gbin)" query --corpus "$gm" --manifest-sha256 "$gs" --recheck "${GRC:-$RC}" --recheck-sha256 "${GPIN:-$(rsha "${GRC:-$RC}")}" --kind raw --k 3 --cap-bytes 4096 \
     --requirement "$gr" --prompt "$gp" --out "$O" "$@"; }
 cq() { gq "$1/MANIFEST" "$(sha "$1/MANIFEST")" "$R" "$P"; }     # cq <records dir>: query a mutated copy
 M0="$(sha "$MAN")"
@@ -193,6 +197,17 @@ O="$W/stubreal"; gq "$MAN" "$M0" "$R" "$P"; O="$W/fx"
 t "a stub validator under its own pin runs" [ -f "$W/stub/receipt.txt" ]
 t "stub validator: receipt differs from the real run" sh -c "! cmp -s '$W/stub/receipt.txt' '$W/stubreal/receipt.txt'"
 t "stub validator: receipt names the stub" [ "$(rv "$W/stub" recheck_sha256)" = "$(sha "$W/approve")" ]
+t "stub validator: source claim is unverified" [ "$(rv "$W/stub" recheck_source_sha256)" = unverified ]
+GG="$G" GRC="$W/approve" fatal_case "production genret refuses a stub under the stub's own pin" recheck_untrusted "$O" gq "$MAN" "$M0" "$R" "$P"
+t "refusal names the built-in binary pin" grep -q "is not the recheck this genret was built with ($RPIN)" "$W/fatal.err"
+cp "$RC" "$W/rc_copy"; printf 'x' >> "$W/rc_copy"
+GG="$G" GRC="$W/rc_copy" fatal_case "production genret refuses a modified recheck under its own pin" recheck_untrusted "$O" gq "$MAN" "$M0" "$R" "$P"
+O="$W/anyreal"; GG="$GA" gq "$MAN" "$M0" "$R" "$P"; O="$W/fx"
+for f in selected.tsv excluded.tsv suffix.txt query.txt; do
+  t "test build with the real recheck: $f identical to production" cmp -s "$W/stubreal/$f" "$W/anyreal/$f"
+done
+t "test build receipt differs only in the source claim" [ "$(diff "$W/stubreal/receipt.txt" "$W/anyreal/receipt.txt" | grep -c '^[<>]')" -eq 2 ]
+t "test build receipt says unverified" [ "$(rv "$W/anyreal" recheck_source_sha256)" = unverified ]
 t "real run: receipt names the pinned recheck" [ "$(rv "$W/stubreal" recheck_sha256)" = "$RPIN" ]
 t "receipt names the recheck source the build verified" [ "$(rv "$W/stubreal" recheck_source_sha256)" = "$(sha "$RSRC")" ]
 t "recheck source is D's frozen schema v1 recheck.c" [ "$(sha "$RSRC")" = 05cec285f7b7b2be68b1db1287661513e7e4715da44909065bdd0829daac02b6 ]

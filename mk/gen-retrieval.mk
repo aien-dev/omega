@@ -17,10 +17,13 @@ GEN_RETRIEVAL_MK := 1
 GENRET_DIR = $(OUT_DIR)/gen_retrieval
 GENRET_RECHECK_COMMIT = 937b033c78d087f1a0c64f28a29f4bab69f0a18a
 GENRET_RECHECK_SHA256 = 05cec285f7b7b2be68b1db1287661513e7e4715da44909065bdd0829daac02b6
-GENRET_CFLAGS = -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -Isrc \
-  -DGENRET_RECHECK_SOURCE_SHA256='"$(GENRET_RECHECK_SHA256)"'
+GENRET_CFLAGS = -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -Isrc
 GENRET_SAN = -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all
 GENRET_SRCS = tools/gen/retrieval/genret.c src/sha256.c src/sha256.h mk/gen-retrieval.mk
+# genret is bound to the recheck binary built (from the verified source) in this make run: both digests are
+# compiled in, and genret refuses any other validator binary
+GENRET_BIND = -DGENRET_RECHECK_SOURCE_SHA256='"$(GENRET_RECHECK_SHA256)"' \
+  -DGENRET_RECHECK_BINARY_SHA256="\"$$(cat $(GENRET_DIR)/recheck.sha256)\""
 
 ifneq ($(wildcard tools/gen/abstract/recheck.c),)
 GENRET_RECHECK_SRC = tools/gen/abstract/recheck.c
@@ -40,13 +43,21 @@ gen-retrieval-recheck-source: $(GENRET_RECHECK_SRC)
 	@echo "$(GENRET_RECHECK_SHA256)  $(GENRET_RECHECK_SRC)" | sha256sum -c --quiet || \
 	  { echo "gen-retrieval: $(GENRET_RECHECK_SRC) does not match GENRET_RECHECK_SHA256"; exit 1; }
 
-$(GENRET_DIR)/genret: $(GENRET_SRCS)
-	@mkdir -p $(GENRET_DIR)
-	$(CC) $(GENRET_CFLAGS) -O2 -o $@ tools/gen/retrieval/genret.c src/sha256.c
+$(GENRET_DIR)/genret: $(GENRET_SRCS) $(GENRET_DIR)/recheck
+	$(CC) $(GENRET_CFLAGS) $(GENRET_BIND) -O2 -o $@ tools/gen/retrieval/genret.c src/sha256.c
 
-$(GENRET_DIR)/genret_asan: $(GENRET_SRCS)
+$(GENRET_DIR)/genret_asan: $(GENRET_SRCS) $(GENRET_DIR)/recheck
+	$(CC) $(GENRET_CFLAGS) $(GENRET_BIND) $(GENRET_SAN) -o $@ tools/gen/retrieval/genret.c src/sha256.c
+
+# test-only builds without the built-in binary pin (receipt: recheck_source_sha256=unverified); the tests use
+# them only to drive fake validators. Never use them for experiment runs.
+$(GENRET_DIR)/genret_anyrecheck: $(GENRET_SRCS)
 	@mkdir -p $(GENRET_DIR)
-	$(CC) $(GENRET_CFLAGS) $(GENRET_SAN) -o $@ tools/gen/retrieval/genret.c src/sha256.c
+	$(CC) $(GENRET_CFLAGS) -DGENRET_ANY_RECHECK -O2 -o $@ tools/gen/retrieval/genret.c src/sha256.c
+
+$(GENRET_DIR)/genret_anyrecheck_asan: $(GENRET_SRCS)
+	@mkdir -p $(GENRET_DIR)
+	$(CC) $(GENRET_CFLAGS) -DGENRET_ANY_RECHECK $(GENRET_SAN) -o $@ tools/gen/retrieval/genret.c src/sha256.c
 
 $(GENRET_DIR)/recheck: $(GENRET_RECHECK_SRC) src/sha256.c src/sha256.h mk/gen-retrieval.mk
 	@mkdir -p $(GENRET_DIR)
@@ -56,9 +67,10 @@ $(GENRET_DIR)/recheck: $(GENRET_RECHECK_SRC) src/sha256.c src/sha256.h mk/gen-re
 
 gen-retrieval: gen-retrieval-recheck-source $(GENRET_DIR)/genret $(GENRET_DIR)/recheck
 
-test-gen-retrieval: gen-retrieval-recheck-source $(GENRET_DIR)/genret $(GENRET_DIR)/genret_asan $(GENRET_DIR)/recheck
-	sh tools/gen/retrieval/test_genret.sh $(abspath $(GENRET_DIR)/genret) $(abspath $(GENRET_DIR)/recheck) \
-	  $(abspath $(GENRET_RECHECK_SRC))
-	ASAN_OPTIONS=detect_leaks=0 sh tools/gen/retrieval/test_genret.sh $(abspath $(GENRET_DIR)/genret_asan) \
+test-gen-retrieval: gen-retrieval-recheck-source $(GENRET_DIR)/genret $(GENRET_DIR)/genret_asan \
+  $(GENRET_DIR)/genret_anyrecheck $(GENRET_DIR)/genret_anyrecheck_asan $(GENRET_DIR)/recheck
+	sh tools/gen/retrieval/test_genret.sh $(abspath $(GENRET_DIR)/genret) $(abspath $(GENRET_DIR)/genret_anyrecheck) \
 	  $(abspath $(GENRET_DIR)/recheck) $(abspath $(GENRET_RECHECK_SRC))
+	ASAN_OPTIONS=detect_leaks=0 sh tools/gen/retrieval/test_genret.sh $(abspath $(GENRET_DIR)/genret_asan) \
+	  $(abspath $(GENRET_DIR)/genret_anyrecheck_asan) $(abspath $(GENRET_DIR)/recheck) $(abspath $(GENRET_RECHECK_SRC))
 endif

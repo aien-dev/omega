@@ -27,9 +27,20 @@
 
 #include "sha256.h"
 
-/* sha256 of the recheck.c the build verified and compiled next to genret (mk/gen-retrieval.mk) */
-#ifndef GENRET_RECHECK_SOURCE_SHA256
-#error "build with -DGENRET_RECHECK_SOURCE_SHA256='\"<64 hex>\"' (see mk/gen-retrieval.mk)"
+/* Validator binding (mk/gen-retrieval.mk). The make run checks recheck.c against its pinned sha256, builds
+ * build/gen_retrieval/recheck from it, and compiles genret with both digests:
+ *   GENRET_RECHECK_SOURCE_SHA256  the verified recheck.c
+ *   GENRET_RECHECK_BINARY_SHA256  the recheck binary built from it in the same make run
+ * genret runs no other validator binary, so recheck_source_sha256 in the receipt is a true claim.
+ * GENRET_ANY_RECHECK (test build genret_anyrecheck only, used by the tests to drive fake validators): no
+ * built-in binary pin, and the receipt says recheck_source_sha256=unverified. */
+#ifdef GENRET_ANY_RECHECK
+#define RECHECK_SOURCE_CLAIM "unverified"
+#else
+#if !defined(GENRET_RECHECK_SOURCE_SHA256) || !defined(GENRET_RECHECK_BINARY_SHA256)
+#error "build with -DGENRET_RECHECK_SOURCE_SHA256 and -DGENRET_RECHECK_BINARY_SHA256 (see mk/gen-retrieval.mk)"
+#endif
+#define RECHECK_SOURCE_CLAIM GENRET_RECHECK_SOURCE_SHA256
 #endif
 
 extern char **environ;
@@ -367,6 +378,11 @@ static int open_recheck(const char *bin, const char *pin, char sha[65])
     hexdigest(p, n, sha);
     free(p);
     if (strcmp(sha, pin) != 0) fatal("recheck_untrusted", "%s has sha256 %s, pinned %s", bin, sha, pin);
+#ifndef GENRET_ANY_RECHECK
+    if (strcmp(sha, GENRET_RECHECK_BINARY_SHA256) != 0)
+        fatal("recheck_untrusted", "%s (sha256 %s) is not the recheck this genret was built with (%s)", bin, sha,
+              GENRET_RECHECK_BINARY_SHA256);
+#endif
     return fd;
 }
 static void run_recheck(int binfd, const char *bin, const char *rdir, const char *mdir, rec *R, size_t nr)
@@ -434,6 +450,14 @@ static void tmp_clean(const char *tmp, outfile *fs, int nf)
     for (int j = 0; j < nf; j++) { snprintf(path, sizeof path, "%s/%s", tmp, fs[j].name); unlink(path); }
     rmdir(tmp);
 }
+static int fsync_dir(const char *path)
+{
+    int fd = open(path, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (fd < 0) return 0;
+    int ok = fsync(fd) == 0;
+    if (close(fd) != 0) ok = 0;
+    return ok;
+}
 static void write_out(const char *dir, outfile *fs, int nf)
 {
     char tmp[PATH_MAX];
@@ -458,12 +482,21 @@ static void write_out(const char *dir, outfile *fs, int nf)
         if (fd >= 0 && close(fd) != 0) ok = 0;
         if (!ok) { tmp_clean(tmp, fs, nf); fatal("write_failed", "cannot write %s/%s", tmp, fs[i].name); }
     }
+    if (!fsync_dir(tmp)) { tmp_clean(tmp, fs, nf); fatal("write_failed", "cannot fsync %s", tmp); }
     if (renameat2(AT_FDCWD, tmp, AT_FDCWD, dir, RENAME_NOREPLACE) != 0) {
         int e = errno;
         tmp_clean(tmp, fs, nf);
         if (e == EEXIST) fatal("out_exists", "%s exists", dir);
         fatal("write_failed", "cannot rename %s to %s", tmp, dir);
     }
+    /* make the rename durable: fsync the parent directory; on failure remove --out again */
+    char parent[PATH_MAX];
+    snprintf(parent, sizeof parent, "%.*s", (int)dl, dir);
+    char *slash = strrchr(parent, '/');
+    if (!slash) strcpy(parent, ".");
+    else if (slash == parent) parent[1] = 0;
+    else *slash = 0;
+    if (!fsync_dir(parent)) { tmp_clean(dir, fs, nf); fatal("write_failed", "cannot fsync %s", parent); }
 }
 
 static void usage(const char *why)
@@ -781,7 +814,7 @@ int main(int argc, char **argv)
     bputs(&br, "exclude_family=");
     if (!nexcl) bputs(&br, "-");
     for (int x = 0; x < nexcl; x++) { if (x) bputs(&br, ","); bputs(&br, excl[x]); }
-    bprintf(&br, "\nmanifest_sha256=%s\nrecheck_sha256=%s\nrecheck_source_sha256=%s\n", mdig, rsha, GENRET_RECHECK_SOURCE_SHA256);
+    bprintf(&br, "\nmanifest_sha256=%s\nrecheck_sha256=%s\nrecheck_source_sha256=%s\n", mdig, rsha, RECHECK_SOURCE_CLAIM);
     bprintf(&br, "requirement_sha256=%s\nprompt_sha256=%s\nquery_sha256=%s\n", d_req, d_pr, d_q);
     bprintf(&br, "records=%zu\nindexed=%zu\ntotal_tokens=%llu\nselected=%zu\n", nr, N, (unsigned long long)T, ns);
     bprintf(&br, "pad=%s\npad_reason=%s\nunpadded_bytes=%s\nsuffix_bytes=%zu\nlength_gap=%s\n", padv, pad_reason, unpv, bx.n, gapv);

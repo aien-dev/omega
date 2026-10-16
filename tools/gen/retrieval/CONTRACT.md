@@ -17,6 +17,8 @@ Version history:
     stopped (section 6).
   - New required `--recheck-sha256`. genret refuses any other validator binary (new fatal reason
     `recheck_untrusted`) and names the validator in the receipt.
+  - Re-review fold-in, with outputs for valid inputs unchanged: genret is bound to the recheck binary
+    built in the same make run (section 2), and directories are fsynced around the final rename.
   - Task files are opened once and read from the same descriptor.
   - Outputs appear atomically.
   - New fatal reason `internal`.
@@ -43,12 +45,15 @@ genret version                                  prints "genret-cli-v3"
 - Exit 0: success (an empty selection is a success). Exit 2: fatal (section 7). `--out` is not created.
 - `--out` must not exist. genret writes all files into a new sibling directory `<out>.tmp.<pid>` and
   renames it to `--out` without replacing anything (Linux `renameat2` with `RENAME_NOREPLACE`), so `--out`
-  either does not exist or holds every output file. If genret is killed before the rename, a
-  `<out>.tmp.<pid>` directory may remain. It is never `--out`.
+  either does not exist or holds every output file. Each file, the temp directory, and after the rename the
+  parent directory are fsynced. If that last fsync fails, `--out` is removed again and the run is fatal
+  `write_failed`. If genret is killed before the rename, a `<out>.tmp.<pid>` directory may remain. It is
+  never `--out`.
 - Default mode: `normal`. Each option except `--exclude-family` at most once. Unknown options are fatal.
 - `--recheck`: Agent D's validator. `make gen-retrieval` builds `build/gen_retrieval/recheck` from the
   pinned `recheck.c`, and writes its sha256 to `build/gen_retrieval/recheck.sha256`. That value is what
-  callers pass as `--recheck-sha256`.
+  callers pass as `--recheck-sha256`. The genret from the same make run accepts only that binary
+  (section 2).
 
 ## 2. Corpus input
 
@@ -64,10 +69,16 @@ genret version                                  prints "genret-cli-v3"
 - Validator pin: before reading any task or record file, genret opens `--recheck` once and hashes its
   bytes. If the sha256 differs from `--recheck-sha256`, the run stops with fatal `recheck_untrusted`. If the
   file is missing or unreadable, the reason is `recheck_failed`. Every batch executes that same open file
-  (`fexecve`), so the program that runs is the one that was hashed. The receipt records `recheck_sha256` (the
-  binary) and `recheck_source_sha256`. The source digest is compiled into genret: it is the `recheck.c` the
-  build checked against its pin and compiled into `build/gen_retrieval/recheck`. It describes `--recheck`
-  only when `--recheck-sha256` is that build's `recheck.sha256`.
+  (`fexecve`), so the program that runs is the one that was hashed.
+- Validator binding: the make run that builds genret first checks `recheck.c` against its pinned sha256,
+  builds `build/gen_retrieval/recheck` from it, and then compiles both digests into genret: the source digest
+  and the digest of that binary. genret also refuses (`recheck_untrusted`) any `--recheck` whose sha256 is
+  not the built-in binary digest, even when it matches `--recheck-sha256`. The receipt records
+  `recheck_sha256` (the binary that ran) and `recheck_source_sha256` (the verified `recheck.c` it was built
+  from), so both are true claims.
+- Test builds: `genret_anyrecheck` is compiled without the binary binding so the tests can drive fake
+  validators. Its receipt always says `recheck_source_sha256=unverified`. Its other outputs equal the
+  production build's, and the tests check that. Experiment runs use `genret` only.
 - Every listed record is passed to `recheck --receipts <MANIFEST dir>/receipts <record>...` (batches of 128,
   manifest order). recheck checks schema v1 sections 1 to 3 and that the receipt file exists, is this
   record's and hashes to its id. It must exit 0 and print exactly `OK <id>` per record, in order, with the id
