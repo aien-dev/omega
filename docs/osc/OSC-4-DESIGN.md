@@ -120,8 +120,10 @@ precedes the dot, so `a.b` member syntax (none today) stays free.
 11. Interpreter MIN/MAX spell out the minNum/maxNum rule of 1.1 item 6 in C (NaN tests, then the
     signed-zero order, then `<`); C `fmin`/`fmax` are never called.
 12. f32 literals are parsed with `strtof`, f64 with `strtod`; never strtod then cast (double rounding).
-13. Item 7 is a permanent language rule, not an OSC-4 exception: the Slice A PR adds a one-line
-    amendment to docs/adr/OMEGA-SYSTEMS-CORE-0000.md (inf and NaN are values under decision 6).
+13. Item 7 is a permanent language rule, not an OSC-4 exception. The ADR docs/adr/OMEGA-SYSTEMS-CORE-0000.md
+    is frozen, so the Slice A PR does not edit the text of decision 6; it appends a dated clarification
+    note under decision 6 stating that inf and NaN are values, not invariant violations (reviewer
+    condition 2, 2026-10-16).
 
 ### 1.4 Static refusals (new diagnostic kinds appended after SLICE_ALIAS, src/compiler/osc_diag.h:12-56)
 | Kind | Transition | Cause |
@@ -297,16 +299,24 @@ One harness test maps a 512 MB `&[u16]` to prove nothing truncates at 2^16 or 2^
 extern fn NAME "(" [param {"," param}] ")" ["->" type] ";"
 ```
 Params and returns limited to: integers (u8..u64, i8..i64), f32, f64, and slices
-(`&[T]`, `&mut [T]`) which cross as a pointer only (length is dropped, a static
-refusal EXTERN_SLICE_LEN appears if the extern's C prototype needs the length:
-the Omega author passes it as a separate u64). At most 8 integer-class and 8
+(`&[T]`, `&mut [T]`) which cross as a pointer only. Every slice parameter of an
+`extern fn` must be followed immediately by an explicit `u64` length parameter
+(`x: &[f32], n: u64` spells the C prototype `const float *x, uint64_t n`); the
+checker passes `len(x)` is NOT implied, the Omega author writes it, and a slice
+parameter with no following `u64` is the static refusal EXTERN_SLICE_LEN (reviewer
+condition 3, 2026-10-16). At most 8 integer-class and 8
 float-class arguments; no struct arguments; no variadics; `OmegaGpuEwInfo *info`
 style out-structs cross as `&mut [u8]` of the right byte size, filled by C.
+The static table (3.2 item 4) is the allowlist: an extern not in it cannot be called,
+whatever the flag says.
 First extern table entries (beside the two GPU entry points of 0.9): `extern fn expf(x: f32) -> f32;`
 and `extern fn logf(x: f32) -> f32;`, which give train.osc its cross-entropy. Assumption: both engines
 and the Rust trainer call the same glibc libm (2.39 on this box); Rust's f32::exp/ln lower to libm
 expf/logf on linux-gnu. glibc expf/logf are not promised correctly rounded, so identity needs the
-same libm build (UNVERIFIED for the trainer binary until `ldd` on it shows the same libm.so.6).
+same libm build. Slice C ships a red check for this: a test runs `ldd` on the OSC harness binary and
+on the Rust trainer binary and fails unless both resolve libm.so.6 to the same path and the two files
+have the same SHA-256; the check stays red (and Slice C does not merge) until that identity is observed
+(reviewer condition 3, 2026-10-16).
 
 ### 3.2 AAPCS64 lowering
 1. Integer-class args in x0..x7, float-class in v0..v7, counted separately. More
@@ -320,11 +330,17 @@ same libm build (UNVERIFIED for the trainer binary until `ldd` on it shows the s
 4. Target address: the unit records extern names; `osc_native_load` resolves them against a static
    table `{name, fnptr}` compiled into oscc and the test harness (no dlsym, no dlopen; both link -lm).
    Unknown name: load-time refusal EXTERN_UNRESOLVED. The resolved pointers sit in an array reached
-   through a new OscRt field `externs` appended after h_store at offset 104 (src/compiler/osc_rt.h:96;
-   host-side state from :100 moves down 8 bytes, native code never reads it by offset), with a
-   `_Static_assert` beside osc_rt.c:12-25. Call k is `ldr x16, [sp, #0]; ldr x16, [x16, #104];
-   ldr x16, [x16, #8*k]; blr x16`, the runtime-entry shape of osc_cg.c:10. No address lives in
-   the code, so oscc's code SHA-256 stays reproducible and determinism.sh is unaffected.
+   through a new OscRt field `externs` (`uint64_t (**externs)(void)`, offset 104) appended after
+   h_store, followed by the entry `log_ext` (offset 112, 3.4), so the fixed-offset region grows by
+   16 bytes, not 8, and host-side state from src/compiler/osc_rt.h:100 moves down 16 bytes (native code
+   never reads it by offset). Two `_Static_assert`s beside osc_rt.c:12-25 pin offsets 104 and 112.
+   `osc_rt_init` sets `externs = NULL` and `log_ext = osc_rt_log_ext`; the host that owns the table
+   (oscc, the test harness) stores its pointer after init. Every runner (oscc run, test harness,
+   determinism.sh's runs) refuses to start a unit that declares an extern while `rt->externs` is
+   NULL: refusal EXTERN_NO_TABLE before any native code runs. Call k is
+   `ldr x16, [sp, #0]; ldr x16, [x16, #104]; ldr x16, [x16, #8*k]; blr x16`, the runtime-entry shape
+   of osc_cg.c:10. No address lives in the code, so oscc's code SHA-256 stays reproducible and
+   determinism.sh is unaffected (reviewer condition 1, 2026-10-16).
 5. Argument storage: EXTERN takes up to 16 argument vregs, more than OscInsn.args[OSC_MAX_PARAMS]
    (src/compiler/osc_ir.h:187) holds. Its `imm` indexes a per-function side table of
    `{uint16_t ext; uint8_t n; int16_t v[16];}`, so OscInsn and version 5 decoding stay unchanged.
@@ -336,20 +352,41 @@ function pointer types in osc_interp.c (81 shapes for 0..8 by 0..8).
 
 ### 3.4 Effect doctrine
 An extern call is an effect. Under decision 6 (docs/adr/OMEGA-SYSTEMS-CORE-0000.md:14-24)
-the C side returns int status and never unwinds; Omega must check it. OSC-3 item 4
+the C side returns int status and never unwinds; Omega must check it. Concretely: no C function in
+the static table may call `rt->trap`, `longjmp`, `exit` or anything else that leaves its frame
+abnormally (rt->trap longjmps over the C frame, which is undefined behaviour); an extern that
+cannot do its job returns a status word and Omega traps or branches on it. OSC-3 item 4
 (effects/capabilities) is not shipped (docs/osc/OSC-3-DESIGN.md:312-318); until it
-is, `extern fn` needs `oscc --allow-extern` and the unit header records the flag.
+is, `extern fn` needs `oscc --allow-extern`. The flag is recorded in the unit header (a new header
+byte, 0 or 1), the unit SHA-256 therefore covers it, and determinism.sh compares it like every other
+header field: two compiles that differ only in the flag are different units, never "the same unit
+with a different gate". When OSC-3 item 4 ships, each extern declares its effects there and the flag
+is retired (reviewer condition 3, 2026-10-16).
 Dual-run equivalence: both engines call the same C function with the same argument bits, then log
 an EXTERN event (new kind 11 after POOL_CLOSE = 10, src/compiler/osc_rt.h:58) whose fold covers the
 extern index, every argument word and the return word, appended after the 8 header bytes the way pool
 events fold their generation (osc_rt.c:87-88). The fold reaches `ev_hash`, which osc_rt_same_outcome
-compares (osc_rt.c:314). Native logs through an OscRt entry `log_ext` appended at offset 112.
+compares (osc_rt.c:314).
+How `log_ext` receives up to 16 argument words plus the return word (reviewer condition 1): the
+lowering reserves 17 contiguous 8-byte words at the top of the frame (`ext area`, frame stays a
+multiple of 16). Before the call it copies the n argument vregs (3.2 item 5) into ext[0..n-1] and
+loads x0..x7 / v0..v7 from there; after the BLR it stores the return word (x0 or FMOV_DX v0) into
+ext[16] and into the dst slot. It then calls the OscRt entry at offset 112,
+`void log_ext(OscRt *rt, uint64_t ext_index, uint64_t n, const uint64_t *words)`, with
+`words = &ext[0]` (4 integer arguments, no V registers live, the runtime-entry shape of osc_cg.c:10).
+`osc_rt_log_ext` writes the 8 header bytes `{kind = 11, slot = (uint8_t)n, len = (uint16_t)ext_index,
+serial = (uint32_t)n}`, then folds ext_index as a u64, then words[0..n-1], then words[16] (the return
+word), each as 8 little-endian bytes. The interpreter calls the same `osc_rt_log_ext` with the same
+words, so the two folds are byte-identical. A void extern logs return word 0.
 Nondeterministic externs are the host's problem.
 
 ### 3.5 Evidence
 Goldens calling a harness-defined test function (int, double, uint32 args) and
 `omega_gpu_rmsnorm_f32` on a 4-row input, output bits compared with the Rust
-path. Negatives for EXTERN_ARITY, EXTERN_SLICE_LEN, EXTERN_UNRESOLVED.
+path. Negatives for EXTERN_ARITY, EXTERN_SLICE_LEN, EXTERN_UNRESOLVED, EXTERN_NO_TABLE (unit with an extern run
+against an OscRt whose `externs` is NULL), and a unit compiled without --allow-extern. The libm identity
+`ldd` check of 3.1 is a red check: it must fail first against a deliberately different library path and
+then pass against the real trainer binary before Slice C merges.
 
 ## 4. Slice D: syscall primitive and std-in-Omega
 
@@ -557,3 +594,24 @@ Encoding cross-check against golden/aarch64_fp_golden: fmov d0,d1 = 0x1E604020, 
 12. Gate `slice_from` behind --allow-syscall with the osc_ir_slice_args_ok checks, and use `&mut [u64]` of length 2 for clock_gettime.
 13. Make "no float traps" a permanent rule by a one-line doctrine amendment, and require the oscc runner to map traps to a distinct non-zero exit code.
 14. Restate the estimate as 7 to 9 builder-days and 10 to 14 calendar days.
+
+## Reviewer conditions (aien-dev-ba, 2026-10-16)
+
+aien-dev-ba answered the three questions the advisor review left open. The answers are binding on
+Slices A and C; the affected sections (1.3 item 13, 3.1, 3.2 item 4, 3.4, 3.5) were rewritten to match.
+
+1. **OscRt grows by 16 bytes, not 8.** `externs` sits at offset 104 and `log_ext` at offset 112, so
+   host-side state moves 16 bytes. Slice C adds `_Static_assert`s for both offsets, `osc_rt_init`
+   initialises both fields (`externs = NULL`, `log_ext = osc_rt_log_ext`), every runner refuses an
+   extern-using unit while `externs` is NULL (EXTERN_NO_TABLE), and 3.4 now specifies how `log_ext`
+   receives up to 16 argument words plus the return word (a 17-word ext area in the frame, one pointer
+   argument, fold order ext_index, args, return).
+2. **inf and NaN as values.** The ADR OMEGA-SYSTEMS-CORE-0000 is frozen. Slice A does not edit the
+   text of decision 6; it appends a dated clarification note under decision 6 saying that inf and NaN
+   are ordinary values, not invariant violations, so float arithmetic raises no trap.
+3. **extern is an effect, with conditions.** No unwinding or longjmp from C: an extern never calls
+   `rt->trap`, it returns a status word. The static `{name, fnptr}` table is the allowlist.
+   `--allow-extern` is recorded in the unit header and compared by determinism.sh. A slice-taking
+   extern also takes an explicit `u64` length (EXTERN_SLICE_LEN otherwise). Effects are declared per
+   extern when OSC-3 item 4 ships, and the flag retires then. The libm identity `ldd` check (3.1) is a
+   red check in Slice C.
