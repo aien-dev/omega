@@ -1,0 +1,12 @@
+USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+drakest+ 2429471  200  0.0  61804 28660 ?        R    20:45   0:00 /usr/libexec/gcc/aarch64-linux-gnu/13/cc1 -quiet -I src -I /home/drakestapleton/workspace/aie
+drakest+ 2429424  140  0.0  64144 31512 ?        R    20:45   0:00 /usr/libexec/gcc/aarch64-linux-gnu/13/cc1 -quiet -I src -I /home/drakestapleton/workspace/aie
+drakest+ 2429417  133  0.0  67324 34892 ?        R    20:45   0:00 /usr/libexec/gcc/aarch64-linux-gnu/13/cc1 -quiet -I src -I /home/drakestapleton/workspace/aie
+drakest+ 2429422  133  0.0  67496 29572 ?        R    20:45   0:00 /usr/libexec/gcc/aarch64-linux-gnu/13/cc1 -quiet -I src -I /home/drakestapleton/workspace/aie
+drakest+ 2429410  112  0.0  64920 33340 ?        D    20:45   0:00 /usr/libexec/gcc/aarch64-linux-gnu/13/cc1 -quiet -I src -I /home/drakestapleton/workspace/aie
+drakest+ 2429347  110  0.0  75968 43024 ?        R    20:45   0:00 /usr/libexec/gcc/aarch64-linux-gnu/13/cc1 -quiet -I src -I /home/drakestapleton/workspace/aie
+drakest+ 2429176  102  0.0  95864 62848 ?        R    20:45   0:00 /usr/libexec/gcc/aarch64-linux-gnu/13/cc1 -quiet -I src -I /home/drakestapleton/workspace/aie
+drakest+ 2428578  101  0.0  31176 12876 ?        R    20:45   0:01 jq -S -n --slurpfile u /tmp/hs-nh/replay/units-1.5.json --slurpfile g /tmp/hs-nh/replay/graph
+drakest+ 2428372 91.1  0.6 939232 891396 ?       R    20:45   0:02 /usr/bin/ld -plugin /usr/libexec/gcc/aarch64-linux-gnu/13/liblto_plugin.so -plugin-opt=/usr/l
+drakest+ 2428500 84.4  0.6 913264 841856 ?       R    20:45   0:01 /usr/bin/ld -plugin /usr/libexec/gcc/aarch64-linux-gnu/13/liblto_plugin.so -plugin-opt=/usr/l
+drakest+ 2428169 67.4  0.1 639628 242472 ?       Sl   20:45   0:02 /home/drakestapleton/.rustup/toolchains/1.98.1-aarch64-unknown-linux-gnu/bin/rustc --crate-na

@@ -1,0 +1,12 @@
+USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+drakest+ 2514122  115  1.9 2683340 2459132 ?     Sl   20:47   0:53 /home/drakestapleton/aien-sovereign-core/.claude/worktrees/agent-a797bbe26270be4df/target/deb
+drakest+ 2437093 97.3  0.0 1631056 7232 ?        Sl   20:46   1:50 /home/drakestapleton/aien-sovereign-core/.claude/worktrees/agent-ab64aea22787c7d5e/target/deb
+drakest+ 2488137 61.5  0.0 344580 95080 ?        Sl   20:47   0:36 /home/drakestapleton/workspace/g2-omegese-constraint/target/release/deps/qwen_vocab-2fefa4143
+drakest+   15251  7.8 29.8 40818924 38072760 ?   Ssl  10:59  46:19 /home/drakestapleton/handoffs/pin-bin-f881710a/aien-serve-http --engine omega --model-dir /ho
+drakest+ 2707502  3.2  0.4 6128120 561096 ?      Ssl  13:16  14:54 /home/drakestapleton/.local/bin/claude --output-format stream-json --verbose --input-format s
+drakest+  276773  2.9  0.4 6107256 535332 ?      Ssl  04:17  29:16 /home/drakestapleton/.local/bin/claude --output-format stream-json --verbose --input-format s
+drakest+ 1607589  2.6  0.5 12534988 718172 ?     Sl   Oct14  48:17 /home/drakestapleton/.t3/runtime/versions/0.0.46-nightly.20261014.3118/t3 serve --host 127.0.
+drakest+ 1781472  2.0  0.3 6107164 426368 ?      Ssl  18:32   2:49 /home/drakestapleton/.local/bin/claude --output-format stream-json --verbose --input-format s
+drakest+ 3145421  1.5  0.2 6108156 376396 ?      Ssl  19:31   1:10 /home/drakestapleton/.local/bin/claude --output-format stream-json --verbose --input-format s
+drakest+  559179  1.2  0.0 2903364 114632 ?      SNl  Oct14  20:03 rclone rcat --drive-chunk-size 64M --drive-stop-on-upload-limit gdrive-backup:spark-backup-20
+472         4102  1.0  0.1 1809716 217140 ?      Ssl  Oct06 146:50 grafana server --homepath=/usr/share/grafana --config=/etc/grafana/grafana.ini --packaging=do
