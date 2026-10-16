@@ -435,7 +435,11 @@ int main(int argc, char **argv)
         if (compare(dir, names[i], names[i], &st)) { fails++; free(names[i]); continue; }
         vec += st.vectors;
         ntraps += st.native_traps;
-        if (st.mismatches || st.undetermined) {
+        if (st.vectors <= 0) {
+            /* omega#454: a program that ran no vectors proves nothing; it must not count as agreeing */
+            printf("FAIL %s: no vectors were run\n", names[i]);
+            fails++;
+        } else if (st.mismatches || st.undetermined) {
             printf("FAIL %s: %ld of %ld vectors disagree, %ld undetermined; first: %s\n", names[i], st.mismatches, st.vectors,
                    st.undetermined, st.first);
             fails++;
