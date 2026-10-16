@@ -1,0 +1,6 @@
+FAIL tests/gpu_serving_alloc_count_test.c:473: update_f32: 6 of 88320 packed words differ from omega_matmul_frag_pack_b
+FAIL tests/gpu_serving_alloc_count_test.c:473: update_f32 while sealed: 6 of 88320 packed words differ from omega_matmul_frag_pack_b
+FAIL tests/gpu_serving_alloc_count_test.c:473: update_f32: 6 of 819200 packed words differ from omega_matmul_frag_pack_b
+FAIL tests/gpu_serving_alloc_count_test.c:473: update_f32 while sealed: 6 of 819200 packed words differ from omega_matmul_frag_pack_b
+gpu_serving_alloc_count_test update: FAIL (4 failed checks)
+exit=1
