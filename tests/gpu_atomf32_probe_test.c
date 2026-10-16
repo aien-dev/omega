@@ -13,8 +13,8 @@
  *   6  CONTROL: the integer ATOMG.ADD on the 1.0f bits must FAIL the same check (proves the check can say no)
  *   --host-only     every case in the warp simulator (small grids)
  *   (default)       the chip, one short window; --cases DIGITS picks cases and their order
- * Throughput printed is every thread on ONE word in GPU-uncached host-visible memory: a contention measurement, not a
- * training figure and not the hardware ceiling. Verdict line last: "GPU_ATOMF32_PROBE: PASS|FAIL". */
+ * Throughput (printed for the large cases only; 32 adds only measure the launch) is every thread on ONE word in
+ * GPU-uncached host-visible memory: a contention measurement, not a training figure and not the hardware ceiling. Verdict line last: "GPU_ATOMF32_PROBE: PASS|FAIL". */
 /* omega_bw_em.h names two helpers fadd and ffma, which collide with C23 math.h (pulled in by the simulator) */
 #define fadd omega_em_fadd
 #define ffma omega_em_ffma
@@ -87,7 +87,7 @@ static void report(const char *where, const Case *c, size_t n, uint32_t word, ui
     if (noftz != wfinal) printf(", no-FTZ would be 0x%08x", noftz);
     if (c->start != wfinal) printf(", a no-op would leave 0x%08x", c->start);
     printf("), %zu faults", bad);
-    if (ns) printf(", %.1f us = %.2f M adds/s, all on one word in uncached host-visible memory (contention, not a ceiling)",
+    if (ns && n >= 4096) printf(", %.1f us = %.2f M adds/s, all on one word in uncached host-visible memory (contention, not a ceiling)",
                    ns / 1e3, (double)n * 1e3 / (double)ns);
     printf("\n");
     if (c->control) printf("  control %s: the check %s the wrong arithmetic\n", bad ? "ok" : "BROKEN", bad ? "caught" : "missed");
