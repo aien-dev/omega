@@ -1,0 +1,4 @@
+Write a function pow_small_or_mix that takes unsigned 8-bit numbers b and e and returns an unsigned
+64-bit number. If b is less than 10, return b to the power e, computed by multiplying e times (b to the
+power 0 is 1, also for b = 0); for every input checked this value fits in 64 bits. Otherwise return
+(b*b + e*e) * 3 + b. It never traps.

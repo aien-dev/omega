@@ -1,0 +1,14 @@
+fn f(x: u32) -> u32 {
+    return 3 * x * x + 2 * x + 1;
+}
+
+fn poly_sum(n: u8) -> u32 {
+    let m: u32 = n as u32;
+    let mut s: u32 = 0;
+    let mut i: u32 = 0;
+    while i < m bound 256 {
+        s = s + f(i);
+        i = i + 1;
+    }
+    return s;
+}

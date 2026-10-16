@@ -1,0 +1,3 @@
+Write a function even_tri_odd_cube that takes an unsigned 16-bit number n and returns an unsigned 64-bit
+number. If n is even, return the sum 1 + 2 + ... + n, adding the numbers one at a time (0 when n is 0).
+If n is odd, return n*n*n - 2*n + 5. It never traps.

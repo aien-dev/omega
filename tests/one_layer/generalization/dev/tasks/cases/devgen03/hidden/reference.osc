@@ -1,0 +1,14 @@
+fn h(s: u32, i: u32) -> u32 {
+    return (s * 31 + i * i + 7) % 65536;
+}
+
+fn mix_hash(seed: u16, n: u8) -> u16 {
+    let m: u32 = n as u32;
+    let mut s: u32 = seed as u32;
+    let mut i: u32 = 0;
+    while i < m bound 256 {
+        s = h(s, i);
+        i = i + 1;
+    }
+    return s as u16;
+}

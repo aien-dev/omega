@@ -1,0 +1,13 @@
+fn count_rising5(a: i16, b: i16, c: i16, d: i16, e: i16) -> u8 {
+    let v: own [i16; 5] = alloc(0);
+    v[0] = a;
+    v[1] = b;
+    v[2] = c;
+    v[3] = d;
+    v[4] = e;
+    let mut k: u8 = 0;
+    for i in 0 .. 4 {
+        if v[i + 1] > v[i] { k = k + 1; }
+    }
+    return k;
+}

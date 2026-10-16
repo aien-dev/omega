@@ -1,0 +1,14 @@
+fn pow_small_or_mix(b: u8, e: u8) -> u64 {
+    let x: u64 = b as u64;
+    let y: u64 = e as u64;
+    if x < 10 {
+        let mut r: u64 = 1;
+        let mut i: u64 = 0;
+        while i < y bound 256 {
+            r = r * x;
+            i = i + 1;
+        }
+        return r;
+    }
+    return (x * x + y * y) * 3 + x;
+}

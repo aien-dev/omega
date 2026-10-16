@@ -1,0 +1,5 @@
+# public GEN dev task (omega#476), not held out
+kind task
+entry shift_sq_sum
+params u8 i16
+ret i32

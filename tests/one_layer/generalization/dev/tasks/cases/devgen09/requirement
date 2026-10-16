@@ -1,0 +1,5 @@
+# public GEN dev task (omega#476), not held out
+kind task
+entry pair_sum_div
+params u8 u8
+ret u32

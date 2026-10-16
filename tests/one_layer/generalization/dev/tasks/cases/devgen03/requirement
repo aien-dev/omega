@@ -1,0 +1,5 @@
+# public GEN dev task (omega#476), not held out
+kind task
+entry mix_hash
+params u16 u8
+ret u16

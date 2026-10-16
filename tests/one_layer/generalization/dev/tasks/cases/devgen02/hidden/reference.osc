@@ -1,0 +1,15 @@
+fn g(x: i32, c: i32) -> i32 {
+    return (x - c) * (x + c) + x;
+}
+
+fn shift_sq_sum(n: u8, c: i16) -> i32 {
+    let m: i32 = n as i32;
+    let cc: i32 = c as i32;
+    let mut s: i32 = 0;
+    let mut i: i32 = 0;
+    while i < m bound 256 {
+        s = s + g(i, cc);
+        i = i + 1;
+    }
+    return s;
+}
