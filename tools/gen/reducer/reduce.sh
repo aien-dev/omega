@@ -60,6 +60,12 @@ if [ -f "$RUN/SHA256SUMS" ] && (cd "$RUN" && sha256sum -c --strict --quiet SHA25
     bad "run SHA256SUMS does not list exactly the run's files"
 else bad "run SHA256SUMS missing or does not verify"; fi
 [ "$(mk mask)" = off ] || bad "run mask is '$(mk mask)', not off"
+if [ -f "$RUN/protocol.json" ] && [ "$(sha "$RUN/protocol.json")" = "$(mk protocol_json_sha256)" ]; then
+  jq -e '.decision | .schema == "omega.gen.decision.v1" and .primary == "attempt1_round1_functional" and .controls == ["A","B","C"] and .delta == 0.1 and .alpha == 0.05
+    and .test == "mcnemar_exact_one_sided" and .ci == "newcombe10" and .fail_control == "C" and .sanity_ab_max == 2 and .z95 == 1.959963984540054 and .z90 == 1.644853626951472' \
+    "$RUN/protocol.json" > /dev/null 2>&1 ||
+    bad "protocol.json decision block is not the rule this reducer applies"
+else bad "run protocol.json missing or not the one meta.txt names"; fi
 [ "$(mk test_mode)" = no ] || [ "$TEST" = 1 ] || bad "the run was made in test mode (GEN_TEST=1)"
 if [ -n "$PINS" ]; then
   while IFS= read -r l; do
@@ -203,7 +209,7 @@ if [ "$NB" -gt 0 ]; then VERDICT=INVALID; else VERDICT="$(gv decision)"; fi
   echo "pin.commit=$(mk commit)"; echo "pin.source_sha256=$(mk source_sha256)"; echo "pin.tasks_public_sha256=$(mk tasks_public_sha256)"
   echo "pin.tasks_corpus_sha256=${HCS:--}"; echo "pin.prefix_sha256.A=$(mk prefix_sha256.A)"; echo "pin.prefix_sha256.B=$(mk prefix_sha256.B)"
   echo "pin.examples_sha256=$(mk examples_sha256)"; echo "pin.provider_sha256=$(mk provider_sha256)"; echo "pin.provider_contract_sha256=$(mk provider_contract_sha256)"
-  echo "pin.corpus_manifest_sha256=$(mk corpus_manifest_sha256)"; echo "pin.retrieval_mode=$(mk retrieval_mode)"; echo "pin.k=$(mk k)"; echo "pin.cap_bytes=$(mk cap_bytes)"
+  echo "pin.corpus_manifest_sha256=$(mk corpus_manifest_sha256.raw),$(mk corpus_manifest_sha256.abstraction)"; echo "pin.retrieval_mode=$(mk retrieval_mode)"; echo "pin.k=$(mk k)"; echo "pin.cap_bytes=$(mk cap_bytes)"
   echo "pin.manifests_sha256=$(mk manifests_sha256)"
   printf '%s\n' rule.primary=attempt1_round1_functional rule.controls=A,B,C rule.delta=0.100000 rule.alpha=0.050000 rule.fail_control=C rule.ci=newcombe10 rule.sanity_ab_max=2
   echo "gate.greedy=$GGATE"; echo "gate.g0=$G0"; echo "pass3=$P3"; echo "tasks=$N"

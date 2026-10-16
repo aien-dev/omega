@@ -4,10 +4,10 @@ Status: FROZEN v1, 2026-10-15 (Agent C). A change to anything below is a new ver
 schema string; readers refuse a schema they do not know. Producers: `tools/gen/runner/run.sh` (run
 directory, run rows, prompt manifests) and `tools/gen/reducer/reduce.sh` (decision receipt).
 Consumers: the reducer, GEN-6 operator evidence (#480), RSI (spark-rsi#57).
-Retrieval goes only through the provider CLI `genret-cli-v2` (Agent E, `tools/gen/retrieval/CONTRACT.md`
-at a4878d69, sha256 e1f2c1cff683bbc6daf552c9771c4fadb71d4b290a7532cb4222824c3b649ab9; re-pinned from v1
-c0c55920 2689ffb7..., a value change only: no key, column or schema string of this file changed), called
-for C (`--kind raw`) and D (`--kind abstraction`) with the same k, cap and mode; never for A and B.
+Retrieval goes only through the provider CLI named by protocol.json `retrieval.contract` (Agent E,
+`tools/gen/retrieval/CONTRACT.md`; now `genret-cli-v3`, its sha256 pinned in tools/gen/runner/PARAMS),
+called for C (`--kind raw`, the raw record set) and D (`--kind abstraction`, the abstraction record set)
+with the same k, cap and mode; never for A and B.
 
 All files are ASCII, `\n` line ends, no time stamps in anything hashed except the transport
 records (`time_s=`) that EXP445 already keeps. sha256 values are 64 lowercase hex.
@@ -61,10 +61,10 @@ suffix_sha256=<sha>      retrieved material = genret suffix.txt bytes; sha256 of
 suffix_bytes=<n>
 system_sha256=<sha>      sha256(prefix bytes ++ suffix bytes) = the system message
 user_sha256=<sha>        the user message: reader.sh user_msg(public requirement, public prompt)
-provider_contract=<genret-cli-v2|->              - for A and B (no provider call)
+provider_contract=<genret-cli-vN|->              - for A and B (no provider call)
 provider_contract_sha256=<sha|->                 sha256 of tools/gen/retrieval/CONTRACT.md that was pinned
 provider_sha256=<sha|->  the provider program that ran
-corpus_manifest_sha256=<sha|->                   genret --manifest-sha256 (the pinned record set)
+corpus_manifest_sha256=<sha|->                   genret --manifest-sha256 (the pinned record set of this kind)
 kind=<raw|abstraction|->                         C = raw, D = abstraction
 mode=<normal|irrelevant|empty|length-matched|->
 k=<n|->
@@ -142,7 +142,7 @@ pin.revision=  pin.protocol_sha256=  pin.params_sha256=  pin.exp445_params_sha25
 pin.config=  pin.model=  pin.base_url=  pin.server=  pin.request_extra=  pin.weights_list_sha256=
 pin.mask=off  pin.commit=  pin.source_sha256=  pin.tasks_public_sha256=  pin.tasks_corpus_sha256=
 pin.prefix_sha256.A=  pin.prefix_sha256.B=  pin.examples_sha256=  pin.provider_sha256=
-pin.provider_contract_sha256=  pin.corpus_manifest_sha256=  pin.retrieval_mode=  pin.k=  pin.cap_bytes=
+pin.provider_contract_sha256=  pin.corpus_manifest_sha256=<raw sha>,<abstraction sha>  pin.retrieval_mode=  pin.k=  pin.cap_bytes=
 pin.manifests_sha256=                   sha256 of manifests.tsv
 rule.primary=attempt1_round1_functional
 rule.controls=A,B,C

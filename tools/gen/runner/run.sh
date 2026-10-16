@@ -14,7 +14,8 @@
 # Order of work:
 #   1 checks: clean source tree (TOOL_PATHS of reader.sh; GEN_TEST=1 allows dirty and records -dirty),
 #     mask=off, public-only tasks, weights.check + server.json in <out> (tools/exp445/check_weights.sh),
-#     provider = genret-cli-v2 (a stub only in test mode), corpus manifest sha256 = the pinned one = records/SET.sha256
+#     provider = PARAMS provider_contract (a stub only in test mode), raw and abstraction record set manifests = the pinned
+#     ones (= their SET.sha256), protocol.json = the pinned one and every setting equal to it
 #   2 prompt manifests for A, B, C, D x every task (content-addressed, FORMATS.md section 3): system =
 #     exp445 arms/common.md + arms/omegese.md + worked examples (A: examples_one, B C D: examples_many) as the
 #     fixed prefix, then the retrieved suffix (genret suffix.txt; C --kind raw, D --kind abstraction; none for
@@ -40,7 +41,7 @@ E445="$ROOT/tools/exp445"
 die() { echo "gen run.sh: $*" >&2; exit 2; }
 TEST="${GEN_TEST:-0}"
 PARAMS="$HERE/PARAMS"
-if [ "$TEST" = 1 ]; then PARAMS="${GEN_PARAMS:-$PARAMS}"; else unset GEN_PARAMS GEN_TEST_KILL; fi
+if [ "$TEST" = 1 ]; then PARAMS="${GEN_PARAMS:-$PARAMS}"; else unset GEN_PARAMS GEN_TEST_KILL EXP445_TEST_BACKOFF_S; fi
 [ -f "$PARAMS" ] || die "no PARAMS file $PARAMS"
 kv() { awk -F= -v k="$1" '$1 == k { print substr($0, length(k) + 2); exit }' "$PARAMS"; }
 pv() { kv "$1" | sed 's/^PLACEHOLDER *//'; }
@@ -111,13 +112,20 @@ weights_ok "$OUT" "$WLIST" "$MODEL" ||
 PROV="$(rp "$(pv provider)")"
 [ -x "$PROV" ] || die "provider $PROV is not executable"
 PVER="$("$PROV" version 2> /dev/null || true)"
-[[ "$PVER" == genret-cli-v2* ]] || die "provider $PROV is not genret-cli-v2 (version: '$PVER')"
+PCN="$(kv provider_contract)"
+[[ "$PCN" =~ ^genret-cli-v[0-9]+$ ]] || die "provider_contract '$PCN'"
+[ "${PVER%% *}" = "$PCN" ] || die "provider $PROV is not $PCN (version: '$PVER')"
 [[ "$PVER" != *stub* ]] || [ "$TEST" = 1 ] || die "provider $PROV is the test stub: a real run needs Agent E's genret"
-PCS="$(kv provider_contract_sha256)"
+PCS="$(pv provider_contract_sha256)"
 if [ -f "$ROOT/tools/gen/retrieval/CONTRACT.md" ]; then [ "$(sha "$ROOT/tools/gen/retrieval/CONTRACT.md")" = "$PCS" ] || die "tools/gen/retrieval/CONTRACT.md is not the pinned genret contract ($PCS)"; fi
-CM="$(rp "$(pv corpus_manifest)")" CMS="$(pv corpus_manifest_sha256)"
-[ -f "$CM" ] && [ "$(sha "$CM")" = "$CMS" ] || die "corpus manifest $CM missing or not the pinned record set ($CMS)"
-[ ! -f "$(dirname "$CM")/SET.sha256" ] || [ "$(tr -d '\n' < "$(dirname "$CM")/SET.sha256")" = "$CMS" ] || die "$(dirname "$CM")/SET.sha256 is not the pinned record set ($CMS)"
+setck() { # setck <manifest> <sha>: the record set's MANIFEST is the pinned one (= its SET.sha256)
+  [ -f "$1" ] && [ "$(sha "$1")" = "$2" ] || die "corpus manifest $1 missing or not the pinned record set ($2)"
+  [ ! -f "$(dirname "$1")/SET.sha256" ] || [ "$(tr -d '\n' < "$(dirname "$1")/SET.sha256")" = "$2" ] || die "$(dirname "$1")/SET.sha256 is not the pinned record set ($2)"
+}
+declare -A CMF CMH
+CMF[raw]="$(rp "$(pv corpus_manifest_raw)")" CMH[raw]="$(pv corpus_manifest_raw_sha256)"
+CMF[abstraction]="$(rp "$(pv corpus_manifest_abstraction)")" CMH[abstraction]="$(pv corpus_manifest_abstraction_sha256)"
+setck "${CMF[raw]}" "${CMH[raw]}"; setck "${CMF[abstraction]}" "${CMH[abstraction]}"
 RCK="$(rp "$(pv recheck)")"
 [ -x "$RCK" ] || die "recheck $RCK is not executable (make gen-abstract builds build/gen_abstract/recheck)"
 RMODE="$(kv retrieval_mode)" K="$(kv k)" CAP="$(kv cap_bytes)"
@@ -133,6 +141,38 @@ case "$CONTROL" in none) ;; cross-family)
     [[ "${EXT[$t]}" =~ ^gs1-[0-9a-f]{16}$ ]] || die "famsig token of $t is '${EXT[$t]}', not gs1-<16 hex>"
   done ;;
   *) die "--control $CONTROL: only cross-family" ;; esac
+# protocol.json (omega.gen.protocol.v1): every setting the driver uses must equal the preregistered one
+PJ="$(rp "$(pv protocol_json)")" PJS="$(kv protocol_json_sha256)"
+[ -f "$PJ" ] || die "no protocol.json $PJ"
+[ "$(sha "$PJ")" = "$PJS" ] || [ "$TEST" = 1 ] || die "protocol.json $PJ is not the pinned one ($PJS)"
+pj() { jq -r "$1 | if . == null then \"null\" else tostring end" "$PJ" 2> /dev/null || echo "?"; }
+pjck() { # pjck <jq path> <driver value>: numbers compare as numbers (protocol.json may write 0.10 for 0.1)
+  if [[ "$2" =~ ^-?[0-9]+(\.[0-9]+)?$ ]] && jq -e --argjson v "$2" "($1 | type) == \"number\" and $1 == \$v" "$PJ" > /dev/null 2>&1; then return 0; fi
+  [ "$(pj "$1")" = "$2" ] || die "protocol.json $1 is '$(pj "$1")', the driver has '$2': refused (PARAMS must equal the protocol)"
+}
+pjck .schema omega.gen.protocol.v1; pjck .config.name "$CONFIG"; pjck .config.masking false; pjck .config.writer omegese
+[ "$(pj .config.params)" = "$(kv exp445_params)" ] || [ "$TEST" = 1 ] || die "protocol.json config.params is '$(pj .config.params)', PARAMS exp445_params '$(kv exp445_params)'"
+pjck '[.conditions[].name] | join(",")' A,B,C,D
+pjck '[.conditions[] | .retrieval] | join(",")' none,none,raw,abstraction
+pjck '.conditions[0].prefix_examples' "$(grep -c . "$(rp "$(pv examples_dir)")/$(kv examples_one)")"
+pjck '[.conditions[1:][] | .prefix_examples] | unique | map(tostring) | join(",")' "$(grep -c . "$(rp "$(pv examples_dir)")/$(kv examples_many)")"
+pjck .retrieval.contract "$PCN"; pjck .retrieval.k "$K"; pjck .retrieval.cap_bytes "$CAP"; pjck .retrieval.mode "$RMODE"; pjck .retrieval.query requirement+prompt
+pjck .generation.primary attempt1_round1_functional; pjck .generation.max_tokens "$MAXT"; pjck .generation.max_rounds 2; pjck .generation.attempts "$ATT"
+pjck .generation.attempt1_temperature "$GTEMP"; pjck .generation.sampled_temperature "$TEMP"; pjck .generation.sampled_top_p "$TOPP"
+pjck .generation.seed_base "$SB"; pjck .generation.seed_attempt_stride 1000; pjck .generation.retries "$RETRIES"
+pjck .generation.retry_pause_s 5; pjck .generation.order attempt,task,condition
+pjck '.generation.sets | join(",")' '<c>-<attempt>,<c>-<attempt>-final'
+pjck .gates.greedy.condition B; pjck .gates.greedy.repeats 2; pjck .gates.g0.condition B; pjck .gates.g0.task "$G0T"; pjck .gates.g0.seeds "$G0N"; pjck .gates.g0.repeat 1
+pjck .gates.g0.script tools/exp445/sampling-gate.sh
+pjck .decision.schema omega.gen.decision.v1; pjck '.decision.controls | join(",")' A,B,C; pjck .decision.delta 0.1; pjck .decision.alpha 0.05
+pjck .decision.test mcnemar_exact_one_sided; pjck .decision.ci newcombe10; pjck .decision.fail_control C; pjck .decision.sanity_ab_max 2
+if [ "$TEST" != 1 ]; then
+  pjck '.splits.dev.tasks | join(",")' "$(IFS=,; echo "${DEVIDS[*]}")"; pjck .splits.dev.count "$NG"
+  for k in .splits.corpus.meta_sha256 .record_sets.prefix_sha256 .record_sets.raw_manifest_sha256 .record_sets.abstraction_manifest_sha256 .splits.heldout.tasks_sha256; do
+    [[ "$(pj "$k")" =~ ^[0-9a-f]{64}$ ]] || die "protocol.json $k is $(pj "$k"): the corpus, record sets and held-out pack are not frozen yet"
+  done
+  pjck .record_sets.raw_manifest_sha256 "${CMH[raw]}"; pjck .record_sets.abstraction_manifest_sha256 "${CMH[abstraction]}"
+fi
 [[ "$K" =~ ^[1-9][0-9]?$ ]] && [[ "$CAP" =~ ^[1-9][0-9]*$ ]] || die "k / cap_bytes"
 case "$RMODE" in normal|irrelevant|empty) ;; *) die "retrieval_mode $RMODE (length-matched runs through a separate ablation revision)" ;; esac
 GATE_SH="$E445/sampling-gate.sh" GSHA="$(ekv g0_gate_sha256)"
@@ -169,14 +209,15 @@ for t in "${IDS[@]}"; do
     if [ "$cd" = C ] || [ "$cd" = D ]; then
       kind=raw; [ "$cd" = D ] && kind=abstraction
       rd="$S/retrieval/$c/$t"; mkdir -p "$rd"
-      args=(query --corpus "$CM" --manifest-sha256 "$CMS" --recheck "$RCK" --kind "$kind" --k "$K" --cap-bytes "$CAP" --requirement "$req" --prompt "$pr" --out "$rd/out" --mode "$RMODE")
+      args=(query --corpus "${CMF[$kind]}" --manifest-sha256 "${CMH[$kind]}" --recheck "$RCK" --kind "$kind" --k "$K" --cap-bytes "$CAP" --requirement "$req" --prompt "$pr" --out "$rd/out" --mode "$RMODE")
       [ "$CONTROL" = cross-family ] && args+=(--exclude-family "${EXT[$t]}")
-      printf '%s\n' "${args[@]}" | sed -e "s|^$CM\$|<corpus_manifest>|" -e "s|^$req\$|<requirement>|" -e "s|^$pr\$|<prompt>|" -e "s|^$rd/out\$|<out>|" > "$rd/argv"
+      printf '%s\n' "${args[@]}" | awk -v a="${CMF[$kind]}" -v b="$req" -v c="$pr" -v d="$rd/out" -v e="$RCK" \
+        '{ if ($0 == a) $0 = "<corpus_manifest>"; else if ($0 == b) $0 = "<requirement>"; else if ($0 == c) $0 = "<prompt>"; else if ($0 == d) $0 = "<out>"; else if ($0 == e) $0 = "<recheck>"; print }' > "$rd/argv"
       "$PROV" "${args[@]}" 2> "$W/prov.err" || die "provider failed closed for $cd $t: $(head -c 300 "$W/prov.err")"
       (cd "$rd/out" && sha256sum -c --quiet --strict SHA256SUMS > /dev/null 2>&1) || die "provider output for $cd $t does not verify its SHA256SUMS"
       suffix="$(cat "$rd/out/suffix.txt"; printf x)"; suffix="${suffix%x}"
       sh="$(blob "$suffix")"
-      pc=genret-cli-v2 pcs="$PCS" ps="$PSHA" cms="$CMS" md="$RMODE" kk="$K" cap="$CAP" ex="$([ "$CONTROL" = cross-family ] && echo "${EXT[$t]}" || echo -)"
+      pc="$PCN" pcs="$PCS" ps="$PSHA" cms="${CMH[$kind]}" md="$RMODE" kk="$K" cap="$CAP" ex="$([ "$CONTROL" = cross-family ] && echo "${EXT[$t]}" || echo -)"
       qs="$(sed -n 's/^query_sha256=//p' "$rd/out/receipt.txt")" rs="$(sha "$rd/out/SHA256SUMS")"
       ret="$(tail -n +2 "$rd/out/selected.tsv" | awk -F'\t' '{ printf "%s%s:%s:%s:%s", s, $1, $2, $3, $6; s = "," }')"; [ -n "$ret" ] || ret=-
     fi
@@ -202,14 +243,14 @@ pubsha() { (cd "$1" && find tasks -type f -print0 | LC_ALL=C sort -z | xargs -0 
 devsha="$(for t in "${DEVIDS[@]}"; do sha256sum "$DEVD/$t/requirement" "$DEVD/$t/prompt" | sed "s|$DEVD/||"; done | sha256sum | cut -d' ' -f1)"
 {
   echo "schema=omega.gen.run_meta.v1"; echo "revision=$(kv revision)"; echo "test_mode=$([ "$TEST" = 1 ] && echo yes || echo no)"
-  echo "params_sha256=$(sha "$PARAMS")"; echo "protocol_sha256=$PROTOSHA"; echo "exp445_params_sha256=$(sha "$EP")"
+  echo "params_sha256=$(sha "$PARAMS")"; echo "protocol_sha256=$PROTOSHA"; echo "protocol_json_sha256=$(sha "$PJ")"; echo "exp445_params_sha256=$(sha "$EP")"
   echo "config=$CONFIG"; echo "model=$MODEL"; echo "base_url=$BASE"; echo "request_extra=$EXTRA"; echo "server=$SERVER"
   echo "weights_list_sha256=$(sha "$WLIST")"; echo "mask=off"; echo "conditions=$(kv conditions)"; echo "attempts=$ATT"
   echo "max_tokens=$MAXT"; echo "greedy_temperature=$GTEMP"; echo "greedy_top_p=$GTOPP"; echo "temperature=$TEMP"; echo "top_p=$TOPP"
   echo "seed_base=$SB"; echo "timeout_s=$TIMEOUT"; echo "retries=$RETRIES"; echo "repair_rounds=1"; echo "order=attempt,task,condition"
   echo "commit=$COMMIT"; echo "source_sha256=$srcsha"
   echo "prefix_sha256.A=$HA"; echo "prefix_sha256.B=$HB"; echo "examples_sha256=$EXSHA"
-  echo "provider_version=$PVER"; echo "provider_sha256=$PSHA"; echo "provider_contract_sha256=$PCS"; echo "recheck_sha256=$(sha "$RCK")"; echo "corpus_manifest_sha256=$CMS"
+  echo "provider_version=$PVER"; echo "provider_sha256=$PSHA"; echo "provider_contract_sha256=$PCS"; echo "recheck_sha256=$(sha "$RCK")"; echo "corpus_manifest_sha256.raw=${CMH[raw]}"; echo "corpus_manifest_sha256.abstraction=${CMH[abstraction]}"
   echo "retrieval_mode=$RMODE"; echo "k=$K"; echo "cap_bytes=$CAP"; echo "control=$CONTROL"; echo "famsig_sha256=$([ "$CONTROL" = none ] && echo - || sha "$FS")"; echo "dev_meta_sha256=$([ "$CONTROL" = none ] && echo - || sha "$DM")"
   echo "gate_sha256=$GSHA"; echo "greedy_gate_tasks=$(IFS=,; echo "${GT[*]}")"; echo "g0_task=$G0T"; echo "g0_seeds=$G0N"
   echo "tasks=${#IDS[@]}"; echo "tasks_public_sha256=$(pubsha "$TASKS")"; echo "dev_public_sha256=$devsha"
@@ -222,7 +263,7 @@ if [ -f "$OUT/meta.txt" ]; then
   echo "gen run.sh: resuming $OUT (identity unchanged)" >&2
 else
   [ -z "$(ls -A "$OUT" | grep -vxE 'weights\.check|server\.json|\.lock' || true)" ] || die "$OUT holds files but no meta.txt: refused"
-  cp -R "$S/blobs" "$S/manifests" "$S/retrieval" "$S/manifests.tsv" "$OUT/"
+  cp -R "$S/blobs" "$S/manifests" "$S/retrieval" "$S/manifests.tsv" "$OUT/"; cp "$PJ" "$OUT/protocol.json"
   mv "$S/meta.txt" "$OUT/meta.txt"
 fi
 

@@ -4,6 +4,9 @@
 # tests only (GEN_TEST=1). Paths are relative to the repository root.
 revision=gen-v1-draft
 protocol=PLACEHOLDER docs/one_layer/GEN_PROTOCOL_V1.md
+# protocol.json (omega.gen.protocol.v1, gen/protocol 23804298): run.sh checks every setting below against it
+protocol_json=PLACEHOLDER tests/one_layer/generalization/protocol.json
+protocol_json_sha256=d4d9942e340ffa79dfe9a7cc9744d6479e3ea4460f8fee9f143865569cd69a1b
 # model pin: configuration <config> of the EXP445 PARAMS (model id, endpoint, request extra, server, weights)
 exp445_params=tools/exp445/PARAMS
 config=A
@@ -16,20 +19,24 @@ greedy_temperature=0
 greedy_top_p=1
 temperature=0.7
 top_p=0.8
-seed_base=477000
+seed_base=476000
 timeout_s=900
 retries=2
 # prompt prefix: worked examples in the tools/exp445/arms/examples layout; A uses examples_one, B C D examples_many
 examples_dir=PLACEHOLDER tools/exp445/arms/examples
 examples_one=one.list
 examples_many=many.list
-# retrieval: genret-cli-v2 only (tools/gen/retrieval/CONTRACT.md at a4878d69), C = --kind raw, D = --kind abstraction;
-# corpus_manifest = records/MANIFEST, corpus_manifest_sha256 = the content of records/SET.sha256; recheck = D's validator
+# retrieval: provider_contract only (tools/gen/retrieval/CONTRACT.md; protocol.json retrieval.contract), C = --kind raw
+# over the raw record set, D = --kind abstraction over the abstraction record set (protocol.json record_sets.*);
+# each manifest = a records/MANIFEST, its sha256 = the content of that set's SET.sha256; recheck = D's validator
 provider=PLACEHOLDER build/gen/genret
-provider_contract_sha256=e1f2c1cff683bbc6daf552c9771c4fadb71d4b290a7532cb4222824c3b649ab9
-corpus_manifest=PLACEHOLDER tests/one_layer/generalization/corpus/records/MANIFEST
+provider_contract=genret-cli-v3
+provider_contract_sha256=PLACEHOLDER (genret-cli-v3 CONTRACT.md sha256, pending Agent E)
+corpus_manifest_raw=PLACEHOLDER tests/one_layer/generalization/corpus/raw/records/MANIFEST
+corpus_manifest_raw_sha256=PLACEHOLDER
+corpus_manifest_abstraction=PLACEHOLDER tests/one_layer/generalization/corpus/abstraction/records/MANIFEST
+corpus_manifest_abstraction_sha256=PLACEHOLDER
 recheck=PLACEHOLDER build/gen_abstract/recheck
-corpus_manifest_sha256=PLACEHOLDER
 retrieval_mode=normal
 k=3
 cap_bytes=4096

@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # tools/gen/runner/test_gen_runner.sh -- CPU-only tests of the GEN driver and reducer (omega#477, GEN-2).
 # Run by `make test-gen-runner` (builds build/gen/{genstat,fakegen}, x445, omega_emit, omegese, ola).
 # No model, no GPU: the endpoint is fakegen on 127.0.0.1, the provider is stub_genret.sh, recheck and famsig
@@ -65,21 +66,24 @@ pack "$T/src" "$T/pack"
 if ! "$OLA" tasks-public "$T/pack/tasks.tar" "$T/pack/TASKS.sha256" "$T/pub" > "$T/pub.log" 2>&1; then
   echo "ola.sh tasks-public failed: $(tail -n 3 "$T/pub.log")" >&2; exit 2; fi
 # corpus of records (gen-record 1) with receipts, a recheck and a famsig stand-in
-C="$T/corpus/records"; mkdir -p "$C/raw" "$C/abstraction" "$C/receipts"
-rec() { # rec <kind> <id> <family> <example>: one verified corpus record whose body is the example's Omegese
-  local f="$C/$1/$2.rec" e="$4" r
-  r="$(printf 'receipt for %s\n' "$2" | sha256sum | cut -d' ' -f1)"; printf 'receipt for %s\n' "$2" > "$C/receipts/$r"
-  { echo "gen-record 1"; echo "id $2"; echo "kind $1"; echo "split corpus"; echo "family $3"
-    grep -E '^(entry|params|ret)( |$)' "$EXD/$e/requirement"; echo "desc Test record from the exp445 example $e."
+CR="$T/corpus/raw/records" CA="$T/corpus/abstraction/records"; mkdir -p "$CR/raw" "$CR/receipts" "$CA/abstraction" "$CA/receipts"
+rec() { # rec <set dir> <kind> <id> <family> <example>: one verified corpus record whose body is the example's Omegese
+  local C="$1" f="$1/$2/$3.rec" e="$5" r
+  r="$(printf 'receipt for %s\n' "$3" | sha256sum | cut -d' ' -f1)"; printf 'receipt for %s\n' "$3" > "$C/receipts/$r"
+  { echo "gen-record 1"; echo "id $3"; echo "kind $2"; echo "split corpus"; echo "family $4"
+    grep -E '^(entry|params|ret)( |$)' "$EXD/$e/requirement"; echo "desc Test record GENTEST-KIND-$2 from the exp445 example $e."
     echo "receipt $r"; echo "validity verified"; echo body; cat "$EXD/$e/program.omegese"; } > "$f"
 }
 FS_TOK() { printf 'gs1:%s' "$1" | sha256sum | cut -c1-16 | sed 's/^/gs1-/'; }
-rec raw raw-power_mod gs1-1111111111111111 power_mod
-rec raw raw-hash_step gs1-2222222222222222 hash_step
-rec abstraction abs-sum_squares3 "$(FS_TOK 'loop(arith)')" sum_squares3
-rec abstraction abs-count_above gs1-3333333333333333 count_above
-(cd "$C" && sha256sum raw/raw-power_mod.rec raw/raw-hash_step.rec abstraction/abs-sum_squares3.rec abstraction/abs-count_above.rec) > "$C/MANIFEST"
-sha "$C/MANIFEST" > "$C/SET.sha256"
+rec "$CR" raw raw-power_mod gs1-1111111111111111 power_mod
+rec "$CR" raw raw-hash_step gs1-2222222222222222 hash_step
+rec "$CA" abstraction abs-sum_squares3 "$(FS_TOK 'loop(arith)')" sum_squares3
+rec "$CA" abstraction abs-count_above gs1-3333333333333333 count_above
+(cd "$CR" && sha256sum raw/raw-power_mod.rec raw/raw-hash_step.rec) > "$CR/MANIFEST"; sha "$CR/MANIFEST" > "$CR/SET.sha256"
+(cd "$CA" && sha256sum abstraction/abs-sum_squares3.rec abstraction/abs-count_above.rec) > "$CA/MANIFEST"; sha "$CA/MANIFEST" > "$CA/SET.sha256"
+PJT="$HERE/testdata/protocol.json"
+[ "$(sha "$PJT")" = d4d9942e340ffa79dfe9a7cc9744d6479e3ea4460f8fee9f143865569cd69a1b ] &&
+  ok "testdata/protocol.json is Agent A's frozen protocol.json (gen/protocol 23804298, sha256 d4d9942e...)" || bad "testdata/protocol.json sha256"
 cat > "$T/recheck" <<'EOF'
 #!/bin/sh
 # test stand-in for Agent D's recheck: OK <id> for every record whose receipt file exists
@@ -124,8 +128,10 @@ grep -q "^config.A.base_url=$URL\$" "$T/E445" || { echo "test EXP445 PARAMS not 
 gp() { # gp <out file> [sed expressions...]
   local o="$1"; shift
   sed -e "s|^exp445_params=.*|exp445_params=$T/E445|" -e "s|^protocol=.*|protocol=-|" -e "s|^examples_dir=.*|examples_dir=$EXD|" \
-      -e "s|^provider=.*|provider=$HERE/stub_genret.sh|" -e "s|^corpus_manifest=.*|corpus_manifest=$C/MANIFEST|" \
-      -e "s|^corpus_manifest_sha256=.*|corpus_manifest_sha256=$(cat "$C/SET.sha256")|" -e "s|^recheck=.*|recheck=$T/recheck|" \
+      -e "s|^provider=.*|provider=$HERE/stub_genret.sh|" -e "s|^corpus_manifest_raw=.*|corpus_manifest_raw=$CR/MANIFEST|" \
+      -e "s|^corpus_manifest_raw_sha256=.*|corpus_manifest_raw_sha256=$(cat "$CR/SET.sha256")|" -e "s|^recheck=.*|recheck=$T/recheck|" \
+      -e "s|^corpus_manifest_abstraction=.*|corpus_manifest_abstraction=$CA/MANIFEST|" -e "s|^corpus_manifest_abstraction_sha256=.*|corpus_manifest_abstraction_sha256=$(cat "$CA/SET.sha256")|" \
+      -e "s|^protocol_json=.*|protocol_json=$PJT|" -e "s|^provider_contract_sha256=.*|provider_contract_sha256=$(printf '%064d' 0)|" \
       -e "s|^famsig=.*|famsig=$T/famsig|" -e "s|^dev_meta=.*|dev_meta=$T/devmeta|" -e "s|^dev_tasks=.*|dev_tasks=$T/src|" \
       -e 's/^greedy_gate_tasks=.*/greedy_gate_tasks=3/' -e 's/^timeout_s=.*/timeout_s=5/' -e 's/^revision=.*/revision=gen-v1-test/' "$@" "$HERE/PARAMS" > "$o"
 }

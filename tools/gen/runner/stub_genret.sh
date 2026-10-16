@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tools/gen/runner/stub_genret.sh -- TEST STUB of the retrieval provider, same call shape and output files as
-# genret-cli-v2 (Agent E, tools/gen/retrieval/CONTRACT.md at a4878d69, sha256 e1f2c1cf...49ab9), for the GEN
+# genret-cli-v2/v3 (Agent E, tools/gen/retrieval/CONTRACT.md at a4878d69 for v2), for the GEN
 # runner's CPU-only tests until the real genret lands (omega#477, GEN-2). NOT the contract's ranker:
 #   - records: gen-record 1, each validated by `<recheck> --receipts <MANIFEST dir>/receipts <record>` which must
 #     print exactly `OK <id>` (contract section 2); eligibility as contract section 5 (kind, split corpus,
@@ -8,10 +8,11 @@
 #   - ranking: manifest order (score column 0), then the contract's k / cap walk (beyond_k, cap_bytes);
 #   - rendering (header, blocks), outputs, receipt keys and exit codes as the contract.
 #   - --mode empty selects nothing; irrelevant and length-matched are refused (usage) by the stub.
-# `version` prints "genret-cli-v2 stub": the runner refuses a stub provider outside test mode.
+# `version` prints "genret-cli-v3 stub" (the runner refuses a stub outside test mode). UNVERIFIED for v3: the v3
+# neutral C/D heading is not published yet, so the stub still renders the v2 headings.
 set -euo pipefail
 fatal() { echo "genret: FATAL $1 ${2:-}" >&2; exit 2; }
-[ "${1:-}" = version ] && { echo "genret-cli-v2 stub"; exit 0; }
+[ "${1:-}" = version ] && { echo "genret-cli-v3 stub"; exit 0; }
 [ "${1:-}" = query ] || fatal usage "first argument must be query or version"
 shift
 CORPUS="" RC="" MSHA="" KIND="" K="" CAP="" REQ="" PR="" OUT="" MODE="" TB="" EXF=()
@@ -100,7 +101,7 @@ cp "$W/suffix.txt" "$W/query.txt" "$W/o/"
 s() { sha256sum < "$1" | cut -d' ' -f1; }
 ex="-"; [ "${#EXF[@]}" = 0 ] || ex="$(IFS=,; echo "${EXF[*]}")"
 {
-  echo "contract=genret-cli-v2"; echo "mode=$MODE"; echo "kind=$KIND"; echo "k=$K"; echo "cap_bytes=$CAP"; echo "target_bytes=-"
+  echo "contract=genret-cli-v3"; echo "mode=$MODE"; echo "kind=$KIND"; echo "k=$K"; echo "cap_bytes=$CAP"; echo "target_bytes=-"
   echo "exclude_family=$ex"; echo "manifest_sha256=$MSHA"; echo "requirement_sha256=$(s "$REQ")"; echo "prompt_sha256=$(s "$PR")"
   echo "query_sha256=$(s "$W/o/query.txt")"; echo "records=$(grep -c . "$CORPUS")"; echo "indexed=$(($(grep -c . "$CORPUS") - $(awk -F'\t' '$3 == "-"' "$W/exc" | grep -c . || true)))"
   echo "total_tokens=0"; echo "selected=$n"; echo "pad=-"; echo "suffix_bytes=$(wc -c < "$W/o/suffix.txt")"; echo "suffix_sha256=$(s "$W/o/suffix.txt")"

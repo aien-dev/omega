@@ -7,8 +7,9 @@
  * binds an ephemeral port and writes it to <port_file>.
  *
  * Condition of a request, from the system text the GEN runner builds (FORMATS.md section 3):
- *   D  "Retrieved records: verified helper functions"      (genret abstraction suffix)
- *   C  "Retrieved records: verified solutions to earlier"  (genret raw suffix)
+ *   D  "GENTEST-KIND-abstraction" (a test record's desc) or "Retrieved records: verified helper functions"
+ *   C  "GENTEST-KIND-raw" (a test record's desc) or "Retrieved records: verified solutions to earlier"
+ *      (the record markers keep working when the contract renders one neutral heading for C and D)
  *   B  "Worked examples ("                                  (the many-shot prefix, no suffix)
  *   A  anything else
  * Task entry: the last "\nentry <name>" (JSON-escaped newline), as fake445. Answer file, first found:
@@ -164,8 +165,8 @@ int main(int argc, char **argv)
         snprintf(logp, sizeof logp, "%s/requests.log", dir);
         FILE *lf = fopen(logp, "a");
         if (lf) { fprintf(lf, "%s\n", body); fclose(lf); }
-        const char *cond = strstr(body, "Retrieved records: verified helper functions") ? "D"
-                         : strstr(body, "Retrieved records: verified solutions to earlier") ? "C"
+        const char *cond = (strstr(body, "GENTEST-KIND-abstraction") || strstr(body, "Retrieved records: verified helper functions")) ? "D"
+                         : (strstr(body, "GENTEST-KIND-raw") || strstr(body, "Retrieved records: verified solutions to earlier")) ? "C"
                          : strstr(body, "Worked examples (") ? "B" : "A";
         char entry[80], mt[32], seed[32];
         {
