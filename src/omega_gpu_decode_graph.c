@@ -5,6 +5,7 @@
  */
 #include "omega_gpu_decode_graph.h"
 #include "omega_gpu_cmdlist.h"
+#include "omega_gpu_dep.h"
 #include "omega_blackwell_codegen_dec.h"
 #include "omega_gpu_session.h"
 #include "omega_gpu_fmt.h"
@@ -61,8 +62,8 @@ static int fail(OmegaGpuDecodeGraph *g, const char *what, int rc) {
 }
 
 /* lock held */
-static int kern_build(Kern *k, OmegaDecKind kind, uint32_t mode, int mutant) {
-    OmegaDecSpec s; memset(&s, 0, sizeof s); s.kind = kind; s.mode = mode; s.mutant = mutant;
+static int kern_build(Kern *k, OmegaDecKind kind, uint32_t mode, int mutant, uint32_t dep) {
+    OmegaDecSpec s; memset(&s, 0, sizeof s); s.kind = kind; s.mode = mode; s.mutant = mutant; s.dep = dep;
     BlackwellIRProgram *prog = omega_gpu_host_calloc(1, sizeof *prog);
     if (!prog) return OMEGA_GPU_DGRAPH_CODEGEN_FAIL;
     int rc = OMEGA_GPU_DGRAPH_OK;
@@ -116,6 +117,8 @@ int omega_gpu_decode_graph_create(const OmegaGpuDecodeGraphConfig *cfg, OmegaGpu
     if (omega_gpu_cmdlist_create(OMEGA_GPU_CMDLIST_MAX_LAUNCHES, &g->cl) != 0) { omega_gpu_decode_graph_free(g); return OMEGA_GPU_DGRAPH_CHIP_FAIL; }
     omega_gpu_session_lock();
     if (!omega_gpu_session_open() || omega_gpu_session_alloc(L->bytes, &g->buf) != 0) rc = OMEGA_GPU_DGRAPH_CHIP_FAIL;
+    /* DEPFLAGS (opt-in, AIEN_OMEGA_DEP / omega_gpu_dep_set_mode): the list and every kernel recorded into it carry the counter protocol; 0 = the barrier */
+    if (rc == OMEGA_GPU_DGRAPH_OK && omega_gpu_cmdlist_set_dep(g->cl, omega_gpu_dep_mode()) != 0) rc = OMEGA_GPU_DGRAPH_CHIP_FAIL;
     static const struct { OmegaDecKind kind; uint32_t mode; int mutant; } spec[K_COUNT] = {
         [K_NORM] = { OMEGA_DEC_RES, OMEGA_DEC_RES_NORM, 0 },
         [K_ADD] = { OMEGA_DEC_RES, OMEGA_DEC_RES_ADD, 0 },
@@ -126,7 +129,7 @@ int omega_gpu_decode_graph_create(const OmegaGpuDecodeGraphConfig *cfg, OmegaGpu
         [K_SW_M1] = { OMEGA_DEC_SWIGLU, 0, 1 },
         [K_CN_M2] = { OMEGA_DEC_RES, OMEGA_DEC_RES_COMBINE | OMEGA_DEC_RES_NORM, 2 },
     };
-    for (unsigned i = 0; i < K_COUNT && rc == OMEGA_GPU_DGRAPH_OK; i++) rc = kern_build(&g->k[i], spec[i].kind, spec[i].mode, spec[i].mutant);
+    for (unsigned i = 0; i < K_COUNT && rc == OMEGA_GPU_DGRAPH_OK; i++) rc = kern_build(&g->k[i], spec[i].kind, spec[i].mode, spec[i].mutant, omega_gpu_cmdlist_dep(g->cl));
     if (rc == OMEGA_GPU_DGRAPH_OK) {
         memset(g->buf.cpu, 0, L->bytes);
         float *lg = cpu_of(g, L->logits), *amv = cpu_of(g, L->am_v);

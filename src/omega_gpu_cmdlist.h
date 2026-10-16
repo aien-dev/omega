@@ -21,6 +21,14 @@
  * here is preceded by WAIT_FOR_IDLE and the session's INVALIDATE_SHADER_CACHES_ALL (instruction, data, constant).
  * OMEGA_GPU_CMDLIST_BARRIER_NONE exists only as the negative control of the chip test.
  *
+ * Dependency flags (DEPFLAGS, 2026-10-16, opt-in, omega_gpu_dep.h): omega_gpu_cmdlist_set_dep(cl, OMEGA_DEP_FLAGS) on an
+ * empty list makes submit emit NO barrier between launches; instead every launch's kernel (built with spec.dep = the list's
+ * value, see omega_bw_dep.h) polls one shared counter until every CTA of every launch before it has added 1, and adds 1 per
+ * CTA at exit. add() writes the counter address and the launch's target (CTAs of launches 0..i-1) into bank words
+ * 0x3e8..0x3fb, so a dep-mode launch may carry at most 26 argument words. The host zeroes the counter before the submit and
+ * checks it against the CTA total after the completion marker (stats dep_expected / dep_observed). dep 0 (the default)
+ * changes nothing: the barrier orders the launches exactly as before.
+ *
  * Launch methods (opts.mode):
  *   PCAS   QMD in memory, SEND_PCAS_A (qmd >> 8) + SEND_SIGNALING_PCAS2_B INVALIDATE_COPY_SCHEDULE (clcec0.h 0x02b4 /
  *          0x02c0; the NVK dispatch sequence, nvk_cmd_dispatch.c), no dependent QMD: 8 words per launch, a whole
@@ -76,6 +84,8 @@ typedef struct {
     uint64_t host_ns;      /* building the method stream (CPU) */
     uint32_t sems_done;    /* launch semaphores found DONE */
     int32_t first_missing; /* index of the first launch whose semaphore was not DONE, -1 if none */
+    uint32_t dep_expected; /* dep mode: CTAs over all launches (what the counter must read after completion); 0 in dep 0 */
+    uint32_t dep_observed; /* dep mode: the counter read back after completion */
 } OmegaGpuCmdListStats;
 
 typedef struct OmegaGpuCmdList OmegaGpuCmdList;
@@ -91,9 +101,16 @@ uint32_t omega_gpu_cmdlist_count(const OmegaGpuCmdList *cl);
  * prefetch beside the latency-bound attention). The launch after it gets the normal barrier, which waits for both.
  * Ignored for the first launch of a submission. 0 ok, -1 (no launch recorded). */
 int omega_gpu_cmdlist_mark_independent(OmegaGpuCmdList *cl);
+/* Caller holds the lock. Dependency flags for every launch recorded from now on (omega_gpu_dep.h: OMEGA_DEP_FLAGS, | OMEGA_DEP_CAMERA;
+ * 0 = the barrier, today's behaviour). Only on an empty list (reset first); other bits refused. Kernels recorded into a dep-mode
+ * list must be built with spec.dep == omega_gpu_cmdlist_dep(cl) (every kernel API does so when given the list). 0 ok, -1. */
+int omega_gpu_cmdlist_set_dep(OmegaGpuCmdList *cl, uint32_t dep);
+uint32_t omega_gpu_cmdlist_dep(const OmegaGpuCmdList *cl);
+/* After a submit in dep mode: the counter read back (== CTAs of all launches when every launch counted itself in). */
+uint32_t omega_gpu_cmdlist_dep_counter(const OmegaGpuCmdList *cl);
 /* Caller holds the lock. Writes the launch's bank and QMD into the next slot. The launch's code must stay resident
- * until submit returns. Returns the launch index, or -1 (full, bad arguments, QMD refused). L->timeout_ms and
- * L->spin_us are ignored (the list has one completion). */
+ * until submit returns. Returns the launch index, or -1 (full, bad arguments, QMD refused, more than 26 argument words in
+ * dep mode). L->timeout_ms and L->spin_us are ignored (the list has one completion). */
 int omega_gpu_cmdlist_add(OmegaGpuCmdList *cl, const OmegaGpuLaunch *L);
 /* Caller holds the lock, device open, not latched. Submits every recorded launch in order, waits for the completion,
  * checks every launch semaphore. 0 ok; -1 with the stage named (omega_gpu_session_last_error). */

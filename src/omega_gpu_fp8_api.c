@@ -303,7 +303,7 @@ static int gemv_core(const OmegaGpuFp8Tensor *t, uint32_t groups, const uint32_t
     if (groups > OMEGA_GPU_FP8_MAX_GROUPS) return OMEGA_GPU_FP8_TOO_LARGE;
     if (!dev_tab) for (uint32_t gi = 0; gi < groups; gi++) if (ids[gi] >= t->experts) return OMEGA_GPU_FP8_BAD_ARGS;
     const uint32_t n = t->n, k = t->k;
-    OmegaFp8GemvSpec spec; spec_for(k, n, groups, &spec);
+    OmegaFp8GemvSpec spec; spec_for(k, n, groups, &spec); spec.dep = rec ? omega_gpu_cmdlist_dep(rec) : 0; /* dep-mode list: the kernel carries the counter protocol */
     if (n % spec.rows) return OMEGA_GPU_FP8_CODEGEN_FAIL;
     const uint32_t RG = n / spec.rows;
     uint32_t grid_x = (RG + spec.warps - 1) / spec.warps;

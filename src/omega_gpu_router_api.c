@@ -188,7 +188,7 @@ static int router_core(OmegaGpuRouter *r, uint32_t layer, const float *x, float 
     if (info) memset(info, 0, sizeof *info);
     if (!r || layer >= r->layers || (rec ? !dev_x : (!x || !ids || !weights))) return OMEGA_GPU_ROUTER_BAD_ARGS;
     OmegaRouterSpec spec; memset(&spec, 0, sizeof spec);
-    spec.warps = g.warps ? g.warps : OMEGA_GPU_ROUTER_WARPS; spec.depth = g.depth ? g.depth : OMEGA_GPU_ROUTER_DEPTH; spec.mutant = g.mutant;
+    spec.warps = g.warps ? g.warps : OMEGA_GPU_ROUTER_WARPS; spec.depth = g.depth ? g.depth : OMEGA_GPU_ROUTER_DEPTH; spec.mutant = g.mutant; spec.dep = rec ? omega_gpu_cmdlist_dep(rec) : 0; /* dep-mode list: the kernel carries the counter protocol */
 
     if (!rec) omega_gpu_session_lock();
 #define UNLOCK() do { if (!rec) omega_gpu_session_unlock(); } while (0)

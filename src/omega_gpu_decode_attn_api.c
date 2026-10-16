@@ -186,7 +186,7 @@ static int dattn_core(OmegaGpuDecodeAttnCache *c, uint32_t layer, uint32_t pos, 
     const uint32_t splits = (pos + per) / per; /* ceil((pos + 1) / per) */
     if (splits > c->max_splits) return OMEGA_GPU_DATTN_TOO_LARGE;
     OmegaDecodeAttnSpec spec; memset(&spec, 0, sizeof spec);
-    spec.depth = g.depth ? g.depth : OMEGA_GPU_DATTN_DEPTH; spec.mutant = g.mutant;
+    spec.depth = g.depth ? g.depth : OMEGA_GPU_DATTN_DEPTH; spec.mutant = g.mutant; spec.dep = rec ? omega_gpu_cmdlist_dep(rec) : 0; /* dep-mode list: the kernel carries the counter protocol */
 
     if (!rec) omega_gpu_session_lock();
 #define UNLOCK() do { if (!rec) omega_gpu_session_unlock(); } while (0)
