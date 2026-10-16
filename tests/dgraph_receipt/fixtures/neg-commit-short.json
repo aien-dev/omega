@@ -1,0 +1,184 @@
+{
+  "schema": "omega-decode-graph-receipt/1",
+  "status": "HISTORICAL",
+  "status_note": "reproduced from an existing evidence run (evidence/OWN30B-REQUAL-MAIN-710d438c-20261015/gates/decode_graph, started 2026-10-15T00:55:40Z) by tools/dgraph_receipt.c; the chip was not run to make this receipt",
+  "run_verdict": "PASS",
+  "source": {
+    "repo": "aien-spark/omega",
+    "commit": "710d438c",
+    "dirty": false,
+    "dirty_basis": "device.txt dirty=0 (git status --porcelain line count at run start)",
+    "branch": "HEAD",
+    "physics_commit": "6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf"
+  },
+  "run": {
+    "started_utc": "2026-10-15T00:55:40Z",
+    "ended_utc": "2026-10-15T00:55:42Z",
+    "runner_mode": "main",
+    "test_checks": "13 checks, 0 failed"
+  },
+  "workload": {
+    "model": "synthetic Qwen3-30B-A3B-shaped decode step, random weights",
+    "precision": "FP8 e4m3 weights (qkv, o, gate_up, down), BF16 lm_head, f32 activations",
+    "mode": "decode, one token per command list (omega_gpu_decode_graph_token), batch 1",
+    "tokens": 20,
+    "tokens_note": "20 timed graph tokens (the test's --reps), every one the same step at position 300; plus one stamped token",
+    "layers": 2,
+    "vocab": 151936,
+    "pos": 300,
+    "cached_weights": false,
+    "prefetch": false,
+    "red_mutant": false,
+    "barrier": "0 (wfi+inval_all)",
+    "fp8_variant": 1
+  },
+  "hardware": {
+    "host": "spark-b87b",
+    "kernel": "7.0.0-1019-nvidia",
+    "gpu": "NVIDIA GB10",
+    "driver": "580.173.02",
+    "basis": "device.txt: uname -a and nvidia-smi --query-gpu=name,driver_version at run start"
+  },
+  "build": {
+    "runner": "tools/run_gpu_decode_graph_chip.sh EVIDENCE_DIR main",
+    "binary_sha256": "4a8a7aa373b9c04ae3f4343a2f45738a57662ad79609f6af99b64f8173028eec",
+    "library_sha256": "6a6cb4df479ddbcc5cd4ef0fda1aea968832b2b70be2ff3312051c3e9921aad5",
+    "compile_command_note": "evidence/OWN30B-REQUAL-MAIN-710d438c-20261015/gates/decode_graph/build.log (0 bytes) holds no compile line for build/gpu_decode_graph_test: make did not rebuild it in this run, so the flags are not recorded; the binary is identified by binary_sha256"
+  },
+  "per_token": {
+    "statistic": "median over 20 tokens (sorted value at index n/2), each field's median taken on its own, so derived differences are differences of medians",
+    "tokens": 20,
+    "graph": {
+      "launches": 22,
+      "submits": 1,
+      "total_ns": 3978675,
+      "chip_ns": 3975395,
+      "record_ns": 2464,
+      "host_overhead_ns": 3280,
+      "sems_done": null,
+      "sems_done_note": "not written by gpu_decode_graph_test; submit_now() in omega_gpu_decode_graph.c fails the token when sems_done != launches, so a PASS run implies sems_done == launches for every timed token (inferred, not a recorded value)"
+    },
+    "flush_each": {
+      "launches": 22,
+      "submits": 22,
+      "total_ns": 5337477,
+      "chip_ns": 5326613,
+      "host_overhead_ns": 10864,
+      "sems_done": null,
+      "sems_done_note": "as for graph: not recorded, implied by the PASS verdict",
+      "identical_to_graph": true,
+      "note": "the same recorded list submitted one launch per submission (TEST ONLY set_flush_each): the batching comparison inside the same run"
+    }
+  },
+  "stamped_token": {
+    "launches": 22,
+    "span_ns": 3989568,
+    "chip_ns": 4076853,
+    "unattributed_ns": 87285,
+    "stage_sum_ns": 3989568,
+    "note": "one extra token run with set_stamps(1): span_ns and stage times are device PTIMER differences; chip_ns is that token's host-clock submit span; unattributed_ns = chip_ns - span_ns (submit call, front-end start, completion marker and host poll)",
+    "stages": [
+      {
+        "kind": "norm",
+        "launches": 1,
+        "device_ns": 15968
+      },
+      {
+        "kind": "qkv",
+        "launches": 2,
+        "device_ns": 167744
+      },
+      {
+        "kind": "attn",
+        "launches": 2,
+        "device_ns": 145440
+      },
+      {
+        "kind": "o_proj",
+        "launches": 2,
+        "device_ns": 121504
+      },
+      {
+        "kind": "res_add",
+        "launches": 2,
+        "device_ns": 10304
+      },
+      {
+        "kind": "router",
+        "launches": 2,
+        "device_ns": 72288
+      },
+      {
+        "kind": "gate_up",
+        "launches": 2,
+        "device_ns": 329184
+      },
+      {
+        "kind": "swiglu",
+        "launches": 2,
+        "device_ns": 6752
+      },
+      {
+        "kind": "down",
+        "launches": 2,
+        "device_ns": 172960
+      },
+      {
+        "kind": "combine_norm",
+        "launches": 2,
+        "device_ns": 19584
+      },
+      {
+        "kind": "lm_head",
+        "launches": 1,
+        "device_ns": 2912960
+      },
+      {
+        "kind": "argmax",
+        "launches": 2,
+        "device_ns": 14880
+      }
+    ]
+  },
+  "aggregate": {
+    "available": false,
+    "reason": "the input receipt carries per-token medians and one stamped token only, no per-token arrays or run totals, so no aggregate sums or percentiles are derived (adding them needs the test to write every token's stats)"
+  },
+  "serial_vs_overlap": {
+    "chip_ns": "serial: the sum over the token's submissions of one host-clock span each (1 submission per graph token, 22 per flush_each token); spans never overlap each other",
+    "stages": "serial partition: barrier 0 (wfi+inval_all) puts a WAIT_FOR_IDLE before every stamp and prefetch is off, so launches run one after another and the stage times add up exactly to span_ns",
+    "overlap_measurable": false,
+    "reason": "every launch waits for the previous one (WFI) and the host records before it submits, so nothing overlaps to measure; device time inside the host span is span_ns, the rest is unattributed_ns"
+  },
+  "methodology": {
+    "device_clock": "GPU PTIMER ns from compute-class REPORT_SEMAPHORE timestamps (omega_gpu_cmdlist.h: \"out[0] = GPU timestamp (ns, PTIMER) before launch 0, out[i + 1] = after launch i completed (taken after its WAIT_FOR_IDLE)\"); used only by stamped_token span_ns and stages",
+    "host_clock": "omega_gpu_session_now_ns(): the platform's time_now_ns, CLOCK_MONOTONIC on Linux (omega_gpu_platform_linux.c ref_now_ns); used by chip_ns, record_ns and total_ns",
+    "counters": {
+      "launches": "omega_gpu_decode_graph.h: \"launches recorded for the token\"",
+      "submits": "omega_gpu_decode_graph.h: \"submissions (1 normally; = launches with flush_each)\"",
+      "chip_ns": "omega_gpu_decode_graph.h: \"sum of the list submissions' first-submit-to-last-marker time\". HOST clock, not device time: omega_gpu_cmdlist_submit() reads time_now_ns just before queue_submit and again after both completion marker words were seen and synced, so it holds device execution plus submit, fetch and poll latency",
+      "record_ns": "omega_gpu_decode_graph.h: \"host: begin_token to the submit (recording)\"",
+      "total_ns": "omega_gpu_decode_graph.h: \"host: begin_token to end_token return\"",
+      "sems_done": "omega_gpu_decode_graph.h: \"launch semaphores found DONE\"",
+      "stamps": "omega_gpu_decode_graph.h: \"Launch i took stamps[i + 1] - stamps[i] ns\"; gpu_decode_graph_test sums them per kind (per_kind_ns)",
+      "host_overhead_ns": "derived: total_ns - chip_ns, both host clock: recording, attention counter check, output sync, token read and lock, everything outside the submit span"
+    },
+    "source": "numbers copied from the stats file written by tests/gpu_decode_graph_test.c --out; settings from its log; identity from the runner's device.txt and binaries.sha256"
+  },
+  "evidence": [
+    "evidence/OWN30B-REQUAL-MAIN-710d438c-20261015/gates/decode_graph/receipt-main.json",
+    "evidence/OWN30B-REQUAL-MAIN-710d438c-20261015/gates/decode_graph/main.log",
+    "evidence/OWN30B-REQUAL-MAIN-710d438c-20261015/gates/decode_graph/device.txt",
+    "evidence/OWN30B-REQUAL-MAIN-710d438c-20261015/gates/decode_graph/binaries.sha256",
+    "evidence/OWN30B-REQUAL-MAIN-710d438c-20261015/gates/decode_graph/build.log",
+    "evidence/OWN30B-REQUAL-MAIN-710d438c-20261015/NOTES.md"
+  ],
+  "limitations": [
+    "chip_ns is host-clock time around the device work; the only device-clock numbers are the stamped token's span_ns and stages",
+    "per-token values are independent medians of a synthetic step on random weights (Qwen3-30B-A3B shapes, not a checkpoint), one fixed position, the same token every rep; not a serving or end-to-end tokens-per-second figure",
+    "the stamped token is a single token: its stage times are one sample, not a distribution",
+    "sems_done, the command list's own host_ns (method-stream build) and the marker-wait part of chip_ns are not recorded per token",
+    "no aggregate totals or percentiles: the input has medians only",
+    "this receipt is not a qualification: it re-expresses an existing run and claims nothing beyond that run's files"
+  ]
+}

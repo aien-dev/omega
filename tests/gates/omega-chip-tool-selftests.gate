@@ -1,5 +1,5 @@
 # tests/gates/omega-chip-tool-selftests.gate
-# Mirrors hosted: host-suites.yml chip-tool-selftests: test-m19r-qualify test-gate14-combine test-window-lane-guard test-unwritten-trap-host test-ldst-host (omega #425; replaces the chip-only OMEGA-M19R-QUALIFY and OMEGA-GATE14-COMBINE manifests: both targets are host-only self-tests)
+# Mirrors hosted: host-suites.yml chip-tool-selftests: test-m19r-qualify test-gate14-combine test-window-lane-guard test-unwritten-trap-host test-ldst-host test-dgraph-receipt (omega #425; dgraph receipt: aien-architecture#233; replaces the chip-only OMEGA-M19R-QUALIFY and OMEGA-GATE14-COMBINE manifests: both targets are host-only self-tests)
 gate: OMEGA-CHIP-TOOL-SELFTESTS
 manifest_version: 2
 owner: omega
@@ -11,6 +11,8 @@ inputs:
   - src/
   - tests/
   - tools/
+  - docs/perf/
+  - evidence/OWN30B-REQUAL-MAIN-710d438c-20261015/
   - tests/gates/
 run:
   exec: tests/gates/run.sh
