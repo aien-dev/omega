@@ -23,13 +23,6 @@ name: Zig cc cross-check
 # UBSan is applied), and the QEMU-backed gates (M5 and the realization demo),
 # because no omega workflow installs QEMU. See docs/zig-cc-lane.md.
 #
-# OPEN: clang 22 warns on src/omega_blackwell_encoder.c:87 (`char HEXDIGITS[16] =
-# "0123456789abcdef"` drops the NUL; -Wunterminated-string-initialization), gcc
-# does not. That file is GPU encoder code and this lane does not edit it, so the
-# one diagnostic is demoted from error to warning with -Wno-error=<flag> on the
-# compiler command below. It stays visible in the build log. Every other
-# warning is still an error (-Werror from the Makefile).
-#
 # Like pr-smoke.yml this runs on every pull request (no path filter), against the
 # merged result that actions/checkout produces for pull_request events.
 
@@ -84,7 +77,7 @@ jobs:
           zig="$RUNNER_TEMP/zig-aarch64-linux-${ZIG_VERSION}/zig"
           test "$("$zig" version)" = "${ZIG_VERSION}"
           "$zig" cc --version | head -2
-          echo "ZIGCC=$zig cc -Wno-error=unterminated-string-initialization" >> "$GITHUB_ENV"
+          echo "ZIGCC=$zig cc" >> "$GITHUB_ENV"
       - name: Build with zig cc and base gates (make test)
         env:
           PHYSICS_DIR: ${{ github.workspace }}/physics-src

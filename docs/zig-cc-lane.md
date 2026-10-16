@@ -50,22 +50,21 @@ changing the version means changing both together.
   gave different `omegatool` bytes (the gcc builds were identical), so the lane
   compares program behaviour, not binary hashes.
 
-## Open item
+## Resolved item
 
-clang 22 reports `-Wunterminated-string-initialization` for
-`src/omega_blackwell_encoder.c:87` (`static const char HEXDIGITS[16] =
-"0123456789abcdef";` leaves no room for the terminating NUL). gcc 13 does not.
-That file is GPU encoder code and the lane does not edit it. The lane passes
-`-Wno-error=unterminated-string-initialization` so this one diagnostic stays a
-visible warning while every other warning remains an error. A fix belongs with the
-owner of that file, for example declaring `HEXDIGITS[]` with no explicit size.
+clang 22 reported `-Wunterminated-string-initialization` for
+`src/omega_blackwell_encoder.c` (`static const char HEXDIGITS[16] =
+"0123456789abcdef";` left no room for the terminating NUL; gcc 13 does not
+warn). The array is now declared `HEXDIGITS[]` (17 bytes, omega#432), and the
+lane no longer passes `-Wno-error=unterminated-string-initialization`: every
+warning is an error, as in the gcc lanes.
 
 ## Running it by hand
 
 From a checkout with the pinned Physics at `PHYSICS_DIR`:
 
     ZIG=/path/to/zig-aarch64-linux-0.17.0/zig
-    make CC="$ZIG cc -Wno-error=unterminated-string-initialization" PHYSICS_DIR=../physics test
+    make CC="$ZIG cc" PHYSICS_DIR=../physics test
 
 Use a separate `OUT_DIR` per compiler if you want both builds side by side. The M5
 QEMU gate writes to a fixed `build/` directory, so create `build/` first when
