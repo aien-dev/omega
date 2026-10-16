@@ -618,11 +618,13 @@ static uint8_t unit_version(const OscUnit *u) {
 }
 
 static void encode_unit(const OscUnit *u, W *w) {
-    /* format version 1 (OSC-1, no structs) / 2 (OSC-2 structs: struct table
-     * after the magic) / 3 (OSC-2 arenas: AOPEN/AALLOC/ADESTROY present; the
-     * struct count byte and table always follow the magic, even when 0).
-     * A unit without structs or arenas encodes exactly as version 1; one with
-     * structs but no arenas exactly as version 2. */
+    /* format version = unit_version(u), the highest feature the unit uses:
+     * 1 (OSC-1, no structs) / 2 (OSC-2 structs) / 3 (OSC-2 arenas:
+     * AOPEN/AALLOC/ADESTROY) / 4 (OSC-3 pools: POPEN/PCLOSE and the handle
+     * ops) / 5 (external byte slices: a register of bytes or cells slice type).
+     * Versions 2..5 share one layout: the struct count byte and table always
+     * follow the magic, even when 0. A unit encodes exactly as the lowest
+     * version that holds it, so older units keep their bytes and identity. */
     uint8_t magic[8] = {'O', 'S', 'C', '1', 'I', 'R', 0, unit_version(u)};
     wbytes(w, magic, sizeof magic);
     if (magic[7] >= 2) { /* struct table present (possibly empty) */
@@ -772,7 +774,7 @@ static void rfail(R *r, int rc) { if (!r->rc) r->rc = rc; }
 /* a count or length field: refuse OVERSIZED above max (checked before anything is read under it) */
 static uint64_t rcount(R *r, unsigned k, uint64_t max) {
     uint64_t v = rle(r, k);
-    if (!r->rc && v > max) rfail(r, OSC_IR_REFUSE_OVERSIZED);
+    if (!r->rc && v > max && !MUTANT(9)) rfail(r, OSC_IR_REFUSE_OVERSIZED);  /* mutant 9: no maximum */
     return r->rc ? 0 : v;
 }
 /* a register / block / callee field: u16 two's complement; 0..0x7FFF or 0xFFFF (= -1) */
@@ -841,7 +843,7 @@ static void decode_insn(R *r, OscInsn *in) {
     case OSC_I_BR: in->blk_t = rvr(r); break;
     case OSC_I_CBR: in->a = rvr(r); in->blk_t = rvr(r); in->blk_f = rvr(r); break;
     case OSC_I_RET: in->a = rvr(r); break;
-    default: rfail(r, OSC_IR_REFUSE_RANGE); break;  /* unknown opcode: its size is unknown */
+    default: if (!MUTANT(10)) rfail(r, OSC_IR_REFUSE_RANGE); break;  /* unknown opcode: its size is unknown; mutant 10 admits it */
     }
 }
 
