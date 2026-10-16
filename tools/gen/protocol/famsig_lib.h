@@ -363,7 +363,7 @@ static char *fs_famlist(const FsSet *set, int *nfam)
     int ns = 0;
     for (int i = 0; i < set->n; i++) if (set->m[i].split == FS_HELDOUT) sig[ns++] = set->m[i].sig;
     qsort(sig, (size_t)ns, sizeof sig[0], fs_cmpstr);
-    size_t cap = 64 + (size_t)ns * (FS_SIGMAX + 8);
+    size_t cap = 128 + (size_t)ns * (FS_SIGMAX + 8);   /* header "gen-famlist 1\nsalt <64 hex>\n" is 84 bytes */
     char *out = malloc(cap);
     if (!out || !sig) { perror("famsig"); exit(2); }
     int n = snprintf(out, cap, "gen-famlist 1\nsalt %s\n", set->salt);
