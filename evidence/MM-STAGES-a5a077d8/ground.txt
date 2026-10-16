@@ -1,0 +1,10 @@
+omega a5a077d8d115a4a50633e71cc2c1f7a0191bafea dirty=0
+red = HEAD tests + 42d30fac matmul_api.c (stub)
+d714e8208489d6d3ba35d16dba2f78ab3c059d16d3f36df276498100ead1fdb7  /home/drakestapleton/workspace/omega-evidence-e2/STAGES-a5a077d8/api_test.red
+dad76fcd9ecb101f7b95285ecda772fcba23b7c6696a0d27c05defa939b752c5  /home/drakestapleton/workspace/omega-evidence-e2/STAGES-a5a077d8/api_test.green
+started 2026-10-16T02:09:52Z
+red sweep exit 1
+green sweep exit 0
+stages 1024 exit 0
+stages 64 exit 0
+finished 2026-10-16T02:10:26Z
