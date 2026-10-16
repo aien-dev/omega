@@ -80,17 +80,17 @@ static void host_only(void) {
       free(w); free(x); }
     uint32_t ws[] = { 4, 8, 16, 32 }, rs[] = { 1, 2, 4 };
     for (unsigned i = 0; i < 4; i++) for (unsigned j = 0; j < 3; j++) for (uint32_t d = 1; d <= 8; d *= 2) for (int m = 0; m <= 3; m++) {
-        OmegaBf16GemvSpec s = { 2048, rs[j], ws[i], d, m };
+        OmegaBf16GemvSpec s = { 2048, rs[j], ws[i], d, m, 0 };
         if (rs[j] * d > 16u) continue;
         uint32_t n = 0, g = 0; int rc = omega_bf16_gemv_prog_stats(&s, &n, &g);
         uint32_t decl = ((g + 1 + 7) / 8) * 8;
         CHECK(rc == 0 && n <= 1024, "codegen k2048 rows %u warps %u depth %u mutant %d: rc %d insns %u gprs %u", rs[j], ws[i], d, m, rc, n, g);
         if (m == 0 && rc == 0 && rs[j] == 1 && d == 8) printf("codegen rows %u warps %2u depth %u: %u instructions, %u registers (declared %u, register file %u of 65536)%s\n", rs[j], ws[i], d, n, g, decl, 32u * ws[i] * decl, 32u * ws[i] * decl <= 65536u ? "" : " DOES NOT FIT");
     }
-    { OmegaBf16GemvSpec s = { 2048, 3, 8, 8, 0 }; CHECK(omega_bf16_gemv_prog_stats(&s, NULL, NULL) != 0, "rows 3 refused"); }
-    { OmegaBf16GemvSpec s = { 2000, 1, 8, 8, 0 }; CHECK(omega_bf16_gemv_prog_stats(&s, NULL, NULL) != 0, "k 2000 refused"); }
-    { OmegaBf16GemvSpec s = { 2048, 1, 8, 3, 0 }; CHECK(omega_bf16_gemv_prog_stats(&s, NULL, NULL) != 0, "depth 3 refused"); }
-    { OmegaBf16GemvSpec s = { 2048, 1, 8, 8, 4 }; CHECK(omega_bf16_gemv_prog_stats(&s, NULL, NULL) != 0, "mutant 4 refused"); }
+    { OmegaBf16GemvSpec s = { 2048, 3, 8, 8, 0, 0 }; CHECK(omega_bf16_gemv_prog_stats(&s, NULL, NULL) != 0, "rows 3 refused"); }
+    { OmegaBf16GemvSpec s = { 2000, 1, 8, 8, 0, 0 }; CHECK(omega_bf16_gemv_prog_stats(&s, NULL, NULL) != 0, "k 2000 refused"); }
+    { OmegaBf16GemvSpec s = { 2048, 1, 8, 3, 0, 0 }; CHECK(omega_bf16_gemv_prog_stats(&s, NULL, NULL) != 0, "depth 3 refused"); }
+    { OmegaBf16GemvSpec s = { 2048, 1, 8, 8, 4, 0 }; CHECK(omega_bf16_gemv_prog_stats(&s, NULL, NULL) != 0, "mutant 4 refused"); }
     CHECK(OMEGA_BF16_ARGS_WORDS <= OMEGA_GPU_SESSION_MAX_ARGS, "argument words fit the constant bank window");
     uint16_t bad[256]; memset(bad, 0, sizeof bad); bad[7] = 0x7f80;
     OmegaGpuBf16Tensor *t = NULL;
@@ -102,7 +102,7 @@ static void host_only(void) {
 static uint64_t g_sim_issues;
 static int sim_point(uint32_t k, uint32_t n, uint32_t rows, uint32_t warps, uint32_t depth, uint32_t grid_x, int mutant, uint32_t seed, char *msg, size_t msgn, size_t *bad) {
     static BlackwellIRProgram prog;
-    OmegaBf16GemvSpec spec = { k, rows, warps, depth, mutant };
+    OmegaBf16GemvSpec spec = { k, rows, warps, depth, mutant, 0 };
     if (omega_blackwell_codegen_bf16_gemv_prog(&spec, &prog) != 0) { snprintf(msg, msgn, "codegen refused"); return -1; }
     uint16_t *w = aligned_alloc(16, (size_t)n * k * 2); { uint16_t *t = make_w((size_t)n * k, seed); memcpy(w, t, (size_t)n * k * 2); free(t); }
     float *x = aligned_alloc(16, (size_t)k * 4); { float *t = make_x(k, seed + 1); memcpy(x, t, (size_t)k * 4); free(t); }

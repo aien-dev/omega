@@ -104,6 +104,7 @@ static void isetp_ge_u32(Em *e, int a, int b) { BlackwellIRInsn i = I0(BW_IR_ISE
 static void bra(Em *e, int target) { BlackwellIRInsn i = I0(BW_IR_BRA); i.imm = (uint32_t)(target - here(e)); emit(e, i, K_BRA); }
 static int bra_if_p0_fwd(Em *e) { int at = here(e); BlackwellIRInsn i = I0(BW_IR_BRA); i.predicate_p0 = true; i.imm = 1; emit(e, i, K_BRA); return at; }
 static void patch_bra(Em *e, int at, int target) { if (!e->err) e->p->insns[at].imm = (uint32_t)(target - at); }
+#include "omega_bw_dep.h" /* DEPFLAGS: needs Em, emit, I0, V, V64, here, patch_bra, K_* above */
 static int bssy_fwd(Em *e) { int at = here(e); BlackwellIRInsn i = I0(BW_IR_BSSY); i.bar_reg = 0; i.imm = 2; emit(e, i, K_BSSY); return at; }
 static void bsync(Em *e) { BlackwellIRInsn i = I0(BW_IR_BSYNC); i.bar_reg = 0; emit(e, i, K_BSYNC); }
 static void exit_k(Em *e) { emit(e, I0(BW_IR_EXIT), K_EXIT); }
@@ -163,7 +164,7 @@ int omega_blackwell_codegen_decode_attn_prog(const OmegaDecodeAttnSpec *spec, Bl
     s2r(e, tid, BW_SR_TID_X); s2r(e, cx, BW_SR_CTAID_X); s2r(e, cy, BW_SR_CTAID_Y);
     movi(e, one, 1); movrz(e, R(zero)); movi(e, c7fff, 0x7fffu); movi(e, c16, 16);
     shr(e, warp, tid, 5);
-    OmegaBwDep D; dep_prologue(e, spec->dep, udesc, tid, &D);
+    OmegaBwDep Dp; dep_prologue(e, spec->dep, udesc, tid, &Dp);
     andi(e, R(lane), R(tid), 31u);
 
     /* range of this CTA: base = cx * per; end = min(base + per, pos + 1) */
@@ -477,7 +478,7 @@ int omega_blackwell_codegen_decode_attn_prog(const OmegaDecodeAttnSpec *spec, Bl
     lds32(e, R(ep[0]), t1, 1);
     isetp_ge_u32(e, ep[0], splitsm1);
     const int bra_last = bra_if_p0_fwd(e);
-    dep_epilogue(e, udesc, tid, &D); /* CTA-uniform exit (ep[0] is one shared word): all threads take it */
+    dep_epilogue(e, udesc, tid, &Dp); /* CTA-uniform exit (ep[0] is one shared word): all threads take it */
     exit_k(e);
     patch_bra(e, bra_last, here(e));
     /* combine: thread tid, outputs o = tid + 256 r (head o >> 7, dim o & 127), r = 0..3 */
@@ -537,7 +538,7 @@ int omega_blackwell_codegen_decode_attn_prog(const OmegaDecodeAttnSpec *spec, Bl
     /* thread 0 resets the counter for the next launch (every other CTA of this head has already added) */
     isetp_ge_u32(e, tid, one);
     { Region r = region_skip_if_p0(e); imadw(e, pb64, cy, 4u, pcnt); stg(e, BW_IR_STG_STRONG_SYS, pb64, R(zero), udesc); region_end(e, r); }
-    dep_epilogue(e, udesc, tid, &D);
+    dep_epilogue(e, udesc, tid, &Dp);
     tail(e);
     if (e->err) return -1;
     return omega_bw_regalloc_solve(prog);

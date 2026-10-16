@@ -122,13 +122,13 @@ static int specs_build(void) {
 /* ---- host-only ---- */
 static int host_only(void) {
     const struct { const char *name; OmegaDecSpec s; } cases[] = {
-        { "axpy", { OMEGA_DEC_AXPY, 0, AXPY_STRIDE, 0 } },
-        { "res add|norm", { OMEGA_DEC_RES, OMEGA_DEC_RES_ADD | OMEGA_DEC_RES_NORM, 0, 0 } },
-        { "res combine|norm", { OMEGA_DEC_RES, OMEGA_DEC_RES_COMBINE | OMEGA_DEC_RES_NORM, 0, 0 } },
-        { "res add", { OMEGA_DEC_RES, OMEGA_DEC_RES_ADD, 0, 0 } },
-        { "swiglu", { OMEGA_DEC_SWIGLU, 0, 0, 0 } },
-        { "argmax", { OMEGA_DEC_ARGMAX, 0, 0, 0 } },
-        { "argmax indexed", { OMEGA_DEC_ARGMAX, 1, 0, 0 } },
+        { "axpy", { OMEGA_DEC_AXPY, 0, AXPY_STRIDE, 0, 0 } },
+        { "res add|norm", { OMEGA_DEC_RES, OMEGA_DEC_RES_ADD | OMEGA_DEC_RES_NORM, 0, 0, 0 } },
+        { "res combine|norm", { OMEGA_DEC_RES, OMEGA_DEC_RES_COMBINE | OMEGA_DEC_RES_NORM, 0, 0, 0 } },
+        { "res add", { OMEGA_DEC_RES, OMEGA_DEC_RES_ADD, 0, 0, 0 } },
+        { "swiglu", { OMEGA_DEC_SWIGLU, 0, 0, 0, 0 } },
+        { "argmax", { OMEGA_DEC_ARGMAX, 0, 0, 0, 0 } },
+        { "argmax indexed", { OMEGA_DEC_ARGMAX, 1, 0, 0, 0 } },
     };
     for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++) {
         uint32_t insns = 0, gprs = 0;
@@ -137,8 +137,8 @@ static int host_only(void) {
         CHECK(gprs <= 200, "%s gprs %u within budget", cases[i].name, gprs);
         printf("codegen %s: %u insns, peak %u gprs, declared %u\n", cases[i].name, insns, gprs, omega_bw_gpr_declared(gprs));
     }
-    OmegaDecSpec bad[] = { { OMEGA_DEC_AXPY, 0, 0, 0 }, { OMEGA_DEC_AXPY, 0, 100, 0 }, { OMEGA_DEC_RES, 0, 0, 0 },
-                           { OMEGA_DEC_RES, OMEGA_DEC_RES_ADD | OMEGA_DEC_RES_COMBINE, 0, 0 }, { (OmegaDecKind)0, 0, 0, 0 }, { OMEGA_DEC_RES, 8, 0, 0 } };
+    OmegaDecSpec bad[] = { { OMEGA_DEC_AXPY, 0, 0, 0, 0 }, { OMEGA_DEC_AXPY, 0, 100, 0, 0 }, { OMEGA_DEC_RES, 0, 0, 0, 0 },
+                           { OMEGA_DEC_RES, OMEGA_DEC_RES_ADD | OMEGA_DEC_RES_COMBINE, 0, 0, 0 }, { (OmegaDecKind)0, 0, 0, 0, 0 }, { OMEGA_DEC_RES, 8, 0, 0, 0 } };
     for (unsigned i = 0; i < sizeof bad / sizeof bad[0]; i++) CHECK(omega_dec_prog_stats(&bad[i], NULL, NULL) != 0, "refusal %u", i);
     return g_failed ? 1 : 0;
 }

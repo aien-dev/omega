@@ -107,15 +107,15 @@ static void host_only(void) {
     /* codegen budgets: every production shape fits the register file (32 * warps * declared <= 65536) and the IR limit */
     uint32_t ws[] = { 8, 16, 32 }, ds[] = { 1, 2, 4, 8 };
     for (unsigned i = 0; i < 3; i++) for (unsigned j = 0; j < 4; j++) for (int m = 0; m <= 4; m++) {
-        OmegaRouterSpec s = { ws[i], ds[j], m }; uint32_t n = 0, g = 0;
+        OmegaRouterSpec s = { ws[i], ds[j], m, 0 }; uint32_t n = 0, g = 0;
         int rc = omega_router_prog_stats(&s, &n, &g);
         uint32_t decl = ((g + 1 + 7) / 8) * 8;
         CHECK(rc == 0 && n <= 1024 && 32u * ws[i] * decl <= 65536u, "codegen warps %u depth %u mutant %d: rc %d insns %u gprs %u declared %u", ws[i], ds[j], m, rc, n, g, decl);
         if (m == 0 && rc == 0) printf("codegen warps %2u depth %u: %u instructions, %u registers (declared %u, register file %u of 65536)\n", ws[i], ds[j], n, g, decl, 32u * ws[i] * decl);
     }
-    { OmegaRouterSpec s = { 4, 8, 0 }; CHECK(omega_router_prog_stats(&s, NULL, NULL) != 0, "warps 4 refused"); }
-    { OmegaRouterSpec s = { 8, 3, 0 }; CHECK(omega_router_prog_stats(&s, NULL, NULL) != 0, "depth 3 refused"); }
-    { OmegaRouterSpec s = { 8, 8, 5 }; CHECK(omega_router_prog_stats(&s, NULL, NULL) != 0, "mutant 5 refused"); }
+    { OmegaRouterSpec s = { 4, 8, 0, 0 }; CHECK(omega_router_prog_stats(&s, NULL, NULL) != 0, "warps 4 refused"); }
+    { OmegaRouterSpec s = { 8, 3, 0, 0 }; CHECK(omega_router_prog_stats(&s, NULL, NULL) != 0, "depth 3 refused"); }
+    { OmegaRouterSpec s = { 8, 8, 5, 0 }; CHECK(omega_router_prog_stats(&s, NULL, NULL) != 0, "mutant 5 refused"); }
     CHECK(OMEGA_ROUTER_ARGS_WORDS <= OMEGA_GPU_SESSION_MAX_ARGS, "argument words fit the constant bank window");
 }
 
@@ -126,7 +126,7 @@ enum { B_X = 0, B_XOUT = 8192, B_IDS = 16384, B_WTS = 16448, B_TGU = 16512, B_TD
 static void fake_dirs(uint64_t *dgu, uint64_t *ddn) { for (unsigned e = 0; e < NE; e++) { dgu[2 * e] = 0x100000000ull + e * 16; dgu[2 * e + 1] = 0x200000000ull + e * 16 + 8; ddn[2 * e] = 0x300000000ull + e * 32; ddn[2 * e + 1] = 0x400000000ull + e * 32 + 16; } }
 static int sim_point(uint32_t depth, int mutant, int norm_topk, float out_scale, uint32_t seed, char *msg, size_t n, int *bad, int *margin_case) {
     static BlackwellIRProgram prog;
-    OmegaRouterSpec spec = { 8, depth, mutant };
+    OmegaRouterSpec spec = { 8, depth, mutant, 0 };
     if (omega_blackwell_codegen_router_prog(&spec, &prog) != 0) { snprintf(msg, n, "codegen refused"); return -1; }
     Case c; case_make(&c, seed, 1.0f, norm_topk);
     uint8_t *blk = aligned_alloc(16, B_BYTES); memset(blk, 0, B_BYTES);
