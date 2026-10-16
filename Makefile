@@ -51,6 +51,8 @@ SRCS += src/omega_gpu_tcgemm_api.c
 SRCS += src/omega_blackwell_codegen_pattn.c src/omega_gpu_prefill_attn_api.c
 # OWN-30B T3b (2026-10-13): device-resident prefill (omega_gpu_prefill.h), new files only
 SRCS += src/omega_blackwell_codegen_pf.c src/omega_gpu_prefill.c src/omega_blackwell_codegen_tc2.c src/omega_gpu_pfgemm.c
+# trainer lane E1 (2026-10-16): device-resident bf16 training GEMM (omega_gpu_tgemm_api.h), new files only
+SRCS += src/omega_blackwell_codegen_tgemm.c src/omega_gpu_tgemm_api.c
 # OWN-30B L1 GEMM (W-L1G, 2026-10-14): native FP8 QMMA, new files only
 SRCS += src/omega_blackwell_codegen_qmma.c src/omega_blackwell_codegen_qg.c
 # OWN-30B W-L1G-D (2026-10-14): router logits + MoE combine for the whole-prompt prefill, new files only
@@ -2567,6 +2569,12 @@ $(GPU_PF_MEM_TEST): tests/gpu_pf_mem_test.c tests/bw_warp_sim_tc.h src/omega_gpu
 GPU_PFGEMM_TEST = $(OUT_DIR)/gpu_pfgemm_test
 $(GPU_PFGEMM_TEST): tests/gpu_pfgemm_test.c tests/bw_hmma_model.h tests/bw_warp_sim_tc.h src/omega_gpu_prefill.h src/omega_blackwell_codegen_tc2.h $(OUT_DIR)/libomega_gpu.a
 	$(CC) $(CFLAGS) -ffp-contract=off -DWS_MAX_THREADS=512 -Itests -o $@ tests/gpu_pfgemm_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+# trainer lane E1 (2026-10-16): bf16 training GEMM. --host-only and --sim are host proofs; the chip gate is tools/run_gpu_tgemm_chip.sh
+GPU_TGEMM_TEST = $(OUT_DIR)/gpu_tgemm_test
+$(GPU_TGEMM_TEST): tests/gpu_tgemm_test.c tests/bw_hmma_model.h tests/bw_warp_sim_tc.h src/omega_gpu_tgemm_api.h src/omega_blackwell_codegen_tgemm.h $(OUT_DIR)/libomega_gpu.a
+	$(CC) $(CFLAGS) -ffp-contract=off -DWS_MAX_THREADS=512 -Itests -o $@ tests/gpu_tgemm_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+test-gpu-tgemm: $(GPU_TGEMM_TEST)
+	$(GPU_TGEMM_TEST) --host-only && $(GPU_TGEMM_TEST) --sim
 GPU_QMMA_PROBE_TEST = $(OUT_DIR)/gpu_qmma_probe_test
 $(GPU_QMMA_PROBE_TEST): tests/gpu_qmma_probe_test.c tests/bw_qmma_model.h src/omega_blackwell_codegen_qmma.h $(OUT_DIR)/libomega_gpu.a
 	$(CC) $(CFLAGS) -ffp-contract=off -Itests -o $@ tests/gpu_qmma_probe_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
