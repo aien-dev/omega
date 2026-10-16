@@ -18,7 +18,7 @@ EL=$(sed -n 's/^static const char \*const k_elabel\[[A-Z_0-9]*\] = {\(.*\)};/\1/
 PL=$(sed -n 's/^static const char \*const k_plabel\[[A-Z_0-9]*\] = {\(.*\)};/\1/p' $C | tr -d '" ' | tr , ' ')
 [ "$(echo $EL | wc -w)" = 5 ] && [ "$(echo $PL | wc -w)" = 5 ] || { echo "[-] cannot read label tables from $C"; exit 1; }
 check() { # name expected-exit expected-text
-    out=$(R15_HWMON_ROOT="$W/$1" "$T" energy-preflight 2>&1); rc=$?
+    out=$(R15_HWMON_ROOT="$W/$1" "$T" energy-preflight 2>&1); rc=$?; : > "$W/$1.stop" # the preflight has returned: stop this case's background writer
     if [ "$rc" = "$2" ] && printf '%s\n' "$out" | grep -Fq -- "$3"; then echo "[+] $1: exit $rc"
     else echo "[-] $1: exit $rc (want $2), output: $out"; fail=$((fail + 1)); fi
 }
@@ -27,9 +27,15 @@ mk() { # case: a complete, valid-looking reader tree (static counters)
     i=1; for l in $EL; do echo "$l" > "$H/energy${i}_label"; echo 5000000000 > "$H/energy${i}_input"; echo 0 > "$H/energy${i}_overflow_raw"; i=$((i + 1)); done
     i=1; for l in $PL; do echo "$l" > "$H/power${i}_label"; echo 20000000 > "$H/power${i}_input"; i=$((i + 1)); done
 }
-# advance <case> <start-uJ>: package counter rises 0.5 J then 1 J in the background while the preflight samples
+# advance <case> <start-uJ>: the package counter keeps rising (0.5 J every 20 ms) in the background until check()
+# has run the preflight, so the three samples see a moving counter however slow the preflight is to start.
+# The old writer stepped twice (50 ms and 150 ms) and then stopped; under the Spark judge, which runs ~21 gates at once,
+# the preflight's own startup (bash, sed over r15_measure.c, label reads) took longer than 150 ms, every sample read the
+# final value and "valid" failed with "package counter did not advance over 3 samples (5001100000 uJ)" (omega#508 judge
+# run 2026-10-16 13:09Z; reproduced 6/15 on the host under 20 busy loops, 0/15 with this writer). Capped at 1500 steps
+# (30 s, 750 J) so it always ends on its own; the cap keeps every fixture below the headroom and wrap thresholds.
 put() { echo "$2" > "$1.tmp" && mv "$1.tmp" "$1"; } # atomic, so the preflight never reads a half-written file
-advance() { ( sleep 0.05; put "$W/$1/hwmon1/energy1_input" $(( $2 + 500000 )); sleep 0.1; put "$W/$1/hwmon1/energy1_input" $(( $2 + 1000000 )) ) & }
+advance() { ( v=$2; k=0; while [ ! -e "$W/$1.stop" ] && [ $k -lt 1500 ]; do v=$((v + 500000)); put "$W/$1/hwmon1/energy1_input" $v; k=$((k + 1)); sleep 0.02; done ) & }
 mkdir -p "$W/absent/hwmon0"; echo acpitz > "$W/absent/hwmon0/name"; check absent 5 "reason=absent"
 mkdir -p "$W/empty"; check empty 5 "reason=absent"
 mk substitute; echo nvml > "$W/substitute/hwmon1/name"; check substitute 5 "reason=absent"
@@ -60,7 +66,7 @@ R15_UPTIME_FILE="$W/wrapped-uptime" R15_ENERGY_PREFLIGHT_SLEEP=0.08 check wrappe
 mk nouptime; advance nouptime 5000000000; R15_UPTIME_FILE="$W/does-not-exist" R15_ENERGY_PREFLIGHT_SLEEP=0.08 check nouptime 5 "uptime"; wait
 # a decrease on any channel (not only package) invalidates the reader
 mk decr3; echo 5000000000 > "$W/decr3/hwmon1/energy1_input"
-( k=0; while [ $k -lt 60 ]; do put "$W/decr3/hwmon1/energy3_input" $((5000000000 - k * 1000)); k=$((k + 1)); sleep 0.01; done ) &  # steadily falling cpu_p counter
+( k=0; while [ ! -e "$W/decr3.stop" ] && [ $k -lt 3000 ]; do put "$W/decr3/hwmon1/energy3_input" $((5000000000 - k * 1000)); k=$((k + 1)); sleep 0.01; done ) &  # steadily falling cpu_p counter until check() returns (cap 30 s)
 advance decr3 5000000000
 R15_ENERGY_PREFLIGHT_SLEEP=0.08 check decr3 5 "energy3 counter went backwards"
 wait
