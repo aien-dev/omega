@@ -1,0 +1,1 @@
+fixture source file for recheck --root (do not edit: fixtures pin its sha256)

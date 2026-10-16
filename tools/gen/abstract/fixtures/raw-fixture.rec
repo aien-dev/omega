@@ -1,0 +1,27 @@
+gen-record 1
+id raw-fx_clamp
+kind raw
+split probe
+family gs1-2ea72f444887b374
+entry fx_clamp
+params u32
+ret u32
+signature fn fx_clamp a uint to uint
+desc Clamp a into 3..9.
+receipt 729b7b7cebe9f99b3bb3df3b0590264fc23184d857d0a3f1edde2937f1e8e306
+validity unverified
+ancestry fx_clamp ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb
+source tools/gen/abstract/fixtures/source.txt bac2644401bdcf656e47f30de59c684ff80d9fde59a6248da97fb448d5ce8776
+body
+fn clampv x uint lo uint hi uint to uint
+if lt x lo
+ret lo
+end
+if gt x hi
+ret hi
+end
+ret x
+end
+fn fx_clamp a uint to uint
+ret clampv a 3 9
+end
