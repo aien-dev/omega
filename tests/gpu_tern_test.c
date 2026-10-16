@@ -329,7 +329,8 @@ static void sim_battery(void) {
         OmegaGpuTernSegments seg = { 3, { 32, 40, 48 }, { 0.5f, 2.0f, 3.0f } };
         float sc4[4] = { 0.5f, 2.0f, 3.0f, 0 }, a = 0.0123f, want[48];
         uint32_t b[3], bm[3], y[48]; char msg[240];
-        omega_gpu_tern_segment_bounds(n, &seg, 0, b); omega_gpu_tern_segment_bounds(n, &seg, 2, bm);
+        b[0] = 32; b[1] = 40; b[2] = 48; /* written out, not taken from the API under test */
+        omega_gpu_tern_segment_bounds(n, &seg, 2, bm);
         expect_f32(ref, n, b, sc4, a, want);
         OmegaTernGemvSpec sp = { k, 1, 2, 2, 2, OMEGA_TERN_EPI_F32, 0 };
         for (int pass = 0; pass < 2; pass++) {
@@ -431,7 +432,7 @@ static long chip_qkv(int mutant2, int *rc_out) {
     float sc4[4] = { 0.75f, 1.5f, 2.25f, 0 }, *want = malloc((size_t)n * 4), *y = malloc((size_t)n * 4);
     int mx = 0; for (uint32_t i = 0; i < k; i++) mx = abs(x[i]) > mx ? abs(x[i]) : mx;
     const float a = (float)mx / 127.0f; /* 1 / s_a, s_a = 127 / max|x| */
-    uint32_t b[3]; omega_gpu_tern_segment_bounds(n, &seg, 0, b);
+    const uint32_t b[3] = { 2560, 3200, 3840 }; /* written out, not taken from the API under test */
     expect_f32(ref, n, b, sc4, a, want);
     if (mutant2) omega_gpu_tern_test_set_mutant(2);
     OmegaGpuTernTensor *t = NULL; long bad = -1;
@@ -479,21 +480,24 @@ static uint64_t cold_ns(uint32_t n, uint32_t k, uint32_t copies, uint32_t reps, 
     OmegaGpuCmdList *cl = NULL; OmegaGpuMem xd, yd; memset(&xd, 0, sizeof xd); memset(&yd, 0, sizeof yd);
     int ok = 1;
     const uint32_t nt = g_hot ? 1u : copies;
+    /* Each launch writes its own output slice (n rounded up to 8 words), all poisoned before the list and each checked against
+     * oma_rz_oracle after it, so a launch that did no work cannot hide inside the timing. */
+    const size_t ys = ((size_t)n + 7u) & ~(size_t)7u;
     for (uint32_t i = 0; i < nt && ok; i++) if (omega_gpu_tern_tensor_upload(n, k, w, NULL, &ts[i]) != 0) ok = 0;
     if (ok && omega_gpu_tern_gemv_i32(ts[0], x, y, NULL) != 0) ok = 0; /* builds the kernel */
     if (ok && memcmp(y, ref, (size_t)n * 4)) { printf("cold %ux%u: reference call differs from oma_rz_oracle\n", n, k); ok = 0; }
     if (ok && omega_gpu_cmdlist_create(copies, &cl) != 0) ok = 0;
     omega_gpu_session_lock();
-    if (ok && (omega_gpu_session_alloc((k + 15u) & ~15u, &xd) != 0 || omega_gpu_session_alloc((size_t)n * 4, &yd) != 0)) ok = 0;
+    if (ok && (omega_gpu_session_alloc((k + 15u) & ~15u, &xd) != 0 || omega_gpu_session_alloc(ys * 4u * copies, &yd) != 0)) ok = 0;
     omega_gpu_session_unlock();
     if (ok) { memcpy(xd.cpu, x, k); if (omega_gpu_session_sync_to_gpu(&xd) != 0) ok = 0; }
     if (bytes_out) *bytes_out = ok ? omega_gpu_tern_tensor_bytes(ts[0]) : 0;
     for (uint32_t r = 0; r < reps && ok; r++) {
-        int32_t *yy = yd.cpu; for (uint32_t i = 0; i < n; i++) yy[i] = OMEGA_GPU_TERN_POISON_I32;
+        int32_t *yy = yd.cpu; for (size_t i = 0; i < ys * copies; i++) yy[i] = OMEGA_GPU_TERN_POISON_I32;
         if (omega_gpu_session_sync_to_gpu(&yd) != 0) { ok = 0; break; }
         omega_gpu_session_lock();
         omega_gpu_cmdlist_reset(cl);
-        for (uint32_t i = 0; i < copies && ok; i++) if (omega_gpu_tern_gemv_record(cl, ts[g_hot ? 0 : i], xd.va, yd.va, 0) != 0) { printf("record: %s\n", omega_gpu_tern_last_error()); ok = 0; }
+        for (uint32_t i = 0; i < copies && ok; i++) if (omega_gpu_tern_gemv_record(cl, ts[g_hot ? 0 : i], xd.va, yd.va + (uint64_t)i * ys * 4u, 0) != 0) { printf("record: %s\n", omega_gpu_tern_last_error()); ok = 0; }
         OmegaGpuCmdListOpts o; memset(&o, 0, sizeof o); o.mode = OMEGA_GPU_CMDLIST_PCAS; o.barrier = OMEGA_GPU_CMDLIST_BARRIER_WFI; o.stamps = 1;
         OmegaGpuCmdListStats s; memset(&s, 0, sizeof s);
         uint64_t *sts = calloc(copies + 1u, 8); int cnt = -1;
@@ -502,7 +506,9 @@ static uint64_t cold_ns(uint32_t n, uint32_t k, uint32_t copies, uint32_t reps, 
         omega_gpu_session_unlock();
         if (ok && cnt == (int)copies + 1) for (uint32_t i = 0; i < copies; i++) d[nd++] = sts[i + 1] - sts[i]; else ok = 0;
         free(sts);
-        if (ok && (omega_gpu_session_sync_to_cpu(&yd) != 0 || memcmp(yd.cpu, ref, (size_t)n * 4))) { printf("cold %ux%u: list result differs from oma_rz_oracle\n", n, k); ok = 0; }
+        if (ok && omega_gpu_session_sync_to_cpu(&yd) != 0) ok = 0;
+        for (uint32_t i = 0; i < copies && ok; i++)
+            if (memcmp((const int32_t *)yd.cpu + i * ys, ref, (size_t)n * 4)) { printf("cold %ux%u: launch %u of the list differs from oma_rz_oracle\n", n, k, i); ok = 0; }
     }
     if (ok && nd) { qsort(d, nd, 8, cmp_u64); med = d[nd / 2]; if (min_out) *min_out = d[0]; }
     CHECK(ok, "cold run %ux%u completed with results equal to oma_rz_oracle", n, k);
@@ -535,12 +541,13 @@ static void chip_bandwidth(uint32_t reps) {
                "minus the launch floor %.2f us -> %.1f GB/s (%.3f of 237.2)\n",
                g_hot ? "hot (diagnostic, L2 resident)" : "cold", n, k, b, copies, (double)b * copies / 1048576.0, ns / 1e3, gbs, gbs / SPEC_GBS, gbs / PRACTICAL_GBS,
                kern_ns / 1e3, kern_ns > 0 ? (double)b / kern_ns : 0, kern_ns > 0 ? (double)b / kern_ns / PRACTICAL_GBS : 0);
-        /* The gate is judged on kernel time (the measured in-list launch floor taken out): with the floor counted, even the
-         * 273 GB/s spec cannot reach 180 GB/s at 2560 x 2560 (evidence README, calc ids there). */
+        /* The gate is judged on the per-launch time minus the in-list launch floor. The floor is a real 8 x 256 launch (setup,
+         * x staging, barrier, one small weight read), so this is a marginal rate, not an isolated kernel time. With the floor
+         * counted, even the 273 GB/s spec cannot reach 180 GB/s at 2560 x 2560 (evidence README, calc ids there). */
         const double kgbs = kern_ns > 0 ? (double)b / kern_ns : 0;
-        if (!g_hot && !g_shape_n) CHECK(kgbs >= floor_gate, "cold kernel GB/s at %ux%u: %.1f (%.1f with the launch floor), gate >= %.0f", n, k, kgbs, gbs, floor_gate);
+        if (!g_hot && !g_shape_n) CHECK(kgbs >= floor_gate, "cold GB/s minus the launch floor at %ux%u: %.1f (%.1f with it), gate >= %.0f", n, k, kgbs, gbs, floor_gate);
         RC("    {\"n\": %u, \"k\": %u, \"bytes\": %" PRIu64 ", \"copies\": %u, \"median_ns\": %" PRIu64 ", \"min_ns\": %" PRIu64 ", \"gbs\": %.2f, "
-           "\"of_spec_273\": %.4f, \"of_practical_237_2\": %.4f, \"kernel_ns\": %.0f, \"kernel_gbs\": %.2f, \"kernel_of_spec_273\": %.4f, \"kernel_of_practical_237_2\": %.4f, \"gate_gbs\": %.0f, \"gate_on\": \"kernel_gbs\", \"pass\": %s}%s\n",
+           "\"of_spec_273\": %.4f, \"of_practical_237_2\": %.4f, \"minus_floor_ns\": %.0f, \"minus_floor_gbs\": %.2f, \"minus_floor_of_spec_273\": %.4f, \"minus_floor_of_practical_237_2\": %.4f, \"gate_gbs\": %.0f, \"gate_on\": \"minus_floor_gbs\", \"pass\": %s}%s\n",
            n, k, b, copies, ns, mn, gbs, gbs / SPEC_GBS, gbs / PRACTICAL_GBS, kern_ns, kgbs, kgbs / SPEC_GBS, kgbs / PRACTICAL_GBS, floor_gate, kgbs >= floor_gate ? "true" : "false", i < nshp - 1 ? "," : "");
     }
     RC("  ],\n");
