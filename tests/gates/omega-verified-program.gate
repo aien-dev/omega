@@ -1,0 +1,35 @@
+# tests/gates/omega-verified-program.gate
+# Objective-bound Omegese -> OSC IR -> checker2 -> authorized execution with an independent receipt
+# (omega#505, docs/one_layer/VERIFIED_PROGRAM.md). Host CPU only: no model, no GPU, no held-out data.
+# Positives are recomputed by vp_verify's own oracles; every negative control must give its named
+# refusal (checker2 rejection, emit refusal, wrong but parseable program, tampered store, stale
+# objective or grant, unauthorized effect, bytes changed before execution, sandbox breach canary).
+gate: OMEGA-VERIFIED-PROGRAM
+manifest_version: 2
+owner: omega
+requires:
+  - host
+inputs:
+  - Makefile
+  - mk/verified-program.mk
+  - mk/omegese.mk
+  - mk/omega-emit.mk
+  - mk/checker2.mk
+  - tools/verified_program/
+  - tools/omegese/
+  - tools/omega_emit/
+  - src/compiler/
+  - src/checker2/
+  - src/searchtrace/sig/
+  - src/sha256.c
+  - src/sha256.h
+  - tests/one_layer/omegese/
+  - tests/gates/omega-verified-program.gate
+run:
+  exec: tools/verified_program/gate.sh
+expects:
+  exit: 0
+  verdict: PASS
+timeout: 10m
+exactness: EXACT
+cache_scope: machine

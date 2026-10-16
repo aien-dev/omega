@@ -1,0 +1,13 @@
+fn gcd a uint b uint to uint
+s = new uint 2 0
+put s 0 a
+put s 1 b
+while ne get s 1 0 bound 100
+t = rem get s 0 get s 1
+put s 0 get s 1
+put s 1 t
+end
+r = get s 0
+free s
+ret r
+end

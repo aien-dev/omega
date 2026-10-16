@@ -1,0 +1,8 @@
+fn gcd a uint b uint to uint
+while ne b 0 bound 100
+t = rem a b
+a = b
+b = t
+end
+ret b
+end
