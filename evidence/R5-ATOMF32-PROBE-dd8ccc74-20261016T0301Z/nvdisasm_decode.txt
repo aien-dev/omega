@@ -1,0 +1,13 @@
+nvdisasm release 13.0, V13.0.85 -b SM121; words written by omega_blackwell_encode_one at dd8ccc74 (scope dst addr data ureg -> w0 w1 w2 w3 -> text)
+sys 4 2 5 6 -> 0x020479a3 0x80000005 0x0c1f5306 0x00321e00 -> ATOMG.E.ADD.F32.FTZ.RN.STRONG.SYS PT, R4, desc[UR6][R2.64], R5 ;
+sys 9 10 7 4 -> 0x0a0979a3 0x80000007 0x0c1f5304 0x00321e00 -> ATOMG.E.ADD.F32.FTZ.RN.STRONG.SYS PT, R9, desc[UR4][R10.64], R7 ;
+sys -1 2 5 6 -> 0x02ff79a3 0x80000005 0x0c1f5306 0x00321e00 -> ATOMG.E.ADD.F32.FTZ.RN.STRONG.SYS PT, RZ, desc[UR6][R2.64], R5 ;
+gpu 4 2 5 6 -> 0x020479a3 0x80000005 0x0c1ef306 0x00321e00 -> ATOMG.E.ADD.F32.FTZ.RN.STRONG.GPU PT, R4, desc[UR6][R2.64], R5 ;
+gpu 9 10 7 4 -> 0x0a0979a3 0x80000007 0x0c1ef304 0x00321e00 -> ATOMG.E.ADD.F32.FTZ.RN.STRONG.GPU PT, R9, desc[UR4][R10.64], R7 ;
+gpu -1 2 5 6 -> 0x02ff79a3 0x80000005 0x0c1ef306 0x00321e00 -> ATOMG.E.ADD.F32.FTZ.RN.STRONG.GPU PT, RZ, desc[UR6][R2.64], R5 ;
+gpu -1 40 33 12 -> 0x28ff79a3 0x80000021 0x0c1ef30c 0x00321e00 -> ATOMG.E.ADD.F32.FTZ.RN.STRONG.GPU PT, RZ, desc[UR12][R40.64], R33 ;
+rejected candidates (Mesa sm90 REDG f32 layout, opcode 0x9a6), each: Unrecognized operation
+0x020079a6 0x00000005 0x0c10f306 -> nvdisasm error   : Unrecognized operation for functional uni
+0x020079a6 0x00000005 0x0c115306 -> nvdisasm error   : Unrecognized operation for functional uni
+0x020079a6 0x00000005 0x0810f306 -> nvdisasm error   : Unrecognized operation for functional uni
+0x020079a6 0x00000005 0x0c1ef306 -> nvdisasm error   : Unrecognized operation for functional uni

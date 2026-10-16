@@ -1,0 +1,91 @@
+commit dd8ccc746d6a5a146ab0f216cdf2a657636fb5d0 (tree 5c9e71056868c3e01195b138f68554e9c2aa843a)  physics 6d7cf0d  driver 580.173.02  build/ cleaned at 0db0f0ad (src/ identical at dd8ccc74)  2026-10-16T03:01:40Z
+== run 1
+sim SYS add 1.0 from 0 x 128: word 0x43000000 = 128 (want 0x43000000, a no-op would leave 0x00000000), 0 faults
+sim SYS add -0.25 from 0 x 128: word 0xc2000000 = -32 (want 0xc2000000, a no-op would leave 0x00000000), 0 faults
+sim SYS add 2^-125 to subnormal 2^-140 (FTZ) x 32: word 0x03800000 = 7.52316385e-37 (want 0x03800000, no-FTZ would be 0x03800008, a no-op would leave 0x00000200), 0 faults
+sim SYS add 1.0 to 2^24+2 (round to nearest even) x 32: word 0x4b800002 = 16777220 (want 0x4b800002, a no-op would leave 0x4b800001), 0 faults
+sim GPU add 1.0 from 0 x 128: word 0x43000000 = 128 (want 0x43000000, a no-op would leave 0x00000000), 0 faults
+sim GPU add 1.0 from 0, no destination (RZ) x 128: word 0x43000000 = 128 (want 0x43000000, a no-op would leave 0x00000000), 0 faults
+sim CONTROL integer ATOMG.ADD of 1.0f bits x 128: word 0xc0000000 = -2 (want 0x43000000, a no-op would leave 0x00000000), 128 faults
+  control ok: the check caught the wrong arithmetic
+chip SYS add 1.0 from 0 x 131072: word 0x48000000 = 131072 (want 0x48000000, a no-op would leave 0x00000000), 0 faults, 65331.7 us = 2.01 M adds/s, all on one word in uncached host-visible memory (contention, not a ceiling)
+chip SYS add -0.25 from 0 x 131072: word 0xc7000000 = -32768 (want 0xc7000000, a no-op would leave 0x00000000), 0 faults, 65790.4 us = 1.99 M adds/s, all on one word in uncached host-visible memory (contention, not a ceiling)
+chip SYS add 2^-125 to subnormal 2^-140 (FTZ) x 32: word 0x03800000 = 7.52316385e-37 (want 0x03800000, no-FTZ would be 0x03800008, a no-op would leave 0x00000200), 0 faults
+chip SYS add 1.0 to 2^24+2 (round to nearest even) x 32: word 0x4b800002 = 16777220 (want 0x4b800002, a no-op would leave 0x4b800001), 0 faults
+chip GPU add 1.0 from 0 x 131072: word 0x48000000 = 131072 (want 0x48000000, a no-op would leave 0x00000000), 0 faults, 64961.2 us = 2.02 M adds/s, all on one word in uncached host-visible memory (contention, not a ceiling)
+chip GPU add 1.0 from 0, no destination (RZ) x 131072: word 0x48000000 = 131072 (want 0x48000000, a no-op would leave 0x00000000), 0 faults, 65587.3 us = 2.00 M adds/s, all on one word in uncached host-visible memory (contention, not a ceiling)
+chip CONTROL integer ATOMG.ADD of 1.0f bits x 131072: word 0x00000000 = 0 (want 0x48000000, a no-op would leave 0x00000000), 131072 faults, 51005.8 us = 2.57 M adds/s, all on one word in uncached host-visible memory (contention, not a ceiling)
+  control ok: the check caught the wrong arithmetic
+GPU_ATOMF32_PROBE: PASS
+== run 2
+sim SYS add 1.0 from 0 x 128: word 0x43000000 = 128 (want 0x43000000, a no-op would leave 0x00000000), 0 faults
+sim SYS add -0.25 from 0 x 128: word 0xc2000000 = -32 (want 0xc2000000, a no-op would leave 0x00000000), 0 faults
+sim SYS add 2^-125 to subnormal 2^-140 (FTZ) x 32: word 0x03800000 = 7.52316385e-37 (want 0x03800000, no-FTZ would be 0x03800008, a no-op would leave 0x00000200), 0 faults
+sim SYS add 1.0 to 2^24+2 (round to nearest even) x 32: word 0x4b800002 = 16777220 (want 0x4b800002, a no-op would leave 0x4b800001), 0 faults
+sim GPU add 1.0 from 0 x 128: word 0x43000000 = 128 (want 0x43000000, a no-op would leave 0x00000000), 0 faults
+sim GPU add 1.0 from 0, no destination (RZ) x 128: word 0x43000000 = 128 (want 0x43000000, a no-op would leave 0x00000000), 0 faults
+sim CONTROL integer ATOMG.ADD of 1.0f bits x 128: word 0xc0000000 = -2 (want 0x43000000, a no-op would leave 0x00000000), 128 faults
+  control ok: the check caught the wrong arithmetic
+chip SYS add 1.0 from 0 x 131072: word 0x48000000 = 131072 (want 0x48000000, a no-op would leave 0x00000000), 0 faults, 64059.1 us = 2.05 M adds/s, all on one word in uncached host-visible memory (contention, not a ceiling)
+chip SYS add -0.25 from 0 x 131072: word 0xc7000000 = -32768 (want 0xc7000000, a no-op would leave 0x00000000), 0 faults, 63325.3 us = 2.07 M adds/s, all on one word in uncached host-visible memory (contention, not a ceiling)
+chip SYS add 2^-125 to subnormal 2^-140 (FTZ) x 32: word 0x03800000 = 7.52316385e-37 (want 0x03800000, no-FTZ would be 0x03800008, a no-op would leave 0x00000200), 0 faults
+chip SYS add 1.0 to 2^24+2 (round to nearest even) x 32: word 0x4b800002 = 16777220 (want 0x4b800002, a no-op would leave 0x4b800001), 0 faults
+chip GPU add 1.0 from 0 x 131072: word 0x48000000 = 131072 (want 0x48000000, a no-op would leave 0x00000000), 0 faults, 63543.4 us = 2.06 M adds/s, all on one word in uncached host-visible memory (contention, not a ceiling)
+chip GPU add 1.0 from 0, no destination (RZ) x 131072: word 0x48000000 = 131072 (want 0x48000000, a no-op would leave 0x00000000), 0 faults, 63275.4 us = 2.07 M adds/s, all on one word in uncached host-visible memory (contention, not a ceiling)
+chip CONTROL integer ATOMG.ADD of 1.0f bits x 131072: word 0x00000000 = 0 (want 0x48000000, a no-op would leave 0x00000000), 131072 faults, 51676.8 us = 2.54 M adds/s, all on one word in uncached host-visible memory (contention, not a ceiling)
+  control ok: the check caught the wrong arithmetic
+GPU_ATOMF32_PROBE: PASS
+== run 3
+sim SYS add 1.0 from 0 x 128: word 0x43000000 = 128 (want 0x43000000, a no-op would leave 0x00000000), 0 faults
+sim SYS add -0.25 from 0 x 128: word 0xc2000000 = -32 (want 0xc2000000, a no-op would leave 0x00000000), 0 faults
+sim SYS add 2^-125 to subnormal 2^-140 (FTZ) x 32: word 0x03800000 = 7.52316385e-37 (want 0x03800000, no-FTZ would be 0x03800008, a no-op would leave 0x00000200), 0 faults
+sim SYS add 1.0 to 2^24+2 (round to nearest even) x 32: word 0x4b800002 = 16777220 (want 0x4b800002, a no-op would leave 0x4b800001), 0 faults
+sim GPU add 1.0 from 0 x 128: word 0x43000000 = 128 (want 0x43000000, a no-op would leave 0x00000000), 0 faults
+sim GPU add 1.0 from 0, no destination (RZ) x 128: word 0x43000000 = 128 (want 0x43000000, a no-op would leave 0x00000000), 0 faults
+sim CONTROL integer ATOMG.ADD of 1.0f bits x 128: word 0xc0000000 = -2 (want 0x43000000, a no-op would leave 0x00000000), 128 faults
+  control ok: the check caught the wrong arithmetic
+chip SYS add 1.0 from 0 x 131072: word 0x48000000 = 131072 (want 0x48000000, a no-op would leave 0x00000000), 0 faults, 62273.9 us = 2.10 M adds/s, all on one word in uncached host-visible memory (contention, not a ceiling)
+chip SYS add -0.25 from 0 x 131072: word 0xc7000000 = -32768 (want 0xc7000000, a no-op would leave 0x00000000), 0 faults, 65020.0 us = 2.02 M adds/s, all on one word in uncached host-visible memory (contention, not a ceiling)
+chip SYS add 2^-125 to subnormal 2^-140 (FTZ) x 32: word 0x03800000 = 7.52316385e-37 (want 0x03800000, no-FTZ would be 0x03800008, a no-op would leave 0x00000200), 0 faults
+chip SYS add 1.0 to 2^24+2 (round to nearest even) x 32: word 0x4b800002 = 16777220 (want 0x4b800002, a no-op would leave 0x4b800001), 0 faults
+chip GPU add 1.0 from 0 x 131072: word 0x48000000 = 131072 (want 0x48000000, a no-op would leave 0x00000000), 0 faults, 62518.3 us = 2.10 M adds/s, all on one word in uncached host-visible memory (contention, not a ceiling)
+chip GPU add 1.0 from 0, no destination (RZ) x 131072: word 0x48000000 = 131072 (want 0x48000000, a no-op would leave 0x00000000), 0 faults, 64690.4 us = 2.03 M adds/s, all on one word in uncached host-visible memory (contention, not a ceiling)
+chip CONTROL integer ATOMG.ADD of 1.0f bits x 131072: word 0x00000000 = 0 (want 0x48000000, a no-op would leave 0x00000000), 131072 faults, 62054.2 us = 2.11 M adds/s, all on one word in uncached host-visible memory (contention, not a ceiling)
+  control ok: the check caught the wrong arithmetic
+GPU_ATOMF32_PROBE: PASS
+== run 4
+sim SYS add 1.0 from 0 x 128: word 0x43000000 = 128 (want 0x43000000, a no-op would leave 0x00000000), 0 faults
+sim SYS add -0.25 from 0 x 128: word 0xc2000000 = -32 (want 0xc2000000, a no-op would leave 0x00000000), 0 faults
+sim SYS add 2^-125 to subnormal 2^-140 (FTZ) x 32: word 0x03800000 = 7.52316385e-37 (want 0x03800000, no-FTZ would be 0x03800008, a no-op would leave 0x00000200), 0 faults
+sim SYS add 1.0 to 2^24+2 (round to nearest even) x 32: word 0x4b800002 = 16777220 (want 0x4b800002, a no-op would leave 0x4b800001), 0 faults
+sim GPU add 1.0 from 0 x 128: word 0x43000000 = 128 (want 0x43000000, a no-op would leave 0x00000000), 0 faults
+sim GPU add 1.0 from 0, no destination (RZ) x 128: word 0x43000000 = 128 (want 0x43000000, a no-op would leave 0x00000000), 0 faults
+sim CONTROL integer ATOMG.ADD of 1.0f bits x 128: word 0xc0000000 = -2 (want 0x43000000, a no-op would leave 0x00000000), 128 faults
+  control ok: the check caught the wrong arithmetic
+chip SYS add 1.0 from 0 x 131072: word 0x48000000 = 131072 (want 0x48000000, a no-op would leave 0x00000000), 0 faults, 63822.7 us = 2.05 M adds/s, all on one word in uncached host-visible memory (contention, not a ceiling)
+chip SYS add -0.25 from 0 x 131072: word 0xc7000000 = -32768 (want 0xc7000000, a no-op would leave 0x00000000), 0 faults, 64916.0 us = 2.02 M adds/s, all on one word in uncached host-visible memory (contention, not a ceiling)
+chip SYS add 2^-125 to subnormal 2^-140 (FTZ) x 32: word 0x03800000 = 7.52316385e-37 (want 0x03800000, no-FTZ would be 0x03800008, a no-op would leave 0x00000200), 0 faults
+chip SYS add 1.0 to 2^24+2 (round to nearest even) x 32: word 0x4b800002 = 16777220 (want 0x4b800002, a no-op would leave 0x4b800001), 0 faults
+chip GPU add 1.0 from 0 x 131072: word 0x48000000 = 131072 (want 0x48000000, a no-op would leave 0x00000000), 0 faults, 63621.5 us = 2.06 M adds/s, all on one word in uncached host-visible memory (contention, not a ceiling)
+chip GPU add 1.0 from 0, no destination (RZ) x 131072: word 0x48000000 = 131072 (want 0x48000000, a no-op would leave 0x00000000), 0 faults, 63671.8 us = 2.06 M adds/s, all on one word in uncached host-visible memory (contention, not a ceiling)
+chip CONTROL integer ATOMG.ADD of 1.0f bits x 131072: word 0x00000000 = 0 (want 0x48000000, a no-op would leave 0x00000000), 131072 faults, 64174.9 us = 2.04 M adds/s, all on one word in uncached host-visible memory (contention, not a ceiling)
+  control ok: the check caught the wrong arithmetic
+GPU_ATOMF32_PROBE: PASS
+== run 5
+sim SYS add 1.0 from 0 x 128: word 0x43000000 = 128 (want 0x43000000, a no-op would leave 0x00000000), 0 faults
+sim SYS add -0.25 from 0 x 128: word 0xc2000000 = -32 (want 0xc2000000, a no-op would leave 0x00000000), 0 faults
+sim SYS add 2^-125 to subnormal 2^-140 (FTZ) x 32: word 0x03800000 = 7.52316385e-37 (want 0x03800000, no-FTZ would be 0x03800008, a no-op would leave 0x00000200), 0 faults
+sim SYS add 1.0 to 2^24+2 (round to nearest even) x 32: word 0x4b800002 = 16777220 (want 0x4b800002, a no-op would leave 0x4b800001), 0 faults
+sim GPU add 1.0 from 0 x 128: word 0x43000000 = 128 (want 0x43000000, a no-op would leave 0x00000000), 0 faults
+sim GPU add 1.0 from 0, no destination (RZ) x 128: word 0x43000000 = 128 (want 0x43000000, a no-op would leave 0x00000000), 0 faults
+sim CONTROL integer ATOMG.ADD of 1.0f bits x 128: word 0xc0000000 = -2 (want 0x43000000, a no-op would leave 0x00000000), 128 faults
+  control ok: the check caught the wrong arithmetic
+chip SYS add 1.0 from 0 x 131072: word 0x48000000 = 131072 (want 0x48000000, a no-op would leave 0x00000000), 0 faults, 66878.0 us = 1.96 M adds/s, all on one word in uncached host-visible memory (contention, not a ceiling)
+chip SYS add -0.25 from 0 x 131072: word 0xc7000000 = -32768 (want 0xc7000000, a no-op would leave 0x00000000), 0 faults, 64006.5 us = 2.05 M adds/s, all on one word in uncached host-visible memory (contention, not a ceiling)
+chip SYS add 2^-125 to subnormal 2^-140 (FTZ) x 32: word 0x03800000 = 7.52316385e-37 (want 0x03800000, no-FTZ would be 0x03800008, a no-op would leave 0x00000200), 0 faults
+chip SYS add 1.0 to 2^24+2 (round to nearest even) x 32: word 0x4b800002 = 16777220 (want 0x4b800002, a no-op would leave 0x4b800001), 0 faults
+chip GPU add 1.0 from 0 x 131072: word 0x48000000 = 131072 (want 0x48000000, a no-op would leave 0x00000000), 0 faults, 66554.9 us = 1.97 M adds/s, all on one word in uncached host-visible memory (contention, not a ceiling)
+chip GPU add 1.0 from 0, no destination (RZ) x 131072: word 0x48000000 = 131072 (want 0x48000000, a no-op would leave 0x00000000), 0 faults, 63885.9 us = 2.05 M adds/s, all on one word in uncached host-visible memory (contention, not a ceiling)
+chip CONTROL integer ATOMG.ADD of 1.0f bits x 131072: word 0x00000000 = 0 (want 0x48000000, a no-op would leave 0x00000000), 131072 faults, 66583.1 us = 1.97 M adds/s, all on one word in uncached host-visible memory (contention, not a ceiling)
+  control ok: the check caught the wrong arithmetic
+GPU_ATOMF32_PROBE: PASS
