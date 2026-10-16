@@ -145,3 +145,187 @@ greq() { cat "$A/requests.log" 2> /dev/null | wc -l; }
 R="$T/run1"; cw "$R" || { echo "check_weights failed" >&2; exit 2; }
 if "$RUN" --tasks "$T/pub" --out "$R" > "$T/run1.out" 2> "$T/run1.err"; then ok "run.sh: full run (4 conditions x 8 tasks x 3 attempts) exit 0"
 else bad "run.sh full run failed: $(tail -n 3 "$T/run1.err")"; fi
+lg() { awk -F'\t' -v s="$2" -v t="$3" -v c="$4" '$1 == s && $2 == t { print $c }' "$1/log.tsv"; }
+mfk() { sed -n "s/^$3=//p" "$1/manifests/$(awk -F'\t' -v c="$2" -v t="$4" '$1 == c && $2 == t { print $3 }' "$1/manifests.tsv")"; }
+[ "$(tail -n 1 "$R/gate/greedy/verdict.txt")" = "GREEDY PASS" ] && [ "$(tail -n 1 "$R/gate/g0/verdict.txt")" = "G0 PASS" ] && grep -qx 'pass3=AVAILABLE' "$R/gate/g0/verdict.txt" &&
+  [ "$(($(wc -l < "$R/log.tsv") - 1))" = 96 ] && [ "$(ls "$R/cands" | wc -l)" = 24 ] &&
+  ok "greedy gate PASS, G0 PASS, 96 run rows, 24 candidate sets (<c>-<attempt> and <c>-<attempt>-final)" || bad "full run record"
+[ "$(mfk "$R" B prefix_sha256 devgen01)" = "$(mfk "$R" C prefix_sha256 devgen05)" ] && [ "$(mfk "$R" B prefix_sha256 devgen01)" = "$(mfk "$R" D prefix_sha256 devgen08)" ] &&
+  [ "$(mfk "$R" A prefix_sha256 devgen01)" != "$(mfk "$R" B prefix_sha256 devgen01)" ] && [ "$(mfk "$R" A suffix_bytes devgen01)" = 0 ] && [ "$(mfk "$R" B suffix_bytes devgen01)" = 0 ] &&
+  [ "$(mfk "$R" C retrieved devgen01 | cut -d: -f2 | head -c 4)" = raw- ] && [[ "$(mfk "$R" D retrieved devgen01)" == *abs-sum_squares3*abs-count_above* ]] && [ "$(mfk "$R" C suffix_bytes devgen01)" -gt 0 ] &&
+  ok "manifests: B C D share one prefix, A has its own; A and B carry no suffix; C retrieves raw records, D abstraction records" || bad "manifest prefix / suffix"
+sysok=1
+for s in a-1 b-1 c-1 d-1; do for t in devgen01 devgen07; do
+  c="$(tr a-z A-Z <<< "${s%-1}")"; q="$R/gen/$s/$t/r1.req.json"
+  sys="$(jq -r '.messages[0].content' "$q")"; pre="$(cat "$R/blobs/$(mfk "$R" "$c" prefix_sha256 "$t")")"
+  [ "${sys:0:${#pre}}" = "$pre" ] && [ "$(printf '%s' "$sys" | sha256sum | cut -d' ' -f1)" = "$(mfk "$R" "$c" system_sha256 "$t")" ] || sysok=0
+  case "$c" in C) grep -q GENTEST-KIND-raw "$q" && ! grep -q GENTEST-KIND-abstraction "$q" || sysok=0 ;; D) grep -q GENTEST-KIND-abstraction "$q" && ! grep -q GENTEST-KIND-raw "$q" || sysok=0 ;;
+    *) ! grep -q GENTEST-KIND "$q" || sysok=0 ;; esac
+done; done
+[ "$sysok" = 1 ] && ok "requests: system = shared prefix, then the retrieved suffix (sha256 as the manifest); retrieved records only in C (raw) and D (abstraction)" || bad "request system messages"
+[ "$(lg "$R" a-1 devgen03 21)" = 2 ] && [ "$(grep -c 'http=500' "$R/gen/a-1/devgen03/r1.transport")" = 1 ] && [ "$(lg "$R" a-1 devgen03 10)" = OK ] && [ ! -e "$R/gen/a-1/devgen03/r2.req.json" ] &&
+  ok "transport retry: one HTTP 500 then the answer, 2 tries in one round (no new sample, no repair)" || bad "transport retry record"
+[ "$(lg "$R" b-2 devgen03 15)" = 478003 ] && [ "$(lg "$R" b-1 devgen03 15)" = 477003 ] && [ "$(lg "$R" b-1 devgen03 16)" = 0 ] && [ "$(lg "$R" b-2 devgen03 16)" = 0.7 ] &&
+  [ "$(lg "$R" b-2 devgen03 23)" = sampled ] && [ "$(lg "$R" b-1 devgen03 23)" = greedy ] &&
+  ok "seeds 476000 + 1000 x attempt + task index; attempt 1 greedy (temperature 0), attempts 2-3 sampled at 0.7" || bad "seed / sampling rule in run rows"
+[ "$(lg "$R" b-1 devgen02 11)" = OK ] && [ "$(lg "$R" b-1 devgen02 27)" = - ] && [ -f "$R/cands/b-1-final/devgen02/candidate.oscir" ] && [ ! -e "$R/cands/b-1/devgen02" ] &&
+  ok "repair round: refused round-1 answer has no primary candidate; the repaired one goes to b-1-final only" || bad "repair round sets"
+n0="$(greq)"; s0="$(sha "$R/SHA256SUMS")"
+"$RUN" --tasks "$T/pub" --out "$R" > /dev/null 2> "$T/replay.err" && [ "$(greq)" = "$n0" ] && [ "$(sha "$R/SHA256SUMS")" = "$s0" ] &&
+  ok "replay: rerun on the finished run sends 0 requests and leaves SHA256SUMS identical" || bad "replay idempotence ($(greq) vs $n0 requests): $(tail -n 2 "$T/replay.err")"
+# hidden-leak canary: never in any request, prompt, retrieval query, manifest or log
+leak() { grep -rlF "$CANARY" "$@" 2> /dev/null | head -n 1; }
+[ -z "$(leak "$R" "$A/requests.log" "$T/run1.err" "$T/run1.out" "$T/replay.err" "$T/pub")" ] && [ -n "$(leak "$T/src")" ] &&
+  ok "hidden canary: absent from the run dir (requests, manifests, blobs, retrieval queries), the server log and the driver logs; present in the hidden files" || bad "hidden canary leaked: $(leak "$R" "$A/requests.log" "$T/run1.err")"
+
+# ---- 3. harness + reducer ------------------------------------------------------------------------------------
+hrun() { # hrun <cands dir> -> prints the harness run dir
+  ls "$T/evid/runs" 2> /dev/null | LC_ALL=C sort > "$T/hb.lst"
+  "$OLA" experiment "$T/pack/tasks.tar" "$T/pack/TASKS.sha256" "$1" > "$T/h.out" 2> "$T/h.err" || return 1
+  ls "$T/evid/runs" | LC_ALL=C sort | comm -13 "$T/hb.lst" - | sed "s|^|$T/evid/runs/|"
+}
+H1="$(hrun "$R/cands")" && [ -f "$H1/score.txt" ] && ok "harness experiment on the run's 24 sets: $(tail -n 2 "$H1/score.txt" | tr '\n' ' ')" || bad "harness experiment failed: $(tail -n 2 "$T/h.err")"
+{ echo "model=qwen3-30b-a3b-instruct-2507"; echo "mask=off"; echo "tasks_public_sha256=$(sed -n 's/^tasks_public_sha256=//p' "$R/meta.txt")"
+  echo "prefix_sha256.B=$(sed -n 's/^prefix_sha256.B=//p' "$R/meta.txt")"; echo "tasks_corpus_sha256=$(sed -n 's/^corpus_sha256=//p' "$H1/meta.txt")"; } > "$T/pins"
+gk() { sed -n "s/^$2=//p" "$1/aggregate.txt"; }
+"$RED" --run "$R" --harness "$H1" --pins "$T/pins" --out "$T/red1" > "$T/red1.log" 2>&1
+if [ "$(gk "$T/red1" verdict)" = PASS ] && [ "$(gk "$T/red1" test_mode)" = yes ]; then ok "reducer: verdict PASS (D 8/8 vs A, B, C 1/8 each; exact one-sided McNemar 1/128), marked test mode"
+else bad "reducer verdict $(gk "$T/red1" verdict): $(grep '^reason' "$T/red1/aggregate.txt" | head -n 3 | tr '\n' ' ')"; fi
+[ "$(gk "$T/red1" arm.D.success_a1)" = 8/8 ] && [ "$(gk "$T/red1" arm.C.success_a1)" = 1/8 ] && [ "$(gk "$T/red1" arm.C.checker_ok_a1)" = 2/8 ] &&
+  [ "$(gk "$T/red1" arm.B.success_a1_final)" = 2/8 ] && [ "$(gk "$T/red1" pass3)" = AVAILABLE ] && [ "$(gk "$T/red1" arm.D.pass3)" = 8/8 ] &&
+  [ "$(gk "$T/red1" pair.D-C.mcnemar_p_one_sided)" = 0.007812 ] && [ "$(gk "$T/red1" paired.devgen06)" = 0001 ] && [ "$(gk "$T/red1" sanity.a_minus_b)" = 0 ] &&
+  [ "$(gk "$T/red1" arm.D.wilson95_lo)" = "$("$GS" wilson 8 8 | cut -d' ' -f2)" ] && [ "$(grep "^fail\.C\." "$T/red1/aggregate.txt" | cut -d= -f2 | paste -sd+ | bc)" = 7 ] &&
+  [ "$(gk "$T/red1" check.C.OK)" = 2 ] &&
+  ok "receipt: success per arm, checker acceptance apart from functional success (C 2/8 vs 1/8), repair secondary, pass@3, paired bits, failure and check tables" ||
+  { bad "receipt values"; grep -E '^(arm\.C|fail\.C|check\.C|pair\.D-C\.mc|paired\.devgen06)' "$T/red1/aggregate.txt" | head -n 20; }
+(cd "$T/red1" && sha256sum -c --quiet receipt.sha256) && grep -qx "aggregate_sha256=$(sha "$T/red1/aggregate.txt")" "$T/red1/receipt.txt" &&
+  [ "$(head -n "$(wc -l < "$T/red1/aggregate.txt")" "$T/red1/receipt.txt")" = "$(cat "$T/red1/aggregate.txt")" ] &&
+  ok "receipt.txt = aggregate.txt + time / input lines + aggregate_sha256; receipt.sha256 verifies" || bad "receipt layout"
+H2="$(hrun "$R/cands")" && "$RED" --run "$R" --harness "$H2" --pins "$T/pins" --out "$T/red2" > /dev/null 2>&1 && [ "$H1" != "$H2" ] &&
+  cmp -s "$T/red1/aggregate.txt" "$T/red2/aggregate.txt" && ok "identical rerun (new harness run, new reduce): byte-identical aggregate.txt" || bad "rerun aggregate differs"
+
+# ---- 4. negatives -------------------------------------------------------------------------------------------
+jq '.generation.attempts = 1' "$PJT" > "$T/pj1.json"
+gp "$T/P1" -e "s|^protocol_json=.*|protocol_json=$T/pj1.json|" -e 's/^attempts=.*/attempts=1/'
+sampling() { printf '%s\n' "$1" > "$A/sampling.json"; }
+# broken seeding: the server ignores the seed (G0 FAIL), forces greedy (G0 FAIL); pass@3 UNAVAILABLE
+for mode in '"ignore_seed": true' '"force_greedy": true'; do
+  sampling "{\"p_repeat\": 0.5, \"seed_salt\": true, $mode}"; o="$T/brk$((++nb))"; cw "$o"
+  "$RUN" --tasks "$T/pub" --out "$o" > /dev/null 2> "$o.err"; e=$?
+  [ "$e" = 0 ] && [ "$(tail -n 1 "$o/gate/g0/verdict.txt")" = "G0 FAIL" ] && grep -qx 'pass3=UNAVAILABLE (attempts 2..3 not run)' "$o/gate/g0/verdict.txt" &&
+    [ "$(($(wc -l < "$o/log.tsv") - 1))" = 32 ] && [ ! -e "$o/gen/a-2" ] && ok "broken seeding ($mode): G0 FAIL, attempts 2-3 not run, pass@3 UNAVAILABLE" || bad "broken seeding ($mode): exit $e $(tail -n 1 "$o.err")"
+done
+sampling '{"p_repeat": 0.5, "seed_salt": true}'
+HB="$(hrun "$T/brk1/cands")" && "$RED" --run "$T/brk1" --harness "$HB" --out "$T/redb" > /dev/null 2>&1 &&
+  [ "$(gk "$T/redb" pass3)" = UNAVAILABLE ] && [ "$(gk "$T/redb" gate.g0)" = FAIL ] && [ "$(gk "$T/redb" arm.D.pass3)" = UNAVAILABLE ] && [ "$(gk "$T/redb" verdict)" = PASS ] &&
+  ok "reducer on the broken-seeding run: gate.g0=FAIL, pass3=UNAVAILABLE for every arm, primary unaffected" || bad "reducer on broken seeding: $(gk "$T/redb" verdict) $(gk "$T/redb" reason.1)"
+# non-deterministic greedy decoding: greedy gate FAIL, no primary attempt
+sampling '{"p_repeat": 0.5, "seed_salt": true, "nondet_greedy": true}'; o="$T/ndg"; cw "$o"
+"$RUN" --tasks "$T/pub" --out "$o" > /dev/null 2> "$o.err"; e=$?
+[ "$e" = 1 ] && [ "$(tail -n 1 "$o/gate/greedy/verdict.txt")" = "GREEDY FAIL" ] && [ ! -e "$o/gen" ] && [ -f "$o/SHA256SUMS" ] &&
+  ok "non-deterministic greedy replies: greedy gate FAIL, exit 1, no generation sent" || bad "greedy gate negative: exit $e"
+sampling '{"p_repeat": 0.5, "seed_salt": true}'
+# interruption and resume: killed after round 1 of b-1 devgen02 (before its repair) and after c-1 devgen03's row
+export GEN_PARAMS="$T/P1"
+o="$T/full1"; cw "$o"; n0="$(greq)"; "$RUN" --tasks "$T/pub" --out "$o" > /dev/null 2>&1; nfull=$(($(greq) - n0))
+o="$T/kill"; cw "$o"; n0="$(greq)"
+GEN_TEST_KILL=after-r1:b-1:devgen02 "$RUN" --tasks "$T/pub" --out "$o" > /dev/null 2>&1; e1=$?
+GEN_TEST_KILL=after-log:c-1:devgen03 "$RUN" --tasks "$T/pub" --out "$o" > /dev/null 2>&1; e2=$?
+"$RUN" --tasks "$T/pub" --out "$o" > /dev/null 2> "$T/kill.err"; e3=$?
+[ "$e1" = 137 ] && [ "$e2" = 137 ] && [ "$e3" = 0 ] && [ "$(($(greq) - n0))" = "$nfull" ] && [ "$(($(wc -l < "$o/log.tsv") - 1))" = 32 ] &&
+  [ "$(cut -f1,2 "$o/log.tsv" | sort | uniq -d | wc -l)" = 0 ] && [ "$(cut -f1-8,10-25,27- "$o/log.tsv" | grep -v '^set' | sort)" = "$(cut -f1-8,10-25,27- "$T/full1/log.tsv" | grep -v '^set' | sort)" ] &&
+  ok "interrupted twice (killed mid-generation and after a row), resumed: same $nfull requests as an uninterrupted run, no duplicate row, same rows" ||
+  bad "interruption / resume: exits $e1 $e2 $e3, requests $(($(greq) - n0)) vs $nfull: $(tail -n 1 "$T/kill.err")"
+# a request timeout is a transport failure of the round (tries recorded), not a new sample
+printf '@@SLEEP 7\n' > "$A/B/tri_kind"
+o="$T/tmo"; cw "$o"; "$RUN" --tasks "$T/pub" --out "$o" > /dev/null 2> "$o.err"
+[ "$(lg "$o" b-1 devgen08 10)" = "REQUEST FAILED" ] && [ "$(lg "$o" b-1 devgen08 21)" = 3 ] && [ ! -e "$o/cands/b-1/devgen08" ] &&
+  ok "timeout: 3 tries in one round, REQUEST FAILED, no candidate" || bad "timeout record: $(lg "$o" b-1 devgen08 10) tries $(lg "$o" b-1 devgen08 21)"
+rm -f "$A/B/tri_kind"
+# refusals
+cp -R "$T/pub" "$T/pubh"; mkdir -p "$T/pubh/tasks/cases/devgen01/hidden"; cp "$T/src/tasks/cases/devgen01/hidden/expected" "$T/pubh/tasks/cases/devgen01/hidden/"
+refuse "a task dir holding hidden data" "no hidden data, ever" "$RUN" --tasks "$T/pubh" --out "$T/o-hidden"
+gp "$T/Pm" -e 's/^mask=.*/mask=on/'; refuse "mask on" "mask must be off" env GEN_PARAMS="$T/Pm" "$RUN" --tasks "$T/pub" --out "$T/o-mask"
+gp "$T/Pk" -e 's/^k=.*/k=4/'; refuse "k differs from protocol.json" "protocol.json .retrieval.k is '3', the driver has '4'" env GEN_PARAMS="$T/Pk" "$RUN" --tasks "$T/pub" --out "$T/o-k"
+gp "$T/Ps" -e 's/^seed_base=.*/seed_base=477000/'; refuse "seed_base differs from protocol.json" "protocol.json .generation.seed_base" env GEN_PARAMS="$T/Ps" "$RUN" --tasks "$T/pub" --out "$T/o-s"
+refuse "a real run on the draft PARAMS" "is a draft" env GEN_TEST=0 "$RUN" --tasks "$T/pub" --out "$T/o-real"
+sed -e 's/^revision=.*/revision=gen-v1/' "$HERE/PARAMS" > "$T/Preal"
+refuse "a real run with PLACEHOLDER values (GEN_PARAMS ignored outside test mode)" "is a draft" env GEN_TEST=0 GEN_PARAMS="$T/Preal" "$RUN" --tasks "$T/pub" --out "$T/o-real2"
+refuse "no weight check in the run dir" "weights.check + server.json missing" "$RUN" --tasks "$T/pub" --out "$T/o-nowck"
+cp -R "$T/pub" "$T/pubx"; mv "$T/pubx/tasks/cases/devgen08" "$T/pubx/tasks/cases/xtask08"; cw "$T/o-x"
+refuse "cross-family control on a non-dev task" "DEV tasks only" "$RUN" --tasks "$T/pubx" --out "$T/o-x" --control cross-family
+# resume refused when the run's identity changes
+cp -R "$T/pub" "$T/pubp"; printf 'One more sentence.\n' >> "$T/pubp/tasks/cases/devgen01/prompt"
+refuse "resume with a changed prompt" "resume refused" "$RUN" --tasks "$T/pubp" --out "$T/full1"
+gp "$T/P1t" -e "s|^protocol_json=.*|protocol_json=$T/pj1.json|" -e 's/^attempts=.*/attempts=1/' -e 's/^timeout_s=.*/timeout_s=6/'
+refuse "resume with changed params" "resume refused" env GEN_PARAMS="$T/P1t" "$RUN" --tasks "$T/pub" --out "$T/full1"
+sed 's|^config\.A\.server=.*|config.A.server=fakegen test server 2|' "$T/E445" > "$T/E445b"
+gp "$T/P1e" -e "s|^protocol_json=.*|protocol_json=$T/pj1.json|" -e 's/^attempts=.*/attempts=1/' -e "s|^exp445_params=.*|exp445_params=$T/E445b|"
+refuse "resume with a changed model pin (server)" "resume refused" env GEN_PARAMS="$T/P1e" "$RUN" --tasks "$T/pub" --out "$T/full1"
+cp "$CA/abstraction/abs-count_above.rec" "$T/rec.bak"; sed -i 's/^desc Test record/desc Changed test record/' "$CA/abstraction/abs-count_above.rec"
+(cd "$CA" && sha256sum abstraction/abs-sum_squares3.rec abstraction/abs-count_above.rec) > "$CA/MANIFEST"; sha "$CA/MANIFEST" > "$CA/SET.sha256"
+gp "$T/P1c" -e "s|^protocol_json=.*|protocol_json=$T/pj1.json|" -e 's/^attempts=.*/attempts=1/'
+refuse "resume with a changed abstraction record set (manifest)" "resume refused" env GEN_PARAMS="$T/P1c" "$RUN" --tasks "$T/pub" --out "$T/full1"
+refuse "a record set whose MANIFEST is not the pinned one" "not the pinned record set" "$RUN" --tasks "$T/pub" --out "$T/full1"
+cp "$T/rec.bak" "$CA/abstraction/abs-count_above.rec"
+(cd "$CA" && sha256sum abstraction/abs-sum_squares3.rec abstraction/abs-count_above.rec) > "$CA/MANIFEST"; sha "$CA/MANIFEST" > "$CA/SET.sha256"
+# dirty tree: a private clone of the current sources, committed there, then one file changed
+G="$T/clone"; git clone -q --shared "$ROOT" "$G" 2> /dev/null && rm -rf "$G/tools/gen" && cp -R "$ROOT/tools/gen" "$G/tools/" && cp "$ROOT/mk/gen-runner.mk" "$G/mk/" &&
+  git -C "$G" add -A tools/gen mk/gen-runner.mk && git -C "$G" -c user.name=test -c user.email=test@invalid commit -qm test --allow-empty
+refuse "clean clone reaches the weight check (control)" "weights.check + server.json missing" env GEN_TEST_CLEAN_TREE=1 "$G/tools/gen/runner/run.sh" --tasks "$T/pub" --out "$T/o-clean"
+printf '\n' >> "$G/tools/gen/runner/FORMATS.md"
+refuse "dirty source tree" "dirty source tree" env GEN_TEST_CLEAN_TREE=1 "$G/tools/gen/runner/run.sh" --tasks "$T/pub" --out "$T/o-dirty"
+# cross-family control: each dev task's own family token excluded from retrieval
+o="$T/xf"; cw "$o"
+if "$RUN" --tasks "$T/pub" --out "$o" --control cross-family > /dev/null 2> "$o.err"; then
+  tok="$(FS_TOK 'loop(arith)')"
+  [ "$(mfk "$o" D exclude_family devgen03)" = "$tok" ] && grep -qx "control=cross-family" "$o/meta.txt" && [[ "$(mfk "$o" D retrieved devgen03)" != *abs-sum_squares3* ]] &&
+    grep -qP "^abs-sum_squares3\t.*\tfamily_excluded:$tok\$" "$o/retrieval/d/devgen03/out/excluded.tsv" && grep -qx -- "--exclude-family" "$o/retrieval/d/devgen03/argv" &&
+    ok "cross-family control: --exclude-family <the dev task's famsig token>; the record of that family is excluded" || bad "cross-family control record"
+else bad "cross-family control run failed: $(tail -n 1 "$o.err")"; fi
+# hidden-leak probe, positive control: a public prompt that carries the canary IS caught
+cp -R "$T/pub" "$T/publ"; printf '%s\n' "$CANARY" >> "$T/publ/tasks/cases/devgen05/prompt"; o="$T/leak"; cw "$o"
+"$RUN" --tasks "$T/publ" --out "$o" > /dev/null 2>&1
+[ -n "$(leak "$o")" ] && [ -n "$(leak "$A/requests.log")" ] && ok "  (positive control: a canary put in a prompt is found in the run dir and the server log)" || bad "canary positive control not caught"
+unset GEN_PARAMS; export GEN_PARAMS="$T/P"
+
+# ---- 5. reducer mutants ----------------------------------------------------------------------------------------
+rehash() { (cd "$1" && find . -type f ! -path ./SHA256SUMS ! -path ./.lock ! -path './gate/g0.tmp/*' -printf '%P\n' | LC_ALL=C sort | tr '\n' '\0' | xargs -0 sha256sum) > "$1/SHA256SUMS"; }
+mut() { # mut <label> <expected reason fragment> <run dir> <harness dir> [pins]: the reducer must say INVALID for that reason
+  local l="$1" m="$2" o="$T/mut$((++NM))"
+  "$RED" --run "$3" --harness "$4" ${5:+--pins "$5"} --out "$o" > /dev/null 2>&1
+  if [ "$(gk "$o" verdict)" = INVALID ] && grep -q "^reason\.[0-9]*=.*$m" "$o/aggregate.txt"; then ok "mutant detected, INVALID: $l"
+  else bad "mutant not detected: $l ($(gk "$o" verdict): $(gk "$o" reason.1))"; fi
+}
+NM=0
+cpr() { rm -rf "$T/mr" "$T/mh"; cp -R "$R" "$T/mr"; mkdir -p "$T/mhe/runs"; rm -rf "$T/mhe/runs/h"; cp -R "$H1" "$T/mhe/runs/h"; chmod -R u+w "$T/mhe/runs/h"
+  rm -rf "$T/mhe/receipts"; cp -R "$(dirname "$(dirname "$H1")")/receipts" "$T/mhe/receipts"; chmod -R u+w "$T/mhe/receipts"; MH="$T/mhe/runs/h"; }
+cpr; "$RED" --run "$T/mr" --harness "$MH" --pins "$T/pins" --out "$T/mut0" > /dev/null 2>&1
+[ "$(gk "$T/mut0" verdict)" = PASS ] && cmp -s "$T/mut0/aggregate.txt" "$T/red1/aggregate.txt" && ok "  (control: unmodified copies reduce to the same PASS aggregate)" || bad "mutant control copy"
+cpr; b="$(mfk "$T/mr" B prefix_sha256 devgen01)"; sed -i '1s/^/X/' "$T/mr/blobs/$b"; rehash "$T/mr"
+mut "prompt source (the shared prefix blob edited, sums rehashed)" "blob $b missing or altered" "$T/mr" "$MH"
+cpr; q="$T/mr/gen/d-1/devgen04/r1.req.json"; jq -c '.seed = 1' "$q" > "$q.t" && mv "$q.t" "$q"; rehash "$T/mr"
+mut "seed (a round-1 request's seed changed, sums rehashed)" "request d-1 devgen04 round 1 is not the request" "$T/mr" "$MH"
+cpr; sed -i 's/^mask=off$/mask=on/' "$T/mr/meta.txt"; rehash "$T/mr"
+mut "mask state (meta mask=on, sums rehashed)" "run mask is 'on'" "$T/mr" "$MH"
+cpr; sed 's/^model=.*/model=qwen3-8b/' "$T/pins" > "$T/pins.m"
+mut "model pin (pins name another model)" "pin model" "$T/mr" "$MH" "$T/pins.m"
+cpr; sed -i 's/^model=.*/model=qwen3-8b/' "$T/mr/meta.txt"; rehash "$T/mr"
+mut "model pin (meta model edited, sums rehashed: requests no longer match)" "is not the request its manifest" "$T/mr" "$MH"
+cpr; sed 's/^tasks_corpus_sha256=.*/tasks_corpus_sha256='"$(printf '%064d' 1)"'/' "$T/pins" > "$T/pins.s"
+mut "split (the harness scored another task corpus than the pinned one)" "pin tasks_corpus_sha256" "$T/mr" "$MH" "$T/pins.s"
+cpr; sed 's/^tasks_public_sha256=.*/tasks_public_sha256='"$(printf '%064d' 2)"'/' "$T/pins" > "$T/pins.p"
+mut "split (the run's public tasks are not the pinned split)" "pin tasks_public_sha256" "$T/mr" "$MH" "$T/pins.p"
+cpr; v="$MH/sets/a-1/verdicts.txt"; sed -i '1s/ REJECT / ACCEPT /' "$v"; sed -i '1s/ REJECT / ACCEPT /' "$MH/sets/a-1/replay/verdicts.txt"
+mut "verdict (a REJECT turned ACCEPT in both passes)" "set a-1 task devgen01: receipt" "$T/mr" "$MH"
+cpr; sed -i '2d' "$MH/sets/d-1/verdicts.txt" "$MH/sets/d-1/replay/verdicts.txt"
+mut "a missing cell (one verdict line removed)" "the paired matrix is incomplete" "$T/mr" "$MH"
+cpr; rm -rf "$T/mr/gen/c-1/devgen05/done"; rehash "$T/mr"
+mut "an unfinished generation (no done marker)" "has no done marker" "$T/mr" "$MH"
+cpr; sed -i 's/^GREEDY PASS$/GREEDY PASS/; s/identical=yes mode_r1=greedy/identical=yes mode_r1=greedy/' "$T/mr/gate/greedy/verdict.txt"; jq -c '.choices[0].message.content += "x"' "$T/mr/gate/greedy/devgen02/r2.resp.json" > "$T/x.json" && mv "$T/x.json" "$T/mr/gate/greedy/devgen02/r2.resp.json"; rehash "$T/mr"
+mut "greedy gate record (a reply changed, verdict kept PASS)" "greedy gate verdict PASS but task devgen02" "$T/mr" "$MH"
+cpr; echo extra > "$T/mr/blobs/extra"
+mut "an unlisted file in the run dir" "run SHA256SUMS" "$T/mr" "$MH"
+
+echo "test_gen_runner: $PASS passed, $FAIL failed"
+[ "$FAIL" = 0 ]

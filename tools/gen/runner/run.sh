@@ -69,7 +69,7 @@ if [ "$TEST" != 1 ]; then
   ! grep -v '^#' "$PARAMS" | grep -q PLACEHOLDER || die "PARAMS still holds PLACEHOLDER values ($(grep -v '^#' "$PARAMS" | grep -c PLACEHOLDER)): a real run waits for the frozen protocol, corpus and provider"
 fi
 DIRTY="$(git -C "$ROOT" status --porcelain -- "${TOOL_PATHS[@]}")"
-if [ -n "$DIRTY" ] && [ "$TEST" != 1 ]; then die "dirty source tree ($(head -n 1 <<< "$DIRTY")): commit first; a run is tied to one clean commit"; fi
+if [ -n "$DIRTY" ] && { [ "$TEST" != 1 ] || [ "${GEN_TEST_CLEAN_TREE:-0}" = 1 ]; }; then die "dirty source tree ($(head -n 1 <<< "$DIRTY")): commit first; a run is tied to one clean commit"; fi
 COMMIT="$(git -C "$ROOT" rev-parse HEAD)$([ -z "$DIRTY" ] || echo -dirty)"
 [ "$(kv mask)" = off ] || die "mask must be off (the Omegese mask is not qualified; plan decision 1)"
 EP="$(rp "$(kv exp445_params)")" CONFIG="$(kv config)"
