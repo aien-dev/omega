@@ -211,7 +211,7 @@ cp -r "$ROOT/tests/one_layer/generalization/dev" "$T/devneg"
 sed -i '1s/.*/1/' "$T/devneg/tasks/cases/devgen04/hidden/expected"
 if bash "$T/devneg/pack_dev.sh" "$T/packneg" >/dev/null 2>&1; then fail "wrong hidden/expected not refused"; else pass "refused: dev pack with one wrong expected line (oracle check)"; fi
 if [ "${GEN_TASKS_CHECK:-0}" = 1 ]; then
-  if bash "$ROOT/tests/one_layer/acceptance/ola.sh" tasks-check "$T/pack1/tasks.tar" "$T/pack1/TASKS.sha256" | grep -q 'RUN VALID'; then pass "ola.sh tasks-check dev pack: RUN VALID"; else fail "ola.sh tasks-check dev pack"; fi
+  if bash "$ROOT/tests/one_layer/acceptance/ola.sh" tasks-check "$T/pack1/tasks.tar" "$T/pack1/TASKS.sha256" 2>"$T/tc.err" | grep -q 'RUN VALID'; then pass "ola.sh tasks-check dev pack: RUN VALID"; else fail "ola.sh tasks-check dev pack"; fi
 fi
 
 echo "test-gen-protocol: $ok ok, $bad failed"
