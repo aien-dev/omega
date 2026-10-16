@@ -23,15 +23,21 @@ retries=2
 examples_dir=PLACEHOLDER tools/exp445/arms/examples
 examples_one=one.list
 examples_many=many.list
-# retrieval: genret-cli-v1 only (tools/gen/retrieval/CONTRACT.md), C = --kind raw, D = --kind abstraction
+# retrieval: genret-cli-v2 only (tools/gen/retrieval/CONTRACT.md at a4878d69), C = --kind raw, D = --kind abstraction;
+# corpus_manifest = records/MANIFEST, corpus_manifest_sha256 = the content of records/SET.sha256; recheck = D's validator
 provider=PLACEHOLDER build/gen/genret
-provider_contract_sha256=2689ffb7b5e8903f4e8f0a3200ffe7b2a890056a96c601610a346193c229bea2
-corpus_manifest=PLACEHOLDER tests/one_layer/generalization/corpus/MANIFEST
+provider_contract_sha256=e1f2c1cff683bbc6daf552c9771c4fadb71d4b290a7532cb4222824c3b649ab9
+corpus_manifest=PLACEHOLDER tests/one_layer/generalization/corpus/records/MANIFEST
+recheck=PLACEHOLDER build/gen_abstract/recheck
 corpus_manifest_sha256=PLACEHOLDER
 retrieval_mode=normal
 k=3
-cap_bytes=6000
-exclude_families=
+cap_bytes=4096
+# k, cap_bytes, retrieval_mode: preregistered by Agent A (relay 2026-10-15; GEN_PROTOCOL_V1 and protocol.json
+# pending). Cross-family negative control (run.sh --control cross-family): DEV tasks only, each C/D query
+# gets --exclude-family <famsig token of that dev task's own shape> (dev_meta, famsig: FAMSIG_V1.md)
+famsig=PLACEHOLDER build/gen/famsig
+dev_meta=PLACEHOLDER tests/one_layer/generalization/dev/META
 # gates: public dev tasks (tasks/cases/<id>/{requirement,prompt}); greedy gate = the first greedy_gate_tasks
 # dev tasks in condition B sent twice at temperature 0; G0 = g0_task in condition B at g0_seeds seeds + 1 repeat
 dev_tasks=PLACEHOLDER tests/one_layer/generalization/dev
