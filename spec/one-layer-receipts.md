@@ -129,10 +129,10 @@ never an overwrite.
                            [--input I] [--producer P] [--dep ID ...]
     checker2 receipt tbs <receipt> <out65>
     checker2 receipt attach <receipt> <sig64> --out-dir D
-    checker2 receipt verify <receipt> <unit.ir> <exe> --target T --epoch E [--allow-test-key 
-                           [--producer P] [--dep ID ...] [--accept-checker ID ...]| --production]
-                           [--floor N] [--firmware F] [--revoked-id ID ...] [--revoked-key FP ...]
-                           [--lrat FUNC=PROOF ...]
+    checker2 receipt verify <receipt> <unit.ir> <exe> --target T --epoch E
+                           [--allow-test-key | --production] [--floor N] [--firmware F]
+                           [--revoked-id ID ...] [--revoked-key FP ...] [--lrat FUNC=PROOF ...]
+                           [--producer P] [--dep ID ...] [--accept-checker ID ...]
     checker2 prove-cnf <unit.ir> <func> <out.cnf>
     checker2 prove-check <unit.ir> <func> <proof.lrat>
 
