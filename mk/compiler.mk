@@ -84,7 +84,7 @@ $(OSC_DIR)/test_legacy_a64_asan: tests/compiler/test_legacy_a64.c $(OSC_LEGACY_A
 # ASan legs run with detect_stack_use_after_return=0: with the fake stack on, every
 # osc_ir_validate call (a 6 KB frame) ran about 50x slower on the Spark (measured
 # 0.012 ms vs 2.6 ms per encode); use-after-return is not what this test probes.
-OSC_DEC_MUTANTS = 1 2 3 4 5 6 7 8
+OSC_DEC_MUTANTS = 1 2 3 4 5 6 7 8 9 10
 OSC_DEC_ASAN_ENV = ASAN_OPTIONS=detect_stack_use_after_return=0
 .PHONY: test-osc-ir-decode test-osc-ir-decode-quick test-osc-ir-decode-mutants
 

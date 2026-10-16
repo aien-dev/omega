@@ -474,6 +474,12 @@ static void test_classes(void) {
 static unsigned long g_cases, g_admitted, g_class[OSC_IR_REFUSAL_COUNT + 1];
 
 /* The oracle for one case: NULL if the decoder's answer is allowed, else why not. */
+/* Independence: for an admitted case the oracle re-encodes with osc_ir_encode,
+ * which runs the same encode_unit the decoder's canonical backstop uses. Only
+ * the validity half (osc_ir_encode refuses an invalid unit) is independent of
+ * the decoder; the byte-identity half shares encode_unit with it, so a bug in
+ * encode_unit would be invisible here. The hand-written counterexamples in
+ * section 4 come from an independent writer and pin each refusal class. */
 static const char *judge(const uint8_t *m, size_t mlen, int rc, const OscUnit *out) {
     if (rc == OSC_IR_OK) {
         size_t n = 0;  /* osc_ir_encode validates first: an invalid unit does not encode */
