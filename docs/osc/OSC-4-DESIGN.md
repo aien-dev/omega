@@ -248,6 +248,67 @@ F64 keeps all 64 bits, so the argument check at osc_interp.c:221 refuses only di
 No fused ops, no FRINT, no transcendental intrinsics, no f16/bf16, no SIMD, no
 float `%`, no float array constants. These omissions buy bit-exact agreement.
 
+## Slice A implementation notes
+
+Written while building Slice A (branch osc4/slice-a, 2026-10-16). Each note is a place where the
+text above left a choice open, or where the code deviates from a line above; the reading chosen is
+the one that keeps the interpreter and the native code bit-identical. The code is the truth.
+
+1. **Names.** The scalar tags are `OSC_T_F32` / `OSC_T_F64` (the existing `OSC_T_` prefix,
+   src/compiler/osc_ir.h), not the `OSC_S_` spelling in 1.5. Tags 13 and 14; opcodes FBIN 30 ..
+   FBITS 36; sub-op enums `OscFBin` (ADD 1 .. MAX 6), `OscFUn` (NEG 1, ABS 2, SQRT 3), `OscFInt`
+   (SIGNED 1, UNSIGNED 2). spec/one-layer-format.md carries the wire layout.
+2. **Canonical f32 value.** `canon` for F32 reuses the width-32 unsigned path: low 32 bits kept,
+   upper 32 zero, payload untouched. A dirty upper half in an F32 argument is refused exactly like a
+   dirty u32.
+3. **Constant folding.** The only compile-time float evaluation is a literal (strtof / strtod, per
+   1.3 item 12) and its negation (sign-bit flip, which is what FNEG does). `1.0 + 2.0` is NOT folded:
+   it is emitted as a run-time FBIN, so every rounding step has exactly one implementation (the
+   machine's). `ceval` returns "unknown" for every float-typed node, so a contract that mentions a
+   float is decided at run time, never folded.
+4. **Literal typing.** An unsuffixed literal takes its type from the context (`let x: f32 = 1.0`,
+   `a * 2.0`); a suffixed literal must match the context or it is TYPE_MISMATCH. A float literal
+   where an integer is required, or an integer literal where a float is required (`x * 2` with
+   `x: f64`), is TYPE_MISMATCH with a message saying to write the `.`. FLOAT_MIXED (1.4) fires when
+   a float meets a float of the other width or an integer-typed expression; `bool` against a float
+   stays TYPE_MISMATCH.
+5. **`as`.** Same float to same float lowers to MOV. `as ... bits` requires exactly one float side
+   and one integer side of equal width (f32 with u32/i32, f64 with u64/i64), else
+   FLOAT_BITS_WIDTH; `bool` to or from a float is TYPE_MISMATCH. ITOF `sub` is the signedness of
+   the source, FTOI `sub` the signedness of the destination; the validator checks both.
+6. **FLOAT_BITOP** covers `% & | ^ << >>` and unary `~` on a float operand. `x / 0.0` with a
+   constant zero divisor is allowed (inf is a value, 1.3 item 7); the integer constant-zero-divisor
+   refusal does not apply to floats.
+7. **FLOAT_INDEX** object: the array or slice name when a float indexes it (also for a float
+   literal index); the word `for` for a float loop-range end and `bound` for a float `while`/arena
+   bound (those two are decided in the parser, since ranges and bounds take integer literals only).
+8. **min/max** (interpreter, mirrors FMINNM/FMAXNM): a signalling NaN in `a` returns quiet(`a`); a
+   signalling NaN in `b` returns quiet(`b`); both quiet NaN returns `a`; exactly one quiet NaN
+   returns the other operand; equal values (including +0.0 and -0.0) return the negative-signed one
+   for `min` and the positive-signed one for `max`; otherwise `<`.
+9. **FTOI.** Interpreter: saturate in `double` (`half = (double)(1ULL << (w-1))`), NaN -> 0, then
+   canon to the destination width. Native: FCVTZS/FCVTZU to an X register (64-bit saturation, NaN
+   -> 0), then for destinations narrower than 64 bits a clamp: materialise the bound in x10, CMP,
+   skip over an `ORR x9, xzr, x10` with B.cond (LE for the upper signed bound, GE for the lower
+   signed bound, LS for the unsigned bound). The two agree bit for bit on every pattern the fuzz
+   draws (signalling/quiet NaN, both infinities, -0.0, subnormals, values past both bounds).
+10. **f32 slot traffic.** Store: `FMOV w9, sN` (zero-extends) then the existing 64-bit STR, so the
+    upper half of an f32 slot is always zero. Load: `LDR sN, [sp, #off]`. FBITS to i32 sign-extends
+    (SBFM); to u32 or f32 it zero-extends.
+11. **Fixed-form encodings.** FMOV_XD/DX/WS/SW and FCVT_SD/DS have one form each and refuse
+    `imm2 != 0`; the type bit is in the opcode name. All other float ops take `imm2` 0 (S) or 1 (D)
+    and refuse anything else. The 25 ops each have one golden word from
+    tests/compiler/aarch64_fp_golden.h (1365 header samples re-encoded with 0 mismatches), one
+    decoder round trip and field-flip mutants.
+12. **Harness change (the one existing check that moved).** test_osc_compiler.c used to assert that
+    IR version byte 6 is refused as unknown. Version 6 is now the float version, so that check
+    asserts instead: `osc_ir_encoding_version` recognises 6, a float unit encodes as version 6, and
+    version 7 is the first unknown one. test_osc_ir_decode.c adds the strict-reader side: version 6
+    on a unit without floats is VERSION_MISMATCH, version 7 is UNKNOWN_VERSION, tag 15 and opcode 37
+    are RANGE. No other existing test changed.
+13. **Build flags.** `-ffp-contract=off -fno-fast-math -fno-math-errno` are on OSC_CFLAGS for every
+    compiler-path C file and on the determinism.sh fallback build; `-lm` is linked for `sqrt`.
+
 ## 2. Slice B: large buffers and typed slices
 
 ### 2.1 Subset statement

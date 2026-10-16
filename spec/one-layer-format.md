@@ -3,7 +3,7 @@
 ```text
 Document ID:   SPEC-ONE-LAYER-FORMAT
 Issue:         aien-spark/omega#444 (one-layer plan, stage 2 "Open the binary front door")
-Status:        IMPLEMENTED for format versions 1..5 (reader + writer); version 6 items OPEN (section 9)
+Status:        IMPLEMENTED for format versions 1..6 (reader + writer); numeric-identifier version OPEN (section 9)
 Code:          src/compiler/osc_ir.h (osc_ir_encode, osc_ir_decode, OscIrRefusal)
                src/compiler/osc_ir.c (encode_unit, unit_version, decode_unit)
 Tests:         tests/compiler/test_osc_ir_decode.c; make test-osc-ir-decode(-quick)
@@ -42,13 +42,13 @@ All integers little-endian, no padding, no alignment, no pointers.
 | bytes | field |
 |---|---|
 | 7 | magic `4F 53 43 31 49 52 00` ("OSC1IR\0") |
-| 1 | version, 1..5 (section 4) |
-| versions 2..5 only: 1 | `nstructs` 0..16, then `nstructs` struct records (3.2) |
+| 1 | version, 1..6 (section 4) |
+| versions 2..6 only: 1 | `nstructs` 0..16, then `nstructs` struct records (3.2) |
 | 2 | `nfuncs` 0..32, then `nfuncs` function records (3.3) |
 
 Nothing may follow the last function record.
 
-### 3.2 Struct record (versions 2..5)
+### 3.2 Struct record (versions 2..6)
 
 | bytes | field |
 |---|---|
@@ -76,7 +76,8 @@ Nothing may follow the last function record.
 ### 3.4 Type
 
 One byte scalar tag: 0 void, 1 bool, 2 u8, 3 u16, 4 u32, 5 u64, 6 i8, 7 i16, 8 i32, 9 i64,
-10 ref, 11 bytes, 12 cells. Tags above 12 are refused. For every tag except 10 that byte is the
+10 ref, 11 bytes, 12 cells, 13 f32, 14 f64 (version 6, OSC-4 Slice A). Tags above 14 are refused.
+For every tag except 10 that byte is the
 whole type (the decoded `ref`, `elem`, `len`, `sid` are 0). Tag 10 (ref) continues:
 
 | bytes | field |
@@ -126,8 +127,17 @@ field: 0x0000..0x7FFF, or 0xFFFF for "none" (-1); 0x8000..0xFFFE are refused (RA
 | 27 | HSTORE | r a, r b, r c, r args[0] |
 | 28 | SLOAD | r dst, r a, r b |
 | 29 | SSTORE | r a, r b, r c |
+| 30 | FBIN | 1 sub (1 ADD, 2 SUB, 3 MUL, 4 DIV, 5 MIN, 6 MAX), r dst, r a, r b |
+| 31 | FUN | 1 sub (1 NEG, 2 ABS, 3 SQRT), r dst, r a |
+| 32 | FCMP | 1 sub (condition, as CMP), r dst, r a, r b |
+| 33 | FCVT | r dst, r a |
+| 34 | ITOF | 1 sub (1 signed, 2 unsigned: the source), r dst, r a |
+| 35 | FTOI | 1 sub (1 signed, 2 unsigned: the destination), r dst, r a |
+| 36 | FBITS | r dst, r a |
 
-Opcode 0 and opcodes above 29 are refused (RANGE): their length is unknown. The numbers are pinned
+Opcode 0 and opcodes above 36 are refused (RANGE): their length is unknown. Opcodes 30..36 are the
+OSC-4 Slice A float instructions (docs/osc/OSC-4-DESIGN.md 1.5); a CONST whose register is f32 or f64
+carries the IEEE bit pattern in `imm` (f32: low 32 bits, upper 32 zero). The numbers are pinned
 by `_Static_assert`s in the test. The meaning of every field and every value range that
 `osc_ir_validate` enforces (types agree, registers in range, blocks partition the instructions,
 calls only to earlier functions, trap codes 1..14, and the rest) is in `osc_ir.h` and
@@ -143,11 +153,12 @@ each decoded unit with the unit the compiler produced on every carried field.
 
 ## 4. Versions and historical readers
 
-The version byte is a function of the content (`unit_version`, `src/compiler/osc_ir.c`): 5 if any
+The version byte is a function of the content (`unit_version`, `src/compiler/osc_ir.c`): 6 if any
+register, return, struct field or pool element is f32 or f64 or any opcode 30..36 occurs, else 5 if any
 register is a byte slice (bytes/cells), else 4 if any pool instruction (POPEN..HSTORE) occurs,
 else 3 if any arena instruction (AOPEN, AALLOC, ADESTROY) occurs, else 2 if the unit has structs,
-else 1. Versions 2..5 share one layout (struct table present, possibly empty); version 1 has no
-struct table. Every version 1..5 is read. A version byte that is not the one the content requires
+else 1. Versions 2..6 share one layout (struct table present, possibly empty); version 1 has no
+struct table. Every version 1..6 is read. A version byte that is not the one the content requires
 is refused (VERSION_MISMATCH), so one unit never has two encodings. Versions are only ever added;
 an existing version's bytes are never reinterpreted.
 
@@ -179,14 +190,14 @@ run in the order listed. `osc_ir_refusal_name` gives the names.
 |---|---|---|---|
 | -1 | ARG | NULL input or output pointer | `osc_ir_decode(NULL, 8, u)` |
 | -2 | MAGIC | first 7 bytes are not the magic | "OSC2IR..." |
-| -3 | UNKNOWN_VERSION | version byte 0 or above 5 | versions 0 and 6 |
+| -3 | UNKNOWN_VERSION | version byte 0 or above 6 | versions 0 and 7 |
 | -4 | TRUNCATED | input ends inside a field | empty input; last byte missing; magic only |
 | -5 | OVERSIZED | input over `OSC_IR_ENCODED_MAX`, or a count or length over section 5 | 64-byte name; 481 registers; 256-byte requires text; 2,620,252-byte input |
 | -6 | TRAILING | bytes after the last function | one extra byte |
-| -7 | RANGE | unknown opcode, scalar tag or ref kind; a register/block/callee field 0x8000..0xFFFE | opcodes 0 and 30; tag 13; register 0x8000 |
+| -7 | RANGE | unknown opcode, scalar tag or ref kind; a register/block/callee field 0x8000..0xFFFE | opcodes 0 and 37; tag 15; register 0x8000 |
 | -8 | TEXT | a NUL byte inside a name or contract text (it would read back shorter: ambiguous) | name "f\0g" |
 | -9 | INVALID | well-formed, but `osc_ir_validate` refuses the unit | u8 constant 256; register out of range |
-| -10 | VERSION_MISMATCH | version byte differs from the one the content requires (section 4) | version 2 or 5 for a plain unit |
+| -10 | VERSION_MISMATCH | version byte differs from the one the content requires (section 4) | version 2, 5 or 6 for a plain unit |
 | -11 | NONCANONICAL | the unit re-encodes to different bytes | none: unreachable (below) |
 
 NONCANONICAL is a backstop. Given the checks above it, every field read back writes back to the
@@ -218,11 +229,20 @@ build `tests/compiler/test_osc_ir_decode.c` plain and with ASan/UBSan. Measured 
   4 no validation, 5 no NUL check, 6 no register range check, 7 no total size check, 8 truncation
   read as zeros) each make the test fail.
 
+Measured again on the Spark, 2026-10-16, full mode, after version 6 (OSC-4 Slice A floats) was added:
+64 corpus units round-trip (32 v1, 7 v2, 6 v3, 3 v4, 11 v5, 5 v6); 10,000 distinct valid objects
+round-trip byte-exactly (2,000 under ASan); 223,489 malformed inputs: 195,293 refused with a named
+class, 28,196 admitted as another canonical unit, NONCANONICAL 0, no crash (ASan/UBSan leg: 223,496
+cases, 195,299 refused, 28,197 admitted, no sanitizer report); all 23 counterexample cases as
+expected, including version 7 (UNKNOWN_VERSION), version 6 on a unit without floats
+(VERSION_MISMATCH), tag 15 and opcode 37 (RANGE); 8 of 8 decoder mutants caught.
+
 ## 9. Open (asked by #444, not in this change)
 
 - **Numeric identifiers.** Versions 1..5 still carry function, struct and field names as text, and
-  names are part of identity. A version 6 that identifies functions, structs and fields by index
-  only (calls and field accesses already do) is not specified here.
+  names are part of identity. A later version that identifies functions, structs and fields by index
+  only (calls and field accesses already do) is not specified here. (Version 6 was taken by the
+  OSC-4 Slice A floats, 2026-10-16: same layout as 2..5 plus tags 13 and 14 and opcodes 30..36.)
 - **Structured requirement objects.** `requires` / `ensures` are carried as source text; their
   checks are lowered into the instruction stream by the front end. A structured, machine-readable
   requirement object (and its place in identity) needs a design decision first.
