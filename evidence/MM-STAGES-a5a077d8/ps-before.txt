@@ -1,0 +1,8 @@
+USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+drakest+ 4028716  100  0.0   2400  1624 ?        R    21:09   0:12 ./build/test_codegen_freestanding
+drakest+ 3941563  7.6  0.3 6091496 421152 ?      Ssl  21:05   0:18 /home/drakestapleton/.local/bin/claude --output-format stream-json --verbose --input-format s
+drakest+   15251  7.6 29.8 40818924 38073580 ?   Ssl  10:59  46:36 /home/drakestapleton/handoffs/pin-bin-f881710a/aien-serve-http --engine omega --model-dir /ho
+drakest+ 3942470  5.1  0.2 6099816 357496 ?      Ssl  21:05   0:12 /home/drakestapleton/.local/bin/claude --output-format stream-json --verbose --input-format s
+drakest+ 3947527  4.2  0.2 1840808 349480 ?      Ssl  21:06   0:09 /home/drakestapleton/.local/bin/codex app-server
+drakest+ 3983657  3.7  0.2 6099752 308736 ?      Ssl  21:08   0:04 /home/drakestapleton/.local/bin/claude --output-format stream-json --verbose --input-format s
+drakest+ 2707502  3.3  0.4 7180856 544636 ?      Ssl  13:16  15:49 /home/drakestapleton/.local/bin/claude --output-format stream-json --verbose --input-format s
