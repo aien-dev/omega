@@ -170,6 +170,24 @@ function: valid types and operands; well-formed control flow; every use defined 
 ownership, arena, pool and handle discipline (a may-set analysis that rejects definite errors);
 every loop reducible and bounded by a guarded counter with a constant limit of at most 10^6.
 
+Known limits of that ownership flow (omega#465). "Accepted" means the program passes the rules
+above, not "well-owned". Two shapes are accepted today:
+
+- An owner leaked on some paths only. `C2-OWN-LEAK` fires at a return only when the owner is live
+  on every path into it, so a program that releases an owner on one branch and returns on the other
+  without releasing it is accepted. This is what keeps drop-flag guarded releases (OSC-3 item 3)
+  from being refused.
+- A mutable borrow copied. `MOV` binds a `mut` source to a `mut` destination (`bindable` in
+  `c2_check.c`) and no rule tracks how many mutable borrows of one owner are live, so two live
+  writers of one array are accepted. `C2-CALL-ALIAS` refuses only one register passed twice to a
+  call and written.
+
+Neither shape breaks memory safety by itself: a leak frees nothing early, and two writers through
+copied mutable borrows still go through bounds-checked accesses to an owner that is alive (the two
+reproducers in omega#465 were checked with glyph, omega_emit and checker2 on 2026-10-15). Front ends
+that want "well-owned" must refuse these shapes themselves until checker2 gains a some-path leak
+rule and an exclusive mutable borrow rule; that choice is open in omega#465.
+
 ## 10. Evidence class 2: LRAT proofs
 
 Property `no-trap-except-requires` of a function F: for every argument value, a run of F that
