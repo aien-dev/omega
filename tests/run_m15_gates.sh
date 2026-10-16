@@ -3,7 +3,7 @@
 set -eu
 
 OMEGA_ROOT=$(cd "$(dirname "$0")/.." && pwd -P)
-TOOL="$OMEGA_ROOT/build/omegatool"
+TOOL="$OMEGA_ROOT/${OUT_DIR:-build}/omegatool"
 EVIDENCE_DIR="$OMEGA_ROOT/evidence"
 RECEIPT="$EVIDENCE_DIR/omega_accelerator_link_qualification_receipt.json"
 

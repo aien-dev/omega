@@ -14,6 +14,14 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 step="${1:?usage: tests/gates/run.sh <step>}"
+
+# Every step builds in its own directory. The Spark judge (aien-test) runs a repository's host gates
+# at the same moment in one worktree; with one shared build/ a gate links an object another gate's
+# compiler is still writing (omega#511: OMEGA-M12 "undefined reference to omega_tern_*" with the
+# object on the link line). OUT_DIR is read by the Makefile (?=) and by every make it spawns.
+# The pins stay at build/pins, shared read-only under their own lock.
+export OUT_DIR="build/step-$step"
+mkdir -p "$OUT_DIR"
 obs() { printf 'AIEN-OBS %s %s\n' "$1" "$2"; }
 
 PINS="$ROOT/build/pins"
@@ -191,8 +199,8 @@ case "$step" in
     make test-regulate
     make test-r11
     receipt rx_aien_faculty_receipt.json '"failures": 0,' '"candidate_bound": true,' '"tree_dirty": false,'
-    make build/rx_r13_living_host build/rx_r13_living_testbuild_host
-    make build/rx_r14_recovery_host
+    make "$OUT_DIR/rx_r13_living_host" "$OUT_DIR/rx_r13_living_testbuild_host"
+    make "$OUT_DIR/rx_r14_recovery_host"
     make test-r16-authpath-linkmap | tee build/r16-g3-linkmap-host.log
     grep -qx 'R16-G3 static: R16_G3_LINKMAP=STATIC_PASS mode=host (checks 1-3 of 5 on this build; not the gate)' build/r16-g3-linkmap-host.log
     grep -qx 'R16 gate: R16_G3_AUTHPATH=NOT_RUN (checks 4-5, exec trace and living run, not run in static-only mode)' build/r16-g3-linkmap-host.log
