@@ -1,0 +1,18 @@
+gen-record 1
+id raw-canary
+kind raw
+split corpus
+family gs1-bae88f134371a1b8
+entry zqxcanary_fn
+params u32
+ret u32
+signature fn zqxcanary_fn zqxcanary uint to uint
+desc Canary record: matches only the word zqxcanary, which appears only in a hidden task file.
+receipt 4255b8a7c233cfc3e950ac07b8f6fe9029187aa9cf0627f7cca057481e47c48c
+validity verified
+ancestry canary d3ca4be53ac70984add01e79d4b260332010970c6622a76b1359e3cff3488805
+source tools/gen/retrieval/fixtures/SOURCE 0004a6e1b859001383839e0ef39bed2c4550782dfb5b57c97c220a23a6a36a2b
+body
+fn zqxcanary_fn zqxcanary uint to uint
+ret zqxcanary
+end

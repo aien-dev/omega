@@ -1,0 +1,1 @@
+Write a function digit_count that returns how many decimal digits the unsigned 64-bit number n has. The number 0 has one digit. Divide by 10 in a loop.

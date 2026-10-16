@@ -1,0 +1,3 @@
+fn twin_pick zqxcanary uint to uint
+ret zqxcanary
+end

@@ -1,0 +1,29 @@
+gen-record 1
+id abs-4ab8e8082fb7c8fe
+kind abstraction
+split corpus
+family gs1-1d8f2039a00f1d80 gs1-694814cd4e1fcd67
+entry sat_sub
+params u32 u32
+ret u32
+signature fn sat_sub a uint b uint to uint
+desc Helper: saturating subtraction, a - b clamped at 0.
+receipt 8026ea7fdc39d48246436f7bf8a43c55523eb3b90637ff9e651ecf9952362671
+validity verified
+ancestry fx_sat_sub_a 232260e6a64117cdd1a065423232a47dc7fb65bea412e6410852bb435be59080
+ancestry fx_sat_sub_b e81588aa686dcc31c82409476e77771b060d1804191e3fdc753390fc80d2d723
+source tools/gen/retrieval/fixtures/SOURCE 0004a6e1b859001383839e0ef39bed2c4550782dfb5b57c97c220a23a6a36a2b
+pre STATED+TESTED true
+post STATED+TESTED le res a
+example 7 9 -> 0
+limit Synthetic fixture helper; its claims were never tested.
+fingerprint 4ab8e8082fb7c8feb88bb6c555b079f91994c62e6a60913a8ceb0a4351db0a2a
+differs fx_sat_sub_a 22f78dbd01781dcadf53e8234dfddea3199e49a859bf01c77e516d30cef9d056
+differs fx_sat_sub_b 457ac88ce14b6e265e3650a6443ffc305be1f3a529d23c670d79fcdecb7d827a
+body
+fn sat_sub a uint b uint to uint
+if ge a b
+ret sub a b
+end
+ret 0
+end

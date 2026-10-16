@@ -1,0 +1,24 @@
+gen-record 1
+id raw-sum_range
+kind raw
+split corpus
+family gs1-694814cd4e1fcd67
+entry sum_range
+params u32 u32
+ret u64
+signature fn sum_range lo uint hi uint to ulong
+desc Sum of the integers from lo to hi inclusive; 0 when lo > hi.
+receipt 16f284ade6077f08bbd212855f048942fd2f026ed65d0351e4cae80df0c43a78
+validity verified
+ancestry sum_range f34910333cc4e7b3d7da8c66f814492430f091b9a59fa036e25bf08d29899a5d
+source tools/gen/retrieval/fixtures/SOURCE 0004a6e1b859001383839e0ef39bed2c4550782dfb5b57c97c220a23a6a36a2b
+body
+fn sum_range lo uint hi uint to ulong
+s = ulong 0
+i = lo
+while le i hi bound 100000
+s = add s ulong i
+i = add i 1
+end
+ret s
+end

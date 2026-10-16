@@ -1,0 +1,21 @@
+gen-record 1
+id raw-probe_clamp
+kind raw
+split probe
+family gs1-1d8f2039a00f1d80
+entry clamp_sub
+params u32 u32
+ret u32
+signature fn clamp_sub a uint b uint to uint
+desc Probe-split record: must never be retrieved even though it matches clamp queries.
+receipt 29662ee26c8754364a9b1d9c6d6b4e66c2504949a0112cdff13fadff0f1d550b
+validity verified
+ancestry probe_clamp 8120278b13d20cc74334735d7311d240d471b16848faeec925ae5c5383e24bce
+source tools/gen/retrieval/fixtures/SOURCE 0004a6e1b859001383839e0ef39bed2c4550782dfb5b57c97c220a23a6a36a2b
+body
+fn clamp_sub a uint b uint to uint
+if ge a b
+ret sub a b
+end
+ret 0
+end

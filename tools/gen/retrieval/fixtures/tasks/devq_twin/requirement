@@ -1,0 +1,5 @@
+# genret fixture query, synthetic
+kind task
+entry twin_pick
+params u8
+ret u8

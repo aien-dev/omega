@@ -1,0 +1,5 @@
+# genret fixture query, synthetic
+kind task
+entry qqq_nothing
+params i8
+ret i8

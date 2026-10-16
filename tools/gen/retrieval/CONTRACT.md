@@ -1,10 +1,18 @@
-# genret: file-backed retrieval provider, CLI contract `genret-cli-v1`
+# genret: file-backed retrieval provider, CLI contract `genret-cli-v2`
 
 GEN-4 (aien-spark/omega#479, master #475). Owner: Agent E. Consumers: the GEN runner (Agent C, through this
 CLI only) and the Cortex provider (aien-spark/aien-sovereign-core#556), which must reproduce `selected.tsv`,
 `excluded.tsv` and `suffix.txt` byte for byte from the same corpus and query. Every rule below is integer
 arithmetic or byte comparison so a second implementation can match it exactly. Any change to an observable
-output is a new contract version; v1 stays valid.
+output is a new contract version.
+
+Version history: v1 (commit c0c55920) read a provisional record format `gen-record v0`; it was never used on
+a real corpus and is superseded. v2 reads Agent D's record schema v1 (`gen-record 1`,
+tools/gen/abstract/RECORD_SCHEMA.md, sha256 9be17b6bc6f97c7420ced722bb258c420944bd87461097163df0992112ae6b53)
+and validates every record with D's `recheck`. Changes from v1: new required `--recheck`; reasons
+`unreceipted` and `poisoned:bytes` removed (recheck refuses such records, which is fatal); new fatal reason
+`recheck_failed`; `contract=genret-cli-v2` in the receipt. Scoring, ranking, rendering and output files are
+unchanged.
 
 Arms C and D call the same command with the same `--k`, `--cap-bytes` and mode. The only difference is
 `--kind raw` (C) versus `--kind abstraction` (D), and therefore which records are indexed.
@@ -12,54 +20,40 @@ Arms C and D call the same command with the same `--k`, `--cap-bytes` and mode. 
 ## 1. Command
 
 ```
-genret query --corpus <MANIFEST file> --manifest-sha256 <64 lowercase hex> --kind raw|abstraction
-             --k <1..64> --cap-bytes <1..1048576> --requirement <file> --prompt <file> --out <new dir>
+genret query --corpus <records/MANIFEST> --manifest-sha256 <64 lowercase hex> --recheck <recheck binary>
+             --kind raw|abstraction --k <1..64> --cap-bytes <1..1048576>
+             --requirement <file> --prompt <file> --out <new dir>
              [--exclude-family <family>]...  [--mode normal|irrelevant|empty|length-matched]
              [--target-bytes <1..cap>]         (required with, and only with, --mode length-matched)
-genret version                                  prints "genret-cli-v1"
+genret version                                  prints "genret-cli-v2"
 ```
 
 - Exit 0: success (an empty selection is a success). Exit 2: fatal (section 7); nothing is written and
   `--out` is not created. `--out` must not exist; genret creates it.
 - Default mode: `normal`. Each option except `--exclude-family` at most once; unknown options are fatal.
+- `--recheck`: Agent D's validator (`make gen-abstract` builds `build/gen_abstract/recheck`).
 
 ## 2. Corpus input
 
+- Layout: RECORD_SCHEMA.md section 5. `--corpus` is `records/MANIFEST`; `--manifest-sha256` is the frozen
+  record-set digest (`records/SET.sha256`). Record paths and `receipts/` resolve against the MANIFEST's
+  directory (made absolute).
 - `MANIFEST`: one line per record, `<64 lowercase hex sha256 of the record file>  <relative path>\n` (two
   spaces, `sha256sum` format), at least 1 and at most 65536 lines, final newline required, no blank lines, no
-  comments. Paths are relative to the manifest's directory; components match `[A-Za-z0-9._-]+`, none is `.`
-  or `..`, no leading `/`. Duplicate paths are fatal. Files not listed are never read.
-- sha256 of the MANIFEST bytes must equal `--manifest-sha256` (the pinned record-set digest).
-- Record file format: owned by Agent D (GEN-3). Until it lands genret reads the provisional fixture format
-  `gen-record v0` (section 2.1); genret depends only on the fields named there.
-
-### 2.1 Provisional record format `gen-record v0` (fixtures only; replaced by Agent D's skeleton)
-
-```
-gen-record v0
-<key> <value>          one line per key, any order, each exactly once (ancestry optional)
-body
-<body bytes to end of file>
-```
-
-At most 65536 bytes. Header lines: bytes 0x20..0x7E only. Keys and values:
-
-| key | value | used for |
-|---|---|---|
-| id | `[a-z0-9_-]{1,64}`, unique in the manifest | tie-break, logs |
-| kind | `raw` or `abstraction` | kind filter |
-| split | `[a-z0-9_-]{1,64}` | only `corpus` is eligible |
-| family | 1+ space-separated `[a-z0-9_-]{1,64}` | `--exclude-family` |
-| validity | `[a-z]{1,16}` | only `verified` is eligible |
-| receipt | 64 lowercase hex test-receipt id, or `none` | `verified` needs one |
-| entry | `[A-Za-z_][A-Za-z0-9_]{0,63}` | indexed, rendered |
-| params | zero or more space-separated `[a-z0-9]{1,16}` (line may be just `params`) | indexed, rendered |
-| ret | `[a-z0-9]{1,16}` | indexed, rendered |
-| desc | one line, 1..512 bytes | indexed, rendered |
-| ancestry | 1+ space-separated ids (not checked by genret) | not used |
-
-`body`: the bytes after the line `body\n` up to end of file; at least 1 byte, must end with `\n`.
-A missing, repeated or unknown key, a value outside its pattern, or a bad body is fatal (`invalid_record`).
+  comments. Path components match `[A-Za-z0-9._-]+`, none is `.` or `..`, no leading `/`. Duplicate paths are
+  fatal. Files not listed are never read.
+- sha256 of the MANIFEST bytes must equal `--manifest-sha256`; every record's bytes must equal its manifest
+  digest (checked when read, and again after recheck has read the file).
+- Every listed record is passed to `recheck --receipts <MANIFEST dir>/receipts <record>...` (batches of 128,
+  manifest order). recheck checks schema v1 sections 1 to 3 and that the receipt file exists, is this
+  record's and hashes to its id. It must exit 0 and print exactly `OK <id>` per record, in order, with the id
+  genret read; exit 1 is fatal `invalid_record` with recheck's first REFUSED line; anything else is fatal
+  `recheck_failed`. `source` digests (`recheck --root`) are not checked: the manifest pin covers the record
+  bytes, and D's `verify` covers derivation.
+- Fields genret reads from a record: `id kind split family validity entry params ret desc` (first line
+  `gen-record 1`, each of these once) and the body (the bytes after the line `body\n` to end of file). All
+  other key lines (signature, receipt, ancestry, source, pre, post, example, limit, counter, fingerprint,
+  differs) are neither indexed nor rendered, so C and D show the same skeleton.
 
 ## 3. Query (public requirement + prompt only)
 
@@ -83,15 +77,14 @@ the token lists concatenated; field boundaries separate tokens). `dl` = number o
 For every manifest record, in this order, the first failing check is its exclusion reason:
 
 1. `kind:<kind>`: kind differs from `--kind`
-2. `split:<split>`: split is not `corpus`
-3. `validity:<validity>`: validity is not `verified`
-4. `unreceipted`: receipt is `none`
-5. `family_excluded:<family>`: one of its families is named by `--exclude-family` (first such, record order)
-6. `poisoned:bytes`: desc or body holds a byte other than `\n` and 0x20..0x7E;
-   `poisoned:fence`: desc or body contains the three bytes "```" (could escape its code block)
+2. `split:<split>`: split is not `corpus` (schema v1: `probe` records are never eligible)
+3. `validity:<validity>`: validity is not `verified` (schema v1: `unverified`)
+4. `family_excluded:<family>`: one of its families is named by `--exclude-family` (first such, record order)
+5. `poisoned:fence`: desc or body contains the three bytes "```" (could escape its code block)
 
-Records that pass all six form the index: `N` records, `T` = sum of their `dl`, `df(t)` = number of index
-records containing term `t`. Excluded records do not affect any score.
+Records that pass all five form the index: `N` records, `T` = sum of their `dl`, `df(t)` = number of index
+records containing term `t`. Excluded records do not affect any score. A record is eligible only through a
+MANIFEST whose sha256 is the pinned one (RECORD_SCHEMA.md section 5).
 
 ## 6. Scoring, ranking, selection
 
@@ -142,9 +135,11 @@ Order and selection by mode:
 ## 7. Fatal (exit 2, one stderr line `genret: FATAL <reason> <detail>`, no output)
 
 `usage`, `manifest_unreadable`, `manifest_malformed`, `manifest_digest_mismatch`, `record_missing` (listed
-file absent or unreadable), `stale_digest` (record bytes differ from the manifest digest), `invalid_record`,
-`duplicate_id`, `requirement_invalid`, `prompt_invalid`, `hidden_path`, `out_exists`, `write_failed`.
-A record is never replaced by another one: integrity failures stop the run.
+file absent or unreadable), `stale_digest` (record bytes differ from the manifest digest), `invalid_record`
+(recheck refused it, or genret cannot read a field it needs), `recheck_failed` (recheck missing, crashed, or
+its output does not match the records), `duplicate_id`, `requirement_invalid`, `prompt_invalid`,
+`hidden_path`, `out_exists`, `write_failed`. A record is never replaced by another one: integrity failures
+stop the run.
 
 ## 8. Outputs in `--out`
 
@@ -154,7 +149,7 @@ A record is never replaced by another one: integrity failures stop the run.
 | `excluded.tsv` | header `id\tdigest\tscore\treason`; every manifest record not selected, sorted by id (byte order); score `-` when not indexed |
 | `suffix.txt` | the exact bytes the runner appends in the variable suffix (may be empty) |
 | `query.txt` | the query terms (section 3) |
-| `receipt.txt` | `key=value` lines, fixed order: `contract=genret-cli-v1`, `mode`, `kind`, `k`, `cap_bytes`, `target_bytes` (`-` if unused), `exclude_family` (comma list or `-`), `manifest_sha256`, `requirement_sha256`, `prompt_sha256`, `query_sha256`, `records`, `indexed`, `total_tokens` (T), `selected`, `pad` (`none`, `-` or the id), `suffix_bytes`, `suffix_sha256`, `selected_sha256`, `excluded_sha256` |
+| `receipt.txt` | `key=value` lines, fixed order: `contract=genret-cli-v2`, `mode`, `kind`, `k`, `cap_bytes`, `target_bytes` (`-` if unused), `exclude_family` (comma list or `-`), `manifest_sha256`, `requirement_sha256`, `prompt_sha256`, `query_sha256`, `records`, `indexed`, `total_tokens` (T), `selected`, `pad` (`none`, `-` or the id), `suffix_bytes`, `suffix_sha256`, `selected_sha256`, `excluded_sha256` |
 | `SHA256SUMS` | `sha256sum` lines of the five files above, in that file order |
 
 Digests are lowercase hex sha256. No timestamps, paths or host data in any output.

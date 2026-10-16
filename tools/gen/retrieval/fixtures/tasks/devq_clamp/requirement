@@ -1,0 +1,5 @@
+# genret fixture query, synthetic
+kind task
+entry sat_diff
+params u32 u32
+ret u32

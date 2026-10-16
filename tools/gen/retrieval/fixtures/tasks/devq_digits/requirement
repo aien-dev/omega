@@ -1,0 +1,5 @@
+# genret fixture query, synthetic
+kind task
+entry digit_count
+params u64
+ret u8

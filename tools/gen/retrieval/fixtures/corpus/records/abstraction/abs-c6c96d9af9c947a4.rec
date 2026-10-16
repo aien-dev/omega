@@ -1,0 +1,32 @@
+gen-record 1
+id abs-c6c96d9af9c947a4
+kind abstraction
+split corpus
+family gs1-03088c393ad0a9dc gs1-694814cd4e1fcd67
+entry range_sum
+params u32 u32
+ret u64
+signature fn range_sum lo uint hi uint to ulong
+desc Helper: sum of lo..hi inclusive with a bounded while loop; 0 when lo > hi.
+receipt 5f2c5e5125466b548f8eec27f7eab29fd1b5275d891f7f4c45174b1d2c421d01
+validity verified
+ancestry fx_range_sum_a b499cd90d449c7dc7971e364247243bf188d078334e1c011d664428c9cae70a1
+ancestry fx_range_sum_b 75671618fc0582a79a70865338fe9b42f0f4459ad89d759668df15d90354ffeb
+source tools/gen/retrieval/fixtures/SOURCE 0004a6e1b859001383839e0ef39bed2c4550782dfb5b57c97c220a23a6a36a2b
+pre STATED+TESTED true
+post STATED+TESTED true
+example 1 4 -> 10
+limit Synthetic fixture helper; its claims were never tested.
+fingerprint c6c96d9af9c947a47f683adcc7761ea154217c3841401539ae3058b194f53681
+differs fx_range_sum_a 002dc9797709171f02fe7728feec075d976f26d76bf45d6262f2887dbe5aa368
+differs fx_range_sum_b f2c96f5c36cfd23607fa717082089f1bfcb487a54ea1a1b729207be110dde048
+body
+fn range_sum lo uint hi uint to ulong
+s = ulong 0
+i = lo
+while le i hi bound 100000
+s = add s ulong i
+i = add i 1
+end
+ret s
+end

@@ -1,0 +1,21 @@
+gen-record 1
+id raw-clamp_sub
+kind raw
+split corpus
+family gs1-1d8f2039a00f1d80
+entry clamp_sub
+params u32 u32
+ret u32
+signature fn clamp_sub a uint b uint to uint
+desc Returns a - b when a >= b, else 0; never traps.
+receipt 31d8c1a3924fd970e488c860e8495232874371fecfd0bb2e52728075f1200599
+validity verified
+ancestry clamp_sub 6d988e1af305146aea8643c2faf7ca6422ab82a4362c2bbbf7256457ac5e556e
+source tools/gen/retrieval/fixtures/SOURCE 0004a6e1b859001383839e0ef39bed2c4550782dfb5b57c97c220a23a6a36a2b
+body
+fn clamp_sub a uint b uint to uint
+if ge a b
+ret sub a b
+end
+ret 0
+end

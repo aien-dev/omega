@@ -1,0 +1,5 @@
+# genret fixture query, synthetic
+kind task
+entry dot_pair
+params i16 i16 i16 i16 i16 i16
+ret i64
