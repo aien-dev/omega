@@ -7,7 +7,8 @@
  *                (|got - ref| / max(sum |terms|, 1e-6) < 1e-5: the rule of gpu_matmul_api_test.c), first with uncached (host)
  *                buffers, then with GPU-cached device buffers (trainer rule R-8); bit-identical repeats, poison scan (every output
  *                written), negative control (mutant 4 differs), medians of chip time and whole-call time, TFLOPS and percent of
- *                the measured bf16 HMMA peak (--peak, default 120.64: evidence TGEMM-CUT1 peak.log, gpu_tc_peak_test)
+ *                the measured bf16 HMMA peak (--peak, default 117.26: evidence TGEMM-CUT1-5b10b824/peak.log, the gate window;
+ *                peak-window1.log of the same day read 120.64; probe gpu_tc_peak_test)
  * Verdict line last: "GPU_TGEMM: PASS|FAIL". */
 #include "omega_blackwell_codegen_tgemm.h"
 #include "omega_gpu_tgemm_api.h"
@@ -58,7 +59,7 @@ static float emu(const Prob *p, uint32_t i, uint32_t c, uint32_t kb0, uint32_t n
 static int host_only(void) {
     int fail = 0;
     static const struct { OmegaTgemmSpec s; int production; } specs[] = {
-        { { 2304, 768, 8, 2, 16, 32, 1, 0, 0, 0 }, 1 }, { { 768, 3072, 8, 2, 16, 32, 1, 0, 0, 0 }, 1 }, { { 50304, 768, 4, 2, 8, 32, 1, 0, 0, 0 }, 1 },
+        { { 2304, 768, 8, 2, 16, 32, 1, 0, 0, 0 }, 1 }, { { 768, 3072, 8, 2, 16, 32, 1, 0, 0, 0 }, 1 }, { { 768, 50304, 4, 2, 8, 32, 1, 0, 0, 0 }, 1 } /* lm_head forward: n % 256 != 0 picks rt 4 x 8 warps */, { { 50304, 768, 4, 2, 8, 32, 1, 0, 0, 0 }, 0 },
         { { 768, 2304, 4, 2, 16, 32, 2, 0, 0, 0 }, 0 }, { { 768, 768, 4, 2, 16, 32, 1, 0, 0, 0 }, 0 }, { { 768, 768, 4, 2, 8, 32, 1, 0, 0, 0 }, 0 }, { { 768, 768, 2, 2, 8, 32, 1, 0, 0, 0 }, 0 },
         { { 768, 768, 8, 2, 8, 32, 1, 0, 0, 0 }, 0 },
     };
@@ -184,9 +185,18 @@ static int chip_shape(uint32_t M, uint32_t N, uint32_t K, int cached, int reps, 
     uint8_t *poison = malloc(cb); memset(poison, 0xff, cb);
     float *y1 = malloc(cb), *y2 = malloc(cb);
     if (!rc) rc = omega_gpu_pf_upload(&cd, 0, poison, cb);
-    if (rc) { printf("shape %ux%ux%u setup: %s (%s)\n", M, N, K, omega_gpu_pf_rc_name(rc), omega_gpu_session_last_error()); return 1; }
+    if (rc) {
+        printf("shape %ux%ux%u setup: %s (%s)\n", M, N, K, omega_gpu_pf_rc_name(rc), omega_gpu_session_last_error());
+        free(poison); free(y1); free(y2); omega_gpu_pf_free(&ad); omega_gpu_pf_free(&bd); omega_gpu_pf_free(&cd); prob_free(&p);
+        return 1;
+    }
     OmegaTgemmCall call = { OMEGA_TGEMM_LAYOUT_NN, OMEGA_TGEMM_EPI_F32, M, N, K, ad.va, bd.va, cd.va };
-    OmegaTgemmSpec sp; if (omega_gpu_tgemm_spec(&call, &sp) != 0) { printf("shape %ux%ux%u: spec refused\n", M, N, K); return 1; }
+    OmegaTgemmSpec sp;
+    if (omega_gpu_tgemm_spec(&call, &sp) != 0) {
+        printf("shape %ux%ux%u: spec refused\n", M, N, K);
+        free(poison); free(y1); free(y2); omega_gpu_pf_free(&ad); omega_gpu_pf_free(&bd); omega_gpu_pf_free(&cd); prob_free(&p);
+        return 1;
+    }
     const char *kind = cached ? "cached" : "uncached";
     int fail = 0;
     if (reps > 64) reps = 64;
@@ -230,7 +240,7 @@ static int chip_shape(uint32_t M, uint32_t N, uint32_t K, int cached, int reps, 
 }
 
 int main(int argc, char **argv) {
-    int host = 1, sim = 1, chip = 0, reps = 7, cached_only = 0, uncached_only = 0; double peak = 120.64, gate = 0; const char *shape = NULL;
+    int host = 1, sim = 1, chip = 0, reps = 7, cached_only = 0, uncached_only = 0; double peak = 117.26, gate = 0; const char *shape = NULL;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--host-only")) sim = 0;
         else if (!strcmp(argv[i], "--sim")) host = 0;

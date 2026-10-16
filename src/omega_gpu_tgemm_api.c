@@ -8,7 +8,7 @@
 static struct { uint32_t rt, warps, aqn; int mutant; OmegaGpuMem tab; } g;
 void omega_gpu_tgemm_set_shape(uint32_t rt, uint32_t warps, uint32_t aqn) { g.rt = rt; g.warps = warps; g.aqn = aqn; }
 void omega_gpu_tgemm_test_set_mutant(int m) { g.mutant = m; }
-uint32_t omega_gpu_tgemm_bm(void) { return 16u * (g.rt ? g.rt : 8u); } /* the default rt 8 for warps 16; omega_gpu_tgemm_spec is authoritative */
+uint32_t omega_gpu_tgemm_bm(uint32_t n) { if (g.rt) return 16u * g.rt; const uint32_t w = g.warps ? g.warps : (n % 256u ? 8u : 16u); return w == 16u ? 128u : 64u; } /* mirrors omega_gpu_tgemm_spec */
 _Static_assert(sizeof(OmegaTgemmTile) == OMEGA_TGEMM_TILE_BYTES, "tile entry");
 
 int omega_gpu_tgemm_spec(const OmegaTgemmCall *c, OmegaTgemmSpec *out) {
@@ -20,6 +20,7 @@ int omega_gpu_tgemm_spec(const OmegaTgemmCall *c, OmegaTgemmSpec *out) {
     if (!omega_tgemm_spec_ok(&s)) return OMEGA_GPU_PF_BAD_ARGS;
     if (c->m == 0 || c->m % omega_tgemm_bm(&s) || !c->a_va || !c->b_va || !c->c_va) return OMEGA_GPU_PF_BAD_ARGS;
     if (c->m / omega_tgemm_bm(&s) > 65535u) return OMEGA_GPU_PF_TOO_LARGE;
+    if ((uint64_t)c->m * c->n >= (1ull << 32)) return OMEGA_GPU_PF_TOO_LARGE; /* the kernel forms row * n + col in 32 bits before the wide scale (review of PR 487) */
     *out = s;
     return OMEGA_GPU_PF_OK;
 }
@@ -63,11 +64,12 @@ int omega_gpu_tgemm(const OmegaTgemmCall *c, uint64_t *ns) {
     if (rc != OMEGA_GPU_PF_OK) return rc;
     const uint32_t nt = c->m / omega_tgemm_bm(&s);
     const size_t need = ((size_t)nt * OMEGA_TGEMM_TILE_BYTES + 4095u) & ~(size_t)4095u;
-    if (g.tab.size < need) { omega_gpu_pf_free(&g.tab); rc = omega_gpu_pf_alloc_host(need, &g.tab); if (rc != OMEGA_GPU_PF_OK) return rc; }
-    if (omega_gpu_tgemm_tiles(c, g.tab.cpu, nt) != nt) return OMEGA_GPU_PF_BAD_ARGS;
     OmegaGpuLaunch L; uint32_t args[OMEGA_TGEMM_ARGS_WORDS];
+    /* the module table is shared state: (re)built only under the session lock, which also serializes the launch that reads it */
     omega_gpu_session_lock();
     rc = omega_gpu_pf_open_locked();
+    if (rc == OMEGA_GPU_PF_OK && g.tab.size < need) { omega_gpu_session_free(&g.tab); if (omega_gpu_session_alloc(need, &g.tab) != 0) rc = OMEGA_GPU_PF_CHIP_FAIL; }
+    if (rc == OMEGA_GPU_PF_OK && omega_gpu_tgemm_tiles(c, g.tab.cpu, nt) != nt) rc = OMEGA_GPU_PF_BAD_ARGS;
     if (rc == OMEGA_GPU_PF_OK && omega_gpu_session_sync_to_gpu(&g.tab) != 0) rc = OMEGA_GPU_PF_CHIP_FAIL;
     if (rc == OMEGA_GPU_PF_OK) rc = omega_gpu_tgemm_fill_launch_locked(c, g.tab.va, nt, &L, args);
     if (rc == OMEGA_GPU_PF_OK) {
