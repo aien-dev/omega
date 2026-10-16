@@ -9,8 +9,10 @@
 #          launch floor (gpu_launch_cost_test), word table 128256 x 2560 on the bf16 and FP8 GEMVs (each with its
 #          mutants), decode attention at 20 / 5 / 128 (a recorded refusal is the expected outcome)
 #   red    negative controls: gpu_tern_test with mutants 1, 3 and 2 forced must FAIL
-#   main   gpu_tern_test: correctness battery, mutants caught, cold bandwidth and in-list launch floor
-#   sweep  informational, one variable per run: row-major layout rows 2 and 4, block rows 2, warps 4 and 16
+#   main   gpu_tern_test: correctness battery, mutants caught, cold bandwidth and in-list launch floor (gate judged on
+#          kernel time, the in-list launch floor taken out; both figures in the receipt)
+#   sweep  informational, one variable per run against the default (row-major, rows 1, 8 warps, 160 CTAs): row-major
+#          rows 2, block layout rows 4, warps 4 and 16, CTAs 96 and 256
 # Speeds are judged only against the physical limit: 273 GB/s spec, 237.2 GB/s practical.
 set -u
 PHASE="${1:?phase}"; EVID="${2:?evidence dir}"; PHYS="${3:-$HOME/workspace/physics-own30b-k}"
@@ -45,7 +47,7 @@ main)
   $T --reps 5 --out "$EVID/receipt-main.json" > "$EVID/main.log" 2>&1; r=$?; echo "main exit $r" | tee -a "$EVID/main.log"; [ $r = 0 ] || fail=1
   ;;
 sweep)
-  for v in "--layout 0 --rows 2:rm-r2" "--layout 0 --rows 4:rm-r4" "--layout 1 --block-rows 2:blk-r2" "--warps 4:w4" "--warps 16:w16" "--ctas 48:c48" "--ctas 192:c192"; do
+  for v in "--layout 0 --rows 2:rm-r2" "--layout 1 --block-rows 4:blk-r4" "--warps 4:w4" "--warps 16:w16" "--ctas 96:c96" "--ctas 256:c256"; do
     a="${v%%:*}"; n="${v##*:}"
     $T --bw-only --reps 3 $a --out "$EVID/receipt-sweep-$n.json" > "$EVID/sweep-$n.log" 2>&1; echo "$a exit $? (informational)" | tee -a "$EVID/sweep-$n.log"
   done
