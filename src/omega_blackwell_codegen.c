@@ -1025,6 +1025,32 @@ int omega_blackwell_verify_codegen_fixtures_bfly_f2fp(void) {
     }
     return 0;
 }
+
+/* Training R5 part 2: f32 global atomic add. Field map from Mesa NAK sm70_encode.rs (a08a0b9, sm >= 90 float ATOMG:
+ * opcode 0x9a3, op 87..91 Add = 0, type 73..77 F32 = 9 which is .FTZ.RN, order 77..81 Strong System), then every word
+ * below decoded offline with nvdisasm -b SM121 (CUDA 13.0) to the text shown. Unlike the integer form (0x9a8), the
+ * float form needs bit 90 (w2 bit 26) for desc[UR][R.64]; without it the same word decodes as [R.64+UR].
+ *   0x80000005020479a3 0x00321e000c1f5306  ATOMG.E.ADD.F32.FTZ.RN.STRONG.SYS PT, R4, desc[UR6][R2.64], R5 ;
+ *   0x800000070a0979a3 0x00321e000c1f5304  ATOMG.E.ADD.F32.FTZ.RN.STRONG.SYS PT, R9, desc[UR4][R10.64], R7 ;
+ *   0x8000000502ff79a3 0x00321e000c1f5306  ATOMG.E.ADD.F32.FTZ.RN.STRONG.SYS PT, RZ, desc[UR6][R2.64], R5 ;
+ * Chip proof of the arithmetic: tests/gpu_atomf32_probe_test.c. 0 = all good. */
+int omega_blackwell_verify_codegen_fixtures_atomf32(void) {
+    static const struct { int d, a, b, u; uint32_t w0, w1, w2; } fx[] = {
+        { 4, 2, 5, 6, 0x020479a3U, 0x80000005U, 0x0c1f5306U },
+        { 9, 10, 7, 4, 0x0a0979a3U, 0x80000007U, 0x0c1f5304U },
+        { 255, 2, 5, 6, 0x02ff79a3U, 0x80000005U, 0x0c1f5306U },
+    };
+    uint32_t w[4];
+    for (int i = 0; i < (int)(sizeof fx / sizeof fx[0]); i++) {
+        BlackwellIRInsn in;
+        memset(&in, 0, sizeof in);
+        in.op = BW_IR_ATOMG_ADD_F32_STRONG_SYS; in.dst_vreg = fx[i].d; in.src1_vreg = fx[i].a; in.src2_vreg = fx[i].b;
+        in.src3_vreg = -1; in.ureg = fx[i].u;
+        if (omega_blackwell_encode_one(&in, w) != 0) return -(2 * i + 1);
+        if (w[0] != fx[i].w0 || w[1] != fx[i].w1 || w[2] != fx[i].w2 || w[3] != 0x00321e00U) return -(2 * i + 2);
+    }
+    return 0;
+}
 /* FB-1 cut 4: word-level fixtures for the four additive ops (checked against the
  * nvdisasm decodes recorded in docs/numeric/FB1_CUT4_ELEMENTWISE.md). 0 = all good. */
 int omega_blackwell_verify_codegen_fixtures_fb1cut4(void) {
