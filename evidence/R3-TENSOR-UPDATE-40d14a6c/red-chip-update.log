@@ -1,0 +1,8 @@
+FAIL: update 16x768x2304: 36864 of 36864 outputs differ from a fresh upload of the same values
+FAIL: update 16x768x2304: 36860 outputs off the double reference (worst 0.31184)
+FAIL update 16x768x2304 vs_fresh=36864 e2e=0.31184 bad=36860 back=0 update_f32_ms=0.00 update_bf16_ms=0.00 upload_f32_free_ms=10.33
+FAIL: update 16x768x50304: 804864 of 804864 outputs differ from a fresh upload of the same values
+FAIL: update 16x768x50304: 804768 outputs off the double reference (worst 0.336122)
+FAIL update 16x768x50304 vs_fresh=804864 e2e=0.336122 bad=804768 back=0 update_f32_ms=0.00 update_bf16_ms=0.00 upload_f32_free_ms=232.72
+FAIL: 24 checks, 4 failed
+exit=1
