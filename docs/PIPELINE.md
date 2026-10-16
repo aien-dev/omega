@@ -45,3 +45,8 @@ records the operator run and the checks pass.
 - Spark state: `aien-local-ci status`, journal `~/.local/state/aien-local-ci/journal.jsonl`,
   pipeline journal `~/.local/state/aien-local-ci/pipeline.jsonl`.
 - Published bundles: <https://github.com/aien-dev/aien-receipts/tree/main/omega>.
+
+## Required checks on main
+
+Since 2026-10-16 branch protection on `main` requires `AIEN Verification` and `evidence-immutable` (still hosted; `crumb`, `reservoir` and `omega-zig-cc` also stay hosted but are not required). The hosted
+jobs that used to be required run only on `workflow_dispatch`.
