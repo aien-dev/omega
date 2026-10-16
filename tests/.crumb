@@ -229,7 +229,7 @@
           "purpose": "Directory tests/program. Purpose not yet described by a human."
         },
         {
-          "digest": "f6d89b21e8eee52d45a45d38627562b70d91a3ff8153b5a3656257f1ae4af7e4",
+          "digest": "ba0c09f67d12b5d7de906129bdbe2f6e0a228e1a34236ecc4b779c523cb2061e",
           "last_commit": "6fdc4c33",
           "name": "r16_inventory",
           "purpose": "Directory tests/r16_inventory. Purpose not yet described by a human."
@@ -295,14 +295,14 @@
           "purpose": "Directory tests/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:0abd5cb2ec210e5d7c53afdc9563f3b4ceecc5a58a00ed4cb11f8c266ee6f284",
-      "compiled_at": "2026-10-16T19:08:36Z",
+      "children_root": "sha256:ddc3618190458bc5073e3bee67ffccc68a2ee9f065f2cb0d86545386a29fddf8",
+      "compiled_at": "2026-10-16T20:31:51Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:330a167f7b7e86b2f503911a9853d900987c833862d23a15e60e33ccf3b2754e",
+      "digest": "sha256:392d42cef45d31a5a27b58fa82d1ef89594ba9db17f3bcb973777119b2f97986",
       "evidence_files": 16,
       "evidence_root": "sha256:96d08097822ad95f4e562c19e0ba5df5a035774c48632f1832912c40a27bd27a",
       "files": 1270,
-      "generated_at_commit": "b6f7a7f3dd11a1eb1c98591a926e3e565c5981f7",
+      "generated_at_commit": "05d0d8e9ab225dba82698bf89128072f3a6f3a7a",
       "source_tree": "sha256:1e2a55983734341d926e907067cdc9d5ffc01739de42f7337941ed107280c0c2"
     },
     "owner_lane": "",
