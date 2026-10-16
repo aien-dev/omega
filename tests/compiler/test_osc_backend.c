@@ -26,6 +26,8 @@
 #include "osc_native.h"
 #include "osc_rt.h"
 
+#include "aarch64_fp_golden.h" /* OSC-4 Slice A: GNU as 2.42 reference encodings (see its provenance line) */
+
 #define NVEC 2000
 
 static unsigned long n_checks, n_fail;
@@ -160,6 +162,17 @@ static const uint64_t EDGE[] = {
 #define NEDGE (sizeof EDGE / sizeof EDGE[0])
 
 static uint64_t gen_val(OscScalar t) {
+    if (t == OSC_T_F32 || t == OSC_T_F64) { /* OSC-4: float bit patterns, edges included */
+        static const uint64_t f32e[] = {0, 0x80000000u, 0x3f800000u, 0xbf800000u, 0x7f800000u, 0xff800000u, 0x7fc00000u, 0x7f800001u,
+                                        0x7fc00123u, 0x00000001u, 0x007fffffu, 0x7f7fffffu, 0x4b800001u, 0x4f000000u, 0xcf000000u, 0x5f000000u};
+        static const uint64_t f64e[] = {0, 0x8000000000000000ull, 0x3ff0000000000000ull, 0xbff0000000000000ull, 0x7ff0000000000000ull,
+                                        0xfff0000000000000ull, 0x7ff8000000000000ull, 0x7ff0000000000001ull, 0x7ff80000000000abull, 1,
+                                        0x000fffffffffffffull, 0x7fefffffffffffffull, 0x4340000000000001ull, 0x43e0000000000000ull,
+                                        0xc3e0000000000000ull, 0x43f0000000000000ull};
+        uint64_t r = sm();
+        if (r % 2) return t == OSC_T_F64 ? f64e[(r >> 8) % 16] : f32e[(r >> 8) % 16];
+        return canon(t, sm());
+    }
     uint64_t r = sm(), x;
     switch (r % 5) {
     case 0: case 1: x = EDGE[sm() % NEDGE]; break;
@@ -346,6 +359,128 @@ static void gen_ops(void) {
 }
 
 /* arrays: alloc / store / load / release, loops, bounds traps */
+/* ---- OSC-4 Slice A: float units for the differential run ------------------- */
+static int k_fbin(B *b, int sub, int x, int y) {
+    int d = V(b, b->f->vtype[x]); OscInsn i = I0(OSC_I_FBIN); i.sub = (uint8_t)sub; i.dst = (int16_t)d; i.a = (int16_t)x; i.b = (int16_t)y; put(b, i); return d;
+}
+static int k_fun(B *b, int sub, int x) {
+    int d = V(b, b->f->vtype[x]); OscInsn i = I0(OSC_I_FUN); i.sub = (uint8_t)sub; i.dst = (int16_t)d; i.a = (int16_t)x; put(b, i); return d;
+}
+static int k_fcmp(B *b, int cc, int x, int y) {
+    int d = V(b, TS(OSC_T_BOOL)); OscInsn i = I0(OSC_I_FCMP); i.sub = (uint8_t)cc; i.dst = (int16_t)d; i.a = (int16_t)x; i.b = (int16_t)y; put(b, i); return d;
+}
+/* FCVT / ITOF / FTOI / FBITS: dst of type `to`, one source */
+static int k_f1(B *b, OscOp op, int sub, OscScalar to, int x) {
+    int d = V(b, TS(to)); OscInsn i = I0(op); i.sub = (uint8_t)sub; i.dst = (int16_t)d; i.a = (int16_t)x; put(b, i); return d;
+}
+static const OscScalar FLTS[2] = {OSC_T_F32, OSC_T_F64};
+static const char *fbname(int s) {
+    static const char *n[] = {"?", "fadd", "fsub", "fmul", "fdiv", "fmin", "fmax"};
+    return n[s];
+}
+static void gen_float_ops(void) {
+    Pack p = {0};
+    B b;
+    char nm[64];
+    for (int ti = 0; ti < 2; ti++) {
+        OscScalar t = FLTS[ti];
+        for (int sub = OSC_FB_ADD; sub <= OSC_FB_MAX; sub++) {
+            OscType pt[2] = {TS(t), TS(t)};
+            snprintf(nm, sizeof nm, "%s_%s", fbname(sub), osc_scalar_name(t));
+            fn(&b, pack_get(&p, "fbin"), nm, pt[0], 2, pt);
+            k_ret(&b, k_fbin(&b, sub, 0, 1));
+        }
+        /* a * b + c: two rounds, never fused */
+        {
+            OscType pt[3] = {TS(t), TS(t), TS(t)};
+            snprintf(nm, sizeof nm, "muladd_%s", osc_scalar_name(t));
+            fn(&b, pack_get(&p, "fbin"), nm, pt[0], 3, pt);
+            k_ret(&b, k_fbin(&b, OSC_FB_ADD, k_fbin(&b, OSC_FB_MUL, 0, 1), 2));
+        }
+        for (int sub = OSC_FU_NEG; sub <= OSC_FU_SQRT; sub++) {
+            OscType pt[1] = {TS(t)};
+            snprintf(nm, sizeof nm, "fun%d_%s", sub, osc_scalar_name(t));
+            fn(&b, pack_get(&p, "fun"), nm, pt[0], 1, pt);
+            k_ret(&b, k_fun(&b, sub, 0));
+        }
+        for (int cc = OSC_C_EQ; cc <= OSC_C_GE; cc++) {
+            OscType pt[2] = {TS(t), TS(t)};
+            snprintf(nm, sizeof nm, "fcmp%d_%s", cc, osc_scalar_name(t));
+            fn(&b, pack_get(&p, "fcmp"), nm, TS(OSC_T_BOOL), 2, pt);
+            k_ret(&b, k_fcmp(&b, cc, 0, 1));
+        }
+        {
+            OscScalar o = FLTS[1 - ti];
+            OscType pt[1] = {TS(t)};
+            snprintf(nm, sizeof nm, "fcvt_%s_%s", osc_scalar_name(t), osc_scalar_name(o));
+            fn(&b, pack_get(&p, "fcvt"), nm, TS(o), 1, pt);
+            k_ret(&b, k_f1(&b, OSC_I_FCVT, 0, o, 0));
+        }
+        for (int ii = 0; ii < 8; ii++) {
+            OscScalar it = INTS[ii];
+            int sg = osc_scalar_signed(it) ? 1 : 2;
+            OscType pt[1] = {TS(it)};
+            snprintf(nm, sizeof nm, "itof_%s_%s", osc_scalar_name(it), osc_scalar_name(t));
+            fn(&b, pack_get(&p, "itof"), nm, TS(t), 1, pt);
+            k_ret(&b, k_f1(&b, OSC_I_ITOF, sg, t, 0));
+            OscType pf[1] = {TS(t)};
+            snprintf(nm, sizeof nm, "ftoi_%s_%s", osc_scalar_name(t), osc_scalar_name(it));
+            fn(&b, pack_get(&p, "ftoi"), nm, TS(it), 1, pf);
+            k_ret(&b, k_f1(&b, OSC_I_FTOI, sg, it, 0));
+        }
+        /* bit casts both ways, to the unsigned and the signed integer of the same width */
+        for (int sg = 0; sg < 2; sg++) {
+            OscScalar it = ti ? (sg ? OSC_T_I64 : OSC_T_U64) : (sg ? OSC_T_I32 : OSC_T_U32);
+            OscType pf[1] = {TS(t)}, pi[1] = {TS(it)};
+            snprintf(nm, sizeof nm, "fbits_%s_%s", osc_scalar_name(t), osc_scalar_name(it));
+            fn(&b, pack_get(&p, "fbits"), nm, TS(it), 1, pf);
+            k_ret(&b, k_f1(&b, OSC_I_FBITS, 0, it, 0));
+            snprintf(nm, sizeof nm, "fbits_%s_%s", osc_scalar_name(it), osc_scalar_name(t));
+            fn(&b, pack_get(&p, "fbits"), nm, TS(t), 1, pi);
+            k_ret(&b, k_f1(&b, OSC_I_FBITS, 0, t, 0));
+        }
+        /* constants: select a float constant by a u8 (MOVZ/MOVK materialisation of float bits) */
+        {
+            static const uint64_t c32[] = {0, 0x80000000u, 0x3f800000u, 0x7fc00000u, 0x7f800001u, 0x3dcccccdu, 0xff800000u, 0x00000001u};
+            static const uint64_t c64[] = {0, 0x8000000000000000ull, 0x3ff0000000000000ull, 0x7ff8000000000000ull,
+                                           0x7ff0000000000001ull, 0x3fb999999999999aull, 0xfff0000000000000ull, 1};
+            OscType pt[1] = {TS(OSC_T_U8)};
+            snprintf(nm, sizeof nm, "fconst_%s", osc_scalar_name(t));
+            fn(&b, pack_get(&p, "fconst"), nm, TS(t), 1, pt);
+            int res = V(&b, TS(t));
+            k_mov(&b, res, k_const(&b, TS(t), ti ? c64[0] : c32[0]));
+            int blocks[8], exit_ = -1;
+            for (int i = 0; i < 8; i++) blocks[i] = blk(&b);
+            exit_ = blk(&b);
+            k_br(&b, blocks[0]);
+            for (int i = 0; i < 8; i++) {
+                at(&b, blocks[i]);
+                int hit = blk(&b);
+                int c = k_cmp(&b, OSC_C_EQ, 0, k_const(&b, TS(OSC_T_U8), (uint64_t)i));
+                k_cbr(&b, c, hit, i + 1 < 8 ? blocks[i + 1] : exit_);
+                at(&b, hit);
+                k_mov(&b, res, k_const(&b, TS(t), ti ? c64[i] : c32[i]));
+                k_br(&b, exit_);
+            }
+            at(&b, exit_);
+            k_ret(&b, k_fbin(&b, OSC_FB_ADD, res, res));
+        }
+        /* arrays of floats: cells hold the bits; LOAD/STORE unchanged */
+        {
+            OscType pt[2] = {TS(t), TS(OSC_T_U8)};
+            snprintf(nm, sizeof nm, "farray_%s", osc_scalar_name(t));
+            fn(&b, pack_get(&p, "farray"), nm, TS(t), 2, pt);
+            int arr = k_alloc(&b, t, 4, 0);
+            int i1 = k_const(&b, TS(OSC_T_U8), 1);
+            k_store(&b, arr, i1, k_fbin(&b, OSC_FB_MUL, 0, 0));
+            int v = k_fbin(&b, OSC_FB_SUB, k_load(&b, arr, i1), k_load(&b, arr, 1)); /* index 1 may trap BOUNDS */
+            k_release(&b, arr);
+            k_ret(&b, v);
+        }
+    }
+    pack_flush(&p);
+}
+
 static void gen_arrays(void) {
     OscUnit *u = unit_new();
     B b;
@@ -836,6 +971,140 @@ static void expect_invalid(OscUnit *u, const char *what) {
     check(osc_ir_digest(u, dg) != 0 && osc_ir_encode(u, NULL, 0, &len) != 0, "digest/encode accepted: %s", what);
 }
 
+/* ---- (d2) OSC-4 Slice A: scalar FP encoder goldens ------------------------
+ * Reference words come from tests/compiler/aarch64_fp_golden.h (GNU as 2.42
+ * samples, see its provenance line) and from the table in
+ * docs/osc/OSC-4-DESIGN.md 1.6. Every new op: one golden word, one decoder
+ * round trip (enc_expect) and a field-flip mutant sweep. */
+static unsigned long n_fp_goldens, n_fp_mutants;
+static void fp_golden_bad(const char *asm_text, uint32_t want, uint32_t got) {
+    check(0, "golden header self-test: %s want 0x%08x got 0x%08x", asm_text, want, got);
+}
+/* every single-bit flip of a golden word either fails to decode or decodes to a
+ * different instruction that re-encodes to exactly the flipped word (mirror) */
+static void fp_mutants(OscA64Insn i, uint32_t w) {
+    for (int b = 0; b < 32; b++) {
+        uint32_t m = w ^ (1u << b), re = 0;
+        OscA64Insn d;
+        if (osc_a64_decode(m, &d) != 0) continue;
+        check(!osc_a64_equal(&d, &i), "mutant bit %d of 0x%08x decodes to the same fields", b, w);
+        check(osc_a64_reencode(&d, &re) == 0 && re == m, "mutant bit %d of 0x%08x: decode/re-encode 0x%08x", b, w, re);
+        n_fp_mutants++;
+    }
+}
+static void fp_expect(OscA64Insn i, uint32_t header_word, uint32_t design_word, const char *what) {
+    check(header_word == design_word, "%s: golden header 0x%08x disagrees with design table 0x%08x", what, header_word, design_word);
+    enc_expect(i, header_word, what);
+    fp_mutants(i, header_word);
+    n_fp_goldens++;
+}
+
+static void test_fp_encoder(void) {
+    const int SP = OSC_A64_SP, ZR = OSC_A64_XZR, S = 0, D = 1;
+    unsigned nsamples = 0;
+    unsigned bad = a64_golden_selftest(&nsamples, fp_golden_bad);
+    check(bad == 0 && nsamples >= 1365, "golden header self-test: %u mismatches over %u samples", bad, nsamples);
+    /* the 25 ops of design table 1.6, D form where the table shows one */
+    fp_expect(osc_a64_f2(OSC_A64_FMOV_RR, 0, 1, D), a64_fmov_d(0, 1), 0x1E604020u, "fmov d0,d1");
+    fp_expect(osc_a64_f2(OSC_A64_FMOV_XD, 0, 1, 0), a64_fmov_d_from_x(0, 1), 0x9E670020u, "fmov d0,x1");
+    fp_expect(osc_a64_f2(OSC_A64_FMOV_DX, 0, 1, 0), a64_fmov_d_to_x(0, 1), 0x9E660020u, "fmov x0,d1");
+    fp_expect(osc_a64_f2(OSC_A64_FMOV_WS, 0, 1, 0), a64_fmov_s_from_w(0, 1), 0x1E270020u, "fmov s0,w1");
+    fp_expect(osc_a64_f2(OSC_A64_FMOV_SW, 0, 1, 0), a64_fmov_s_to_w(0, 1), 0x1E260020u, "fmov w0,s1");
+    fp_expect(osc_a64_f3(OSC_A64_FADD, 0, 1, 2, D), a64_fadd_d(0, 1, 2), 0x1E622820u, "fadd d0,d1,d2");
+    fp_expect(osc_a64_f3(OSC_A64_FSUB, 0, 1, 2, D), a64_fsub_d(0, 1, 2), 0x1E623820u, "fsub d0,d1,d2");
+    fp_expect(osc_a64_f3(OSC_A64_FMUL, 0, 1, 2, D), a64_fmul_d(0, 1, 2), 0x1E620820u, "fmul d0,d1,d2");
+    fp_expect(osc_a64_f3(OSC_A64_FDIV, 0, 1, 2, D), a64_fdiv_d(0, 1, 2), 0x1E621820u, "fdiv d0,d1,d2");
+    fp_expect(osc_a64_f3(OSC_A64_FMAXNM, 0, 1, 2, D), a64_fmaxnm_d(0, 1, 2), 0x1E626820u, "fmaxnm d0,d1,d2");
+    fp_expect(osc_a64_f3(OSC_A64_FMINNM, 0, 1, 2, D), a64_fminnm_d(0, 1, 2), 0x1E627820u, "fminnm d0,d1,d2");
+    fp_expect(osc_a64_f2(OSC_A64_FSQRT, 0, 1, D), a64_fsqrt_d(0, 1), 0x1E61C020u, "fsqrt d0,d1");
+    fp_expect(osc_a64_f2(OSC_A64_FNEG, 0, 1, D), a64_fneg_d(0, 1), 0x1E614020u, "fneg d0,d1");
+    fp_expect(osc_a64_f2(OSC_A64_FABS, 0, 1, D), a64_fabs_d(0, 1), 0x1E60C020u, "fabs d0,d1");
+    fp_expect(osc_a64_fcmp(0, 1, D), a64_fcmp_d(0, 1), 0x1E612000u, "fcmp d0,d1");
+    fp_expect(osc_a64_f2(OSC_A64_FCVT_SD, 0, 1, 0), a64_fcvt_d_to_s(0, 1), 0x1E624020u, "fcvt s0,d1");
+    fp_expect(osc_a64_f2(OSC_A64_FCVT_DS, 0, 1, 0), a64_fcvt_s_to_d(0, 1), 0x1E22C020u, "fcvt d0,s1");
+    fp_expect(osc_a64_f2(OSC_A64_SCVTF_X, 0, 1, D), a64_scvtf_d_from_x(0, 1), 0x9E620020u, "scvtf d0,x1");
+    fp_expect(osc_a64_f2(OSC_A64_UCVTF_X, 0, 1, D), a64_ucvtf_d_from_x(0, 1), 0x9E630020u, "ucvtf d0,x1");
+    fp_expect(osc_a64_f2(OSC_A64_FCVTZS_X, 0, 1, D), a64_fcvtzs_d_to_x(0, 1), 0x9E780020u, "fcvtzs x0,d1");
+    fp_expect(osc_a64_f2(OSC_A64_FCVTZU_X, 0, 1, D), a64_fcvtzu_d_to_x(0, 1), 0x9E790020u, "fcvtzu x0,d1");
+    fp_expect(osc_a64_fmem(OSC_A64_LDR_F_UOFF, 0, SP, 8, D), a64_ldr_d_uimm(0, 31, 1), 0xFD4007E0u, "ldr d0,[sp,#8]");
+    fp_expect(osc_a64_fmem(OSC_A64_STR_F_UOFF, 0, SP, 8, D), a64_str_d_uimm(0, 31, 1), 0xFD0007E0u, "str d0,[sp,#8]");
+    fp_expect(osc_a64_fmem_reg(OSC_A64_LDR_F_REG, 0, 1, 2, D), a64_ldr_d_reg_lsl(0, 1, 2), 0xFC627820u, "ldr d0,[x1,x2,lsl#3]");
+    fp_expect(osc_a64_fmem_reg(OSC_A64_STR_F_REG, 0, 1, 2, D), a64_str_d_reg_lsl(0, 1, 2), 0xFC227820u, "str d0,[x1,x2,lsl#3]");
+    check(n_fp_goldens == 25, "expected 25 FP goldens, ran %lu", n_fp_goldens);
+    /* S forms and the registers the code generator actually uses (d16..d20, x9..x13) */
+    enc_expect(osc_a64_f2(OSC_A64_FMOV_RR, 16, 17, S), a64_fmov_s(16, 17), "fmov s16,s17");
+    enc_expect(osc_a64_f3(OSC_A64_FADD, 16, 16, 17, S), a64_fadd_s(16, 16, 17), "fadd s16,s16,s17");
+    enc_expect(osc_a64_f3(OSC_A64_FSUB, 16, 16, 17, S), a64_fsub_s(16, 16, 17), "fsub s16,s16,s17");
+    enc_expect(osc_a64_f3(OSC_A64_FMUL, 18, 16, 17, S), a64_fmul_s(18, 16, 17), "fmul s18,s16,s17");
+    enc_expect(osc_a64_f3(OSC_A64_FDIV, 20, 19, 18, S), a64_fdiv_s(20, 19, 18), "fdiv s20,s19,s18");
+    enc_expect(osc_a64_f3(OSC_A64_FMAXNM, 16, 16, 17, S), a64_fmaxnm_s(16, 16, 17), "fmaxnm s16,s16,s17");
+    enc_expect(osc_a64_f3(OSC_A64_FMINNM, 16, 16, 17, S), a64_fminnm_s(16, 16, 17), "fminnm s16,s16,s17");
+    enc_expect(osc_a64_f2(OSC_A64_FSQRT, 16, 16, S), a64_fsqrt_s(16, 16), "fsqrt s16,s16");
+    enc_expect(osc_a64_f2(OSC_A64_FNEG, 16, 16, S), a64_fneg_s(16, 16), "fneg s16,s16");
+    enc_expect(osc_a64_f2(OSC_A64_FABS, 16, 16, S), a64_fabs_s(16, 16), "fabs s16,s16");
+    enc_expect(osc_a64_fcmp(16, 17, S), a64_fcmp_s(16, 17), "fcmp s16,s17");
+    enc_expect(osc_a64_f2(OSC_A64_SCVTF_X, 16, 9, S), a64_scvtf_s_from_x(16, 9), "scvtf s16,x9");
+    enc_expect(osc_a64_f2(OSC_A64_UCVTF_X, 16, 9, S), a64_ucvtf_s_from_x(16, 9), "ucvtf s16,x9");
+    enc_expect(osc_a64_f2(OSC_A64_FCVTZS_X, 9, 16, S), a64_fcvtzs_s_to_x(9, 16), "fcvtzs x9,s16");
+    enc_expect(osc_a64_f2(OSC_A64_FCVTZU_X, 9, 16, S), a64_fcvtzu_s_to_x(9, 16), "fcvtzu x9,s16");
+    enc_expect(osc_a64_f2(OSC_A64_FMOV_XD, 16, 9, 0), a64_fmov_d_from_x(16, 9), "fmov d16,x9");
+    enc_expect(osc_a64_f2(OSC_A64_FMOV_XD, 16, ZR, 0), a64_fmov_d_from_x(16, 31), "fmov d16,xzr");
+    enc_expect(osc_a64_f2(OSC_A64_FMOV_DX, 9, 16, 0), a64_fmov_d_to_x(9, 16), "fmov x9,d16");
+    enc_expect(osc_a64_f2(OSC_A64_FMOV_WS, 16, 9, 0), a64_fmov_s_from_w(16, 9), "fmov s16,w9");
+    enc_expect(osc_a64_f2(OSC_A64_FMOV_WS, 16, ZR, 0), a64_fmov_s_from_w(16, 31), "fmov s16,wzr");
+    enc_expect(osc_a64_f2(OSC_A64_FMOV_SW, 9, 16, 0), a64_fmov_s_to_w(9, 16), "fmov w9,s16");
+    enc_expect(osc_a64_f2(OSC_A64_FCVT_SD, 16, 17, 0), a64_fcvt_d_to_s(16, 17), "fcvt s16,d17");
+    enc_expect(osc_a64_f2(OSC_A64_FCVT_DS, 16, 17, 0), a64_fcvt_s_to_d(16, 17), "fcvt d16,s17");
+    enc_expect(osc_a64_fmem(OSC_A64_LDR_F_UOFF, 16, SP, 4, S), a64_ldr_s_uimm(16, 31, 1), "ldr s16,[sp,#4]");
+    enc_expect(osc_a64_fmem(OSC_A64_LDR_F_UOFF, 16, SP, 16380, S), a64_ldr_s_uimm(16, 31, 4095), "ldr s16,[sp,#16380]");
+    enc_expect(osc_a64_fmem(OSC_A64_STR_F_UOFF, 16, SP, 0, S), a64_str_s_uimm(16, 31, 0), "str s16,[sp]");
+    enc_expect(osc_a64_fmem(OSC_A64_LDR_F_UOFF, 16, SP, 32760, D), a64_ldr_d_uimm(16, 31, 4095), "ldr d16,[sp,#32760]");
+    enc_expect(osc_a64_fmem(OSC_A64_STR_F_UOFF, 20, 9, 0, D), a64_str_d_uimm(20, 9, 0), "str d20,[x9]");
+    enc_expect(osc_a64_fmem_reg(OSC_A64_LDR_F_REG, 16, 9, 10, S), a64_ldr_s_reg_lsl(16, 9, 10), "ldr s16,[x9,x10,lsl#2]");
+    enc_expect(osc_a64_fmem_reg(OSC_A64_STR_F_REG, 16, 9, 10, S), a64_str_s_reg_lsl(16, 9, 10), "str s16,[x9,x10,lsl#2]");
+    enc_expect(osc_a64_fmem_reg(OSC_A64_LDR_F_REG, 16, SP, 10, D), a64_ldr_d_reg_lsl(16, 31, 10), "ldr d16,[sp,x10,lsl#3]");
+    enc_expect(osc_a64_fmem_reg(OSC_A64_STR_F_REG, 31, 9, ZR, D), a64_str_d_reg_lsl(31, 9, 31), "str d31,[x9,xzr,lsl#3]");
+    /* refusals */
+    enc_refuse(osc_a64_f3(OSC_A64_FADD, 0, 1, 2, 2), "fadd type 2");
+    enc_refuse(osc_a64_f3(OSC_A64_FADD, 0, 1, 2, -1), "fadd type -1");
+    enc_refuse(osc_a64_f3(OSC_A64_FADD, 32, 1, 2, D), "fadd vd=32");
+    enc_refuse(osc_a64_f3(OSC_A64_FADD, 0, SP, 2, D), "fadd vn=SP");
+    enc_refuse(osc_a64_f3(OSC_A64_FADD, 0, 1, ZR, D), "fadd vm=XZR");
+    enc_refuse(osc_a64_f2(OSC_A64_FMOV_XD, 0, 1, D), "fmov d0,x1 with type flag");
+    enc_refuse(osc_a64_f2(OSC_A64_FMOV_XD, 0, SP, 0), "fmov d0,sp");
+    enc_refuse(osc_a64_f2(OSC_A64_FMOV_DX, SP, 1, 0), "fmov sp,d1");
+    enc_refuse(osc_a64_f2(OSC_A64_FMOV_SW, 0, 32, 0), "fmov w0,v32");
+    enc_refuse(osc_a64_f2(OSC_A64_FCVT_SD, 0, 1, D), "fcvt s0,d1 with type flag");
+    enc_refuse(osc_a64_f2(OSC_A64_FSQRT, 0, 1, 3), "fsqrt type 3");
+    enc_refuse(osc_a64_f2(OSC_A64_SCVTF_X, 0, SP, D), "scvtf d0,sp");
+    enc_refuse(osc_a64_f2(OSC_A64_FCVTZS_X, SP, 1, D), "fcvtzs sp,d1");
+    { OscA64Insn i = osc_a64_fcmp(0, 1, D); i.rd = 1; enc_refuse(i, "fcmp with rd set"); }
+    { OscA64Insn i = osc_a64_f3(OSC_A64_FADD, 0, 1, 2, D); i.imm = 8; enc_refuse(i, "fadd with imm set"); }
+    { OscA64Insn i = osc_a64_f3(OSC_A64_FADD, 0, 1, 2, D); i.shift = 1; enc_refuse(i, "fadd with shift set"); }
+    { OscA64Insn i = osc_a64_f2(OSC_A64_FNEG, 0, 1, D); i.rm = 2; enc_refuse(i, "fneg with rm set"); }
+    enc_refuse(osc_a64_fmem(OSC_A64_LDR_F_UOFF, 0, SP, 2, S), "ldr s0 offset 2 (unaligned)");
+    enc_refuse(osc_a64_fmem(OSC_A64_LDR_F_UOFF, 0, SP, 4, D), "ldr d0 offset 4 (unaligned)");
+    enc_refuse(osc_a64_fmem(OSC_A64_LDR_F_UOFF, 0, SP, 16384, S), "ldr s0 offset 16384");
+    enc_refuse(osc_a64_fmem(OSC_A64_LDR_F_UOFF, 0, SP, 32768, D), "ldr d0 offset 32768");
+    enc_refuse(osc_a64_fmem(OSC_A64_LDR_F_UOFF, 0, SP, -8, D), "ldr d0 offset -8");
+    enc_refuse(osc_a64_fmem(OSC_A64_LDR_F_UOFF, 0, ZR, 0, D), "ldr d0 base=XZR");
+    enc_refuse(osc_a64_fmem(OSC_A64_STR_F_UOFF, 32, SP, 0, D), "str v32");
+    enc_refuse(osc_a64_fmem(OSC_A64_STR_F_UOFF, 0, SP, 0, 2), "str type 2");
+    enc_refuse(osc_a64_fmem_reg(OSC_A64_LDR_F_REG, 0, ZR, 1, D), "ldr d0 reg base=XZR");
+    enc_refuse(osc_a64_fmem_reg(OSC_A64_LDR_F_REG, 0, 1, SP, D), "ldr d0 reg index=SP");
+    enc_refuse(osc_a64_fmem_reg(OSC_A64_LDR_F_REG, 0, 1, 2, 2), "ldr reg type 2");
+    { OscA64Insn i = osc_a64_fmem_reg(OSC_A64_LDR_F_REG, 0, 1, 2, D); i.imm = 8; enc_refuse(i, "ldr reg with imm set"); }
+    /* no fused multiply-add is encodable (design 1.3 item 2): decoder refuses FMADD/FMSUB/FNMADD/FNMSUB words */
+    check(osc_a64_decode(0x1F420020u, NULL) != 0, "decoder accepted fmadd d0,d1,d2,d0");
+    check(osc_a64_decode(0x1F428020u, NULL) != 0, "decoder accepted fmsub d0,d1,d2,d0");
+    check(osc_a64_decode(0x1F620020u, NULL) != 0, "decoder accepted fnmadd d0,d1,d2,d0");
+    check(osc_a64_decode(0x1E625820u, NULL) != 0, "decoder accepted fmin d0,d1,d2 (non-NM)");
+    check(osc_a64_decode(0x1E624820u, NULL) != 0, "decoder accepted fmax d0,d1,d2 (non-NM)");
+    check(osc_a64_decode(0x1E612010u, NULL) != 0, "decoder accepted fcmpe d0,d1 (E bit)");
+    check(osc_a64_decode(0x1E602008u, NULL) != 0, "decoder accepted fcmp d0,#0.0");
+    printf("fp encoder: goldens=%lu header_samples=%u mutant_words=%lu\n", n_fp_goldens, nsamples, n_fp_mutants);
+}
+
 static void test_validator(void) {
     OscUnit *u = base_unit();
     char err[256];
@@ -1034,9 +1303,11 @@ int main(void) {
     osc_rt_init(rtN);
 
     test_encoder();
+    test_fp_encoder();
     test_validator();
     sm_state = 0x05C1B4C4ULL;
     gen_ops();
+    gen_float_ops();
     gen_arrays();
     gen_calls();
 

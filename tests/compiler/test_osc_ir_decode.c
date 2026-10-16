@@ -6,7 +6,7 @@
  *   1. corpus      every .osc unit under tests/compiler/{progs,slices}, src/osh and
  *                  tests/physics0/osc that the front end compiles: encode -> decode
  *                  -> encode is byte-identical, the decoded unit equals the compiled
- *                  one in every encoded field, digests agree, all five versions seen.
+ *                  one in every encoded field, digests agree, all six versions seen.
  *   2. valid       unit-level variants of the corpus (constants, names, contract
  *                  text, operators, trap codes) that pass osc_ir_validate: at least
  *                  VALID_MIN distinct encodings round-trip byte-exactly.
@@ -38,8 +38,10 @@
 
 /* spec/one-layer-format.md section 3 states these numbers; a renumbering must fail here. */
 _Static_assert(OSC_I_CONST == 1 && OSC_I_CALL == 11 && OSC_I_RET == 15 && OSC_I_FLOAD == 16 && OSC_I_AOPEN == 18 &&
-               OSC_I_POPEN == 21 && OSC_I_HSTORE == 27 && OSC_I_SSTORE == 29, "opcode numbers in the spec");
-_Static_assert(OSC_T_BOOL == 1 && OSC_T_U64 == 5 && OSC_T_I64 == 9 && OSC_T_REF == 10 && OSC_T_CELLS == 12, "scalar tags in the spec");
+               OSC_I_POPEN == 21 && OSC_I_HSTORE == 27 && OSC_I_SSTORE == 29 && OSC_I_FBIN == 30 &&
+               OSC_I_FBITS == 36, "opcode numbers in the spec");
+_Static_assert(OSC_T_BOOL == 1 && OSC_T_U64 == 5 && OSC_T_I64 == 9 && OSC_T_REF == 10 && OSC_T_CELLS == 12 && OSC_T_F32 == 13 && OSC_T_F64 == 14,
+               "scalar tags in the spec");
 _Static_assert(OSC_REF_OWN == 1 && OSC_REF_MUT == 3, "ref kinds in the spec");
 
 static int g_fail;
@@ -227,8 +229,8 @@ static void test_corpus(void) {
         if (v >= 1 && v <= OSC_IR_VERSION_MAX) seen[v]++;
         if (round_trip(c->u, c->name) == 0) ok++;
     }
-    printf("corpus: units=%d round_trip_ok=%d compile_refused=%d versions v1=%d v2=%d v3=%d v4=%d v5=%d\n", g_ncorpus, ok,
-           g_compile_refused, seen[1], seen[2], seen[3], seen[4], seen[5]);
+    printf("corpus: units=%d round_trip_ok=%d compile_refused=%d versions v1=%d v2=%d v3=%d v4=%d v5=%d v6=%d\n", g_ncorpus, ok,
+           g_compile_refused, seen[1], seen[2], seen[3], seen[4], seen[5], seen[6]);
     CHECK(g_ncorpus >= 40, "corpus too small: %d units", g_ncorpus);
     CHECK(ok == g_ncorpus, "corpus round trip: %d of %d", ok, g_ncorpus);
     for (int v = 1; v <= OSC_IR_VERSION_MAX; v++) CHECK(seen[v] > 0, "corpus has no version %d unit", v);
@@ -425,7 +427,7 @@ static void test_classes(void) {
     k = knobs_default(); k.version = 0; build(&m, &k);
     EXPECT(m.b, m.n, OSC_IR_REFUSE_UNKNOWN_VERSION, "version 0");
     k.version = OSC_IR_VERSION_MAX + 1; build(&m, &k);
-    EXPECT(m.b, m.n, OSC_IR_REFUSE_UNKNOWN_VERSION, "version 6");
+    EXPECT(m.b, m.n, OSC_IR_REFUSE_UNKNOWN_VERSION, "version 7");
     EXPECT(b.b, b.n - 1, OSC_IR_REFUSE_TRUNCATED, "last byte missing");
     EXPECT(b.b, 7, OSC_IR_REFUSE_TRUNCATED, "magic without version");
     k = knobs_default(); k.name_len = 64; k.name = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl"; build(&m, &k);
@@ -445,10 +447,10 @@ static void test_classes(void) {
     EXPECT(m.b, m.n, OSC_IR_REFUSE_TRAILING, "one trailing byte");
     k = knobs_default(); k.op0 = 0; build(&m, &k);
     EXPECT(m.b, m.n, OSC_IR_REFUSE_RANGE, "opcode 0");
-    k.op0 = OSC_I_SSTORE + 1; build(&m, &k);
-    EXPECT(m.b, m.n, OSC_IR_REFUSE_RANGE, "opcode past SSTORE");
-    k = knobs_default(); k.ret_tag = OSC_T_CELLS + 1; build(&m, &k);
-    EXPECT(m.b, m.n, OSC_IR_REFUSE_RANGE, "scalar tag 13");
+    k.op0 = OSC_I_FBITS + 1; build(&m, &k);
+    EXPECT(m.b, m.n, OSC_IR_REFUSE_RANGE, "opcode past FBITS");
+    k = knobs_default(); k.ret_tag = OSC_T_F64 + 1; build(&m, &k);
+    EXPECT(m.b, m.n, OSC_IR_REFUSE_RANGE, "scalar tag 15");
     k = knobs_default(); k.dst = 0x8000; build(&m, &k);
     EXPECT(m.b, m.n, OSC_IR_REFUSE_RANGE, "register 0x8000");
     k = knobs_default(); k.name_len = 3; k.name = "f\0g"; build(&m, &k);
@@ -461,6 +463,8 @@ static void test_classes(void) {
     EXPECT(m.b, m.n, OSC_IR_REFUSE_VERSION_MISMATCH, "version 2 with no structs");
     k.version = 5; build(&m, &k);
     EXPECT(m.b, m.n, OSC_IR_REFUSE_VERSION_MISMATCH, "version 5 with no slices");
+    k.version = 6; build(&m, &k);
+    EXPECT(m.b, m.n, OSC_IR_REFUSE_VERSION_MISMATCH, "version 6 with no floats (OSC-4 Slice A)");
 #undef EXPECT
     int classes = 0;
     for (int c = 1; c <= OSC_IR_REFUSAL_COUNT; c++) classes += refused[c];

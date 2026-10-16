@@ -158,6 +158,8 @@ test-compiler: $(OSC_DIR)/test_osc_model $(OSC_DIR)/test_osc_model_asan \
 	@grep "^struct fuzz: .* mismatches=0$$" $(OSC_DIR)/compiler_asan.out
 	@grep "^arena fuzz: .* mismatches=0$$" $(OSC_DIR)/compiler.out
 	@grep "^arena fuzz: .* mismatches=0$$" $(OSC_DIR)/compiler_asan.out
+	@grep "^float fuzz: .* mismatches=0$$" $(OSC_DIR)/compiler.out
+	@grep "^float fuzz: .* mismatches=0$$" $(OSC_DIR)/compiler_asan.out
 	@grep "^arena destruction order: " $(OSC_DIR)/compiler.out
 	@grep "^runtime model replay: .* rejected=0$$" $(OSC_DIR)/compiler.out
 	@grep "^runtime model replay: .* rejected=0$$" $(OSC_DIR)/compiler_asan.out

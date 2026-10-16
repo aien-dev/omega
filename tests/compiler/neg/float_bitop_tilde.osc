@@ -1,0 +1,6 @@
+// expect: FLOAT_BITOP object=y line=4
+// unary `~` is a bit operator and is refused on floats.
+fn f(a: f32) -> f32 {
+    let y: f32 = ~a;
+    return y;
+}

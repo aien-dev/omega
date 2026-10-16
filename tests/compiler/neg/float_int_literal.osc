@@ -1,0 +1,6 @@
+// expect: TYPE_MISMATCH object=y line=4
+// integer literals are not float literals: write 3.0.
+fn f() -> f32 {
+    let y: f32 = 3;
+    return y;
+}

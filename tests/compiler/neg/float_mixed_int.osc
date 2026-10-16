@@ -1,0 +1,6 @@
+// expect: FLOAT_MIXED object=y line=4
+// a float and an integer never meet without `as`.
+fn f(a: f32, k: u32) -> f32 {
+    let y: f32 = a * k;
+    return y;
+}
