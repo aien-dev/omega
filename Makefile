@@ -2630,4 +2630,4 @@ $(GPU_L2_REUSE_TEST): tests/gpu_l2_reuse_test.c src/omega_gpu_fp8_api.h src/omeg
 # This block stays last: the binary names are defined above it.
 PHYSICS_HDR_OBJS := $(patsubst %.d,%.o,$(shell grep -l -E '/m16/m16_native\.h|/nvrm/nvrm\.h|/nvidia-open-[0-9.]+/' $(OUT_DIR)/*.d 2>/dev/null))
 $(PHYSICS_HDR_OBJS) $(RX_R12_SILICON) $(RX_R13_TEST_SILICON) $(RX_R13_SILICON) $(RX_COMPOSE_GATE_GPU) \
-	build/omega_blackwell_engine_syntax.o: $(PHYSICS_STAMP)
+	$(OUT_DIR)/omega_blackwell_engine_syntax.o: $(PHYSICS_STAMP)
