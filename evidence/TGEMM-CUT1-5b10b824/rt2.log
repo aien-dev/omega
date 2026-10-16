@@ -1,0 +1,5 @@
+shape 8192x768x2304 setup: CHIP_FAIL (m16_native_create_channel: RM_ALLOC class 0xcec0 status 0x51)
+TGEMM 8192x768x2304 cached rt 2 warps 8 tiles 256 grid_x 6: reference 0 of 6291456 outside 1e-5 (worst 1.12e-06), 6291456 bit-identical to the emulation, repeats identical yes, poison left 0 (reference 13.7 s)
+TGEMM 8192x768x2304 cached: chip median 0.822 ms (min 0.818) = 35.28 TFLOPS = 30.1% of peak 117.26; whole call median 0.822 ms = 35.25 TFLOPS = 30.1%
+GPU_TGEMM: FAIL
+--shape 8192x768x2304 --shape-knob 2 8 1 exit 1 (informational)

@@ -1,0 +1,15 @@
+sim case 0 (M 128 N 512 K 256 rt 4 warps 16 aqn 1 blocks 0..1) order 0: ran, 0 of 65536 differ
+sim case 0 (M 128 N 512 K 256 rt 4 warps 16 aqn 1 blocks 0..1) order 1: ran, 0 of 65536 differ
+sim case 0 mutant 1: caught
+sim case 0 mutant 2: caught
+sim case 0 mutant 3: caught
+sim case 0 mutant 4: caught
+sim case 1 (M 64 N 256 K 384 rt 2 warps 8 aqn 1 blocks 1..2) order 0: ran, 0 of 16384 differ
+sim case 1 (M 64 N 256 K 384 rt 2 warps 8 aqn 1 blocks 1..2) order 1: ran, 0 of 16384 differ
+sim case 2 (M 128 N 256 K 128 rt 4 warps 16 aqn 2 blocks 0..0) order 0: ran, 0 of 32768 differ
+sim case 2 (M 128 N 256 K 128 rt 4 warps 16 aqn 2 blocks 0..0) order 1: ran, 0 of 32768 differ
+sim case 3 (M 128 N 256 K 256 rt 4 warps 8 aqn 2 blocks 0..1) order 0: ran, 0 of 32768 differ
+sim case 3 (M 128 N 256 K 256 rt 4 warps 8 aqn 2 blocks 0..1) order 1: ran, 0 of 32768 differ
+sim case 4 (M 256 N 512 K 128 rt 8 warps 16 aqn 1 blocks 0..0) order 0: ran, 0 of 131072 differ
+sim case 4 (M 256 N 512 K 128 rt 8 warps 16 aqn 1 blocks 0..0) order 1: ran, 0 of 131072 differ
+GPU_TGEMM: PASS

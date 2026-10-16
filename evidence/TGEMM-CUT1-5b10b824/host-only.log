@@ -1,0 +1,9 @@
+spec k 2304 n 768 rt 8 ct 2 warps 16 kc 32 aqn 1: built, 800 instructions, peak 125, declared 128, shared 16384 B -> fits (production)
+spec k 768 n 3072 rt 8 ct 2 warps 16 kc 32 aqn 1: built, 800 instructions, peak 125, declared 128, shared 16384 B -> fits (production)
+spec k 50304 n 768 rt 4 ct 2 warps 8 kc 32 aqn 1: built, 552 instructions, peak 93, declared 96, shared 8192 B -> fits (production)
+spec k 768 n 2304 rt 4 ct 2 warps 16 kc 32 aqn 2: built, 527 instructions, peak 96, declared 104, shared 8192 B -> fits
+spec k 768 n 768 rt 4 ct 2 warps 16 kc 32 aqn 1: built, 527 instructions, peak 92, declared 96, shared 8192 B -> fits
+spec k 768 n 768 rt 4 ct 2 warps 8 kc 32 aqn 1: built, 552 instructions, peak 93, declared 96, shared 8192 B -> fits
+spec k 768 n 768 rt 2 ct 2 warps 8 kc 32 aqn 1: built, 403 instructions, peak 76, declared 80, shared 4096 B -> fits
+spec k 768 n 768 rt 8 ct 2 warps 8 kc 32 aqn 1: REFUSED, 0 instructions, peak 0, declared 8, shared 16384 B -> DOES NOT FIT
+GPU_TGEMM: PASS

@@ -1,0 +1,1 @@
+yardstick: bf16 HMMA dense peak 117.26 TFLOPS (best 'peak' line of peak.log)
