@@ -10,6 +10,9 @@ name: Host suites 3
 #   numeric-transc-digest test-numeric-transc-digest (full 2^32 domain, 9 ops,
 #                         against the frozen digests; long, own job)
 #   language              test-language (Omega language V0 golden)
+#   gpu-attention         test-gpu-attention (hd 64 + hd 128 host-only refusals,
+#                         codegen and register bound, warp simulator, sweep;
+#                         the nvdisasm listing check skips: no nvdisasm here)
 #   milestones            test-m6 .. test-m15 (omegatool gates + reference
 #                         demonstrations; models and host reference, no chip)
 # Listed as skipped jobs so GitHub shows them skipped, never green:
@@ -121,6 +124,39 @@ jobs:
           make test-${{ matrix.m }} | tee gate.log
           grep -E 'TOTAL GATES: [0-9]+ \| PASSED: [0-9]+ \| FAILED: 0' gate.log
           ! grep -E 'FAILED: [1-9]' gate.log
+
+  gpu-attention:
+    # omega#470: the attention kernels' host tiers (refusals, codegen, register bound, both
+    # warp simulators, the sweep) at head_dim 64 and 128. Builds libomega_gpu.a against the
+    # pinned Physics (lock check on); nothing touches a GPU. nvdisasm is not installed on the
+    # runner, so the listing check prints "skipped" here and runs on the Spark.
+    name: test-gpu-attention
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read pinned Physics
+        id: pins
+        run: |
+          sha=$(tr -d '[:space:]' < physics.lock)
+          test -n "$sha"
+          echo "physics=$sha" >> "$GITHUB_OUTPUT"
+      - name: Checkout pinned Physics
+        uses: actions/checkout@v4
+        with:
+          repository: aien-spark/physics
+          ref: ${{ steps.pins.outputs.physics }}
+          path: physics-src
+      - name: Keep Physics checkout out of Omega tree status
+        run: echo 'physics-src/' >> .git/info/exclude
+      - name: make test-gpu-attention
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+        run: |
+          set -o pipefail
+          make -j"$(nproc)" test-gpu-attention | tee attn.log
+          test "$(grep -cE '^PASS: [0-9]+ checks, 0 failed$' attn.log)" -eq 6
+          ! grep -qE '^FAIL' attn.log
 
   m17:
     name: "test-m17 (SKIP: needs GB10 chip, physical SM execution gate)"
