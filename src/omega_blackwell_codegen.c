@@ -1001,8 +1001,8 @@ int omega_blackwell_verify_codegen_fixtures_reconv(void) {
  *   SHFL.BFLY PT, R6, R11, 0x2, 0x1f ;     0x0c401f000b067f89 0x000e6200000e0000
  *   F2FP.BF16.F32.PACK_AB R9, R3, R0 ;     0x000000000309723e 0x000fe200000010ff
  *   F2FP.BF16.F32.PACK_AB R13, R13, R10 ;  0x0000000a0d0d723e 0x000fe400000010ff
- * SHFL.BFLY is SHFL.DOWN (oracle words in omega_numeric.c, lanes 16 .. 1) with bit 58 set (mode .DOWN 1 -> .BFLY 3, the
- * same lane field 53..57); the lane check below covers every lane 0 .. 31 against that rule. 0 = all good. */
+ * SHFL.BFLY is SHFL.DOWN (oracle words in omega_numeric.c, lanes 16 .. 1) with bit 58 set (Mesa NAK mode field 58..59: Idx 0,
+ * Up 1, Down 2, Bfly 3; same lane field 53..57); the lane check below covers every lane 0 .. 31 against that rule. 0 = all good. */
 int omega_blackwell_verify_codegen_fixtures_bfly_f2fp(void) {
     static const struct {
         BlackwellIROpcode op; int d, a, b; uint32_t imm; uint32_t w0, w1, w2; const char *text;
@@ -1035,25 +1035,35 @@ int omega_blackwell_verify_codegen_fixtures_bfly_f2fp(void) {
     return 0;
 }
 
-/* Training R5 part 2: f32 global atomic add. Field map from Mesa NAK sm70_encode.rs (a08a0b9, sm >= 90 float ATOMG:
- * opcode 0x9a3, op 87..91 Add = 0, type 73..77 F32 = 9 which is .FTZ.RN, order 77..81 Strong System), then every word
- * below decoded offline with nvdisasm -b SM121 (CUDA 13.0) to the text shown. Unlike the integer form (0x9a8), the
- * float form needs bit 90 (w2 bit 26) for desc[UR][R.64]; without it the same word decodes as [R.64+UR].
+/* Training R5 part 2: f32 global atomic add. Starting map from Mesa NAK sm70_encode.rs (a08a0b9, sm >= 90 float ATOMG;
+ * Mesa ranges are half-open): opcode 0x9a3, op 87..90 (Add 0, Min 2, Max 4), type 73..76 (F32 = 9, which is .FTZ.RN;
+ * 12 decodes as .RN without FTZ), order 77..80 (Strong System 0xa, Strong GPU 0x7), pred-dst 81..83 = PT, eviction
+ * 84..86 = 1, bit 63 = Ra.64, bit 91 = UR form. Then every word below was decoded offline with nvdisasm -b SM121
+ * (CUDA 13.0) to the text shown. Where Mesa and the decoder disagree the decoder (and the chip probe) win: this word
+ * sets bit 90 (w2 bit 26), which falls inside Mesa's op field, yet it decodes as .ADD with desc[UR][R.64]; without it
+ * the same word decodes as [R.64+UR]. (Bit 88 decodes as .MIN, so the op field is there.)
  *   0x80000005020479a3 0x00321e000c1f5306  ATOMG.E.ADD.F32.FTZ.RN.STRONG.SYS PT, R4, desc[UR6][R2.64], R5 ;
  *   0x800000070a0979a3 0x00321e000c1f5304  ATOMG.E.ADD.F32.FTZ.RN.STRONG.SYS PT, R9, desc[UR4][R10.64], R7 ;
  *   0x8000000502ff79a3 0x00321e000c1f5306  ATOMG.E.ADD.F32.FTZ.RN.STRONG.SYS PT, RZ, desc[UR6][R2.64], R5 ;
- * Chip proof of the arithmetic: tests/gpu_atomf32_probe_test.c. 0 = all good. */
+ *   0x80000005020479a3 0x00321e000c1ef306  ATOMG.E.ADD.F32.FTZ.RN.STRONG.GPU PT, R4, desc[UR6][R2.64], R5 ;
+ *   0x800000070a0979a3 0x00321e000c1ef304  ATOMG.E.ADD.F32.FTZ.RN.STRONG.GPU PT, R9, desc[UR4][R10.64], R7 ;
+ *   0x8000000502ff79a3 0x00321e000c1ef306  ATOMG.E.ADD.F32.FTZ.RN.STRONG.GPU PT, RZ, desc[UR6][R2.64], R5 ;
+ * Rows with d = -1 (no destination vreg) must encode RZ, not R0. Chip proof: tests/gpu_atomf32_probe_test.c. 0 = all good. */
 int omega_blackwell_verify_codegen_fixtures_atomf32(void) {
-    static const struct { int d, a, b, u; uint32_t w0, w1, w2; } fx[] = {
-        { 4, 2, 5, 6, 0x020479a3U, 0x80000005U, 0x0c1f5306U },
-        { 9, 10, 7, 4, 0x0a0979a3U, 0x80000007U, 0x0c1f5304U },
-        { 255, 2, 5, 6, 0x02ff79a3U, 0x80000005U, 0x0c1f5306U },
+    static const struct { BlackwellIROpcode op; int d, a, b, u; uint32_t w0, w1, w2; } fx[] = {
+        { BW_IR_ATOMG_ADD_F32_STRONG_SYS, 4, 2, 5, 6, 0x020479a3U, 0x80000005U, 0x0c1f5306U },
+        { BW_IR_ATOMG_ADD_F32_STRONG_SYS, 9, 10, 7, 4, 0x0a0979a3U, 0x80000007U, 0x0c1f5304U },
+        { BW_IR_ATOMG_ADD_F32_STRONG_SYS, 255, 2, 5, 6, 0x02ff79a3U, 0x80000005U, 0x0c1f5306U },
+        { BW_IR_ATOMG_ADD_F32_STRONG_SYS, -1, 2, 5, 6, 0x02ff79a3U, 0x80000005U, 0x0c1f5306U },
+        { BW_IR_ATOMG_ADD_F32_STRONG_GPU, 4, 2, 5, 6, 0x020479a3U, 0x80000005U, 0x0c1ef306U },
+        { BW_IR_ATOMG_ADD_F32_STRONG_GPU, 9, 10, 7, 4, 0x0a0979a3U, 0x80000007U, 0x0c1ef304U },
+        { BW_IR_ATOMG_ADD_F32_STRONG_GPU, -1, 2, 5, 6, 0x02ff79a3U, 0x80000005U, 0x0c1ef306U },
     };
     uint32_t w[4];
     for (int i = 0; i < (int)(sizeof fx / sizeof fx[0]); i++) {
         BlackwellIRInsn in;
         memset(&in, 0, sizeof in);
-        in.op = BW_IR_ATOMG_ADD_F32_STRONG_SYS; in.dst_vreg = fx[i].d; in.src1_vreg = fx[i].a; in.src2_vreg = fx[i].b;
+        in.op = fx[i].op; in.dst_vreg = fx[i].d; in.src1_vreg = fx[i].a; in.src2_vreg = fx[i].b;
         in.src3_vreg = -1; in.ureg = fx[i].u;
         if (omega_blackwell_encode_one(&in, w) != 0) return -(2 * i + 1);
         if (w[0] != fx[i].w0 || w[1] != fx[i].w1 || w[2] != fx[i].w2 || w[3] != 0x00321e00U) return -(2 * i + 2);

@@ -105,10 +105,18 @@ typedef enum {
      * placeholders patched after encoding. Words: omega_blackwell_verify_codegen_fixtures_bfly_f2fp. */
     BW_IR_SHFL_BFLY,    /* SHFL.BFLY PT, Rd, Ra, imm & 31, 0x1f: Rd = Ra of lane (lane ^ imm) */
     BW_IR_F2FP_BF16_PACK, /* F2FP.BF16.F32.PACK_AB Rd, Ra, Rb: Rd = bf16_rn(Ra) << 16 | bf16_rn(Rb) (fixed latency) */
-    /* Training R5 part 2 (2026-10-15), additive: f32 global atomic add, the float twin of BW_IR_ATOMG_ADD_STRONG_SYS.
+    /* Training R5 part 2 (2026-10-15), additive: f32 global atomic add, the float twins of BW_IR_ATOMG_ADD_STRONG_SYS.
      * Flush-to-zero like every f32 global atomic add (CUDA Programming Guide: "equivalent to PTX add.rn.ftz.f32").
-     * Words: omega_blackwell_verify_codegen_fixtures_atomf32; chip probe: tests/gpu_atomf32_probe_test.c. */
-    BW_IR_ATOMG_ADD_F32_STRONG_SYS /* ATOMG.E.ADD.F32.FTZ.RN.STRONG.SYS PT, Rd, desc[UR][Ra.64], Rb: Rd = old, mem += Rb */
+     * dst_vreg < 0 encodes RZ: the add happens and the old value is dropped (no register is written).
+     * Two scopes, same arithmetic:
+     *   .STRONG.SYS  for a word the CPU (or another agent) may watch while the kernel runs: host-visible memory.
+     *   .STRONG.GPU  for a word only this GPU touches during the kernel and reads in a later launch, e.g. a gradient
+     *                accumulated in device memory. This is the scope nvcc gives atomicAdd.
+     * nvcc's no-return form is REDG; Mesa's sm90 float REDG layout (opcode 0x9a6) does not decode on SM121 in any variant
+     * tried, so ATOMG with RZ is the no-return form here. Words: omega_blackwell_verify_codegen_fixtures_atomf32;
+     * chip probe: tests/gpu_atomf32_probe_test.c. */
+    BW_IR_ATOMG_ADD_F32_STRONG_SYS, /* ATOMG.E.ADD.F32.FTZ.RN.STRONG.SYS PT, Rd|RZ, desc[UR][Ra.64], Rb: Rd = old, mem += Rb */
+    BW_IR_ATOMG_ADD_F32_STRONG_GPU  /* ATOMG.E.ADD.F32.FTZ.RN.STRONG.GPU PT, Rd|RZ, desc[UR][Ra.64], Rb: Rd = old, mem += Rb */
 } BlackwellIROpcode;
 
 /* Barrier (reconvergence) registers: the sm_121 BSSY/BSYNC words carry a 4-bit barrier id
@@ -332,8 +340,8 @@ int omega_blackwell_verify_codegen_fixtures_reconv(void);
  * evidence/OWN30B-T3-TC-PEAK-BW-5faa0f70-20261013T2236Z), plus SHFL.BFLY = SHFL.DOWN with bit 58 for every lane. 0 = pass. */
 int omega_blackwell_verify_codegen_fixtures_bfly_f2fp(void);
 
-/* Training R5 part 2: golden words for ATOMG.E.ADD.F32.FTZ.RN.STRONG.SYS (decoded with nvdisasm -b SM121; no nvcc).
- * 0 = pass. */
+/* Training R5 part 2: golden words for ATOMG.E.ADD.F32.FTZ.RN.STRONG.SYS and .STRONG.GPU, with and without a destination
+ * (decoded with nvdisasm -b SM121; no nvcc). 0 = pass. */
 int omega_blackwell_verify_codegen_fixtures_atomf32(void);
 
 /* omega #308: encodes one instruction with a given physical register map of
