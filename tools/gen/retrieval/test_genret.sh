@@ -1,12 +1,13 @@
 #!/bin/sh
-# tools/gen/retrieval/test_genret.sh <genret binary> <recheck binary>: tests of the GEN-4 file-backed retrieval
-# provider (CONTRACT.md, genret-cli-v2) on the SYNTHETIC record set tools/gen/retrieval/fixtures/corpus/
+# tools/gen/retrieval/test_genret.sh <genret> <recheck> <recheck source>: tests of the GEN-4 file-backed retrieval
+# provider (CONTRACT.md, genret-cli-v3) on the SYNTHETIC record set tools/gen/retrieval/fixtures/corpus/
 # (Agent D's record schema v1, written by fixtures/make_fixtures.sh) and the fixture queries fixtures/tasks/.
 # CPU only, no network, no hidden data. Scores are re-derived by an independent sh + bc implementation
 # (tokens with tr, counts with grep, integer BM25 and the fixed-point log2 in bc) and the suffix by an
 # independent sh renderer.
 set -eu
-G="$1" RC="$2"
+[ $# -eq 3 ] || { echo "usage: test_genret.sh <genret> <recheck> <recheck source>" >&2; exit 2; }
+G="$1" RC="$2" RSRC="$3"
 case "$G" in /*) ;; *) G="$(pwd)/$G" ;; esac
 case "$RC" in /*) ;; *) RC="$(pwd)/$RC" ;; esac
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -19,6 +20,8 @@ ok() { pass=$((pass + 1)); }
 bad() { echo "FAIL: $*" >&2; fail=$((fail + 1)); }
 t() { tdesc="$1"; shift; if "$@"; then ok; else bad "$tdesc"; fi; }
 sha() { sha256sum "$1" | cut -c1-64; }
+RPIN="$(sha "$RC")"                                                 # the recheck pin (= build/gen_retrieval/recheck.sha256)
+rsha() { if [ -f "$1" ]; then sha "$1"; else printf "%064d" 0; fi; }
 REC="$FX/corpus/records"
 MAN="$REC/MANIFEST"
 TK="$FX/tasks"
@@ -27,7 +30,7 @@ TK="$FX/tasks"
 # K and CAP default to the preregistered settings (k 3, cap 4096; GEN protocol).
 q() {
   qm="$1" qk="$2" qt="$3" qo="$4"; shift 4
-  "$G" query --corpus "$qm" --manifest-sha256 "$(sha "$qm")" --recheck "$RC" --kind "$qk" --k "${K:-3}" \
+  "$G" query --corpus "$qm" --manifest-sha256 "$(sha "$qm")" --recheck "$RC" --recheck-sha256 "$RPIN" --kind "$qk" --k "${K:-3}" \
     --cap-bytes "${CAP:-4096}" --requirement "$qt/requirement" --prompt "$qt/prompt" --out "$qo" "$@"
 }
 rv() { sed -n "s/^$2=//p" "$1/receipt.txt"; }                       # receipt value
@@ -58,7 +61,7 @@ famtok() { printf 'gs1-%s' "$(printf 'gs1:fixture-%s' "$1" | sha256sum | cut -c1
 A_SAT="$(aid sat_sub)" A_DIG="$(aid ndigits)" A_DOT="$(aid dot)" A_RNG="$(aid range_sum)" A_OLD="$(aid sat_sub_old)"
 
 # ---- 1 version and the fixture pin --------------------------------------------------------------------
-t "version" [ "$("$G" version)" = genret-cli-v2 ]
+t "version" [ "$("$G" version)" = genret-cli-v3 ]
 t "fixture manifest matches its records" sh -c "cd '$REC' && sha256sum -c --quiet MANIFEST"
 t "SET.sha256 is the manifest digest" [ "$(cat "$REC/SET.sha256")" = "$(sha "$MAN")" ]
 t "recheck accepts every fixture record" sh -c "'$RC' --receipts '$REC/receipts' \$(sed 's|^[0-9a-f]*  |$REC/|' '$MAN') > /dev/null"
@@ -92,7 +95,7 @@ t "reversed manifest differs" sh -c "! cmp -s '$MAN' '$W/rev/MANIFEST'"
 q "$W/rev/MANIFEST" raw "$TK/devq_clamp" "$W/d3"
 for f in selected.tsv excluded.tsv suffix.txt query.txt; do t "manifest order does not change $f" cmp -s "$W/d1/$f" "$W/d3/$f"; done
 t "SHA256SUMS lists the five outputs" sh -c "cd '$W/d1' && sha256sum -c --quiet SHA256SUMS && [ \$(wc -l < SHA256SUMS) -eq 5 ]"
-t "receipt names the contract" [ "$(rv "$W/d1" contract)" = genret-cli-v2 ]
+t "receipt names the contract" [ "$(rv "$W/d1" contract)" = genret-cli-v3 ]
 
 # ---- 4 stable tie-break by record id byte order ------------------------------------------------------
 q "$MAN" raw "$TK/devq_twin" "$W/tie"
@@ -131,7 +134,7 @@ t "two excluded families recorded in order" [ "$(rv "$W/famD" exclude_family)" =
 # ---- 6 fail closed: integrity problems stop the run, nothing is written --------------------------------
 R="$TK/devq_clamp/requirement" P="$TK/devq_clamp/prompt" O="$W/fx"
 gq() { gm="$1" gs="$2" gr="$3" gp="$4"; shift 4
-  "$G" query --corpus "$gm" --manifest-sha256 "$gs" --recheck "${GRC:-$RC}" --kind raw --k 3 --cap-bytes 4096 \
+  "$G" query --corpus "$gm" --manifest-sha256 "$gs" --recheck "${GRC:-$RC}" --recheck-sha256 "${GPIN:-$(rsha "${GRC:-$RC}")}" --kind raw --k 3 --cap-bytes 4096 \
     --requirement "$gr" --prompt "$gp" --out "$O" "$@"; }
 cq() { gq "$1/MANIFEST" "$(sha "$1/MANIFEST")" "$R" "$P"; }     # cq <records dir>: query a mutated copy
 M0="$(sha "$MAN")"
@@ -177,6 +180,40 @@ GRC="$W/fake4" fatal_case "recheck prints an extra line" recheck_failed "$O" gq 
 copy_corpus "$W/c10"
 printf '#!/bin/sh\nshift 2\nfor f; do sed -n "s/^id /OK /p" "$f"; done\nprintf "x\\n" >> "%s"\n' "$W/c10/raw/raw-dot3.rec" > "$W/fake5"; chmod +x "$W/fake5"
 GRC="$W/fake5" fatal_case "record changed while recheck read it" stale_digest "$O" cq "$W/c10"
+# the validator is pinned: genret refuses a recheck whose sha256 is not the pin, and the receipt names it
+printf '#!/bin/sh\nshift 2\nfor f; do sed -n "s/^id /OK /p" "$f"; done\n' > "$W/approve"; chmod +x "$W/approve"
+GRC="$W/approve" GPIN="$RPIN" fatal_case "always-approve recheck under the real pin" recheck_untrusted "$O" gq "$MAN" "$M0" "$R" "$P"
+GPIN="$(printf '%s' "$RPIN" | tr 0-9a-f 1-9a-f0)" fatal_case "real recheck under a wrong pin" recheck_untrusted "$O" gq "$MAN" "$M0" "$R" "$P"
+fatal_case "recheck pin not hex" usage "$O" "$G" query --corpus "$MAN" --manifest-sha256 "$M0" --recheck "$RC" --recheck-sha256 xyz --kind raw --k 1 --cap-bytes 9 --requirement "$R" --prompt "$P" --out "$O"
+fatal_case "no --recheck-sha256" usage "$O" "$G" query --corpus "$MAN" --manifest-sha256 "$M0" --recheck "$RC" --kind raw --k 1 --cap-bytes 9 --requirement "$R" --prompt "$P" --out "$O"
+copy_corpus "$W/c11"; rm -f "$W/c11/receipts/"*
+fatal_case "real recheck refuses a corpus without receipts" invalid_record "$O" cq "$W/c11"
+O="$W/stub"; GRC="$W/approve" gq "$W/c11/MANIFEST" "$(sha "$W/c11/MANIFEST")" "$R" "$P" 2> /dev/null || true
+O="$W/stubreal"; gq "$MAN" "$M0" "$R" "$P"; O="$W/fx"
+t "a stub validator under its own pin runs" [ -f "$W/stub/receipt.txt" ]
+t "stub validator: receipt differs from the real run" sh -c "! cmp -s '$W/stub/receipt.txt' '$W/stubreal/receipt.txt'"
+t "stub validator: receipt names the stub" [ "$(rv "$W/stub" recheck_sha256)" = "$(sha "$W/approve")" ]
+t "real run: receipt names the pinned recheck" [ "$(rv "$W/stubreal" recheck_sha256)" = "$RPIN" ]
+t "receipt names the recheck source the build verified" [ "$(rv "$W/stubreal" recheck_source_sha256)" = "$(sha "$RSRC")" ]
+t "recheck source is D's frozen schema v1 recheck.c" [ "$(sha "$RSRC")" = 05cec285f7b7b2be68b1db1287661513e7e4715da44909065bdd0829daac02b6 ]
+# task files are opened once; the open file's own path is checked (symlinks into hidden/ are refused)
+mkdir -p "$W/task/hidden"; cp "$R" "$W/task/hidden/requirement"; cp "$P" "$W/task/hidden/prompt"
+ln -s "$W/task/hidden/requirement" "$W/task/req.link"; ln -s "$W/task/hidden" "$W/task/hid.link"
+fatal_case "requirement symlink into hidden/" hidden_path "$O" gq "$MAN" "$M0" "$W/task/req.link" "$P"
+fatal_case "prompt through a symlinked hidden dir" hidden_path "$O" gq "$MAN" "$M0" "$R" "$W/task/hid.link/prompt"
+fatal_case "requirement is a directory" requirement_invalid "$O" gq "$MAN" "$M0" "$W/task" "$P"
+mkfifo "$W/task/fifo"
+fatal_case "prompt is a FIFO" prompt_invalid "$O" gq "$MAN" "$M0" "$R" "$W/task/fifo"
+t "FIFO prompt refused as not a regular file" grep -q 'not a regular file' "$W/fatal.err"
+fatal_case "prompt missing" prompt_invalid "$O" gq "$MAN" "$M0" "$R" "$W/task/nope"
+# outputs appear atomically: no temporary directory is left after success or failure
+t "no temporary output dir after success" [ -z "$(find "$W" -maxdepth 1 -name '*.tmp.*')" ]
+mkdir -p "$W/ro"; chmod 555 "$W/ro"
+if [ ! -w "$W/ro" ]; then
+  O="$W/ro/out"; fatal_case "read-only parent: write_failed" write_failed "$O" gq "$MAN" "$M0" "$R" "$P"; O="$W/fx"
+  t "read-only parent: nothing left behind" [ -z "$(ls -A "$W/ro")" ]
+else bad "cannot make a read-only directory (running as root?)"; fi
+chmod 755 "$W/ro"
 mkdir -p "$W/task/hidden"; cp "$R" "$W/task/hidden/requirement"; cp "$P" "$W/task/hidden/prompt"
 fatal_case "requirement under hidden/" hidden_path "$O" gq "$MAN" "$M0" "$W/task/hidden/requirement" "$P"
 fatal_case "prompt under hidden/" hidden_path "$O" gq "$MAN" "$M0" "$R" "$W/task/hidden/prompt"
@@ -187,11 +224,11 @@ fatal_case "requirement with two ret lines" requirement_invalid "$O" gq "$MAN" "
 fatal_case "empty prompt" prompt_invalid "$O" gq "$MAN" "$M0" "$R" "$W/task/empty"
 fatal_case "prompt with a tab" prompt_invalid "$O" gq "$MAN" "$M0" "$R" "$W/task/tab"
 mkdir -p "$W/exists"
-fatal_case "out exists" out_exists "$W/exists" "$G" query --corpus "$MAN" --manifest-sha256 "$M0" --recheck "$RC" --kind raw --k 3 --cap-bytes 9 --requirement "$R" --prompt "$P" --out "$W/exists"
+fatal_case "out exists" out_exists "$W/exists" "$G" query --corpus "$MAN" --manifest-sha256 "$M0" --recheck "$RC" --recheck-sha256 "$RPIN" --kind raw --k 3 --cap-bytes 9 --requirement "$R" --prompt "$P" --out "$W/exists"
 t "existing out left empty" [ -z "$(ls -A "$W/exists")" ]
-fatal_case "k 0" usage "$O" "$G" query --corpus "$MAN" --manifest-sha256 "$M0" --recheck "$RC" --kind raw --k 0 --cap-bytes 9 --requirement "$R" --prompt "$P" --out "$O"
-fatal_case "k 65" usage "$O" "$G" query --corpus "$MAN" --manifest-sha256 "$M0" --recheck "$RC" --kind raw --k 65 --cap-bytes 9 --requirement "$R" --prompt "$P" --out "$O"
-fatal_case "kind other" usage "$O" "$G" query --corpus "$MAN" --manifest-sha256 "$M0" --recheck "$RC" --kind text --k 1 --cap-bytes 9 --requirement "$R" --prompt "$P" --out "$O"
+fatal_case "k 0" usage "$O" "$G" query --corpus "$MAN" --manifest-sha256 "$M0" --recheck "$RC" --recheck-sha256 "$RPIN" --kind raw --k 0 --cap-bytes 9 --requirement "$R" --prompt "$P" --out "$O"
+fatal_case "k 65" usage "$O" "$G" query --corpus "$MAN" --manifest-sha256 "$M0" --recheck "$RC" --recheck-sha256 "$RPIN" --kind raw --k 65 --cap-bytes 9 --requirement "$R" --prompt "$P" --out "$O"
+fatal_case "kind other" usage "$O" "$G" query --corpus "$MAN" --manifest-sha256 "$M0" --recheck "$RC" --recheck-sha256 "$RPIN" --kind text --k 1 --cap-bytes 9 --requirement "$R" --prompt "$P" --out "$O"
 fatal_case "no --recheck" usage "$O" "$G" query --corpus "$MAN" --manifest-sha256 "$M0" --kind raw --k 1 --cap-bytes 9 --requirement "$R" --prompt "$P" --out "$O"
 fatal_case "unknown option" usage "$O" gq "$MAN" "$M0" "$R" "$P" --hidden "$W"
 fatal_case "target without length-matched" usage "$O" gq "$MAN" "$M0" "$R" "$P" --target-bytes 100
@@ -200,7 +237,7 @@ fatal_case "repeated k" usage "$O" gq "$MAN" "$M0" "$R" "$P" --k 2
 fatal_case "unknown mode" usage "$O" gq "$MAN" "$M0" "$R" "$P" --mode lucky
 
 # ---- 7 C and D under identical caps; whole records only; independent renderer --------------------------
-SETTINGS='^(contract|mode|k|cap_bytes|target_bytes|exclude_family|manifest_sha256|requirement_sha256|prompt_sha256|query_sha256)='
+SETTINGS='^(contract|mode|k|cap_bytes|target_bytes|exclude_family|manifest_sha256|recheck_sha256|recheck_source_sha256|requirement_sha256|prompt_sha256|query_sha256)='
 for cap in 600 4096; do
   CAP=$cap q "$MAN" raw "$TK/devq_clamp" "$W/C$cap"; CAP=$cap q "$MAN" abstraction "$TK/devq_clamp" "$W/D$cap"
   for kd in C D; do
@@ -220,11 +257,10 @@ t "cap below the first record: rank 1 logged cap_bytes" [ "$(reason_of "$W/C60" 
 K=2 q "$MAN" raw "$TK/devq_clamp" "$W/K2"
 t "k 2 selects 2" [ "$(rv "$W/K2" selected)" = 2 ]
 t "rank 3 logged beyond_k" [ "$(reason_of "$W/K2" raw-sum_range)" = beyond_k ]
-# render <out dir> <kind>: the suffix rebuilt in sh from selected.tsv and the record files (CONTRACT.md 6)
+# render <out dir>: the suffix rebuilt in sh from selected.tsv and the record files (CONTRACT.md 6); one heading for both kinds
 render() {
   if [ "$(col "$1/selected.tsv" 2 | wc -l)" -eq 0 ]; then return; fi
-  if [ "$2" = raw ]; then noun="solutions to earlier tasks"; else noun="helper functions"; fi
-  printf '\nRetrieved records: verified %s, most relevant first.\n' "$noun"
+  printf '\nVerified reference code from earlier tasks, most relevant first.\n'
   tail -n +2 "$1/selected.tsv" | while IFS="$(printf '\t')" read -r rk id dg sc by rl; do
     f="$(recf "$REC" "$id")"
     printf '\nRecord %s.\n\nentry %s\n' "$rk" "$(hdr "$f" entry)"
@@ -234,12 +270,34 @@ render() {
   done
 }
 for o in "C600 raw" "D600 abstraction" "C4096 raw" "D4096 abstraction" "tie raw"; do
-  set -- $o; render "$W/$1" "$2" > "$W/$1.render"
+  set -- $o; render "$W/$1" > "$W/$1.render"
   t "independent renderer matches suffix $1" cmp -s "$W/$1.render" "$W/$1/suffix.txt"
   t "bytes column sums to suffix minus heading $1" [ "$(col "$W/$1/selected.tsv" 5 | awk '{ s += $1 } END { print s + 0 }')" -eq \
     "$(($(wc -c < "$W/$1/suffix.txt") - $(head -n 2 "$W/$1/suffix.txt" | wc -c)))" ]
 done
 t "D suffix shows no abstraction-only fields" sh -c "! grep -q -e '^pre ' -e '^post ' -e '^example ' -e '^fingerprint ' -e '^receipt ' '$W/D4096/suffix.txt'"
+# C and D are rendered identically apart from record content: blank out entry/params/ret values, desc and
+# fenced bodies, and the two suffixes must be the same bytes
+template() {
+  awk 'f { if ($0 == "```") { f = 0; print } ; next }
+       $0 == "```" { f = 1; print; print "BODY"; next }
+       s == 1 { print; s = 2; next }
+       s == 2 { print "DESC"; s = 0; next }
+       /^entry / { print "entry X"; next }
+       /^params( |$)/ { print "params X"; next }
+       /^ret / { print "ret X"; s = 1; next }
+       { print }' "$1"
+}
+for tk in devq_clamp devq_digits devq_dot; do
+  template "$W/s.$tk.raw/suffix.txt" > "$W/tpl.$tk.C"; template "$W/s.$tk.abstraction/suffix.txt" > "$W/tpl.$tk.D"
+  t "C and D suffixes differ in content ($tk)" sh -c "! cmp -s '$W/s.$tk.raw/suffix.txt' '$W/s.$tk.abstraction/suffix.txt'"
+  t "C and D suffix templates byte-identical ($tk)" cmp -s "$W/tpl.$tk.C" "$W/tpl.$tk.D"
+  t "template keeps 3 records ($tk)" [ "$(grep -c '^BODY$' "$W/tpl.$tk.C")" -eq 3 ]
+done
+t "template starts with the shared heading" [ "$(sed -n 2p "$W/tpl.devq_clamp.C")" = "Verified reference code from earlier tasks, most relevant first." ]
+sed '2s/reference code/helper functions/' "$W/s.devq_clamp.abstraction/suffix.txt" > "$W/tplmut"
+template "$W/tplmut" > "$W/tplmut.t"
+t "template comparison detects a changed heading (mutant)" sh -c "! cmp -s '$W/tplmut.t' '$W/tpl.devq_clamp.C'"
 
 # ---- 8 query = public requirement + prompt only: hidden canary never influences output ----------------
 mkdir -p "$W/nohid"; cp "$TK/devq_clamp/requirement" "$TK/devq_clamp/prompt" "$W/nohid/"
@@ -282,25 +340,51 @@ for kd in raw abstraction; do
 done
 t "empty mode keeps exclusion reasons of unindexed records" [ "$(reason_of "$W/emp.raw" raw-poison_fence)" = poisoned:fence ]
 
-# ---- 10 length-matched ablation: C padded with one extra raw record -------------------------------------
+# ---- 10 length-matched ablation: the target is the other arm's realised suffix_bytes ---------------------
+# Fixture numbers (devq_clamp, raw): heading 66 bytes; blocks in rank order clamp_sub 180, dot3 492,
+# sum_range 250, canary 207, tie_a 172, tie_b 172, count_digits 215. K=1 unpadded = 66 + 180 = 246.
+lm() { # lm <out> <target> [extra args]: K=1 devq_clamp raw, length-matched
+  lo="$1" lt="$2"; shift 2; K=1 q "$MAN" raw "$TK/devq_clamp" "$W/$lo" --mode length-matched --target-bytes "$lt" "$@"
+}
+lmrc() { echo "$(rv "$W/$1" pad) $(rv "$W/$1" pad_reason) $(rv "$W/$1" unpadded_bytes) $(rv "$W/$1" suffix_bytes) $(rv "$W/$1" length_gap)"; }
 K=1 q "$MAN" raw "$TK/devq_clamp" "$W/lm0"
-K=1 q "$MAN" raw "$TK/devq_clamp" "$W/lm1" --mode length-matched --target-bytes 700
-t "pad: one extra record" [ "$(rv "$W/lm1" selected)" = 2 ]
-t "pad role and position" [ "$(tail -n 1 "$W/lm1/selected.tsv" | cut -f1,6)" = "$(printf '2\tpad')" ]
-t "pad is the first lower-ranked record that fits (raw-dot3 is too long)" [ "$(rv "$W/lm1" pad)" = raw-sum_range ]
-t "pad stays within target" [ "$(rv "$W/lm1" suffix_bytes)" -le 700 ]
-t "pad keeps the normal record first" [ "$(sed -n 2p "$W/lm1/selected.tsv")" = "$(sed -n 2p "$W/lm0/selected.tsv")" ]
-t "pad longer than unpadded" [ "$(rv "$W/lm1" suffix_bytes)" -gt "$(rv "$W/lm0" suffix_bytes)" ]
-K=1 q "$MAN" raw "$TK/devq_clamp" "$W/lm2" --mode length-matched --target-bytes 300
-t "no record fits the target: pad=none" [ "$(rv "$W/lm2" pad)" = none ]
-t "pad=none leaves the normal selection" cmp -s "$W/lm0/selected.tsv" "$W/lm2/selected.tsv"
-K=2 q "$MAN" abstraction "$TK/devq_dot" "$W/lmD"; tgt="$(rv "$W/lmD" suffix_bytes)"
-K=2 q "$MAN" raw "$TK/devq_dot" "$W/lmC" --mode length-matched --target-bytes "$tgt"
-K=2 q "$MAN" raw "$TK/devq_dot" "$W/lmCn"; cn="$(rv "$W/lmCn" suffix_bytes)"; if [ "$cn" -gt "$tgt" ]; then mx="$cn"; else mx="$tgt"; fi
-t "C padded to D's length: never longer than max(target, unpadded C)" [ "$(rv "$W/lmC" suffix_bytes)" -le "$mx" ]
-t "C padded to D's length: unpadded rows kept" [ "$(head -n 3 "$W/lmC/selected.tsv")" = "$(cat "$W/lmCn/selected.tsv")" ]
-render "$W/lm1" raw > "$W/lm1.render"
-t "independent renderer matches the padded suffix" cmp -s "$W/lm1.render" "$W/lm1/suffix.txt"
+t "normal mode: length fields unused" [ "$(lmrc lm0) $(rv "$W/lm0" target_bytes)" = "- - - 246 - -" ]
+t "heading is 66 bytes" [ "$(head -n 2 "$W/lm0/suffix.txt" | wc -c)" -eq 66 ]
+lm lmA 300
+t "shorter C: one whole pad reaches the target" [ "$(lmrc lmA)" = "1 reached 246 738 438" ]
+t "shorter C: pad is rank k+1 (raw-dot3)" [ "$(tail -n +2 "$W/lmA/selected.tsv" | cut -f1,2,5,6 | tr '\t\n' ' ')" = "1 raw-clamp_sub 180 top 2 raw-dot3 492 pad " ]
+t "shorter C: length_gap = suffix - target" [ "$(rv "$W/lmA" length_gap)" -eq $(($(rv "$W/lmA" suffix_bytes) - 300)) ]
+t "shorter C: suffix_bytes = file size" [ "$(rv "$W/lmA" suffix_bytes)" -eq "$(wc -c < "$W/lmA/suffix.txt")" ]
+t "receipt keys in contract order" [ "$(cut -d= -f1 "$W/lmA/receipt.txt" | tr '\n' ' ')" = "contract mode kind k cap_bytes target_bytes exclude_family manifest_sha256 recheck_sha256 recheck_source_sha256 requirement_sha256 prompt_sha256 query_sha256 records indexed total_tokens selected pad pad_reason unpadded_bytes suffix_bytes length_gap suffix_sha256 selected_sha256 excluded_sha256 " ]
+lm lmB 800
+t "two pads, rank order, until reached" [ "$(lmrc lmB)" = "2 reached 246 988 188" ]
+t "two pads are rank k+1 and k+2" [ "$(col "$W/lmB/selected.tsv" 2 | tr '\n' ' ')" = "raw-clamp_sub raw-dot3 raw-sum_range " ]
+t "two pads have role pad" [ "$(col "$W/lmB/selected.tsv" 6 | tr '\n' ' ')" = "top pad pad " ]
+t "records after the pads stay beyond_k" [ "$(reason_of "$W/lmB" raw-canary)" = beyond_k ]
+render "$W/lmB" > "$W/lmB.render"
+t "independent renderer matches the padded suffix" cmp -s "$W/lmB.render" "$W/lmB/suffix.txt"
+CAP=600 lm lmC 400
+t "a pad that would pass the cap is skipped" [ "$(lmrc lmC)" = "1 reached 246 496 96" ]
+t "skipped pad candidate keeps its reason" [ "$(reason_of "$W/lmC" raw-dot3)" = beyond_k ]
+t "the next candidate is the pad" [ "$(col "$W/lmC/selected.tsv" 2 | tr '\n' ' ')" = "raw-clamp_sub raw-sum_range " ]
+CAP=600 lm lmD 500
+t "candidates run out under the cap: exhausted, short of target" [ "$(lmrc lmD)" = "1 exhausted 246 496 -4" ]
+lm lmE 4096
+t "every candidate used: exhausted" [ "$(lmrc lmE)" = "6 exhausted 246 1754 -2342" ]
+t "exhausted suffix never passes the cap" [ "$(rv "$W/lmE" suffix_bytes)" -le 4096 ]
+lm lmF 246
+t "C exactly at target: c_not_shorter" [ "$(lmrc lmF)" = "none c_not_shorter 246 246 0" ]
+t "c_not_shorter leaves the normal selection" cmp -s "$W/lm0/selected.tsv" "$W/lmF/selected.tsv"
+CAP=200 lm lmG 200
+t "nothing fits at all: exhausted with no pad" [ "$(lmrc lmG)" = "none exhausted 0 0 -200" ]
+# the reviewer's case: D (devq_dot, k 1) is 295 bytes; C at k 3 is already 945 bytes
+K=1 q "$MAN" abstraction "$TK/devq_dot" "$W/lmDd"
+t "D devq_dot k 1 realised 295 bytes" [ "$(rv "$W/lmDd" suffix_bytes)" = 295 ]
+q "$MAN" raw "$TK/devq_dot" "$W/lmCn"
+q "$MAN" raw "$TK/devq_dot" "$W/lmCc" --mode length-matched --target-bytes "$(rv "$W/lmDd" suffix_bytes)"
+t "longer C: pad=none c_not_shorter, both lengths in the receipt" [ "$(lmrc lmCc) $(rv "$W/lmCc" target_bytes)" = "none c_not_shorter 945 945 650 295" ]
+t "longer C: selection is the normal one" cmp -s "$W/lmCn/selected.tsv" "$W/lmCc/selected.tsv"
+t "longer C: suffix is the normal one" cmp -s "$W/lmCn/suffix.txt" "$W/lmCc/suffix.txt"
 
 # ---- 11 independent score oracle (sh tokens + bc integer BM25) ------------------------------------------
 tokens() { tr 'A-Z' 'a-z' | tr -cs 'a-z0-9' '\n' | grep -v '^$' || true; }

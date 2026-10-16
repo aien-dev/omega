@@ -1,19 +1,20 @@
 /*
  * genret.c -- file-backed retrieval provider of the GEN experiment (aien-spark/omega#479, #475).
- * Contract: tools/gen/retrieval/CONTRACT.md (genret-cli-v2). Arms C and D run the same algorithm with the
- * same k and byte cap; only --kind differs. The query is built from the public requirement (entry, params,
- * ret values) and the public prompt only; no other task file is opened.
+ * Contract: tools/gen/retrieval/CONTRACT.md (genret-cli-v3). Arms C and D run the same algorithm with the
+ * same k, byte cap and rendering; only --kind differs. The query is built from the public requirement (entry,
+ * params, ret values) and the public prompt only; no other task file is opened.
  *
- *   genret query --corpus <MANIFEST> --manifest-sha256 <hex> --recheck <recheck binary>
+ *   genret query --corpus <MANIFEST> --manifest-sha256 <hex> --recheck <recheck binary> --recheck-sha256 <hex>
  *                --kind raw|abstraction --k <n> --cap-bytes <n>
  *                --requirement <file> --prompt <file> --out <new dir> [--exclude-family <f>]...
  *                [--mode normal|irrelevant|empty|length-matched] [--target-bytes <n>]
  *   genret version
  *
  * Exit 0 on success (an empty selection included); exit 2 on any fatal condition, with one stderr line
- * "genret: FATAL <reason> <detail>" and nothing written. All scoring is integer arithmetic.
+ * "genret: FATAL <reason> <detail>" and no --out. All scoring is integer arithmetic.
  */
 #include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -26,11 +27,19 @@
 
 #include "sha256.h"
 
-#define CONTRACT "genret-cli-v2"
+/* sha256 of the recheck.c the build verified and compiled next to genret (mk/gen-retrieval.mk) */
+#ifndef GENRET_RECHECK_SOURCE_SHA256
+#error "build with -DGENRET_RECHECK_SOURCE_SHA256='\"<64 hex>\"' (see mk/gen-retrieval.mk)"
+#endif
+
+extern char **environ;
+
+#define CONTRACT "genret-cli-v3"
 #define MAX_RECORD 65536
 #define MAX_RECORDS 65536
 #define MAX_TASKFILE 4096
 #define MAX_MANIFEST (MAX_RECORDS * 4200)
+#define MAX_RECHECK_BIN (64 << 20)
 #define MAX_EXCL 256
 
 typedef unsigned __int128 u128;
@@ -66,8 +75,8 @@ static void fatal(const char *reason, const char *fmt, ...)
     fputc('\n', stderr);
     exit(2);
 }
-static void *xmalloc(size_t n) { void *p = malloc(n ? n : 1); if (!p) fatal("usage", "out of memory"); return p; }
-static void *xrealloc(void *p, size_t n) { p = realloc(p, n ? n : 1); if (!p) fatal("usage", "out of memory"); return p; }
+static void *xmalloc(size_t n) { void *p = malloc(n ? n : 1); if (!p) fatal("internal", "out of memory"); return p; }
+static void *xrealloc(void *p, size_t n) { p = realloc(p, n ? n : 1); if (!p) fatal("internal", "out of memory"); return p; }
 
 static void bput(buf *b, const void *p, size_t n)
 {
@@ -80,7 +89,7 @@ static void bprintf(buf *b, const char *fmt, ...)
 {
     char tmp[512]; va_list ap; int n;
     va_start(ap, fmt); n = vsnprintf(tmp, sizeof tmp, fmt, ap); va_end(ap);
-    if (n < 0 || (size_t)n >= sizeof tmp) fatal("usage", "internal format overflow");
+    if (n < 0 || (size_t)n >= sizeof tmp) fatal("internal", "format overflow");
     bput(b, tmp, (size_t)n);
 }
 
@@ -94,24 +103,31 @@ static int cmpb(const char *a, size_t na, const char *b, size_t nb)
 }
 static int spaneq(span s, const char *lit) { return s.n == strlen(lit) && memcmp(s.p, lit, s.n) == 0; }
 
-/* reads a whole file; returns NULL when unreadable; *over = 1 when longer than max */
-static unsigned char *slurp(const char *path, size_t max, size_t *len, int *over)
+/* reads an open file from its current offset to end; returns NULL on a read error; *over = 1 when longer
+ * than max (reading stops one byte past max) */
+static unsigned char *slurp_fd(int fd, size_t max, size_t *len, int *over)
 {
-    FILE *f = fopen(path, "rb");
-    if (!f) return NULL;
     size_t cap = 1 << 16, n = 0;
     unsigned char *p = xmalloc(cap + 1);
-    for (;;) {   /* grows as needed; stops reading one byte past max */
+    for (;;) {
         size_t want = (max + 1 - n) < (cap - n) ? (max + 1 - n) : (cap - n);
-        size_t got = fread(p + n, 1, want, f);
-        n += got;
-        if (got < want || n > max) break;
+        ssize_t got = read(fd, p + n, want);
+        if (got < 0) { if (errno == EINTR) continue; free(p); return NULL; }
+        if (got == 0) break;
+        n += (size_t)got;
+        if (n > max) break;
         if (n == cap) { cap *= 2; p = xrealloc(p, cap + 1); }
     }
-    int err = ferror(f);
-    fclose(f);
-    if (err) { free(p); return NULL; }
     *over = n > max; *len = n; p[n] = 0;
+    return p;
+}
+/* reads a whole file; returns NULL when unreadable */
+static unsigned char *slurp(const char *path, size_t max, size_t *len, int *over)
+{
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return NULL;
+    unsigned char *p = slurp_fd(fd, max, len, over);
+    close(fd);
     return p;
 }
 static void hexdigest(const void *p, size_t n, char out[65])
@@ -262,11 +278,9 @@ static uint64_t log2q16(uint64_t a, uint64_t b)
 }
 
 /* ---- rendering ------------------------------------------------------------------------------------ */
-static const char *kind_noun(const char *kind) { return strcmp(kind, "raw") == 0 ? "solutions to earlier tasks" : "helper functions"; }
-static void render_head(buf *b, const char *kind)
-{
-    bputs(b, "\nRetrieved records: verified "); bputs(b, kind_noun(kind)); bputs(b, ", most relevant first.\n");
-}
+/* one heading for both kinds: C and D suffixes differ only in record content */
+#define HEADING "\nVerified reference code from earlier tasks, most relevant first.\n"
+static void render_head(buf *b) { bputs(b, HEADING); }
 static void render_block(buf *b, size_t i, const rec *r)
 {
     bprintf(b, "\nRecord %zu.\n\nentry ", i); bspan(b, r->f[K_ENTRY]);
@@ -295,18 +309,33 @@ static int cmp_asc(const void *a, const void *b)
     return cmp_id(x, y);
 }
 static int cmp_byid(const void *a, const void *b) { return cmp_id(*(rec *const *)a, *(rec *const *)b); }
+static int cmpstr(const void *a, const void *b) { return strcmp(*(const char *const *)a, *(const char *const *)b); }
 
 /* ---- task files (CONTRACT.md 3) ------------------------------------------------------------------- */
-static void no_hidden(const char *path, const char *what)
+/* opens a task file once, checks the resolved path of THAT open file (no component named "hidden",
+ * byte-exact) and that it is a regular file, then reads it from the same descriptor. A symlink swapped in
+ * after the check cannot change what is read. Hard links into a hidden directory are not detectable. */
+static unsigned char *read_task(const char *path, const char *what, size_t *len, int *over)
 {
-    char rp[PATH_MAX];
-    if (!realpath(path, rp)) fatal(what, "cannot resolve %s", path);
+    int fd = open(path, O_RDONLY | O_CLOEXEC | O_NOCTTY | O_NONBLOCK);   /* a FIFO must not block before fstat */
+    if (fd < 0) fatal(what, "cannot read %s", path);
+    char link[64], rp[PATH_MAX];
+    snprintf(link, sizeof link, "/proc/self/fd/%d", fd);
+    ssize_t n = readlink(link, rp, sizeof rp - 1);
+    if (n <= 0) fatal(what, "cannot resolve %s", path);
+    rp[n] = 0;
     for (char *s = rp; *s; ) {
         while (*s == '/') s++;
         char *e = s; while (*e && *e != '/') e++;
         if (e - s == 6 && memcmp(s, "hidden", 6) == 0) fatal("hidden_path", "%s is under a 'hidden' directory", path);
         s = e;
     }
+    struct stat st;
+    if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode)) fatal(what, "%s is not a regular file", path);
+    unsigned char *p = slurp_fd(fd, MAX_TASKFILE, len, over);
+    close(fd);
+    if (!p) fatal(what, "cannot read %s", path);
+    return p;
 }
 static int parse_num(const char *s, long lo, long hi, long *out)
 {
@@ -323,7 +352,24 @@ static int parse_num(const char *s, long lo, long hi, long *out)
  * exits 0 (all accepted), 1 (any refused) or 2 (usage). Run in batches; every OK line must name the id
  * genret parsed from the same file, in order. */
 #define RECHECK_BATCH 128
-static void run_recheck(const char *bin, const char *rdir, const char *mdir, rec *R, size_t nr)
+/* opens the recheck binary once and hashes it; refuses it unless the sha256 equals the pin. The returned
+ * descriptor is what run_recheck executes (fexecve), so the binary that runs is the one that was hashed.
+ * It is not close-on-exec so that a script interpreter can open it through /proc/self/fd. */
+static int open_recheck(const char *bin, const char *pin, char sha[65])
+{
+    int fd = open(bin, O_RDONLY);
+    if (fd < 0) fatal("recheck_failed", "cannot open %s", bin);
+    struct stat st;
+    if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode)) fatal("recheck_failed", "%s is not a regular file", bin);
+    size_t n; int over;
+    unsigned char *p = slurp_fd(fd, MAX_RECHECK_BIN, &n, &over);
+    if (!p || over) fatal("recheck_failed", "cannot read %s", bin);
+    hexdigest(p, n, sha);
+    free(p);
+    if (strcmp(sha, pin) != 0) fatal("recheck_untrusted", "%s has sha256 %s, pinned %s", bin, sha, pin);
+    return fd;
+}
+static void run_recheck(int binfd, const char *bin, const char *rdir, const char *mdir, rec *R, size_t nr)
 {
     for (size_t b0 = 0; b0 < nr; b0 += RECHECK_BATCH) {
         size_t bn = nr - b0 < RECHECK_BATCH ? nr - b0 : RECHECK_BATCH;
@@ -343,7 +389,7 @@ static void run_recheck(const char *bin, const char *rdir, const char *mdir, rec
             close(pfd[0]);
             if (dup2(pfd[1], 1) < 0) _exit(127);
             close(pfd[1]);
-            execv(bin, av);
+            fexecve(binfd, av, environ);
             _exit(127);
         }
         close(pfd[1]);
@@ -380,29 +426,50 @@ static void run_recheck(const char *bin, const char *rdir, const char *mdir, rec
 
 /* ---- output --------------------------------------------------------------------------------------- */
 typedef struct { const char *name; buf *b; } outfile;
+/* writes every file into a fresh sibling directory <out>.tmp.<pid>, then renames it to <out> without
+ * replacing anything (RENAME_NOREPLACE): --out either does not exist or holds all six files. */
+static void tmp_clean(const char *tmp, outfile *fs, int nf)
+{
+    char path[PATH_MAX + 32];
+    for (int j = 0; j < nf; j++) { snprintf(path, sizeof path, "%s/%s", tmp, fs[j].name); unlink(path); }
+    rmdir(tmp);
+}
 static void write_out(const char *dir, outfile *fs, int nf)
 {
-    if (mkdir(dir, 0777) != 0) {
-        if (errno == EEXIST) fatal("out_exists", "%s exists", dir);
-        fatal("write_failed", "cannot create %s", dir);
-    }
+    char tmp[PATH_MAX];
+    size_t dl = strlen(dir);
+    while (dl > 1 && dir[dl - 1] == '/') dl--;
+    if (dl + 32 >= sizeof tmp) fatal("write_failed", "--out path too long");
+    snprintf(tmp, sizeof tmp, "%.*s.tmp.%ld", (int)dl, dir, (long)getpid());
+    if (mkdir(tmp, 0777) != 0) fatal("write_failed", "cannot create %s", tmp);
     for (int i = 0; i < nf; i++) {
-        char path[PATH_MAX];
-        snprintf(path, sizeof path, "%s/%s", dir, fs[i].name);
-        FILE *f = fopen(path, "wb");
-        int ok = f && fwrite(fs[i].b->p ? fs[i].b->p : "", 1, fs[i].b->n, f) == fs[i].b->n;
-        if (f && fclose(f) != 0) ok = 0;
-        if (!ok) {
-            for (int j = 0; j <= i; j++) { snprintf(path, sizeof path, "%s/%s", dir, fs[j].name); unlink(path); }
-            rmdir(dir);
-            fatal("write_failed", "cannot write %s/%s", dir, fs[i].name);
+        char path[PATH_MAX + 32];
+        snprintf(path, sizeof path, "%s/%s", tmp, fs[i].name);
+        int fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0666);
+        size_t n = fs[i].b->n, w = 0;
+        const char *p = fs[i].b->p ? fs[i].b->p : "";
+        while (fd >= 0 && w < n) {
+            ssize_t r = write(fd, p + w, n - w);
+            if (r < 0 && errno == EINTR) continue;
+            if (r <= 0) break;
+            w += (size_t)r;
         }
+        int ok = fd >= 0 && w == n && fsync(fd) == 0;
+        if (fd >= 0 && close(fd) != 0) ok = 0;
+        if (!ok) { tmp_clean(tmp, fs, nf); fatal("write_failed", "cannot write %s/%s", tmp, fs[i].name); }
+    }
+    if (renameat2(AT_FDCWD, tmp, AT_FDCWD, dir, RENAME_NOREPLACE) != 0) {
+        int e = errno;
+        tmp_clean(tmp, fs, nf);
+        if (e == EEXIST) fatal("out_exists", "%s exists", dir);
+        fatal("write_failed", "cannot rename %s to %s", tmp, dir);
     }
 }
 
 static void usage(const char *why)
 {
-    fatal("usage", "%s (genret query --corpus MANIFEST --manifest-sha256 HEX --recheck BIN --kind raw|abstraction --k N "
+    fatal("usage", "%s (genret query --corpus MANIFEST --manifest-sha256 HEX --recheck BIN --recheck-sha256 HEX "
+          "--kind raw|abstraction --k N "
           "--cap-bytes N --requirement F --prompt F --out DIR [--exclude-family F]... "
           "[--mode normal|irrelevant|empty|length-matched] [--target-bytes N]; genret version)", why);
 }
@@ -412,7 +479,7 @@ int main(int argc, char **argv)
     if (argc == 2 && strcmp(argv[1], "version") == 0) { puts(CONTRACT); return 0; }
     if (argc < 2 || strcmp(argv[1], "query") != 0) usage("first argument must be query or version");
 
-    const char *corpus = NULL, *msha = NULL, *kind = NULL, *reqf = NULL, *prf = NULL, *out = NULL, *mode = NULL, *recheck = NULL;
+    const char *corpus = NULL, *msha = NULL, *kind = NULL, *reqf = NULL, *prf = NULL, *out = NULL, *mode = NULL, *recheck = NULL, *rpin = NULL;
     const char *excl[MAX_EXCL]; int nexcl = 0;
     long k = -1, cap = -1, target = -1;
     for (int i = 2; i < argc; i++) {
@@ -427,6 +494,7 @@ int main(int argc, char **argv)
         else if (!strcmp(o, "--prompt")) slot = &prf;
         else if (!strcmp(o, "--out")) slot = &out;
         else if (!strcmp(o, "--recheck")) slot = &recheck;
+        else if (!strcmp(o, "--recheck-sha256")) slot = &rpin;
         else if (!strcmp(o, "--mode")) slot = &mode;
         else if (!strcmp(o, "--k")) { num = &k; lo = 1; hi = 64; }
         else if (!strcmp(o, "--cap-bytes")) { num = &cap; lo = 1; hi = 1048576; }
@@ -439,8 +507,9 @@ int main(int argc, char **argv)
         if (slot) { if (*slot) usage("option repeated"); *slot = v; }
         else { if (*num != -1) usage("option repeated"); if (!parse_num(v, lo, hi, num)) usage("number out of range"); }
     }
-    if (!corpus || !msha || !kind || !reqf || !prf || !out || !recheck || k < 0 || cap < 0) usage("missing required option");
+    if (!corpus || !msha || !kind || !reqf || !prf || !out || !recheck || !rpin || k < 0 || cap < 0) usage("missing required option");
     if (!ishex64(msha, strlen(msha))) usage("--manifest-sha256 must be 64 lowercase hex");
+    if (!ishex64(rpin, strlen(rpin))) usage("--recheck-sha256 must be 64 lowercase hex");
     if (strcmp(kind, "raw") && strcmp(kind, "abstraction")) usage("--kind must be raw or abstraction");
     if (!mode) mode = "normal";
     int m_normal = !strcmp(mode, "normal"), m_irr = !strcmp(mode, "irrelevant"), m_empty = !strcmp(mode, "empty"),
@@ -450,16 +519,14 @@ int main(int argc, char **argv)
     if (m_len && target > cap) usage("--target-bytes must not exceed --cap-bytes");
     struct stat st;
     if (lstat(out, &st) == 0) fatal("out_exists", "%s exists", out);
+    char rsha[65];
+    int rfd = open_recheck(recheck, rpin, rsha);
 
     /* ---- task files: the only query input ---- */
-    no_hidden(reqf, "requirement_invalid");
-    no_hidden(prf, "prompt_invalid");
     size_t rn, pn; int over;
-    unsigned char *req = slurp(reqf, MAX_TASKFILE, &rn, &over);
-    if (!req) fatal("requirement_invalid", "cannot read %s", reqf);
+    unsigned char *req = read_task(reqf, "requirement_invalid", &rn, &over);
     if (over || memchr(req, 0, rn)) fatal("requirement_invalid", "%s: over %d bytes or holds NUL", reqf, MAX_TASKFILE);
-    unsigned char *pr = slurp(prf, MAX_TASKFILE, &pn, &over);
-    if (!pr) fatal("prompt_invalid", "cannot read %s", prf);
+    unsigned char *pr = read_task(prf, "prompt_invalid", &pn, &over);
     if (over || pn < 1) fatal("prompt_invalid", "%s: must be 1..%d bytes", prf, MAX_TASKFILE);
     for (size_t i = 0; i < pn; i++)
         if (pr[i] != '\n' && (pr[i] < 0x20 || pr[i] > 0x7e)) fatal("prompt_invalid", "%s: byte outside \\n and 0x20..0x7E", prf);
@@ -512,7 +579,7 @@ int main(int argc, char **argv)
     for (size_t i = 0; i < mn; i++) if (man[i] == '\n') nr++;
     if (nr > MAX_RECORDS) fatal("manifest_malformed", "more than %d lines", MAX_RECORDS);
     rec *R = calloc(nr, sizeof *R);
-    if (!R) fatal("usage", "out of memory");
+    if (!R) fatal("internal", "out of memory");
     {
         size_t i = 0, li = 0;
         while (i < mn) {
@@ -537,9 +604,15 @@ int main(int argc, char **argv)
             rec *r = &R[li];
             memcpy(r->digest, line, 64); r->digest[64] = 0;
             r->relpath = path;
-            for (size_t j = 0; j < li; j++) if (!strcmp(R[j].relpath, path)) fatal("manifest_malformed", "duplicate path %s", path);
             li++; i += n + 1;
         }
+        /* duplicate paths: sort the path pointers (sizeof(char *) on purpose) and compare neighbours */
+        const char **paths = xmalloc(nr * sizeof *paths);
+        for (size_t j = 0; j < nr; j++) paths[j] = R[j].relpath;
+        qsort(paths, nr, sizeof *paths, cmpstr);
+        for (size_t j = 1; j < nr; j++)
+            if (!strcmp(paths[j - 1], paths[j])) fatal("manifest_malformed", "duplicate path %s", paths[j]);
+        free(paths);
     }
 
     /* ---- records: integrity is fatal ---- */
@@ -559,7 +632,7 @@ int main(int argc, char **argv)
     {
         char *rdir = xmalloc(strlen(mdir) + 16);
         strcpy(rdir, mdir); strcat(rdir, "receipts");
-        run_recheck(recheck, rdir, mdir, R, nr);
+        run_recheck(rfd, recheck, rdir, mdir, R, nr);
         free(rdir);
     }
     /* the files recheck read must still be the bytes genret parsed */
@@ -636,8 +709,8 @@ int main(int argc, char **argv)
     for (size_t i = 0; i < nr; i++) if (R[i].indexed) ord[no++] = &R[i];
     qsort(ord, no, sizeof *ord, m_irr ? cmp_asc : cmp_desc);
     rec **sel = xmalloc((N + 1) * sizeof *sel);
-    size_t ns = 0, total = 0, hlen;
-    { buf h = { 0 }; render_head(&h, kind); hlen = h.n; free(h.p); }
+    size_t ns = 0, total = 0, unpadded = 0, npad = 0, hlen = strlen(HEADING);
+    const char *pad_reason = "-";
     if (m_empty) {
         for (size_t i = 0; i < no; i++) strcpy(ord[i]->reason, "ablation_empty");
     } else {
@@ -655,29 +728,36 @@ int main(int argc, char **argv)
             }
             strcpy(r->reason, stop);
         }
-        if (m_len) {
-            for (size_t i = 0; i < no; i++) {
+        /* length-matched (CONTRACT.md 6): the target is the other arm's realised suffix_bytes. A selection
+         * already at or over it is left alone (c_not_shorter). A shorter one gets whole extra records from
+         * the rest of its own ranking (rank k+1, k+2, ...; any that would pass the cap is skipped) until the
+         * suffix reaches or passes the target (reached) or no candidate is left (exhausted). */
+        unpadded = total;
+        if (m_len && total >= (size_t)target) pad_reason = "c_not_shorter";
+        else if (m_len) {
+            pad_reason = "exhausted";
+            for (size_t i = 0; i < no && total < (size_t)target; i++) {
                 rec *r = ord[i];
                 if (strcmp(r->reason, "beyond_k") && strcmp(r->reason, "cap_bytes")) continue;
                 size_t add = block_len(ns + 1, r) + (ns == 0 ? hlen : 0);
-                if (total + add <= (size_t)target) {
-                    total += add; r->selected = 1; r->pad = 1; r->reason[0] = 0; sel[ns++] = r; break;
-                }
+                if (total + add > (size_t)cap) continue;
+                total += add; r->selected = 1; r->pad = 1; r->reason[0] = 0; sel[ns++] = r; npad++;
             }
+            if (total >= (size_t)target) pad_reason = "reached";
         }
     }
 
     /* ---- outputs (CONTRACT.md 8) ---- */
     buf bs = { 0 }, be = { 0 }, bx = { 0 }, bq = { 0 }, br = { 0 }, bh = { 0 };
     bputs(&bs, "rank\tid\tdigest\tscore\tbytes\trole\n");
-    if (ns) render_head(&bx, kind);
+    if (ns) render_head(&bx);
     for (size_t i = 0; i < ns; i++) {
         size_t before = bx.n;
         render_block(&bx, i + 1, sel[i]);
         bprintf(&bs, "%zu\t", i + 1); bspan(&bs, sel[i]->f[K_ID]);
         bprintf(&bs, "\t%s\t%llu\t%zu\t%s\n", sel[i]->digest, (unsigned long long)sel[i]->score, bx.n - before, sel[i]->pad ? "pad" : "top");
     }
-    if (bx.n != total) fatal("usage", "internal: suffix length %zu != accounted %zu", bx.n, total);
+    if (bx.n != total) fatal("internal", "suffix length %zu != accounted %zu", bx.n, total);
     bputs(&be, "id\tdigest\tscore\treason\n");
     for (size_t i = 0; i < nr; i++) {
         rec *r = byid[i];
@@ -690,21 +770,22 @@ int main(int argc, char **argv)
     char d_req[65], d_pr[65], d_q[65], d_x[65], d_s[65], d_e[65];
     hexdigest(req, rn, d_req); hexdigest(pr, pn, d_pr); hexdigest(bq.p ? bq.p : "", bq.n, d_q);
     hexdigest(bx.p ? bx.p : "", bx.n, d_x); hexdigest(bs.p, bs.n, d_s); hexdigest(be.p, be.n, d_e);
-    const char *padid = "-"; char padbuf[80];
+    char padv[24] = "-", unpv[24] = "-", gapv[24] = "-";
     if (m_len) {
-        padid = "none";
-        for (size_t i = 0; i < ns; i++) if (sel[i]->pad) {
-            snprintf(padbuf, sizeof padbuf, "%.*s", (int)sel[i]->f[K_ID].n, sel[i]->f[K_ID].p); padid = padbuf;
-        }
+        if (npad) snprintf(padv, sizeof padv, "%zu", npad); else strcpy(padv, "none");
+        snprintf(unpv, sizeof unpv, "%zu", unpadded);
+        snprintf(gapv, sizeof gapv, "%lld", (long long)bx.n - (long long)target);
     }
     bprintf(&br, "contract=%s\nmode=%s\nkind=%s\nk=%ld\ncap_bytes=%ld\n", CONTRACT, mode, kind, k, cap);
     if (m_len) bprintf(&br, "target_bytes=%ld\n", target); else bputs(&br, "target_bytes=-\n");
     bputs(&br, "exclude_family=");
     if (!nexcl) bputs(&br, "-");
     for (int x = 0; x < nexcl; x++) { if (x) bputs(&br, ","); bputs(&br, excl[x]); }
-    bprintf(&br, "\nmanifest_sha256=%s\nrequirement_sha256=%s\nprompt_sha256=%s\nquery_sha256=%s\n", mdig, d_req, d_pr, d_q);
-    bprintf(&br, "records=%zu\nindexed=%zu\ntotal_tokens=%llu\nselected=%zu\npad=%s\n", nr, N, (unsigned long long)T, ns, padid);
-    bprintf(&br, "suffix_bytes=%zu\nsuffix_sha256=%s\nselected_sha256=%s\nexcluded_sha256=%s\n", bx.n, d_x, d_s, d_e);
+    bprintf(&br, "\nmanifest_sha256=%s\nrecheck_sha256=%s\nrecheck_source_sha256=%s\n", mdig, rsha, GENRET_RECHECK_SOURCE_SHA256);
+    bprintf(&br, "requirement_sha256=%s\nprompt_sha256=%s\nquery_sha256=%s\n", d_req, d_pr, d_q);
+    bprintf(&br, "records=%zu\nindexed=%zu\ntotal_tokens=%llu\nselected=%zu\n", nr, N, (unsigned long long)T, ns);
+    bprintf(&br, "pad=%s\npad_reason=%s\nunpadded_bytes=%s\nsuffix_bytes=%zu\nlength_gap=%s\n", padv, pad_reason, unpv, bx.n, gapv);
+    bprintf(&br, "suffix_sha256=%s\nselected_sha256=%s\nexcluded_sha256=%s\n", d_x, d_s, d_e);
     outfile fs[6] = { { "selected.tsv", &bs }, { "excluded.tsv", &be }, { "suffix.txt", &bx }, { "query.txt", &bq },
                       { "receipt.txt", &br }, { "SHA256SUMS", &bh } };
     for (int i = 0; i < 5; i++) {

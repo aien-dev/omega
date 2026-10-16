@@ -1,4 +1,4 @@
-# genret: file-backed retrieval provider, CLI contract `genret-cli-v2`
+# genret: file-backed retrieval provider, CLI contract `genret-cli-v3`
 
 GEN-4 (aien-spark/omega#479, master #475). Owner: Agent E. Consumers: the GEN runner (Agent C, through this
 CLI only) and the Cortex provider (aien-spark/aien-sovereign-core#556), which must reproduce `selected.tsv`,
@@ -6,32 +6,49 @@ CLI only) and the Cortex provider (aien-spark/aien-sovereign-core#556), which mu
 arithmetic or byte comparison so a second implementation can match it exactly. Any change to an observable
 output is a new contract version.
 
-Version history: v1 (commit c0c55920) read a provisional record format `gen-record v0`; it was never used on
-a real corpus and is superseded. v2 reads Agent D's record schema v1 (`gen-record 1`,
-tools/gen/abstract/RECORD_SCHEMA.md, sha256 9be17b6bc6f97c7420ced722bb258c420944bd87461097163df0992112ae6b53)
-and validates every record with D's `recheck`. Changes from v1: new required `--recheck`; reasons
-`unreceipted` and `poisoned:bytes` removed (recheck refuses such records, which is fatal); new fatal reason
-`recheck_failed`; `contract=genret-cli-v2` in the receipt. Scoring, ranking, rendering and output files are
-unchanged.
+Version history:
+- v1 (commit c0c55920) read a provisional record format `gen-record v0`. It was never used on a real corpus.
+- v2 (commit a4878d69) reads Agent D's record schema v1 (`gen-record 1`, tools/gen/abstract/RECORD_SCHEMA.md,
+  sha256 9be17b6bc6f97c7420ced722bb258c420944bd87461097163df0992112ae6b53) and validates every record with D's
+  `recheck`.
+- v3 (this file), after the PR #485 review:
+  - One heading for both kinds, so C and D suffixes differ only in record content (section 6).
+  - Length-matched pads with as many whole records as it takes to reach the target, and reports why it
+    stopped (section 6).
+  - New required `--recheck-sha256`. genret refuses any other validator binary (new fatal reason
+    `recheck_untrusted`) and names the validator in the receipt.
+  - Task files are opened once and read from the same descriptor.
+  - Outputs appear atomically.
+  - New fatal reason `internal`.
+  - New receipt keys `recheck_sha256`, `recheck_source_sha256`, `pad_reason`, `unpadded_bytes` and
+    `length_gap`. `pad` is now a count.
 
-Arms C and D call the same command with the same `--k`, `--cap-bytes` and mode. The only difference is
-`--kind raw` (C) versus `--kind abstraction` (D), and therefore which records are indexed.
+  Scoring, ranking, tokenization, eligibility and the record block format are unchanged from v2.
+
+Arms C and D call the same command with the same `--k`, `--cap-bytes`, mode and rendering. The only
+difference is `--kind raw` (C) versus `--kind abstraction` (D), and therefore which records are indexed.
 
 ## 1. Command
 
 ```
-genret query --corpus <records/MANIFEST> --manifest-sha256 <64 lowercase hex> --recheck <recheck binary>
+genret query --corpus <records/MANIFEST> --manifest-sha256 <64 lowercase hex>
+             --recheck <recheck binary> --recheck-sha256 <64 lowercase hex>
              --kind raw|abstraction --k <1..64> --cap-bytes <1..1048576>
              --requirement <file> --prompt <file> --out <new dir>
              [--exclude-family <family>]...  [--mode normal|irrelevant|empty|length-matched]
              [--target-bytes <1..cap>]         (required with, and only with, --mode length-matched)
-genret version                                  prints "genret-cli-v2"
+genret version                                  prints "genret-cli-v3"
 ```
 
-- Exit 0: success (an empty selection is a success). Exit 2: fatal (section 7); nothing is written and
-  `--out` is not created. `--out` must not exist; genret creates it.
-- Default mode: `normal`. Each option except `--exclude-family` at most once; unknown options are fatal.
-- `--recheck`: Agent D's validator (`make gen-abstract` builds `build/gen_abstract/recheck`).
+- Exit 0: success (an empty selection is a success). Exit 2: fatal (section 7). `--out` is not created.
+- `--out` must not exist. genret writes all files into a new sibling directory `<out>.tmp.<pid>` and
+  renames it to `--out` without replacing anything (Linux `renameat2` with `RENAME_NOREPLACE`), so `--out`
+  either does not exist or holds every output file. If genret is killed before the rename, a
+  `<out>.tmp.<pid>` directory may remain. It is never `--out`.
+- Default mode: `normal`. Each option except `--exclude-family` at most once. Unknown options are fatal.
+- `--recheck`: Agent D's validator. `make gen-retrieval` builds `build/gen_retrieval/recheck` from the
+  pinned `recheck.c`, and writes its sha256 to `build/gen_retrieval/recheck.sha256`. That value is what
+  callers pass as `--recheck-sha256`.
 
 ## 2. Corpus input
 
@@ -44,6 +61,13 @@ genret version                                  prints "genret-cli-v2"
   fatal. Files not listed are never read.
 - sha256 of the MANIFEST bytes must equal `--manifest-sha256`; every record's bytes must equal its manifest
   digest (checked when read, and again after recheck has read the file).
+- Validator pin: before reading any task or record file, genret opens `--recheck` once and hashes its
+  bytes. If the sha256 differs from `--recheck-sha256`, the run stops with fatal `recheck_untrusted`. If the
+  file is missing or unreadable, the reason is `recheck_failed`. Every batch executes that same open file
+  (`fexecve`), so the program that runs is the one that was hashed. The receipt records `recheck_sha256` (the
+  binary) and `recheck_source_sha256`. The source digest is compiled into genret: it is the `recheck.c` the
+  build checked against its pin and compiled into `build/gen_retrieval/recheck`. It describes `--recheck`
+  only when `--recheck-sha256` is that build's `recheck.sha256`.
 - Every listed record is passed to `recheck --receipts <MANIFEST dir>/receipts <record>...` (batches of 128,
   manifest order). recheck checks schema v1 sections 1 to 3 and that the receipt file exists, is this
   record's and hashes to its id. It must exit 0 and print exactly `OK <id>` per record, in order, with the id
@@ -61,8 +85,13 @@ genret version                                  prints "genret-cli-v2"
   `^ret( |$)` (the same lines `tools/exp445/reader.sh user_msg` shows the model). Query text from it = the
   three values (the line after the key and one space), nothing else from the file.
 - `--prompt`: 1..4096 bytes, only `\n` and 0x20..0x7E (HARNESS_INTERFACE_V2 section 3). Query text = all of it.
-- A requirement or prompt path whose resolved absolute path has a component named `hidden` is fatal
-  (`hidden_path`). genret opens no other task file.
+- Each task file is opened once. genret takes the resolved absolute path of that open file
+  (`/proc/self/fd/N`), refuses it if any component is exactly `hidden` (fatal `hidden_path`), and refuses
+  anything but a regular file (`requirement_invalid` / `prompt_invalid`). It then reads from the same
+  descriptor, so a symlink swapped in after the check changes nothing.
+  - The match is byte-exact and case-sensitive: `Hidden` is not refused.
+  - A hard link to a hidden file placed outside `hidden/` cannot be detected this way.
+  - genret opens no other task file.
 - Query terms = the DISTINCT tokens (section 4) of the requirement values and the prompt, sorted by byte
   order; written to `query.txt`, one per line.
 
@@ -86,6 +115,10 @@ Records that pass all five form the index: `N` records, `T` = sum of their `dl`,
 records containing term `t`. Excluded records do not affect any score. A record is eligible only through a
 MANIFEST whose sha256 is the pinned one (RECORD_SCHEMA.md section 5).
 
+Only the fence is screened here. `desc` is rendered as plain prose outside the code block (section 6), so
+its wording reaches the model unfenced. Its content is owned by the record producers and by recheck's
+schema checks (one printable line), not by genret.
+
 ## 6. Scoring, ranking, selection
 
 Integer BM25, k1 = 6/5, b = 3/4, log base 2, scores in units of 2^-16. For index record r and query term t
@@ -106,10 +139,11 @@ log2q16(a, b):   requires a >= b >= 1, a < 2^32; 64-bit unsigned arithmetic
 
 (This is BM25 with idf = ln(1 + (N - df + 0.5)/(df + 0.5)), rescaled by 1/ln 2 and multiplied out by 20T.)
 
-Rendering (exact bytes; kind noun K = `solutions to earlier tasks` for raw, `helper functions` for abstraction):
+Rendering (exact bytes, the same for both kinds: a C suffix and a D suffix with the same number of records
+differ only in the entry, params, ret, desc and body values):
 
 ```
-H        = "\nRetrieved records: verified " K ", most relevant first.\n"
+H        = "\nVerified reference code from earlier tasks, most relevant first.\n"            (66 bytes)
 block(i) = "\nRecord " i ".\n\n" "entry " entry "\n" "params" (" " param)* "\n" "ret " ret "\n" "\n" desc "\n\n```\n" body "```\n"
 suffix   = "" when nothing is selected, else H block(1) ... block(n)
 ```
@@ -126,20 +160,36 @@ Order and selection by mode:
   walk, k and cap. Score-0 records are not excluded.
 - `empty` (negative control): nothing selected; every index record is excluded with `ablation_empty`.
   Corpus checks and fatal rules are unchanged.
-- `length-matched` (preregistered ablation): `normal`, then one pad record: the first record logged
-  `beyond_k` or `cap_bytes`, in rank order, whose block at position n+1 keeps the suffix length (with H if
-  n = 0) at most `--target-bytes`. It is appended with role `pad`; if none fits, nothing is appended
-  (`pad=none` in the receipt). `--target-bytes` must be <= `--cap-bytes`; intended use: C padded to D's
-  realised `suffix_bytes`.
+- `length-matched` (preregistered ablation: "C with more raw solutions, length-matched").
+  `--target-bytes` is the other arm's realised `suffix_bytes`, normally D's at the same k and cap, and must
+  be <= `--cap-bytes`. First the `normal` walk; call its suffix length U (`unpadded_bytes`).
+  - If U >= target: nothing is added. The receipt shows `pad=none` and `pad_reason=c_not_shorter`, and the
+    selection and suffix are exactly `normal`'s.
+  - If U < target: walk the records logged `beyond_k` or `cap_bytes` in rank order (rank k+1, k+2, ...).
+    Skip any whose block at the next position (with H if nothing is selected yet) would push the suffix
+    past `--cap-bytes`; a skipped record keeps its reason. Append the others whole, with role `pad`. Stop
+    as soon as the suffix length is >= target (`pad_reason=reached`), or when the candidates run out
+    (`pad_reason=exhausted`, still short of the target). `pad` = the number appended, or `none`.
+  - The receipt always gives `unpadded_bytes`, `target_bytes`, the final `suffix_bytes` and
+    `length_gap` = suffix_bytes - target_bytes, signed. When reached, `length_gap` is the overshoot (>= 0,
+    smaller than the last pad's block). For c_not_shorter it is >= 0. For exhausted it is < 0.
+  - Known property, by design: the pads are C's next-most-relevant raw records. Padded C therefore gets
+    more records and more on-topic content, not only more bytes. Its gain cannot be put down to length
+    alone. That bias favours C, which keeps a "D still wins" result conservative. The length-neutral
+    control is `irrelevant`.
 
 ## 7. Fatal (exit 2, one stderr line `genret: FATAL <reason> <detail>`, no output)
 
-`usage`, `manifest_unreadable`, `manifest_malformed`, `manifest_digest_mismatch`, `record_missing` (listed
-file absent or unreadable), `stale_digest` (record bytes differ from the manifest digest), `invalid_record`
-(recheck refused it, or genret cannot read a field it needs), `recheck_failed` (recheck missing, crashed, or
-its output does not match the records), `duplicate_id`, `requirement_invalid`, `prompt_invalid`,
-`hidden_path`, `out_exists`, `write_failed`. A record is never replaced by another one: integrity failures
-stop the run.
+- `usage`, `manifest_unreadable`, `manifest_malformed`, `manifest_digest_mismatch`
+- `record_missing`: a listed file is absent or unreadable
+- `stale_digest`: record bytes differ from the manifest digest
+- `invalid_record`: recheck refused the record, or genret cannot read a field it needs
+- `recheck_failed`: recheck is missing, crashed, or its output does not match the records
+- `recheck_untrusted`: the `--recheck` file's sha256 is not `--recheck-sha256`
+- `duplicate_id`, `requirement_invalid`, `prompt_invalid`, `hidden_path`, `out_exists`, `write_failed`
+- `internal`: out of memory, or an internal consistency check failed
+
+A record is never replaced by another one: integrity failures stop the run.
 
 ## 8. Outputs in `--out`
 
@@ -149,7 +199,34 @@ stop the run.
 | `excluded.tsv` | header `id\tdigest\tscore\treason`; every manifest record not selected, sorted by id (byte order); score `-` when not indexed |
 | `suffix.txt` | the exact bytes the runner appends in the variable suffix (may be empty) |
 | `query.txt` | the query terms (section 3) |
-| `receipt.txt` | `key=value` lines, fixed order: `contract=genret-cli-v2`, `mode`, `kind`, `k`, `cap_bytes`, `target_bytes` (`-` if unused), `exclude_family` (comma list or `-`), `manifest_sha256`, `requirement_sha256`, `prompt_sha256`, `query_sha256`, `records`, `indexed`, `total_tokens` (T), `selected`, `pad` (`none`, `-` or the id), `suffix_bytes`, `suffix_sha256`, `selected_sha256`, `excluded_sha256` |
+| `receipt.txt` | `key=value` lines in a fixed order (listed below) |
 | `SHA256SUMS` | `sha256sum` lines of the five files above, in that file order |
+
+`receipt.txt` keys, in this order:
+1. `contract=genret-cli-v3`
+2. `mode`
+3. `kind`
+4. `k`
+5. `cap_bytes`
+6. `target_bytes` (`-` if unused)
+7. `exclude_family` (comma list or `-`)
+8. `manifest_sha256`
+9. `recheck_sha256`
+10. `recheck_source_sha256`
+11. `requirement_sha256`
+12. `prompt_sha256`
+13. `query_sha256`
+14. `records`
+15. `indexed`
+16. `total_tokens` (T)
+17. `selected`
+18. `pad` (`-` unless length-matched; else `none` or the count of pad records)
+19. `pad_reason` (`-`, `c_not_shorter`, `reached` or `exhausted`)
+20. `unpadded_bytes` (`-` unless length-matched)
+21. `suffix_bytes`
+22. `length_gap` (`-` unless length-matched; else signed decimal)
+23. `suffix_sha256`
+24. `selected_sha256`
+25. `excluded_sha256`
 
 Digests are lowercase hex sha256. No timestamps, paths or host data in any output.
