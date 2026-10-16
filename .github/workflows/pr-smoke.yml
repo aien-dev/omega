@@ -53,6 +53,13 @@ jobs:
           make test | tee base.log
           grep -E 'TOTAL GATES: ([0-9]+) \| PASSED: \1 \| FAILED: 0' base.log
           ! grep -qE 'FAILED: [1-9]|\[FAIL\]|\(FAIL\)' base.log
+      - name: IMAD.HI.U32 register Rc refused by the four warp simulators (omega #492)
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+        run: |
+          set -o pipefail
+          make test-gpu-imadhi-rc | tee imadhi.log
+          test "$(grep -c '^PASS bw_warp_sim' imadhi.log)" -eq 4
       - name: Language V0 golden
         run: |
           set -o pipefail
