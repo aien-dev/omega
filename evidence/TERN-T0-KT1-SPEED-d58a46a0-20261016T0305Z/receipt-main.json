@@ -1,0 +1,21 @@
+{
+  "test": "gpu_tern_test",
+  "stage": "TERN-T0 KT1",
+  "mutant_forced": 0,
+  "shape_k2560": {"layout": 0, "rows": 1, "warps": 8, "depth": 10, "ctas": 160},
+  "random_rows": {"rows": 20000, "differing": 0},
+  "ma_grid": {"points": 36, "rows": 49932, "differing": 0},
+  "bitnet_shapes": {"layouts": 2, "differing": 0},
+  "mutant_1": {"rows": 512, "differing": 512, "caught": true},
+  "mutant_3": {"rows": 512, "differing": 511, "caught": true},
+  "f32_qkv": {"rows": 3840, "differing": 0},
+  "mutant_2": {"rows": 3840, "differing": 1919, "caught": true},
+  "launch_floor_in_list": {"median_us": 3.744, "min_us": 3.456},
+  "cold": [
+    {"n": 3840, "k": 2560, "bytes": 2457600, "copies": 41, "median_ns": 15296, "min_ns": 14752, "gbs": 160.67, "of_spec_273": 0.5885, "of_practical_237_2": 0.6774, "minus_floor_ns": 11552, "minus_floor_gbs": 212.74, "minus_floor_of_spec_273": 0.7793, "minus_floor_of_practical_237_2": 0.8969, "gate_gbs": 180, "gate_on": "minus_floor_gbs", "pass": true},
+    {"n": 2560, "k": 2560, "bytes": 1638400, "copies": 62, "median_ns": 13344, "min_ns": 13024, "gbs": 122.78, "of_spec_273": 0.4498, "of_practical_237_2": 0.5176, "minus_floor_ns": 9600, "minus_floor_gbs": 170.67, "minus_floor_of_spec_273": 0.6252, "minus_floor_of_practical_237_2": 0.7195, "gate_gbs": 180, "gate_on": "minus_floor_gbs", "pass": false},
+    {"n": 13824, "k": 2560, "bytes": 8847360, "copies": 12, "median_ns": 42592, "min_ns": 37760, "gbs": 207.72, "of_spec_273": 0.7609, "of_practical_237_2": 0.8757, "minus_floor_ns": 38848, "minus_floor_gbs": 227.74, "minus_floor_of_spec_273": 0.8342, "minus_floor_of_practical_237_2": 0.9601, "gate_gbs": 200, "gate_on": "minus_floor_gbs", "pass": true},
+    {"n": 2560, "k": 6912, "bytes": 4423680, "copies": 23, "median_ns": 26272, "min_ns": 24352, "gbs": 168.38, "of_spec_273": 0.6168, "of_practical_237_2": 0.7099, "minus_floor_ns": 22528, "minus_floor_gbs": 196.36, "minus_floor_of_spec_273": 0.7193, "minus_floor_of_practical_237_2": 0.8278, "gate_gbs": 180, "gate_on": "minus_floor_gbs", "pass": true}
+  ],
+  "checks": 68, "failed": 1, "verdict": "FAIL"
+}

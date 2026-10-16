@@ -66,3 +66,11 @@ jobs:
           test "$(grep -cE '^mutant [0-9]+ killed' transc.log)" -eq 10
           grep -qE '^test-numeric-transc: PASS \(all 10 mutants killed\)' transc.log
           ! grep -q '^FAIL' transc.log
+      - name: KT1 ternary GEMV, host battery and warp simulator (no chip)
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+        run: |
+          set -o pipefail
+          make test-gpu-tern | tee tern.log
+          test "$(grep -cE '^gpu_tern_test: [0-9]+ checks, 0 failed: PASS$' tern.log)" -eq 2
+          ! grep -q '^FAIL' tern.log

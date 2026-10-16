@@ -75,10 +75,14 @@ static void andi(Em *e, int d, int a, unsigned asub, uint32_t imm) { BlackwellIR
 static void ldg_wide(Em *e, BlackwellIROpcode op, int d, int addr64, uint32_t imm, int udesc, int first) {
     BlackwellIRInsn i = I0(op); i.dst_vreg = d; i.src1_vreg = addr64; i.imm = imm; i.ureg = udesc; emit(e, i, first ? K_VAR : K_VAR_MORE);
 }
-static void ldg32(Em *e, int d, int addr64, int udesc, int first) { BlackwellIRInsn i = I0(BW_IR_LDG_E); i.dst_vreg = d; i.src1_vreg = addr64; i.ureg = udesc; emit(e, i, first ? K_VAR : K_VAR_MORE); }
+static void ldg32(Em *e, int d, int addr64, uint32_t imm, int udesc, int first) {
+    BlackwellIRInsn i = I0(BW_IR_LDG_E); i.dst_vreg = d; i.src1_vreg = addr64; i.imm = imm; i.ureg = udesc; emit(e, i, first ? K_VAR : K_VAR_MORE);
+}
 static void stg(Em *e, int addr64, uint32_t imm, int val, int udesc) { BlackwellIRInsn i = I0(BW_IR_STG_E); i.src1_vreg = addr64; i.src2_vreg = val; i.imm = imm; i.ureg = udesc; emit(e, i, K_STORE); }
 static void lds128(Em *e, int d128, int addr, uint32_t imm, int first) { BlackwellIRInsn i = I0(BW_IR_LDS128); i.dst_vreg = d128; i.src1_vreg = addr; i.imm = imm; emit(e, i, first ? K_VAR : K_VAR_MORE); }
+static void lds32(Em *e, int d, int addr) { BlackwellIRInsn i = I0(BW_IR_LDS32); i.dst_vreg = d; i.src1_vreg = addr; emit(e, i, K_VAR); }
 static void sts32(Em *e, int addr, int val) { BlackwellIRInsn i = I0(BW_IR_STS32); i.src1_vreg = addr; i.src2_vreg = val; emit(e, i, K_STORE); }
+static void xorr(Em *e, int d, int a, int b) { BlackwellIRInsn i = I0(BW_IR_LOP3_XOR); i.dst_vreg = d; i.src1_vreg = a; i.src2_vreg = b; emit(e, i, K_FIXED); }
 static void bar_sync(Em *e) { emit(e, I0(BW_IR_BAR_SYNC), K_SYNC); }
 static void fmul(Em *e, int d, int a, int b) { BlackwellIRInsn i = I0(BW_IR_FMUL); i.dst_vreg = d; i.src1_vreg = a; i.src2_vreg = b; emit(e, i, K_FIXED); }
 static void i2f(Em *e, int d, int a) { BlackwellIRInsn i = I0(BW_IR_I2FP); i.dst_vreg = d; i.src1_vreg = a; emit(e, i, K_FIXED); }
@@ -129,12 +133,24 @@ int omega_tern_gemv_spec_ok(const OmegaTernGemvSpec *s) {
     if (s->depth == 0 || s->depth > 16 || ksc % s->depth || s->rows * s->depth > 16u) return 0;
     if (s->epi != OMEGA_TERN_EPI_I32 && s->epi != OMEGA_TERN_EPI_F32) return 0;
     if (s->epi == OMEGA_TERN_EPI_F32 && nch != 1) return 0;
-    if (s->mutant < 0 || s->mutant > 3) return 0;
+    if (s->mutant < 0 || s->mutant > 5) return 0;
     return 1;
 }
 uint32_t omega_tern_gemv_steps(const OmegaTernGemvSpec *s) { return omega_tern_gemv_spec_ok(s) ? s->k / 256u : 0; }
+/* Output path. Chip finding (investigation 2026-10-16-kt1-speed, probe-nostore): one small GPU-uncached store per unit per
+ * warp cost 9 to 11 us per launch at 3840 x 2560 and 13824 x 2560, more than a third of the launch. So a single-chunk
+ * kernel gathers each round's 2 R W results in shared memory (two slot sets, alternating by round, one CTA barrier per
+ * round) and warp 0 writes them as one coalesced store of 2 R W consecutive words. Chunked kernels (k > 8192) keep the
+ * per-row store because they accumulate y in place across chunks. */
+int omega_tern_gemv_coalesced_out(const OmegaTernGemvSpec *s) {
+    if (!omega_tern_gemv_spec_ok(s) || omega_tern_gemv_chunks(s) != 1 || 2u * s->rows * s->warps > 32u) return 0; /* warp 0 stores the round */
+    return s->k * 2u + 2u * omega_tern_gemv_out_slot_bytes(s) <= OMEGA_TERN_SHARED_MAX;
+}
+uint32_t omega_tern_gemv_out_slot_bytes(const OmegaTernGemvSpec *s) { return s ? 2u * s->rows * s->warps * 4u : 0; }
 uint32_t omega_tern_gemv_shared_bytes(const OmegaTernGemvSpec *s) {
-    return omega_tern_gemv_spec_ok(s) ? (s->k / omega_tern_gemv_chunks(s)) * 2u : 0;
+    if (!omega_tern_gemv_spec_ok(s)) return 0;
+    const uint32_t x_bytes = (s->k / omega_tern_gemv_chunks(s)) * 2u;
+    return omega_tern_gemv_coalesced_out(s) ? x_bytes + 2u * omega_tern_gemv_out_slot_bytes(s) : x_bytes;
 }
 
 uint64_t omega_tern_word_offset(uint32_t layout, uint32_t R, uint32_t k, uint32_t r, uint32_t c) {
@@ -213,6 +229,28 @@ static int tern_schedule_stalls(BlackwellIRProgram *p) {
     }
     return 0;
 }
+/* Every weight load of one K iteration (D steps) from the lane pointer pw, issued back to back with immediate offsets
+ * (block: one wide load per step; row-major: one 32-bit load per row and step). */
+static void weight_loads(Em *e, int block, uint32_t R, uint32_t D, const int *wq, int wr[4][16], int pw, uint32_t step_bytes,
+                         uint32_t row_bytes, int udesc) {
+    if (block) {
+        for (uint32_t d = 0; d < D; d++) ldg_wide(e, R == 4 ? BW_IR_LDG_E_128 : BW_IR_LDG_E_64, wq[d], pw, d * step_bytes, udesc, d == 0);
+        return;
+    }
+    for (uint32_t r = 0; r < R; r++) for (uint32_t d = 0; d < D; d++) ldg32(e, wr[r][d], pw, r * row_bytes + d * step_bytes, udesc, r == 0 && d == 0);
+}
+
+/* x staging address of word c, clamped to KWC - 1 so no lane reads past x (clamped lanes rewrite that word's staged values,
+ * identical bytes to the same place): cc = c < KWC ? c : KWC - 1, pxa = px + 16 cc, sb = 32 cc. kwm1 holds KWC - 1. */
+static void x_stage_addr(Em *e, int c, int kwm1, int one, int px, int cc, int pxa, int sb, int va, int vb) {
+    imadi(e, va, kwm1, 0, 0xffffffffu, c);  /* c - (KWC - 1) */
+    imadi(e, vb, one, 0, 0xffffffffu, va);  /* c - KWC */
+    shr(e, vb, vb, 0, 31);                  /* 1 if c < KWC */
+    imadr(e, cc, vb, va, 0, kwm1);          /* c < KWC ? c : KWC - 1 */
+    imadw(e, pxa, cc, 16u, px);
+    imadi(e, sb, cc, 0, 32u, NOREG);
+}
+
 int omega_blackwell_codegen_tern_gemv_prog(const OmegaTernGemvSpec *spec, BlackwellIRProgram *prog) {
     if (!omega_tern_gemv_spec_ok(spec) || !prog) return -1;
     const uint32_t K = spec->k, R = spec->rows, W = spec->warps, D = spec->depth, TH = 32u * W;
@@ -258,28 +296,53 @@ int omega_blackwell_codegen_tern_gemv_prog(const OmegaTernGemvSpec *spec, Blackw
     else { imadi(e, lo, l, 0, 4u, NOREG); imadi(e, lo, h, 0, R * row_bytes, lo); }
     imadw(e, pl, lo, 1, pwb);                /* this lane's weight pointer in unit 0, chunk 0 */
     movi(e, k0, 0x80008000u);
-    if (f32) ldg32(e, asv, pas, udesc, 1);
+    if (f32) ldg32(e, asv, pas, 0, udesc, 1);
     if (NCH > 1) { movi(e, chc, NCH); movrz(e, mul); }
+
+    /* ---- per-unit registers ---- */
+    int rowbase = V(e), pw = V64(e), xlc = V(e), cnt = V(e);
+    int T[4], wq[16], wr[4][16], xs[8], Ut[4], P[4], M[4], ap[4], am[4];
+    int row = V(e), okr = V(e), skip = V(e), yv = V(e), f = V(e), wsv = V(e), pya = V64(e), pwsa = V64(e), sum = V(e);
+    for (uint32_t r = 0; r < R; r++) { T[r] = V(e); Ut[r] = V(e); P[r] = V(e); M[r] = V(e); ap[r] = V(e); am[r] = V(e); }
+    if (block) { for (uint32_t d = 0; d < D; d++) wq[d] = R == 4 ? V128(e) : V64(e); }
+    else for (uint32_t r = 0; r < R; r++) for (uint32_t d = 0; d < D; d++) wr[r][d] = V(e);
+    for (uint32_t i = 0; i < (D <= 4u ? 2u * D : 2u); i++) xs[i] = V128(e);
+    /* prefetch flag (single chunk): 1 while this warp's first K iteration already has its weights in flight */
+    const int pre = NCH == 1;
+    int pf = NOREG, pu = NOREG;
+    if (pre) { pf = V(e); pu = V(e); }
+    if (e->err) return -1;
 
     /* ---- chunk loop (NCH > 1 only for k > OMEGA_TERN_CHUNK_MAX): x staged per chunk, y accumulated in place ---- */
     const int L_c = here(e);
     if (NCH > 1) { loop_begin(e); bar_sync(e); }
 
-    /* ---- stage x: per word c of the chunk, X_j = x[16c+j] * 65536 + x[16c+j+8] (j < 8), 32 bytes ---- */
+    /* ---- stage x: per word c of the chunk, X_j = x[16c+j] * 65536 + x[16c+j+8] (j < 8), 32 bytes.
+     * Single chunk: the weight loads of this warp's first unit (clamped to U - 1, always inside the tensor) go out first
+     * and the x load follows without waiting for them, so the x round trip and the first weight round trip overlap; the
+     * first instruction that uses x then waits for both. The K loop skips its loads once while pf is set. Measured
+     * (investigation 2026-10-16-kt1-speed): x staging alone took 2.3 to 3.2 us of every CTA before any weight moved. ---- */
     {
         const uint32_t rounds = (KWC + TH - 1) / TH;
-        int c = V(e), kwr = V(e), rc = V(e), pxa = V64(e), xq = V128(e), sb = V(e), va = V(e), vb = V(e), X = V(e), sad = V(e);
+        int c = V(e), kwm1 = V(e), rc = V(e), cc = V(e), pxa = V64(e), xq = V128(e), sb = V(e), va = V(e), vb = V(e), X = V(e), sad = V(e);
         if (e->err) return -1;
-        movi(e, kwr, KWC);
+        movi(e, kwm1, KWC - 1u);
         imadi(e, c, tid, 0, 1, NOREG);
         movi(e, rc, rounds);
+        x_stage_addr(e, c, kwm1, one, px, cc, pxa, sb, va, vb);
+        if (pre) {
+            imadi(e, pu, ureg, 0, 0xffffffffu, u0);   /* u0 - U */
+            shr(e, pf, pu, 0, 31);                    /* 1 if u0 < U */
+            imadi(e, pu, one, 0, 1, pu);              /* u0 - U + 1 */
+            imadi(e, t, one, 0, 0xffffffffu, ureg);   /* U - 1 */
+            imadr(e, pu, pf, pu, 0, t);               /* u0 < U ? u0 : U - 1 */
+            imadw(e, pw, pu, 2u * R * row_bytes, pl);
+            movi(e, pf, 1);
+            weight_loads(e, block, R, D, wq, wr, pw, step_bytes, row_bytes, udesc);
+        }
         const int L_s = here(e);
         loop_begin(e);
-        isetp_ge_u32(e, c, kwr);
-        Region rg = region_begin(e);
-        imadw(e, pxa, c, 16u, px);
-        ldg_wide(e, BW_IR_LDG_E_128, xq, pxa, 0, udesc, 1);
-        imadi(e, sb, c, 0, 32u, NOREG);
+        ldg_wide(e, BW_IR_LDG_E_128, xq, pxa, 0, udesc, !pre); /* behind the prefetch: no wait for its data */
         for (uint32_t j = 0; j < 8; j++) {
             const unsigned sh = 8u * (j & 3u);
             int src[2] = { va, vb }; const unsigned sub[2] = { j >> 2, 2u + (j >> 2) };
@@ -294,33 +357,51 @@ int omega_blackwell_codegen_tern_gemv_prog(const OmegaTernGemvSpec *spec, Blackw
             imadi(e, sad, one, 0, 4u * j, sb);
             sts32(e, sad, X);
         }
-        region_end(e, rg);
         imadi(e, c, one, 0, TH, c);
         imadi(e, rc, one, 0, 0xffffffffu, rc);
+        x_stage_addr(e, c, kwm1, one, px, cc, pxa, sb, va, vb); /* next round (unused after the last) */
         isetp_ge_u32(e, rc, one);
         bra_if_p0(e, L_s);
         loop_end(e);
         bar_sync(e);
     }
 
-    /* ---- per-unit registers ---- */
-    int rowbase = V(e), pw = V64(e), xlc = V(e), cnt = V(e);
-    int T[4], wq[16], wr[4][16], wa[4][16], xs[8], Ut[4], P[4], M[4], ap[4], am[4];
-    int row = V(e), okr = V(e), skip = V(e), yv = V(e), f = V(e), wsv = V(e), pya = V64(e), pwsa = V64(e), sum = V(e);
-    for (uint32_t r = 0; r < R; r++) { T[r] = V(e); Ut[r] = V(e); P[r] = V(e); M[r] = V(e); ap[r] = V(e); am[r] = V(e); }
-    if (block) { for (uint32_t d = 0; d < D; d++) wq[d] = R == 4 ? V128(e) : V64(e); }
-    else for (uint32_t r = 0; r < R; r++) for (uint32_t d = 0; d < D; d++) { wr[r][d] = V(e); wa[r][d] = V64(e); }
-    for (uint32_t i = 0; i < (D <= 4u ? 2u * D : 2u); i++) xs[i] = V128(e);
-    if (e->err) return -1;
+    /* ---- coalesced output (single chunk): per-CTA round variables, see the header ---- */
+    const int coal = omega_tern_gemv_coalesced_out(spec);
+    const uint32_t slot_bytes = omega_tern_gemv_out_slot_bytes(spec), x_bytes = KC * 2u, nrow = 2u * R * W;
+    int uc = NOREG, ueff = NOREG, um1 = NOREG, negU = NOREG, okw = NOREG, tu = NOREG, lg0 = NOREG, sbase = NOREG, stog = NOREG;
+    int so = NOREG, sa = NOREG, wl1 = NOREG, val = NOREG;
+    if (coal) {
+        uc = V(e); ueff = V(e); um1 = V(e); negU = V(e); okw = V(e); tu = V(e); lg0 = V(e); sbase = V(e); stog = V(e);
+        so = V(e); sa = V(e); wl1 = V(e); val = V(e);
+        if (e->err) return -1;
+        imadi(e, lg0, nzl1, 0, 1, NOREG); imadi(e, lg0, one, 0, 0xffffffffu, lg0); /* (l > 0) */
+        imadi(e, um1, one, 0, 0xffffffffu, ureg);     /* U - 1 */
+        imadi(e, negU, ureg, 0, 0xffffffffu, NOREG);  /* -U */
+        movi(e, sbase, x_bytes);                      /* slot set of this round (alternates) */
+        movi(e, stog, spec->mutant == 4 ? 0u : slot_bytes); /* mutant 4: one slot set, the round race the second set prevents */
+        imadi(e, so, warp, 0, 2u * R * 4u, NOREG); imadi(e, so, h, 0, R * 4u, so); /* this half-warp's slot: (2 warp + h) R words */
+        imadi(e, tu, lane, 0, 0xffffffffu, NOREG); imadi(e, tu, one, 0, nrow - 1u, tu); shr(e, tu, tu, 0, 31); /* 1 if lane >= 2 R W */
+        imadi(e, wl1, warp, 0, 1, tu); imadi(e, wl1, one, 0, 1, wl1);                                       /* warp + (lane >= 2 R W) + 1 */
+        imadi(e, uc, cx, 0, W, NOREG);                /* first unit of this CTA's round (uniform over the CTA) */
+    }
 
     /* ---- unit loop ---- */
     imadi(e, u, u0, 0, 1, NOREG);
     const int L_u = here(e);
     loop_begin(e);
-    isetp_ge_u32(e, u, ureg);
+    isetp_ge_u32(e, coal ? uc : u, ureg);           /* coalesced: the whole CTA leaves together (barriers inside) */
     const int bra_end = bra_if_p0_fwd(e);
-    imadi(e, rowbase, u, 0, 2u * R, hR);
-    imadw(e, pw, u, 2u * R * row_bytes, pl);
+    if (coal) {
+        /* a warp past the last unit recomputes unit U - 1; its rows are >= n_padded >= n and are never stored */
+        imadi(e, tu, u, 0, 1, negU);                  /* u - U */
+        shr(e, okw, tu, 0, 31);                       /* 1 if u < U */
+        imadi(e, tu, one, 0, 1, tu);                  /* u - U + 1 */
+        if (spec->mutant == 5) imadi(e, ueff, u, 0, 1, NOREG); /* mutant 5: no clamp, a warp past U reads past the tensor */
+        else imadr(e, ueff, okw, tu, 0, um1);         /* u < U ? u : U - 1 */
+    } else ueff = u;
+    imadi(e, rowbase, ueff, 0, 2u * R, hR);
+    imadw(e, pw, ueff, 2u * R * row_bytes, pl);
     imadi(e, xlc, xl, 0, 1, NOREG);
     for (uint32_t r = 0; r < R; r++) movrz(e, T[r]);
     movi(e, cnt, KSC / D);
@@ -333,14 +414,18 @@ int omega_blackwell_codegen_tern_gemv_prog(const OmegaTernGemvSpec *spec, Blackw
     const int lds_up = D <= 4u;
     const int L_k = here(e);
     loop_begin(e);
-    if (block) {
-        for (uint32_t d = 0; d < D; d++) ldg_wide(e, R == 4 ? BW_IR_LDG_E_128 : BW_IR_LDG_E_64, wq[d], pw, d * step_bytes, udesc, d == 0);
+    if (pre) {
+        /* the prefetched first iteration skips its loads (pf set); the staged x reads go out before the predicate */
+        if (lds_up) for (uint32_t d = 0; d < D; d++) for (uint32_t i = 0; i < 2; i++) lds128(e, xs[2u * d + i], xlc, d * 512u + 16u * i, d == 0 && i == 0);
+        isetp_ge_u32(e, pf, one);
+        Region rl = region_begin(e);
+        weight_loads(e, block, R, D, wq, wr, pw, step_bytes, row_bytes, udesc);
+        region_end(e, rl);
+        movi(e, pf, 0);
     } else {
-        for (uint32_t r = 0; r < R; r++) for (uint32_t d = 0; d < D; d++) imadw(e, wa[r][d], one, r * row_bytes + d * step_bytes, pw);
-        int first = 1;
-        for (uint32_t r = 0; r < R; r++) for (uint32_t d = 0; d < D; d++) { ldg32(e, wr[r][d], wa[r][d], udesc, first); first = 0; }
+        weight_loads(e, block, R, D, wq, wr, pw, step_bytes, row_bytes, udesc);
+        if (lds_up) for (uint32_t d = 0; d < D; d++) for (uint32_t i = 0; i < 2; i++) lds128(e, xs[2u * d + i], xlc, d * 512u + 16u * i, 0);
     }
-    if (lds_up) for (uint32_t d = 0; d < D; d++) for (uint32_t i = 0; i < 2; i++) lds128(e, xs[2u * d + i], xlc, d * 512u + 16u * i, 0);
     for (uint32_t d = 0; d < D; d++) {
         const int *xd = lds_up ? &xs[2u * d] : xs;
         if (!lds_up) for (uint32_t i = 0; i < 2; i++) lds128(e, xs[i], xlc, d * 512u + 16u * i, i == 0);
@@ -366,7 +451,50 @@ int omega_blackwell_codegen_tern_gemv_prog(const OmegaTernGemvSpec *spec, Blackw
     /* ---- half-warp reduction (lanes 0 and 16 hold the sums), lane l == 0 stores rows < n ---- */
     for (uint32_t r = 0; r < R; r++)
         for (uint32_t o = 8; o >= 1; o /= 2) { shfl_down(e, t, T[r], o); imadi(e, T[r], t, 0, 1, T[r]); }
-    for (uint32_t r = 0; r < R; r++) {
+    if (coal) {
+        /* lane l == 0 of each half-warp: finish its R rows and park them in this round's slot set */
+        isetp_ge_u32(e, lg0, one);
+        Region rs = region_begin(e);
+        imadi(e, sa, sbase, 0, 1, so);                 /* sbase + so */
+        for (uint32_t r = 0; r < R; r++) {
+            imadi(e, yv, one, 0, 0u - KSC * (1u << 18), T[r]); /* y = T - KSC * 2^18 (mod 2^32, exact) */
+            if (f32) {
+                imadi(e, row, one, 0, r, rowbase);
+                for (int i = 0; i < 3; i++) {
+                    imadi(e, t, row, 0, 1, nb[i]);
+                    shr(e, t, t, 0, 31);                   /* 1 if row < b_i */
+                    if (i == 0) imadi(e, sum, t, 0, 1, NOREG); else imadi(e, sum, t, 0, 1, sum);
+                }
+                imadw(e, pwsa, sum, 4u, pws);              /* ws_rev[boundaries above row] = w_scale[seg] */
+                ldg32(e, wsv, pwsa, 0, udesc, 1);
+                i2f(e, f, yv);
+                fmul(e, f, f, asv);
+                fmul(e, f, f, wsv);
+                if (r) imadi(e, sa, one, 0, 4u, sa);
+                sts32(e, sa, f);
+            } else {
+                if (r) imadi(e, sa, one, 0, 4u, sa);
+                sts32(e, sa, yv);
+            }
+        }
+        region_end(e, rs);
+        bar_sync(e);
+        /* warp 0, lanes < 2 R W: row = 2 R uc + lane, stored when < n, as one coalesced STG */
+        imadi(e, row, uc, 0, 2u * R, lane);
+        imadi(e, okr, row, 0, 1, negn);
+        shr(e, okr, okr, 0, 31);                       /* 1 if row < n */
+        imadi(e, skip, okr, 0, 0xffffffffu, wl1);      /* warp + (lane >= 2 R W) + 1 - (row < n): 0 only for a store */
+        isetp_ge_u32(e, skip, one);
+        Region rg = region_begin(e);
+        imadi(e, sa, lane, 0, 4u, sbase);
+        lds32(e, val, sa);
+        imadw(e, pya, row, 4u, py);
+        stg(e, pya, 0, val, udesc);
+        region_end(e, rg);
+        xorr(e, sbase, sbase, stog);                   /* next round parks in the other slot set */
+        imadi(e, uc, stride, 0, 1, uc);
+    }
+    for (uint32_t r = 0; r < R && !coal; r++) {
         imadi(e, row, one, 0, r, rowbase);
         imadi(e, okr, row, 0, 1, negn);
         shr(e, okr, okr, 0, 31);                       /* 1 if row < n */
@@ -375,7 +503,7 @@ int omega_blackwell_codegen_tern_gemv_prog(const OmegaTernGemvSpec *spec, Blackw
         Region rg = region_begin(e);
         imadi(e, yv, one, 0, 0u - KSC * (1u << 18), T[r]); /* y = T - KSC * 2^18 (mod 2^32, exact) */
         imadw(e, pya, row, 4u, py);
-        if (NCH > 1) { ldg32(e, prev, pya, udesc, 1); imadr(e, yv, prev, mul, 0, yv); } /* + earlier chunks */
+        if (NCH > 1) { ldg32(e, prev, pya, 0, udesc, 1); imadr(e, yv, prev, mul, 0, yv); } /* + earlier chunks */
         if (f32) {
             for (int i = 0; i < 3; i++) {
                 imadi(e, t, row, 0, 1, nb[i]);
@@ -383,7 +511,7 @@ int omega_blackwell_codegen_tern_gemv_prog(const OmegaTernGemvSpec *spec, Blackw
                 if (i == 0) imadi(e, sum, t, 0, 1, NOREG); else imadi(e, sum, t, 0, 1, sum);
             }
             imadw(e, pwsa, sum, 4u, pws);              /* ws_rev[boundaries above row] = w_scale[seg] */
-            ldg32(e, wsv, pwsa, udesc, 1);
+            ldg32(e, wsv, pwsa, 0, udesc, 1);
             i2f(e, f, yv);
             fmul(e, f, f, asv);
             fmul(e, f, f, wsv);

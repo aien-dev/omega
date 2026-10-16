@@ -1,0 +1,17 @@
+chip: random rows 20000, rows differing from oma_rz_oracle 0
+chip: MA grid 36 points (49932 rows), rows differing 0
+chip: BitNet shapes x 2 layouts, rows differing 0
+chip: rows checked against oma_rz_oracle 115500
+chip: mutant 1 caught (512 of 512 rows differ from oma_rz_oracle)
+chip: mutant 3 caught (511 of 512 rows differ from oma_rz_oracle)
+chip: f32 q|k|v segments, rows differing from the host formula 0
+chip: mutant 2 caught (1919 of 3840 rows take the wrong scale)
+chip: in-list launch floor (8 x 256, 512 B) median 3.74 us, min 3.46 us
+chip: cold 3840x2560 (2457600 B x 41 launches = 96.1 MiB per list): 15.30 us per launch -> 160.7 GB/s = 0.589 of 273 spec, 0.677 of 237.2 practical; minus the launch floor 11.55 us -> 212.7 GB/s (0.897 of 237.2)
+chip: cold 2560x2560 (1638400 B x 62 launches = 96.9 MiB per list): 13.34 us per launch -> 122.8 GB/s = 0.450 of 273 spec, 0.518 of 237.2 practical; minus the launch floor 9.60 us -> 170.7 GB/s (0.720 of 237.2)
+FAIL: cold GB/s minus the launch floor at 2560x2560: 170.7 (122.8 with it), gate >= 180
+chip: cold 13824x2560 (8847360 B x 12 launches = 101.2 MiB per list): 42.59 us per launch -> 207.7 GB/s = 0.761 of 273 spec, 0.876 of 237.2 practical; minus the launch floor 38.85 us -> 227.7 GB/s (0.960 of 237.2)
+chip: cold 2560x6912 (4423680 B x 23 launches = 97.0 MiB per list): 26.27 us per launch -> 168.4 GB/s = 0.617 of 273 spec, 0.710 of 237.2 practical; minus the launch floor 22.53 us -> 196.4 GB/s (0.828 of 237.2)
+receipt: evidence/TERN-T0-KT1-SPEED-d58a46a0-20261016T0305Z/receipt-main.json
+gpu_tern_test: 68 checks, 1 failed: FAIL
+main exit 1

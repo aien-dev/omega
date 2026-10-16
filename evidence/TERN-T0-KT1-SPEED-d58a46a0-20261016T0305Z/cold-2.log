@@ -1,0 +1,8 @@
+chip: in-list launch floor (8 x 256, 512 B) median 3.84 us, min 3.46 us
+chip: cold 3840x2560 (2457600 B x 41 launches = 96.1 MiB per list): 15.26 us per launch -> 161.0 GB/s = 0.590 of 273 spec, 0.679 of 237.2 practical; minus the launch floor 11.42 us -> 215.1 GB/s (0.907 of 237.2)
+chip: cold 2560x2560 (1638400 B x 62 launches = 96.9 MiB per list): 13.28 us per launch -> 123.4 GB/s = 0.452 of 273 spec, 0.520 of 237.2 practical; minus the launch floor 9.44 us -> 173.6 GB/s (0.732 of 237.2)
+FAIL: cold GB/s minus the launch floor at 2560x2560: 173.6 (123.4 with it), gate >= 180
+chip: cold 13824x2560 (8847360 B x 12 launches = 101.2 MiB per list): 43.04 us per launch -> 205.6 GB/s = 0.753 of 273 spec, 0.867 of 237.2 practical; minus the launch floor 39.20 us -> 225.7 GB/s (0.952 of 237.2)
+chip: cold 2560x6912 (4423680 B x 23 launches = 97.0 MiB per list): 28.13 us per launch -> 157.3 GB/s = 0.576 of 273 spec, 0.663 of 237.2 practical; minus the launch floor 24.29 us -> 182.1 GB/s (0.768 of 237.2)
+receipt: evidence/TERN-T0-KT1-SPEED-d58a46a0-20261016T0305Z/receipt-cold-2.json
+gpu_tern_test: 9 checks, 1 failed: FAIL

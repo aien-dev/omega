@@ -2511,7 +2511,7 @@ test-gpu-bf16-gemv: $(GPU_BF16_TEST)
 
 # Ternary engine T0 (2026-10-15): KT1 W2A8 ternary GEMV (omega_gpu_tern_api.h). test-gpu-tern is host-only (word
 # arithmetic, packing, segments, budgets, refusals) plus the warp simulator (bit-equal to oma_rz_oracle, f32 segment
-# epilogue, mutants 1-3 caught); the chip gate is tools/run_gpu_tern_chip.sh with the quiet flag held.
+# epilogue, three warp orders, mutants 1 to 5 caught); the chip gate is tools/run_gpu_tern_chip.sh with the quiet flag held.
 .PHONY: test-gpu-tern
 GPU_TERN_TEST = $(OUT_DIR)/gpu_tern_test
 $(GPU_TERN_TEST): tests/gpu_tern_test.c tests/bw_warp_sim_k.h src/omega_gpu_tern_api.h src/omega_blackwell_codegen_tern.h $(OMA_RZ_SRCS) $(OMA_RZ_HDRS) $(OUT_DIR)/libomega_gpu.a

@@ -89,6 +89,7 @@ typedef struct {
     uint32_t smem_bytes;
     WsRange ranges[WS_MAX_RANGES]; int nranges; /* when > 0, every global access must fall in one */
     int order;                /* 0 = lowest pc first, 1 = highest pc first */
+    uint32_t warp_sched;      /* warp visit order per barrier phase: 0 ascending, 1 descending, else a seed for a fresh shuffle each phase */
     int trace;                /* print every issue of warp 0 of CTA (0,0) */
     /* results */
     int err; int err_pc; char msg[200];
@@ -153,7 +154,7 @@ static void ws_lane_exec(WsSim *s, WsLane *l, const BlackwellIRInsn *in, int pc,
     case BW_IR_LOP3_XOR: ws_wrs(l, in->dst_vreg, in->dst_subreg, a ^ b, p); break;
     case BW_IR_LOP3_LUT: ws_wrs(l, in->dst_vreg, in->dst_subreg, ws_lut3(in->imm & 0xff, a, b, c), p); break;
     case BW_IR_ISETP_GE_U32: l->p0 = a >= b; break;
-    case BW_IR_LDG_E: { uint64_t ad = ws_rd64(l, in->src1_vreg, p); if (!ws_mem_ok(s, ad, 4, pc)) return; uint32_t x; memcpy(&x, (const void *)(uintptr_t)ad, 4); ws_wrs(l, in->dst_vreg, in->dst_subreg, x, p); break; }
+    case BW_IR_LDG_E: { uint64_t ad = ws_rd64(l, in->src1_vreg, p) + (uint64_t)(int64_t)(int32_t)in->imm; if (!ws_mem_ok(s, ad, 4, pc)) return; uint32_t x; memcpy(&x, (const void *)(uintptr_t)ad, 4); ws_wrs(l, in->dst_vreg, in->dst_subreg, x, p); break; }
     case BW_IR_LDG_E_U16: { uint64_t ad = ws_rd64(l, in->src1_vreg, p); if (!ws_mem_ok(s, ad, 2, pc)) return; uint16_t x; memcpy(&x, (const void *)(uintptr_t)ad, 2); ws_wrs(l, in->dst_vreg, in->dst_subreg, x, p); break; }
     case BW_IR_STG_E: { uint64_t ad = ws_rd64(l, in->src1_vreg, p); if (!ws_mem_ok(s, ad, 4, pc)) return; memcpy((void *)(uintptr_t)ad, &b, 4); break; }
     case BW_IR_LDG_E_64: case BW_IR_LDG_E_128: { unsigned n = in->op == BW_IR_LDG_E_64 ? 8u : 16u; uint64_t ad = ws_rd64(l, in->src1_vreg, p) + (uint64_t)(int64_t)(int32_t)in->imm; if (!ws_mem_ok(s, ad, n, pc)) { if (getenv("WS_DBG")) fprintf(stderr, "  tid %u cx %u cy %u\n", tid, cx, cy); return; } if (ad & (n - 1)) { ws_fail(s, WS_E_MEM, pc, "wide global load not naturally aligned"); return; } uint32_t x[4]; memcpy(x, (const void *)(uintptr_t)ad, n); for (unsigned i = 0; i < n / 4; i++) ws_wrs(l, in->dst_vreg, i, x[i], p); break; }
@@ -309,9 +310,16 @@ static int ws_run(WsSim *s, uint32_t grid_x, uint32_t grid_y) {
         /* Barrier phases: every warp runs until all of its fragments are parked at BAR.SYNC or it
          * has finished (exited lanes do not hold the barrier up: INFERRED, see WS_E_BAR_SPLIT).
          * Then every parked fragment is released and the next phase starts. */
+        uint32_t rng = s->warp_sched;
         for (int phase = 0; ; phase++) {
             int parked = 0;
-            for (uint32_t w = 0; w < nw && !s->err; w++) {
+            /* visit order: the chip gives no order between warps, so a slot or barrier mistake that the fixed order hides
+             * must show under the reversed or a shuffled one */
+            uint32_t vis[WS_MAX_WARPS];
+            for (uint32_t i = 0; i < nw; i++) vis[i] = s->warp_sched == 1 ? nw - 1u - i : i;
+            if (s->warp_sched > 1) for (uint32_t i = nw - 1u; i > 0; i--) { rng = rng * 1664525u + 1013904223u; uint32_t j = (rng >> 8) % (i + 1u); uint32_t t = vis[i]; vis[i] = vis[j]; vis[j] = t; }
+            for (uint32_t vi = 0; vi < nw && !s->err; vi++) {
+                const uint32_t w = vis[vi];
                 if (warps[w].nfrag == 0) continue;
                 int r = ws_run_warp(s, &warps[w], w, cx, cy, trace && w == 0);
                 if (r < 0) break;
