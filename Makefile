@@ -101,10 +101,27 @@ $(OUT_DIR):
 $(OUT_DIR)/%.o: src/%.c | $(OUT_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OUT_DIR)/m16_native.o: $(PHYSICS_DIR)/m16/m16_native.c | $(OUT_DIR)
+# omega#488: which physics tree built the objects in $(OUT_DIR). Path and timestamp alone miss a switch of
+# PHYSICS_DIR to another checkout whose files are older than the existing objects (m16_native.o and nvrm.o
+# stayed built from an unpinned tree, and the chip launches timed out). physics.stamp records the resolved
+# PHYSICS_DIR, its HEAD commit and a digest of its uncommitted diff; the recipe runs on every make but rewrites
+# the file only when that content changes, so the objects that read physics (listed after the last rule of this
+# file) rebuild exactly when the physics tree they were built from changes.
+PHYSICS_STAMP = $(OUT_DIR)/physics.stamp
+.PHONY: physics-stamp-force
+physics-stamp-force:
+$(PHYSICS_STAMP): physics-stamp-force | $(OUT_DIR)
+	@dir=$$(cd "$(PHYSICS_DIR)" 2>/dev/null && pwd -P || echo "missing:$(PHYSICS_DIR)"); \
+	commit=$$(git -C "$(PHYSICS_DIR)" rev-parse HEAD 2>/dev/null || echo none); \
+	diff=$$(git -C "$(PHYSICS_DIR)" diff --no-ext-diff HEAD 2>/dev/null | sha256sum | cut -d' ' -f1); \
+	printf 'dir=%s\ncommit=%s\ndiff_sha256=%s\n' "$$dir" "$$commit" "$$diff" > $@.tmp.$$$$; \
+	if cmp -s $@.tmp.$$$$ $@; then rm -f $@.tmp.$$$$; \
+	else mv -f $@.tmp.$$$$ $@; echo "physics.stamp: $$dir @ $$commit (objects built from physics will rebuild)"; fi
+
+$(OUT_DIR)/m16_native.o: $(PHYSICS_DIR)/m16/m16_native.c $(PHYSICS_STAMP) | $(OUT_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OUT_DIR)/nvrm.o: $(PHYSICS_DIR)/nvrm/nvrm.c | $(OUT_DIR)
+$(OUT_DIR)/nvrm.o: $(PHYSICS_DIR)/nvrm/nvrm.c $(PHYSICS_STAMP) | $(OUT_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(OUT_DIR)/crumbline/%.o: src/crumbline/%.c | $(OUT_DIR)
@@ -2604,3 +2621,13 @@ $(GPU_LAUNCH_COST_TEST): tests/gpu_launch_cost_test.c src/omega_gpu_fp8_api.h sr
 GPU_L2_REUSE_TEST = $(OUT_DIR)/gpu_l2_reuse_test
 $(GPU_L2_REUSE_TEST): tests/gpu_l2_reuse_test.c src/omega_gpu_fp8_api.h src/omega_gpu_cmdlist.h $(OUT_DIR)/libomega_gpu.a
 	$(CC) $(CFLAGS) -ffp-contract=off -o $@ tests/gpu_l2_reuse_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+
+# omega#488: everything that reads the physics tree depends on $(PHYSICS_STAMP) (rule next to m16_native.o).
+#  - objects whose last build read a physics header, found in their -MMD files (on a fresh build there are no
+#    .d files and everything compiles anyway; an object whose source starts including physics changes its .c);
+#  - test binaries compiled straight from the physics sources (their recipes name the sources explicitly, so the
+#    stamp never reaches a compiler command line).
+# This block stays last: the binary names are defined above it.
+PHYSICS_HDR_OBJS := $(patsubst %.d,%.o,$(shell grep -l -E '/m16/m16_native\.h|/nvrm/nvrm\.h|/nvidia-open-[0-9.]+/' $(OUT_DIR)/*.d 2>/dev/null))
+$(PHYSICS_HDR_OBJS) $(RX_R12_SILICON) $(RX_R13_TEST_SILICON) $(RX_R13_SILICON) $(RX_COMPOSE_GATE_GPU) \
+	$(OUT_DIR)/omega_blackwell_engine_syntax.o: $(PHYSICS_STAMP)
