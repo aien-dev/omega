@@ -74,6 +74,7 @@ typedef struct {
     uint32_t stride;    /* AXPY: elements per iteration (grid_x * 256) */
     int mutant;         /* TEST ONLY. RES: 1 = norm without the weight; 2 = COMBINE skips expert 7.
                            SWIGLU: 1 = up half read at +767. ARGMAX: 1 = last equal index instead of first. 0 none */
+    uint32_t dep;       /* OMEGA_DEP_FLAGS | OMEGA_DEP_CAMERA (omega_bw_dep.h); 0 = none */
 } OmegaDecSpec;
 
 int omega_blackwell_codegen_dec_prog(const OmegaDecSpec *spec, BlackwellIRProgram *prog);

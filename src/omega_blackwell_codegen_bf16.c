@@ -151,6 +151,7 @@ int omega_blackwell_codegen_bf16_gemv_prog(const OmegaBf16GemvSpec *spec, Blackw
     s2r(e, tid, BW_SR_TID_X); s2r(e, cx, BW_SR_CTAID_X);
     movi(e, one, 1);
     shr(e, warp, tid, 0, 5);
+    OmegaBwDep D; dep_prologue(e, spec->dep, udesc, tid, &D);
     andi(e, lane, tid, 0, 31);
     imadi(e, wlane, lane, 0, 16, NOREG);  /* byte offset of this lane's chunk in a row step */
     imadi(e, rg, cx, 0, W, warp);         /* first row group of this warp */
@@ -232,6 +233,7 @@ int omega_blackwell_codegen_bf16_gemv_prog(const OmegaBf16GemvSpec *spec, Blackw
     loop_end(e);
     const int L_end = here(e);
     patch_bra(e, bra_end, L_end);
+    dep_epilogue(e, udesc, tid, &D);
     tail(e);
     if (e->err) return -1;
     return omega_bw_regalloc_solve(prog);

@@ -73,6 +73,7 @@ typedef struct {
     int mutant;      /* TEST ONLY. 0 none; 1 RMSNorm without the weight; 2 the mask after each argmax round removes
                       * expert id ^ 1 (the winner can be picked again); 3 the directory entries copied are those of
                       * id ^ 1; 4 the weights are not normalised (den = 1). */
+    uint32_t dep;    /* OMEGA_DEP_FLAGS | OMEGA_DEP_CAMERA (omega_bw_dep.h); 0 = none */
 } OmegaRouterSpec;
 
 /* Builds the register-allocated IR program into *prog. 0 ok, -1 refused. */

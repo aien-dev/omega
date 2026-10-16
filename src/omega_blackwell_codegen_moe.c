@@ -181,6 +181,7 @@ int omega_blackwell_codegen_fp8_gemv_prog(const OmegaFp8GemvSpec *spec, Blackwel
     s2r(e, tid, BW_SR_TID_X); s2r(e, cx, BW_SR_CTAID_X); s2r(e, cy, BW_SR_CTAID_Y);
     movi(e, one, 1);
     shr(e, warp, tid, 0, 5);
+    OmegaBwDep D; dep_prologue(e, spec->dep, udesc, tid, &D); /* before the first LDG: the table entry is router-written */
     andi(e, lane, tid, 0, 31);
     if (spec->mutant == 3) xorr(e, gidx, cy, one); else imadi(e, gidx, cy, 0, 1, NOREG);
     imadw(e, tent, gidx, 16, ptab);
@@ -298,6 +299,7 @@ int omega_blackwell_codegen_fp8_gemv_prog(const OmegaFp8GemvSpec *spec, Blackwel
     loop_end(e);
     const int L_end = here(e);
     patch_bra(e, bra_end, L_end);
+    dep_epilogue(e, udesc, tid, &D);
     tail(e);
     if (e->err) return -1;
     return omega_bw_regalloc_solve(prog);

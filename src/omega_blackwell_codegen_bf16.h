@@ -51,6 +51,7 @@ typedef struct {
     uint32_t warps;  /* 1 .. 32 (the host simulator runs up to 8) */
     uint32_t depth;  /* K steps per loop iteration: divides k / 256; rows * depth <= 16 */
     int mutant;      /* 0 production; 1, 2, 3 as above */
+    uint32_t dep;    /* OMEGA_DEP_FLAGS | OMEGA_DEP_CAMERA (omega_bw_dep.h); 0 = none */
 } OmegaBf16GemvSpec;
 
 int omega_blackwell_codegen_bf16_gemv_prog(const OmegaBf16GemvSpec *spec, BlackwellIRProgram *prog);

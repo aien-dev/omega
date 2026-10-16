@@ -156,6 +156,7 @@ static int gen_axpy(Em *e, const OmegaDecSpec *sp) {
     ldc64(e, px, OMEGA_DEC_AXPY_X); ldc64(e, pa, OMEGA_DEC_AXPY_A); ldc32(e, iters, OMEGA_DEC_AXPY_ITERS);
     s2r(e, tid, BW_SR_TID_X); s2r(e, cta, BW_SR_CTAID_X);
     imadi(e, R(gid), R(cta), OMEGA_DEC_THREADS, tid);
+    OmegaBwDep D; dep_prologue(e, sp->dep, udesc, tid, &D);
     imadw(e, xa, gid, 4u, px); imadw(e, aa, gid, 4u, pa);
     movrz(e, R(it)); movi(e, one, 1);
     const int L = here(e);
@@ -170,6 +171,7 @@ static int gen_axpy(Em *e, const OmegaDecSpec *sp) {
     bra(e, L);
     loop_end(e);
     patch_bra(e, done, here(e));
+    dep_epilogue(e, udesc, tid, &D);
     tail(e);
     return e->err;
 }
@@ -188,6 +190,7 @@ static int gen_res(Em *e, const OmegaDecSpec *sp) {
     movi(e, one, 1);
     shr(e, warp, tid, 5);
     andi(e, R(lane), R(tid), 31u);
+    OmegaBwDep D; dep_prologue(e, sp->dep, udesc, tid, &D);
     imadi(e, R(toff), R(tid), 32u, NOREG);
     imadw(e, xa, toff, 1u, px);
     ldg(e, BW_IR_LDG_E_128, xq0, xa, 0, udesc, 1); ldg(e, BW_IR_LDG_E_128, xq1, xa, 16, udesc, 0);
@@ -247,6 +250,7 @@ static int gen_res(Em *e, const OmegaDecSpec *sp) {
             stg(e, ya, R(yv), udesc);
         }
     }
+    dep_epilogue(e, udesc, tid, &D);
     tail(e);
     return e->err;
 }
@@ -259,6 +263,7 @@ static int gen_swiglu(Em *e, const OmegaDecSpec *sp) {
     ldc64(e, pgu, OMEGA_DEC_SW_GU); ldc64(e, pact, OMEGA_DEC_SW_ACT); ldc32(e, scale, OMEGA_DEC_SW_SCALE);
     s2r(e, tid, BW_SR_TID_X); s2r(e, cx, BW_SR_CTAID_X); s2r(e, cy, BW_SR_CTAID_Y);
     imadi(e, R(c), R(cx), OMEGA_DEC_THREADS, tid);
+    OmegaBwDep D; dep_prologue(e, sp->dep, udesc, tid, &D);
     imadi(e, R(gi), R(cy), 2u * OMEGA_DEC_INTER, c);
     imadi(e, R(ai), R(cy), OMEGA_DEC_INTER, c);
     /* the up half sits INTER floats after the gate: its own address (the 32-bit LDG.E encoding carries no immediate
@@ -280,6 +285,7 @@ static int gen_swiglu(Em *e, const OmegaDecSpec *sp) {
     fmul(e, R(t), R(t), R(uv));
     fmul(e, R(t), R(t), R(scale));
     stg(e, aa, R(t), udesc);
+    dep_epilogue(e, udesc, tid, &D);
     tail(e);
     return e->err;
 }
@@ -339,6 +345,7 @@ static int gen_argmax(Em *e, const OmegaDecSpec *sp) {
         imadw(e, oa, cta, 4u, poi); stg(e, oa, R(best), udesc);
         region_end(e, r);
     }
+    dep_epilogue(e, udesc, tid, &D);
     tail(e);
     return e->err;
 }

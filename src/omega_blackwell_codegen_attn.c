@@ -163,6 +163,7 @@ int omega_blackwell_codegen_decode_attn_prog(const OmegaDecodeAttnSpec *spec, Bl
     s2r(e, tid, BW_SR_TID_X); s2r(e, cx, BW_SR_CTAID_X); s2r(e, cy, BW_SR_CTAID_Y);
     movi(e, one, 1); movrz(e, R(zero)); movi(e, c7fff, 0x7fffu); movi(e, c16, 16);
     shr(e, warp, tid, 5);
+    OmegaBwDep D; dep_prologue(e, spec->dep, udesc, tid, &D);
     andi(e, R(lane), R(tid), 31u);
 
     /* range of this CTA: base = cx * per; end = min(base + per, pos + 1) */
@@ -476,6 +477,7 @@ int omega_blackwell_codegen_decode_attn_prog(const OmegaDecodeAttnSpec *spec, Bl
     lds32(e, R(ep[0]), t1, 1);
     isetp_ge_u32(e, ep[0], splitsm1);
     const int bra_last = bra_if_p0_fwd(e);
+    dep_epilogue(e, udesc, tid, &D); /* CTA-uniform exit (ep[0] is one shared word): all threads take it */
     exit_k(e);
     patch_bra(e, bra_last, here(e));
     /* combine: thread tid, outputs o = tid + 256 r (head o >> 7, dim o & 127), r = 0..3 */
@@ -535,6 +537,7 @@ int omega_blackwell_codegen_decode_attn_prog(const OmegaDecodeAttnSpec *spec, Bl
     /* thread 0 resets the counter for the next launch (every other CTA of this head has already added) */
     isetp_ge_u32(e, tid, one);
     { Region r = region_skip_if_p0(e); imadw(e, pb64, cy, 4u, pcnt); stg(e, BW_IR_STG_STRONG_SYS, pb64, R(zero), udesc); region_end(e, r); }
+    dep_epilogue(e, udesc, tid, &D);
     tail(e);
     if (e->err) return -1;
     return omega_bw_regalloc_solve(prog);

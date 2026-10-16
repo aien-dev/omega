@@ -171,6 +171,7 @@ int omega_blackwell_codegen_router_prog(const OmegaRouterSpec *spec, BlackwellIR
     s2r(e, tid, BW_SR_TID_X);
     movi(e, one, 1); movrz(e, R(zero)); movi(e, c2p23, C_2P23); movi(e, cneg, NEG_BIG);
     shr(e, warp, tid, 5);
+    OmegaBwDep D; dep_prologue(e, spec->dep, udesc, tid, &D);
     andi(e, R(lane), R(tid), 31u);
 
     /* ---- phase 1: RMSNorm ---- */
@@ -390,6 +391,7 @@ int omega_blackwell_codegen_router_prog(const OmegaRouterSpec *spec, BlackwellIR
         region_end(e, rg);
     }
     patch_bra(e, bra_tail, here(e));
+    dep_epilogue(e, udesc, tid, &D);
     tail(e);
     (void)zero;
     if (e->err) return -1;
