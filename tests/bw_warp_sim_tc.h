@@ -185,8 +185,8 @@ static void ws_lane_exec(WsSim *s, WsLane *l, const BlackwellIRInsn *in, int pc,
     case BW_IR_FSUB: ws_wrs(l, in->dst_vreg, in->dst_subreg, ws_f2u(ws_u2f(a) - ws_u2f(b)), p); break;
     case BW_IR_FMUL: ws_wrs(l, in->dst_vreg, in->dst_subreg, ws_f2u(ws_u2f(a) * ws_u2f(b)), p); break;
     case BW_IR_FFMA: ws_wrs(l, in->dst_vreg, in->dst_subreg, ws_f2u(fmaf(ws_u2f(a), ws_u2f(b), ws_u2f(c))), p); break;
+    case BW_IR_F2FP_BF16_PACK: ws_wrs(l, in->dst_vreg, in->dst_subreg, (ws_bf16_rn(a) << 16) | ws_bf16_rn(b), p); break; /* F2FP.BF16.F32.PACK_AB */
     case BW_IR_FMNMX_MAX:
-        if (in->imm == OMEGA_TC_MARK_F2FP) { ws_wrs(l, in->dst_vreg, in->dst_subreg, (ws_bf16_rn(a) << 16) | ws_bf16_rn(b), p); break; } /* F2FP.BF16.F32.PACK_AB placeholder */
         if (in->imm == OMEGA_QMMA_MARK_F2E4) { ws_wrs(l, in->dst_vreg, in->dst_subreg, (uint32_t)qm_e4m3_rne_sat(ws_u2f(a)) << 8 | qm_e4m3_rne_sat(ws_u2f(b)), p); break; } /* F2FP.SATFINITE.E4M3 placeholder (NaN not modelled) */
         ws_wrs(l, in->dst_vreg, in->dst_subreg, ws_f2u(fmaxf(ws_u2f(a), ws_u2f(b))), p); break;
     case BW_IR_FMNMX_MIN: ws_wrs(l, in->dst_vreg, in->dst_subreg, ws_f2u(fminf(ws_u2f(a), ws_u2f(b))), p); break;
@@ -292,13 +292,13 @@ static int ws_run_warp(WsSim *s, WsWarp *w, uint32_t warp, uint32_t cx, uint32_t
             }
             break;
         }
-        case BW_IR_SHFL_DOWN: {
+        case BW_IR_SHFL_DOWN: case BW_IR_SHFL_BFLY: {
             if (w->exited) { ws_fail(s, WS_E_SHFL_EXITED, pc, "SHFL on a warp with exited lanes"); return -1; }
             if (mask != live) { ws_fail(s, WS_E_SHFL_SPLIT, pc, "SHFL on a split warp"); return -1; }
             uint32_t src[WS_WARP];
             for (int L = 0; L < WS_WARP; L++) src[L] = ws_rd(&w->lane[L], in->src1_vreg, p);
             for (int L = 0; L < WS_WARP; L++) {
-                int from = (in->imm & OMEGA_TC_MARK_BFLY) ? (L ^ (int)(in->imm & 31)) : L + (int)(in->imm & 31); /* BFLY placeholder (omega_blackwell_codegen_tc.h) */
+                int from = in->op == BW_IR_SHFL_BFLY ? (L ^ (int)(in->imm & 31)) : L + (int)(in->imm & 31);
                 ws_wr(&w->lane[L], in->dst_vreg, from < WS_WARP ? src[from] : src[L], p);
             }
             f->pc = pc + 1;

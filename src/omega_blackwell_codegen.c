@@ -649,6 +649,24 @@ static int encode_single_insn(const BlackwellIRInsn *insn, const OmegaRegAlloc *
             w[3] = insn->control ? insn->control : 0x000e2400;
             break;
 
+        case BW_IR_SHFL_BFLY:
+            /* SHFL.BFLY PT, Rd, Ra, lane, 0x1f: SHFL.DOWN with bit 58 (w[1] bit 26) set
+             * (omega_blackwell_verify_codegen_fixtures_bfly_f2fp) */
+            w[0] = 0x7f89U | ((uint32_t)(dst & 0xff) << 16) | ((uint32_t)(src1 & 0xff) << 24);
+            w[1] = 0x0c001f00U | (((uint32_t)insn->imm & 0x1f) << 21);
+            w[2] = 0x000e0000;
+            w[3] = insn->control ? insn->control : 0x000e2400;
+            break;
+
+        case BW_IR_F2FP_BF16_PACK:
+            /* F2FP.BF16.F32.PACK_AB Rd, Ra, Rb (omega_blackwell_verify_codegen_fixtures_bfly_f2fp). The default control
+             * is FMNMX's: the kernels emitted this as a patched FMNMX_MAX before R5 and their bytes must not move. */
+            w[0] = 0x723eU | ((uint32_t)(dst & 0xff) << 16) | ((uint32_t)(src1 & 0xff) << 24);
+            w[1] = (uint32_t)(src2 & 0xff);
+            w[2] = 0x000010ff;
+            w[3] = insn->control ? insn->control : 0x004fc400;
+            break;
+
         case BW_IR_LDS:
             /* LDS Rd, [Ra] */
             w[0] = 0x7984U | ((uint32_t)(dst & 0xff) << 16) | ((uint32_t)(src1 & 0xff) << 24);
