@@ -4,6 +4,7 @@
  * Deterministic: no clock, no randomness, no environment; output depends only on the arguments and files.
  *
  *   famsig canon <shape>             print "gs1:<canonical form>" of one nesting shape
+ *   famsig token <shape>             print the family token "gs1-<16 hex>" (record family field)
  *   famsig edges <shape>             print the composition edges "parent>child", one per line, sorted
  *   famsig meta <file>...            validate gen-meta / gen-split files; one line per task:
  *                                    "<task_id>\t<split>\t<signature>"
@@ -20,7 +21,7 @@
 
 static int usage(void)
 {
-    fprintf(stderr, "usage: famsig canon <shape> | edges <shape> | meta <file>... | rule [--show-heldout] <file>... | split <SPLIT> | famlist <SPLIT>\n");
+    fprintf(stderr, "usage: famsig canon <shape> | token <shape> | edges <shape> | meta <file>... | rule [--show-heldout] <file>... | split <SPLIT> | famlist <SPLIT>\n");
     return 2;
 }
 
@@ -45,11 +46,12 @@ int main(int argc, char **argv)
 {
     if (argc < 2) return usage();
     const char *cmd = argv[1];
-    if (!strcmp(cmd, "canon") || !strcmp(cmd, "edges")) {
+    if (!strcmp(cmd, "canon") || !strcmp(cmd, "edges") || !strcmp(cmd, "token")) {
         if (argc != 3) return usage();
         FsShape sh;
         if (fs_shape(argv[2], &sh)) { fprintf(stderr, "famsig: shape: %s\n", sh.err); return 1; }
         if (cmd[0] == 'c') { printf("gs1:%s\n", sh.canon); return 0; }
+        if (cmd[0] == 't') { char sig[FS_SIGMAX + 4], tok[24]; snprintf(sig, sizeof sig, "gs1:%s", sh.canon); fs_token(sig, tok); printf("%s\n", tok); return 0; }
         char e[64][16];
         int ne = fs_edges(&sh, e, 64);
         for (int i = 0; i < ne; i++) printf("%s\n", e[i]);

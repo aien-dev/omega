@@ -267,6 +267,17 @@ static void fs_hex(const unsigned char *d, char out[65])
     out[64] = 0;
 }
 
+/* family token: "gs1-" + first 16 hex of sha256(signature), signature = "gs1:" + canonical (no newline);
+ * matches [a-z0-9_-]{1,64}, the record "family" field of tools/gen/retrieval/CONTRACT.md */
+static void fs_token(const char *sig, char out[24])
+{
+    unsigned char d[32];
+    char hex[65];
+    sha256_hash((const unsigned char *)sig, strlen(sig), d);
+    fs_hex(d, hex);
+    snprintf(out, 24, "gs1-%.16s", hex);
+}
+
 static int fs_hex64_ok(const char *s)
 {
     if (strlen(s) != 64) return 0;

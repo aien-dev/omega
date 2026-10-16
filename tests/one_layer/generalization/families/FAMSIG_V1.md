@@ -48,6 +48,12 @@ order therefore never matters; nesting does (`loop(branch(arith))` and `branch(l
 **Signature** = `gs1:` + canonical form, e.g. `seq(loop(branch(arith),array),array)` has signature
 `gs1:seq(array,loop(array,branch(arith)))`. `famsig canon <shape>` prints it.
 
+**Family token** (for fields that allow only `[a-z0-9_-]`, such as the record `family` field of
+`tools/gen/retrieval/CONTRACT.md` and its `--exclude-family`): `gs1-` + the first 16 lowercase hex digits of
+sha256 of the signature bytes (`gs1:` included, no newline). `famsig token <shape>` prints it. A record or
+task carries the token of the family of the task it was written for. (Added 2026-10-15, before any
+consumer used v1: additive, no rule changed.)
+
 **Composition edges** of a shape: `P>C` for every container P and every child C of P after flattening,
 where C is the child's head primitive (`famsig edges <shape>`). Used only in the report (section 4).
 
@@ -129,14 +135,14 @@ except `families <m>` and the two salted digests. After the run (or for the inde
 the seal), anyone holding SPLIT verifies with `gencheck split` that SPLIT matches HELDOUT.pub
 (digests, ids, counts) and that R1..R5 pass against the pinned dev and corpus META.
 
-## 8. Reserved dev families (v1)
+## 8. Reserved dev families (v1): signature and token
 
 The 10 dev fixtures `devgen01..devgen10` hold these four signatures; no corpus or held-out task may use
 them (R3):
 
 ```
-gs1:branch(loop(arith),nested)
-gs1:loop(call(nested))
-gs1:loop(loop(branch(arith)))
-gs1:seq(array,loop(array,branch(arith)))
+gs1:branch(loop(arith),nested)              gs1-e05d1c5dffd08b06
+gs1:loop(call(nested))                      gs1-bd9c105e5ae45397
+gs1:loop(loop(branch(arith)))               gs1-f63e09ec03a454ee
+gs1:seq(array,loop(array,branch(arith)))    gs1-30938c5c7504ef0e
 ```
