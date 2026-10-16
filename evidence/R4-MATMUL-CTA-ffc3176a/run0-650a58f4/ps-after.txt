@@ -1,0 +1,12 @@
+USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+drakest+ 2466097  184  0.1 485576 128044 ?       Sl   20:46   0:00 /home/drakestapleton/.rustup/toolchains/1.98.1-aarch64-unknown-linux-gnu/bin/rustc --crate-na
+drakest+ 2438269  108  0.0 1390604 40928 ?       Sl   20:46   0:20 bfs -S dfs -regextype findutils-default / -name clcec0qmd.h
+drakest+ 2437093  100  0.0 1631056 7392 ?        Sl   20:46   0:23 /home/drakestapleton/aien-sovereign-core/.claude/worktrees/agent-ab64aea22787c7d5e/target/deb
+drakest+ 2467289  100  0.0  71520 68308 ?        R    20:46   0:00 /usr/bin/ld -plugin /usr/libexec/gcc/aarch64-linux-gnu/13/liblto_plugin.so -plugin-opt=/usr/l
+drakest+ 2466106 96.0  0.0 394184 127592 ?       Sl   20:46   0:00 /home/drakestapleton/.rustup/toolchains/1.98.1-aarch64-unknown-linux-gnu/bin/rustc --crate-na
+drakest+ 2442687 59.5  0.0 280816  7192 ?        Sl   20:46   0:02 /home/drakestapleton/workspace/g2-omegese-constraint/target/debug/deps/echo_walks-fc75283c9bf
+drakest+ 2463213 14.2  0.0 354088 71748 ?        Sl   20:46   0:00 /home/drakestapleton/.rustup/toolchains/1.98.1-aarch64-unknown-linux-gnu/bin/cargo test -p ai
+drakest+   15251  7.8 29.8 40818924 38073512 ?   Ssl  10:59  46:19 /home/drakestapleton/handoffs/pin-bin-f881710a/aien-serve-http --engine omega --model-dir /ho
+drakest+ 2707502  3.2  0.4 6128120 563508 ?      Ssl  13:16  14:50 /home/drakestapleton/.local/bin/claude --output-format stream-json --verbose --input-format s
+drakest+  276773  2.9  0.4 6107256 560728 ?      Ssl  04:17  29:09 /home/drakestapleton/.local/bin/claude --output-format stream-json --verbose --input-format s
+drakest+ 1607589  2.6  0.5 12544532 727692 ?     Sl   Oct14  48:10 /home/drakestapleton/.t3/runtime/versions/0.0.46-nightly.20261014.3118/t3 serve --host 127.0.
