@@ -1,0 +1,17 @@
+# GEN-2 own statistics vectors (Agent C), used until Agent A publishes tests/one_layer/generalization/stats_vectors.tsv.
+# cmd<TAB>args (space separated)<TAB>expected genstat output<TAB>source of the expected value
+# mcnemar1x values are exact fractions checked with aien-calc (receipt ids below); wilson4 rows equal x445 wilson;
+# Newcombe, Wilson (pinned z), McNemar and the verdict rule are checked against Agent A's frozen testdata/stats_vectors.tsv.
+mcnemar1x	9 1	11/2^10	C(10,9)+C(10,10) = 11 (by hand)
+mcnemar1x	12 3	576/2^15	calc:3d7d1b62f7718ae091cde5de8a6548bf9aa845c091e3fb5b10752787093568e7 = 9/512
+mcnemar1x	8 4	794/2^12	calc:1d9c4987b92189f485e6525680e0a193ebf47a19900398bef101c2b4df83e2f8 = 397/2048
+mcnemar1x	54 6	56049058/2^60	calc:68f2fde988d0b974c81c06a65e14a8553b37a06c98f8948ee78fb35d4e436145 = 28024529/2^59
+mcnemar1x	0 0	1/2^0	no discordant pairs: p = 1
+mcnemar1	12 3	0.017578	9/512 rounded
+mcnemar1	8 4	0.193848	397/2048 rounded
+mcnemar1	6 0	0.015625	1/64
+mcnemar1	0 5	1.000000	P(X >= 0) = 1
+mcnemar1	9 1	0.010742	11/1024 rounded
+wilson4	7 10	0.7000 0.3968 0.8922	x445 wilson (tools/exp445/test_exp445.sh)
+wilson4	0 60	0.0000 0.0000 0.0602	x445 wilson
+wilson4	60 60	1.0000 0.9398 1.0000	x445 wilson

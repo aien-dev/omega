@@ -1,0 +1,40 @@
+# GEN runner parameters (omega#477, GEN-2). DRAFT: the values marked PLACEHOLDER wait for GEN_PROTOCOL_V1
+# (Agent A, #476), the corpus record set (Agent D, #478) and the genret binary (Agent E, #479). run.sh refuses
+# a non-test run while any value is PLACEHOLDER or revision is a draft. GEN_PARAMS names another file, for
+# tests only (GEN_TEST=1). Paths are relative to the repository root.
+revision=gen-v1-draft
+protocol=PLACEHOLDER docs/one_layer/GEN_PROTOCOL_V1.md
+# model pin: configuration <config> of the EXP445 PARAMS (model id, endpoint, request extra, server, weights)
+exp445_params=tools/exp445/PARAMS
+config=A
+mask=off
+conditions=A,B,C,D
+attempts=3
+max_tokens=3072
+# attempt 1 is greedy (primary); attempts 2..attempts are sampled, only after a G0 PASS
+greedy_temperature=0
+greedy_top_p=1
+temperature=0.7
+top_p=0.8
+seed_base=477000
+timeout_s=900
+retries=2
+# prompt prefix: worked examples in the tools/exp445/arms/examples layout; A uses examples_one, B C D examples_many
+examples_dir=PLACEHOLDER tools/exp445/arms/examples
+examples_one=one.list
+examples_many=many.list
+# retrieval: genret-cli-v1 only (tools/gen/retrieval/CONTRACT.md), C = --kind raw, D = --kind abstraction
+provider=PLACEHOLDER build/gen/genret
+provider_contract_sha256=2689ffb7b5e8903f4e8f0a3200ffe7b2a890056a96c601610a346193c229bea2
+corpus_manifest=PLACEHOLDER tests/one_layer/generalization/corpus/MANIFEST
+corpus_manifest_sha256=PLACEHOLDER
+retrieval_mode=normal
+k=3
+cap_bytes=6000
+exclude_families=
+# gates: public dev tasks (tasks/cases/<id>/{requirement,prompt}); greedy gate = the first greedy_gate_tasks
+# dev tasks in condition B sent twice at temperature 0; G0 = g0_task in condition B at g0_seeds seeds + 1 repeat
+dev_tasks=PLACEHOLDER tests/one_layer/generalization/dev
+greedy_gate_tasks=10
+g0_task=devgen01
+g0_seeds=8
