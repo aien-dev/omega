@@ -265,7 +265,7 @@ float `%`, no float array constants. These omissions buy bit-exact agreement.
 
 ### 2.2 IR and validation
 1. OscScalar gains SLICE_RO and SLICE_RW with an element scalar stored in
-   OscType (a new `elem` byte beside `len`, src/compiler/osc_ir.h:63-71). BYTES and
+   OscType (the existing `elem` field, src/compiler/osc_ir.h:66, whose OscScalar gains F32 and F64 in Slice A). BYTES and
    CELLS are decoded as SLICE_RO/u8 and SLICE_RW/u64 for version 5 units.
 2. SLOAD/SSTORE gain `sub` = element width (1, 2, 4, 8); `osc_ir_slice_args_ok`
    (src/compiler/osc_ir.c:705-720) also checks pointer alignment and length * width overflow.
