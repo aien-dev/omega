@@ -6,7 +6,8 @@
 #include <stdint.h>
 #include "omega_blackwell_matmul.h"
 
-#define BW_MAX_IR_INSNS         1024 /* cut K: the four-head hd 128 attention kernel is ~700 instructions */
+#define BW_MAX_IR_INSNS         1280 /* cut K: the four-head hd 128 attention kernel is ~700 instructions; DEPFLAGS (2026-10-16): the depth-4 decode attention
+                                        kernel (1012) plus the counter prologue and epilogue passes 1024. Programs are heap-allocated and code is sized by need. */
 #define BW_MAX_VREGS            256
 #define BW_MAX_UVREGS           32
 #define BW_PHYS_GPR_START       2    /* Reserve R0, R1 */

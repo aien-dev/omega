@@ -42,6 +42,7 @@
  * The simulator runs CTAs one after another, so an atomic counter sees every earlier CTA's add. */
 
 #include "omega_blackwell_codegen.h"
+#include "omega_gpu_dep.h"
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -102,6 +103,18 @@ typedef struct WsSim {
     void (*poll_hook)(struct WsSim *s, uint64_t addr, void *ctx); void *poll_ctx;
     uint64_t timer;
 } WsSim;
+
+/* DEPFLAGS: arm a pre-satisfied counter line for a dep-mode kernel the way omega_gpu_cmdlist_add does for the first launch of a
+ * list: bank words 0x3e8 / 0x3f0 = the line, 0x3f8 = target 0 (nothing to wait for), the line declared in the range table.
+ * After ws_run the test checks line[0] == CTAs of the grid (every CTA's thread 0 added 1 at exit). */
+static inline void ws_dep_arm(WsSim *s, uint32_t *line16) {
+    memset(line16, 0, 64);
+    const uint64_t va = (uintptr_t)line16;
+    s->cbank[OMEGA_DEP_ARG_WAIT / 4] = (uint32_t)va; s->cbank[OMEGA_DEP_ARG_WAIT / 4 + 1] = (uint32_t)(va >> 32);
+    s->cbank[OMEGA_DEP_ARG_DONE / 4] = (uint32_t)va; s->cbank[OMEGA_DEP_ARG_DONE / 4 + 1] = (uint32_t)(va >> 32);
+    s->cbank[OMEGA_DEP_ARG_TARGET / 4] = 0;
+    if (s->nranges < WS_MAX_RANGES) { s->ranges[s->nranges].lo = (uintptr_t)va; s->ranges[s->nranges].hi = (uintptr_t)va + 64; s->nranges++; }
+}
 
 static void ws_fail(WsSim *s, int err, int pc, const char *what) {
     if (s->err) return;

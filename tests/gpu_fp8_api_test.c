@@ -170,6 +170,15 @@ static void host_only(void) {
     }
     printf("codegen: %d kernels built, largest %u IR instructions, peak %u GPRs\n", built, worst_insns, worst_gprs);
     CHECK(worst_insns <= BW_MAX_IR_INSNS && worst_gprs <= 128, "budgets");
+    for (uint32_t dep = 1; dep <= 3; dep += 2) { /* DEPFLAGS: the decode shapes with the counter prologue/epilogue (and the camera) stay within budget */
+        OmegaFp8GemvSpec sp = { .k = 2048, .lane_bytes = 16, .rows = 1, .warps = 8, .dep = dep }; uint32_t ni = 0, ng = 0;
+        int rc = omega_fp8_gemv_prog_stats(&sp, &ni, &ng);
+        CHECK(rc == 0 && ni <= BW_MAX_IR_INSNS && ng <= 128, "codegen k=2048 lb=16 rows=1 warps=8 dep=%u: rc %d insns %u gprs %u", dep, rc, ni, ng);
+        OmegaFp8GemvSpec gs = { .k = 768, .lane_bytes = 8, .rows = 1, .warps = 32, .dep = dep }; /* the down width: k % 512 != 0, so 8 B lanes */
+        rc = omega_fp8_gemv_prog_stats(&gs, &ni, &ng);
+        CHECK(rc == 0 && ni <= BW_MAX_IR_INSNS && 32u * 32u * (((ng + 1 + 7) / 8) * 8) <= 65536u, "codegen grouped k=768 lb=8 rows=1 warps=32 dep=%u: rc %d insns %u gprs %u", dep, rc, ni, ng);
+    }
+    CHECK(OMEGA_FP8_ARGS_WORDS <= OMEGA_DEP_MAX_KERNEL_ARGS, "argument words end before the dep words (0x3e8)");
     { OmegaFp8GemvSpec bad = { .k = 192, .lane_bytes = 8, .rows = 1, .warps = 1 }; CHECK(omega_fp8_gemv_prog_stats(&bad, NULL, NULL) != 0, "k not a multiple of 128 refused");
       bad.k = 256; bad.lane_bytes = 4; CHECK(omega_fp8_gemv_prog_stats(&bad, NULL, NULL) != 0, "lane_bytes 4 refused (LDG.E has no immediate offset)"); bad.lane_bytes = 8;
       bad.k = 2048; bad.rows = 3; CHECK(omega_fp8_gemv_prog_stats(&bad, NULL, NULL) != 0, "rows 3 refused");
@@ -279,8 +288,10 @@ static int sim_gemv(const OmegaFp8GemvSpec *spec, const Weights *W, uint32_t gro
         /* the table is read too */
         s.nranges = 5; s.ranges[4].lo = (uintptr_t)tab; s.ranges[4].hi = (uintptr_t)tab + 16 * (size_t)groups;
         for (size_t i = 0; i < (size_t)groups * n; i++) yd[i] = -999.0f;
+        static uint32_t depline[16]; if (spec->dep & OMEGA_DEP_FLAGS) ws_dep_arm(&s, depline);
         err = ws_run(&s, grid_x, groups);
         if (err) { snprintf(msg, msglen, "order %d: %s", order, s.msg); break; }
+        if ((spec->dep & OMEGA_DEP_FLAGS) && depline[0] != grid_x * groups) { err = -1; snprintf(msg, msglen, "dep counter %u after %u CTAs", depline[0], grid_x * groups); break; }
         g_sim_issues += s.warp_issues;
         size_t unwritten = 0; for (size_t i = 0; i < (size_t)groups * n; i++) if (yd[i] == -999.0f) unwritten++;
         if (unwritten) { err = -1; snprintf(msg, msglen, "%zu output words never written", unwritten); break; }
@@ -357,6 +368,13 @@ static void sim_battery(uint32_t cta_budget) {
         if (worst > worst_all) worst_all = worst;
         CHECK(rc == 0 && bad == 0, "sim %s: rc=%d bad=%zu worst_rel=%.3e %s", nm, rc, bad, worst, msg);
         printf("sim %-45s rc=%d worst_rel=%.3e bad=%zu (%.0f ms)\n", nm, rc, worst, bad, now_ms() - t0);
+        if (!deep && (i == 1 || i == 7)) { /* DEPFLAGS: one single and one grouped point with the counter protocol (variant 1; variant 2 below) */
+            OmegaFp8GemvSpec ds = sp; ds.dep = OMEGA_DEP_FLAGS;
+            int rcd = sim_gemv(&ds, &W, p->groups, ids, x, p->x_rows, y, cta_budget, 0, msg, sizeof msg);
+            size_t badd = 0; double worstd = rcd == 0 ? parity(&W, p->groups, ids, x, p->x_rows, y, &badd) : 1.0;
+            CHECK(rcd == 0 && badd == 0, "sim %s dep 1: rc=%d bad=%zu worst_rel=%.3e %s", p->name, rcd, badd, worstd, msg);
+            printf("sim %-38s dep 1 rc=%d worst_rel=%.3e bad=%zu\n", p->name, rcd, worstd, badd);
+        }
         /* mutants on the two grouped points and the first two single points: each must be caught */
         if (i == 1 || i == 4 || i == 7 || i == 8) {
             for (int m = 1; m <= 4; m++) {
@@ -414,6 +432,13 @@ static void sim_battery(uint32_t cta_budget) {
             CHECK(rc2 == 0 && bad == 0 && same, "sim %s: rc=%d bad=%zu worst_rel=%.3e identical_to_v1=%d %s", p->name, rc2, bad, worst, same, msg);
             if (same) identical++;
             printf("sim %-48s rc=%d worst_rel=%.3e bad=%zu identical_to_v1=%d (%.0f ms)\n", p->name, rc2, worst, bad, same, now_ms() - t0);
+            if (i == 0 || i == 6) { /* DEPFLAGS: variant 2 with the counter protocol stays bit-identical to variant 1 and every CTA counts itself in */
+                OmegaFp8GemvSpec ds = sp; ds.dep = OMEGA_DEP_FLAGS;
+                int rcd = sim_gemv(&ds, &W, p->groups, ids, x, p->x_rows, y2, cta_budget, 0, msg, sizeof msg);
+                int samed = rc1 == 0 && rcd == 0 && memcmp(y1, y2, ny * 4) == 0;
+                CHECK(rcd == 0 && samed, "sim %s dep 1: rc=%d identical_to_v1=%d %s", p->name, rcd, samed, msg);
+                printf("sim %-48s dep 1 rc=%d identical_to_v1=%d\n", p->name, rcd, samed);
+            }
             if (i == 0 || i == 6 || i == 7) {
                 for (int m = 1; m <= 3; m++) {
                     if (m == 3 && p->groups == 1) continue;

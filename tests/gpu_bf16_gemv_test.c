@@ -87,6 +87,13 @@ static void host_only(void) {
         CHECK(rc == 0 && n <= 1024, "codegen k2048 rows %u warps %u depth %u mutant %d: rc %d insns %u gprs %u", rs[j], ws[i], d, m, rc, n, g);
         if (m == 0 && rc == 0 && rs[j] == 1 && d == 8) printf("codegen rows %u warps %2u depth %u: %u instructions, %u registers (declared %u, register file %u of 65536)%s\n", rs[j], ws[i], d, n, g, decl, 32u * ws[i] * decl, 32u * ws[i] * decl <= 65536u ? "" : " DOES NOT FIT");
     }
+    for (uint32_t dep = 1; dep <= 3; dep += 2) { /* DEPFLAGS: the lm_head shape with the counter prologue/epilogue (and the camera) stays within budget */
+        OmegaBf16GemvSpec s = { 2048, 1, 8, 8, 0, dep }; uint32_t n = 0, g = 0;
+        int rc = omega_bf16_gemv_prog_stats(&s, &n, &g);
+        uint32_t decl = ((g + 1 + 7) / 8) * 8;
+        CHECK(rc == 0 && n <= 1024 && 32u * 8u * decl <= 65536u, "codegen k2048 rows 1 warps 8 depth 8 dep %u: rc %d insns %u gprs %u declared %u", dep, rc, n, g, decl);
+    }
+    CHECK(OMEGA_BF16_ARGS_WORDS <= OMEGA_DEP_MAX_KERNEL_ARGS, "argument words end before the dep words (0x3e8)");
     { OmegaBf16GemvSpec s = { 2048, 3, 8, 8, 0, 0 }; CHECK(omega_bf16_gemv_prog_stats(&s, NULL, NULL) != 0, "rows 3 refused"); }
     { OmegaBf16GemvSpec s = { 2000, 1, 8, 8, 0, 0 }; CHECK(omega_bf16_gemv_prog_stats(&s, NULL, NULL) != 0, "k 2000 refused"); }
     { OmegaBf16GemvSpec s = { 2048, 1, 8, 3, 0, 0 }; CHECK(omega_bf16_gemv_prog_stats(&s, NULL, NULL) != 0, "depth 3 refused"); }
@@ -100,9 +107,10 @@ static void host_only(void) {
 
 /* ------------------------------------------------------------- simulator */
 static uint64_t g_sim_issues;
+static uint32_t g_sim_dep; /* DEPFLAGS: spec.dep for the next sim point (0, or OMEGA_DEP_FLAGS: counter armed by ws_dep_arm) */
 static int sim_point(uint32_t k, uint32_t n, uint32_t rows, uint32_t warps, uint32_t depth, uint32_t grid_x, int mutant, uint32_t seed, char *msg, size_t msgn, size_t *bad) {
     static BlackwellIRProgram prog;
-    OmegaBf16GemvSpec spec = { k, rows, warps, depth, mutant, 0 };
+    OmegaBf16GemvSpec spec = { k, rows, warps, depth, mutant, g_sim_dep };
     if (omega_blackwell_codegen_bf16_gemv_prog(&spec, &prog) != 0) { snprintf(msg, msgn, "codegen refused"); return -1; }
     uint16_t *w = aligned_alloc(16, (size_t)n * k * 2); { uint16_t *t = make_w((size_t)n * k, seed); memcpy(w, t, (size_t)n * k * 2); free(t); }
     float *x = aligned_alloc(16, (size_t)k * 4); { float *t = make_x(k, seed + 1); memcpy(x, t, (size_t)k * 4); free(t); }
@@ -120,8 +128,10 @@ static int sim_point(uint32_t k, uint32_t n, uint32_t rows, uint32_t warps, uint
         s.ranges[0].lo = (uintptr_t)w; s.ranges[0].hi = (uintptr_t)w + (size_t)n * k * 2;
         s.ranges[1].lo = (uintptr_t)x; s.ranges[1].hi = (uintptr_t)x + (size_t)k * 4;
         s.ranges[2].lo = (uintptr_t)y; s.ranges[2].hi = (uintptr_t)y + (size_t)n * 4;
+        static uint32_t depline[16]; if (g_sim_dep) ws_dep_arm(&s, depline);
         err = ws_run(&s, grid_x, 1);
         if (err) { snprintf(msg, msgn, "order %d: %s (pc %d)", order, s.msg, s.err_pc); break; }
+        if (g_sim_dep && depline[0] != grid_x) { err = -1; snprintf(msg, msgn, "dep counter %u after %u CTAs", depline[0], grid_x); break; }
         g_sim_issues += s.warp_issues;
         size_t unwritten = 0; for (uint32_t i = 0; i < n; i++) if (y[i] == -999.0f) unwritten++;
         if (unwritten) { err = -1; snprintf(msg, msgn, "%zu output words never written", unwritten); break; }
@@ -143,6 +153,14 @@ static void sim_battery(void) {
         int err = sim_point(pts[i].k, pts[i].n, pts[i].rows, pts[i].warps, pts[i].depth, pts[i].grid, 0, 31 + (uint32_t)i, msg, sizeof msg, &bad);
         CHECK(!err && bad == 0, "sim k %u n %u rows %u warps %u depth %u grid %u: %s", pts[i].k, pts[i].n, pts[i].rows, pts[i].warps, pts[i].depth, pts[i].grid, msg);
         printf("sim k %u n %u rows %u warps %u depth %u grid %u: %s %s\n", pts[i].k, pts[i].n, pts[i].rows, pts[i].warps, pts[i].depth, pts[i].grid, err ? "ERROR" : bad ? "MISMATCH" : "ok", msg);
+    }
+    { /* DEPFLAGS: the dep-mode kernel computes the same rows and every CTA counts itself in */
+        char msg[300]; size_t bad = 1;
+        g_sim_dep = OMEGA_DEP_FLAGS;
+        int err = sim_point(2048, 64, 1, 8, 4, 2, 0, 31, msg, sizeof msg, &bad);
+        g_sim_dep = 0;
+        CHECK(!err && bad == 0, "sim k 2048 n 64 grid 2 with dep flags: %s", msg);
+        printf("sim k 2048 n 64 grid 2 dep 1: %s %s\n", err ? "ERROR" : bad ? "MISMATCH" : "ok", msg);
     }
     for (int m = 1; m <= 3; m++) {
         char msg[300]; size_t bad = 0;
