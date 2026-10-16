@@ -736,8 +736,8 @@ static int sim_step(SimThr *t, const BlackwellIRProgram *p, uint32_t tid, uint32
         case BW_IR_FMUL: wrs(t, in->dst_vreg, in->dst_subreg, f2u_(u2f(a) * u2f(b)), p); break;
         case BW_IR_FFMA: wrs(t, in->dst_vreg, in->dst_subreg, f2u_(fmaf(u2f(a), u2f(b), u2f(c))), p); break;
         case BW_IR_FMNMX_MAX: wrs(t, in->dst_vreg, in->dst_subreg, f2u_(fmaxf(u2f(a), u2f(b))), p); break;
-        case BW_IR_MUFU_EX2: wrs(t, in->dst_vreg, in->dst_subreg, f2u_(exp2f(u2f(a))), p); break;
-        case BW_IR_MUFU_RCP: wrs(t, in->dst_vreg, in->dst_subreg, f2u_(1.0f / u2f(a)), p); break;
+        case BW_IR_MUFU_EX2: wrs(t, in->dst_vreg, in->dst_subreg, f2u_(ws_mufu_ex2(u2f(a))), p); break; /* bw_mufu_ftz.h (#462) */
+        case BW_IR_MUFU_RCP: wrs(t, in->dst_vreg, in->dst_subreg, f2u_(ws_mufu_rcp(u2f(a))), p); break;
         default: g_sim_err = 100 + (int)in->op; t->done = 1; return 0;
         }
         if (g_trace && tid == 0 && cx == g_trace_cx && cy == 0 && g_trace_launch == 1) { uint32_t dv = rd(t, in->dst_vreg, p); printf("T pc=%d op=%d dst=v%d(r%d)=%08x f=%g p0=%d a=%08x b=%08x c=%08x\n", t->pc, (int)in->op, in->dst_vreg, in->dst_vreg >= 0 ? p->regalloc.vreg_to_phys[in->dst_vreg] : -1, dv, u2f(dv), t->p0, a, b, c); }

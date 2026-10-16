@@ -33,8 +33,8 @@
  * nobody wrote shows up in the oracle comparison.
  *
  * Per-lane ALU semantics are those of the two earlier simulators (tests/gpu_attention_test.c,
- * bench/prime_race/tests/gb10_sieve_host_test.c). EX2 and RCP are exact here; the chip's
- * are approximate. LDCU64 (memory descriptor) is not modelled. */
+ * bench/prime_race/tests/gb10_sieve_host_test.c). MUFU EX2 / RCP / RSQ are the correctly
+ * rounded IEEE value with the chip's subnormal flush (bw_mufu_ftz.h); the chip's are approximate. LDCU64 (memory descriptor) is not modelled. */
 #ifndef BW_WARP_SIM_PA_H
 /* bw_warp_sim_pa.h (OWN-30B L1 attention, 2026-10-13): bw_warp_sim_tc.h with the HMMA operands read at their sub-register
  * offsets (src1/src2/src3_subreg; the encoder adds them to the physical register, bw_warp_sim_tc.h ignored them). The
@@ -49,6 +49,7 @@
  * encoder emits and bw_warp_sim_k.h ignored. Timing (stall counts, scoreboards) is not modelled. */
 
 #include "omega_blackwell_codegen.h"
+#include "bw_mufu_ftz.h" /* MUFU EX2 / RCP / RSQ: the chip's flush of subnormal inputs and results (omega #462) */
 #include "bw_hmma_model.h"
 #include "omega_blackwell_codegen_tc.h"
 #include <math.h>
@@ -178,9 +179,9 @@ static void ws_lane_exec(WsSim *s, WsLane *l, const BlackwellIRInsn *in, int pc,
         if (in->imm == OMEGA_TC_MARK_F2FP) { ws_wrs(l, in->dst_vreg, in->dst_subreg, (ws_bf16_rn(a) << 16) | ws_bf16_rn(b), p); break; } /* F2FP.BF16.F32.PACK_AB placeholder */
         ws_wrs(l, in->dst_vreg, in->dst_subreg, ws_f2u(fmaxf(ws_u2f(a), ws_u2f(b))), p); break;
     case BW_IR_FMNMX_MIN: ws_wrs(l, in->dst_vreg, in->dst_subreg, ws_f2u(fminf(ws_u2f(a), ws_u2f(b))), p); break;
-    case BW_IR_MUFU_EX2: ws_wrs(l, in->dst_vreg, in->dst_subreg, ws_f2u(exp2f(ws_u2f(a))), p); break;
-    case BW_IR_MUFU_RCP: ws_wrs(l, in->dst_vreg, in->dst_subreg, ws_f2u(1.0f / ws_u2f(a)), p); break;
-    case BW_IR_MUFU_RSQ: ws_wrs(l, in->dst_vreg, in->dst_subreg, ws_f2u(1.0f / sqrtf(ws_u2f(a))), p); break;
+    case BW_IR_MUFU_EX2: ws_wrs(l, in->dst_vreg, in->dst_subreg, ws_f2u(ws_mufu_ex2(ws_u2f(a))), p); break;
+    case BW_IR_MUFU_RCP: ws_wrs(l, in->dst_vreg, in->dst_subreg, ws_f2u(ws_mufu_rcp(ws_u2f(a))), p); break;
+    case BW_IR_MUFU_RSQ: ws_wrs(l, in->dst_vreg, in->dst_subreg, ws_f2u(ws_mufu_rsq(ws_u2f(a))), p); break;
     case BW_IR_LDG_STRONG_SYS: { uint64_t ad = ws_rd64(l, in->src1_vreg, p); if (!ws_mem_ok(s, ad, 4, pc)) return; uint32_t x; memcpy(&x, (const void *)(uintptr_t)ad, 4); ws_wrs(l, in->dst_vreg, in->dst_subreg, x, p); break; }
     case BW_IR_STG_STRONG_SYS: { uint64_t ad = ws_rd64(l, in->src1_vreg, p); if (!ws_mem_ok(s, ad, 4, pc)) return; memcpy((void *)(uintptr_t)ad, &b, 4); break; }
     case BW_IR_ATOMG_ADD_STRONG_SYS: { uint64_t ad = ws_rd64(l, in->src1_vreg, p); if (!ws_mem_ok(s, ad, 4, pc)) return; uint32_t old; memcpy(&old, (const void *)(uintptr_t)ad, 4); uint32_t nw = old + b; memcpy((void *)(uintptr_t)ad, &nw, 4); ws_wrs(l, in->dst_vreg, in->dst_subreg, old, p); break; }
