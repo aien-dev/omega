@@ -2389,13 +2389,21 @@ test-vc-bridge: tests/test_omega_vc_bridge.c src/omega_vc_bridge.c src/omega_vc_
 # byte-identical for any PHYSICS_DIR and any omega checkout directory.
 GPU_API_OBJS = $(filter-out $(OUT_DIR)/omegatool.o $(OUT_DIR)/omega_blackwell_gates.o $(OUT_DIR)/omega_world_gates.o,$(OBJS))
 GPU_API_TEST = $(OUT_DIR)/gpu_matmul_api_test
+GPU_R4_RECEIPT = $(OUT_DIR)/gpu_matmul_r4_receipt
 $(OUT_DIR)/libomega_gpu.a: $(GPU_API_OBJS) | check-physics-lock
 	ar rcs $@ $(GPU_API_OBJS)
 libomega_gpu: $(OUT_DIR)/libomega_gpu.a
 $(GPU_API_TEST): tests/gpu_matmul_api_test.c src/omega_gpu_matmul_api.h $(OUT_DIR)/libomega_gpu.a
 	$(CC) $(CFLAGS) -o $@ tests/gpu_matmul_api_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
-test-gpu-matmul-api: $(GPU_API_TEST)
+test-gpu-matmul-api: $(GPU_API_TEST) $(GPU_R4_RECEIPT)
 	./$(GPU_API_TEST) --host-only
+	./$(GPU_R4_RECEIPT) --host-only
+
+# omega #473 R4: the sealed CTA-budget receipt (full-output comparison at the training shapes,
+# every budget, repeats, I42 stale-output check, negative controls). Host-only self-test above; the
+# chip receipt is `quietlock run -- ./build/gpu_matmul_r4_receipt --out receipt.json`.
+$(GPU_R4_RECEIPT): tests/gpu_matmul_r4_receipt.c src/omega_gpu_matmul_api.h $(OUT_DIR)/libomega_gpu.a
+	$(CC) $(CFLAGS) -o $@ tests/gpu_matmul_r4_receipt.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
 
 # FB-1 cut 4: native rmsnorm / rope / swiglu (+ EX2 and shared-exchange probes).
 # test-gpu-elementwise is host-only (refusals, codegen, word fixtures, nvdisasm
