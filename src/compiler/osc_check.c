@@ -772,8 +772,15 @@ static int ffold(C *c, int i, OscScalar t, uint64_t *bits)
             snprintf(msg, sizeof msg, "%s literal where %s is required", tname(lit), tname(t));
             return tmismatch(c, n, tname(lit), msg);
         }
-        char buf[128];
-        osc_tok_text(c->ast->src, &c->ast->toks[n->tok], buf, sizeof buf);
+        const OscToken *tk = &c->ast->toks[n->tok];
+        char buf[OSC_LEX_NAME_MAX + 1];
+        if (tk->len > OSC_LEX_NAME_MAX) { /* the lexer refuses these first; never parse a cut spelling */
+            osc_tok_text(c->ast->src, tk, buf, sizeof buf);
+            osc_diag_set(c->d, OSC_DIAG_CAPACITY, n->line, n->col, buf, 0, NULL, "float literal length",
+                         "float literal longer than %d characters", OSC_LEX_NAME_MAX);
+            return -1;
+        }
+        osc_tok_text(c->ast->src, tk, buf, sizeof buf);
         size_t len = strlen(buf);
         if (n->ival && len > 3) buf[len - 3] = 0; /* drop the f32 / f64 suffix */
         if (t == OSC_T_F32) {

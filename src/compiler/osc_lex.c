@@ -157,6 +157,13 @@ int osc_lex(const char *src, size_t len, OscToken *toks, uint32_t cap, uint32_t 
                                  "malformed float literal '%s'", buf);
                     return -1;
                 }
+                if (t->len > OSC_LEX_NAME_MAX) { /* refused, never truncated: a cut literal would parse to another value */
+                    char lb[OSC_LEX_NAME_MAX + 1];
+                    osc_tok_text(src, t, lb, sizeof lb);
+                    osc_diag_set(d, OSC_DIAG_CAPACITY, t->line, t->col, lb, 0, NULL, "float literal length",
+                                 "float literal longer than %d characters", OSC_LEX_NAME_MAX);
+                    return -1;
+                }
                 t->kind = OT_FLOAT;
                 t->ival = suffix;
                 n++;
