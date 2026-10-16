@@ -87,8 +87,8 @@
           "purpose": "Directory docs/numeric. Purpose not yet described by a human."
         },
         {
-          "digest": "5f91761066f42aceaa64aa34ac2e168ed70553c8174747c9a4a02938124609fd",
-          "last_commit": "5901baa5",
+          "digest": "6bdfbc843114954144a288eb6bc0f8c84a3be256547a8db98b2bd3ee949e95be",
+          "last_commit": "06d994df",
           "name": "osc",
           "purpose": "Directory docs/osc. Purpose not yet described by a human."
         },
@@ -123,15 +123,15 @@
           "purpose": "Directory docs/turing. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:75e94efdf68de6fd562a544862b5033af55021631da72ef33d19522830bb40ec",
-      "compiled_at": "2026-10-15T21:40:57Z",
+      "children_root": "sha256:ac7f7ea4b00d4620a993c6dd88a0267f2d49008d415162976e45fa4341e43407",
+      "compiled_at": "2026-10-16T01:32:55Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:02c49f2f9bf7c347ac33676e72fde85506fae3d1bbf40931547ef65839728653",
+      "digest": "sha256:e965b8e2076c58547b444a429bc01746ebf7b9ec0e5c878bf99bd95d1efa6e3e",
       "evidence_files": 34,
       "evidence_root": "sha256:589d8b3706e6d7a202ab20b278dac5fc5bafc973f1c2a867b2668aa7210b65cc",
-      "files": 125,
-      "generated_at_commit": "53ab95e282b1a08ec34edc3d7543fac56c7e095f",
-      "source_tree": "sha256:d85e4b94ce8bb53a9f165fc2b7b0accb7fd9fb06f46488d1285dc174f3bd8c51"
+      "files": 126,
+      "generated_at_commit": "06d994df9cb00eb5267a6c613552c70109a2aaa4",
+      "source_tree": "sha256:a9ce06854d390ffa772f9ad82d412098d88d97321aed96ac4c6828c19850758e"
     },
     "owner_lane": "",
     "provenance": {
