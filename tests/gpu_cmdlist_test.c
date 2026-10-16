@@ -580,18 +580,94 @@ static int chip_run(const char *out_path, uint32_t reps) {
     return g_failed ? 1 : 0;
 }
 
+/* ---- DEPFLAGS chip study (--depflags, 2026-10-16): the heavy dependent AXPY chain (32 launches x 1M elements, 256 CTAs each) three ways.
+ *   RED  barrier NONE, dep 0: the kernels carry no ordering of their own, so overlapping grids must corrupt x (the negative control: the
+ *        run where the instrument says "no"; without it a clean D run proves nothing).
+ *   A    barrier WFI + INVALIDATE ALL, dep 0: today's default.
+ *   D    barrier NONE, dep 1: the kernels order themselves with the list's counter (omega_gpu_cmdlist_set_dep).
+ * RED reps times first, then A and D interleaved reps times each, GPU PTIMER stamps on: span = stamps[N] - stamps[0] (the first
+ * stamp sits after the first launch's WFI, the last after the final WFI, so the span covers all N grids in both variants); parity on
+ * every element after every run; in D the counter read back must equal the CTA total. One line per run; JSON with --out. */
+static uint64_t med64(uint64_t *v, uint32_t n) { for (uint32_t i = 1; i < n; i++) for (uint32_t j = i; j > 0 && v[j - 1] > v[j]; j--) { uint64_t t = v[j]; v[j] = v[j - 1]; v[j - 1] = t; } return n ? v[n / 2] : 0; }
+static int chip_depflags(const char *out_path, uint32_t reps) {
+    FILE *out = out_path ? fopen(out_path, "w") : NULL;
+    if (out_path && !out) { printf("cannot write %s\n", out_path); return 1; }
+    if (specs_build()) { printf("FAIL: codegen\n"); return 1; }
+    static Kern K_dep;
+    { OmegaDecSpec s; memset(&s, 0, sizeof s); s.kind = OMEGA_DEC_AXPY; s.stride = AXPY_BIG_STRIDE; s.dep = OMEGA_DEP_FLAGS; if (kern_prog(&K_dep, &s)) { printf("FAIL: codegen dep\n"); return 1; } }
+    OmegaGpuCmdList *cl = NULL;
+    if (omega_gpu_cmdlist_create(OMEGA_GPU_CMDLIST_MAX_LAUNCHES, &cl) != 0) return chip_fail("cmdlist create");
+    omega_gpu_session_lock();
+    if (kern_upload(&K_axpy_big) || kern_upload(&K_dep)) { omega_gpu_session_unlock(); return chip_fail("kernel upload"); }
+    const uint32_t N = 32; const size_t n = (size_t)AXPY_BIG_STRIDE * AXPY_BIG_ITERS, big = n * 4u;
+    OmegaGpuMem bx, ba, bx0;
+    if (omega_gpu_session_alloc(big, &bx) || omega_gpu_session_alloc(big, &ba) || omega_gpu_session_alloc(big, &bx0)) { omega_gpu_session_unlock(); return chip_fail("alloc"); }
+    uint32_t s = 11; float *x0 = bx0.cpu, *a = ba.cpu, *x = bx.cpu;
+    for (size_t i = 0; i < n; i++) { x0[i] = frand(&s, -1, 1); a[i] = frand(&s, -1, 1); }
+    omega_gpu_session_sync_to_gpu(&ba);
+    float *xr = malloc(big); memcpy(xr, x0, big);
+    for (uint32_t l = 0; l < N; l++) for (size_t i = 0; i < n; i++) xr[i] = xr[i] + a[i];
+    uint32_t ab[OMEGA_DEC_AXPY_WORDS] = { 0 }; put64(ab, OMEGA_DEC_AXPY_X, bx.va); put64(ab, OMEGA_DEC_AXPY_A, ba.va); ab[(OMEGA_DEC_AXPY_ITERS - 0x380) / 4] = AXPY_BIG_ITERS;
+    OmegaGpuLaunch L0 = axpy_launch(&K_axpy_big, ab, AXPY_BIG_STRIDE, AXPY_BIG_ITERS), L1 = axpy_launch(&K_dep, ab, AXPY_BIG_STRIDE, AXPY_BIG_ITERS);
+    static uint64_t stamps[OMEGA_GPU_CMDLIST_MAX_LAUNCHES + 1];
+    const uint32_t ctas = AXPY_BIG_STRIDE / OMEGA_DEC_THREADS;
+    printf("depflags chip study: %u launches x %zu elements, %u CTAs per launch, dep kernel %u gprs (dep 0: %u), reps %u\n", N, n, ctas, K_dep.gpr, K_axpy_big.gpr, reps);
+    if (out) fprintf(out, "{\"receipt\":\"OMEGA_DEPFLAGS_CHIP_V1\",\"launches\":%u,\"elements\":%zu,\"ctas_per_launch\":%u,\"reps\":%u,\"runs\":[", N, n, ctas, reps);
+    uint64_t span_a[256], span_d[256]; uint32_t na = 0, nd = 0, red_corrupt = 0, red_runs = 0, par_a = 0, par_d = 0; int first = 1;
+    if (reps > 256) reps = 256;
+    for (uint32_t rep = 0; rep < 3 * reps && !omega_gpu_cmdlist_is_latched(); rep++) {
+        const int variant = rep < reps ? 0 : ((rep - reps) & 1 ? 2 : 1); /* RED x reps, then A, D, A, D, ... */
+        memcpy(x, x0, big); omega_gpu_session_sync_to_gpu(&bx);
+        omega_gpu_cmdlist_reset(cl);
+        if (omega_gpu_cmdlist_set_dep(cl, variant == 2 ? OMEGA_DEP_FLAGS : 0) != 0) { omega_gpu_session_unlock(); return chip_fail("set_dep"); }
+        for (uint32_t l = 0; l < N; l++) if (omega_gpu_cmdlist_add(cl, variant == 2 ? &L1 : &L0) < 0) { omega_gpu_session_unlock(); return chip_fail("add"); }
+        OmegaGpuCmdListOpts o; memset(&o, 0, sizeof o); o.mode = OMEGA_GPU_CMDLIST_PCAS; o.timeout_ms = 20000; o.stamps = 1;
+        o.barrier = variant == 1 ? OMEGA_GPU_CMDLIST_BARRIER_WFI : OMEGA_GPU_CMDLIST_BARRIER_NONE;
+        OmegaGpuCmdListStats st; int rc = omega_gpu_cmdlist_submit(cl, &o, &st);
+        omega_gpu_session_sync_to_cpu(&bx);
+        size_t d = 0; for (size_t i = 0; i < n; i++) if (x[i] != xr[i]) d++;
+        int cnt = rc == 0 ? omega_gpu_cmdlist_stamps(cl, stamps, N + 1) : -1;
+        int mono = 1; for (int i = 1; i < cnt; i++) if (stamps[i] < stamps[i - 1]) mono = 0;
+        const uint64_t span = cnt == (int)N + 1 ? stamps[N] - stamps[0] : 0;
+        const char *name = variant == 0 ? "RED none dep0" : variant == 1 ? "A wfi dep0" : "D none dep1";
+        printf("run %2u %-13s rc %d differ %zu/%zu chip %.1f us stamps %d mono %d span %.1f us per-launch %.2f us counter %u/%u%s%s\n", rep, name, rc, d, n, st.elapsed_ns / 1e3, cnt, mono,
+               span / 1e3, span / 1e3 / N, st.dep_observed, st.dep_expected, rc ? " ERR: " : "", rc ? omega_gpu_session_last_error() : "");
+        if (out) fprintf(out, "%s{\"run\":%u,\"variant\":\"%s\",\"rc\":%d,\"differ\":%zu,\"chip_ns\":%" PRIu64 ",\"stamps\":%d,\"span_ns\":%" PRIu64 ",\"counter\":%u,\"expected\":%u}",
+                         first ? "" : ",", rep, name, rc, d, st.elapsed_ns, cnt, span, st.dep_observed, st.dep_expected);
+        first = 0;
+        if (variant == 0) { red_runs++; if (d) red_corrupt++; }
+        else if (variant == 1) { if (rc == 0 && d == 0 && cnt == (int)N + 1 && mono) par_a++; if (span) span_a[na++] = span; }
+        else { if (rc == 0 && d == 0 && cnt == (int)N + 1 && mono && st.dep_observed == st.dep_expected && st.dep_expected == N * ctas) par_d++; if (span) span_d[nd++] = span; }
+    }
+    CHECK(red_corrupt > 0, "RED: barrier NONE with dep 0 corrupted x in %u of %u runs (the instrument can say no)", red_corrupt, red_runs);
+    CHECK(par_a == reps, "A wfi dep0: parity, %u stamps, monotonic in %u of %u runs", N + 1, par_a, reps);
+    CHECK(par_d == reps, "D none dep1: parity, stamps, counter == %u CTAs in %u of %u runs", N * ctas, par_d, reps);
+    const uint64_t ma = med64(span_a, na), md = med64(span_d, nd);
+    printf("A wfi dep0  span median %.1f us (min %.1f max %.1f, %u runs), per launch %.2f us\n", ma / 1e3, na ? span_a[0] / 1e3 : 0.0, na ? span_a[na - 1] / 1e3 : 0.0, na, ma / 1e3 / N);
+    printf("D none dep1 span median %.1f us (min %.1f max %.1f, %u runs), per launch %.2f us; D/A %.3f\n", md / 1e3, nd ? span_d[0] / 1e3 : 0.0, nd ? span_d[nd - 1] / 1e3 : 0.0, nd, md / 1e3 / N, ma ? (double)md / (double)ma : 0.0);
+    if (out) fprintf(out, "],\"red\":{\"runs\":%u,\"corrupt\":%u},\"A\":{\"parity\":%u,\"span_med_ns\":%" PRIu64 ",\"span_min_ns\":%" PRIu64 ",\"span_max_ns\":%" PRIu64 "},\"D\":{\"parity\":%u,\"span_med_ns\":%" PRIu64 ",\"span_min_ns\":%" PRIu64 ",\"span_max_ns\":%" PRIu64 "},\"latched\":%d}\n",
+                     red_runs, red_corrupt, par_a, ma, na ? span_a[0] : 0, na ? span_a[na - 1] : 0, par_d, md, nd ? span_d[0] : 0, nd ? span_d[nd - 1] : 0, omega_gpu_cmdlist_is_latched());
+    if (out) fclose(out);
+    free(xr);
+    omega_gpu_session_free(&bx); omega_gpu_session_free(&ba); omega_gpu_session_free(&bx0);
+    omega_gpu_session_unlock();
+    omega_gpu_cmdlist_free(cl);
+    return g_failed ? 1 : 0;
+}
+
 int main(int argc, char **argv) {
-    int host = 0, sim = 0; uint32_t reps = 20; const char *out = NULL;
+    int host = 0, sim = 0, depflags = 0; uint32_t reps = 20; const char *out = NULL;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--host-only") == 0) host = 1;
         else if (strcmp(argv[i], "--sim") == 0) sim = 1;
+        else if (strcmp(argv[i], "--depflags") == 0) depflags = 1; /* DEPFLAGS chip study (RED, A, D; --reps N each, --out) */
         else if (strcmp(argv[i], "--reps") == 0 && i + 1 < argc) reps = (uint32_t)atoi(argv[++i]);
         else if (strcmp(argv[i], "--spin-us") == 0 && i + 1 < argc) omega_gpu_session_set_spin_us((uint32_t)atoi(argv[++i]));
         else if (strcmp(argv[i], "--out") == 0 && i + 1 < argc) out = argv[++i];
         else { printf("usage: %s [--host-only|--sim] [--reps N] [--spin-us U] [--out receipt.json]\n", argv[0]); return 2; }
     }
     if (reps == 0) reps = 1;
-    int rc = host ? host_only() : sim ? sim_mode() : chip_run(out, reps);
-    printf("%s: %d checks, %d failed: %s\n", host ? "host-only" : sim ? "sim" : "chip", g_checks, g_failed, rc ? "FAIL" : "PASS");
+    int rc = host ? host_only() : sim ? sim_mode() : depflags ? chip_depflags(out, reps) : chip_run(out, reps);
+    printf("%s: %d checks, %d failed: %s\n", host ? "host-only" : sim ? "sim" : depflags ? "chip-depflags" : "chip", g_checks, g_failed, rc ? "FAIL" : "PASS");
     return rc;
 }
