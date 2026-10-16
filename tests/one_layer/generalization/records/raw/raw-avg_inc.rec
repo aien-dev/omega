@@ -8,7 +8,7 @@ params u32 u32
 ret u32
 signature fn avg_inc a uint b uint to uint
 desc average of a and b rounded down plus one, with an overflow-free avg2 helper
-receipt 25812542d03c97252d91bca5a6891ac2a03bd0c0b2a6520ff02440e148283ca2
+receipt e1f7dde7a6bca6273ccd8d528695ad2588ff850f6e76d4e519e310cadbc87964
 validity verified
 ancestry avg_inc e34d765d09b44d4ec5fd213a30b7f34bed75b0afd7989a8d0d799b2dfedf9257
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

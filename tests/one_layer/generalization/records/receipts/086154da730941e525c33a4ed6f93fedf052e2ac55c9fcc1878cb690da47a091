@@ -1,0 +1,9 @@
+gen-receipt 1
+record raw-wrap_diff
+tool tools/gen/abstract/extract 09c1b424bf715321a35f8730405f860460f8e62dd31abb5607e1e7956a312968
+tool tools/gen/abstract/genabs.sh a90f07483fe62ae5e7ec9ae55bdb904a106bb5402f96906e4d6cb70b080d18d7
+tool tools/gen/abstract/gabs.c 16023e76cb19000eebb4c341692a831ad3d8d12093a4ecf2ed3e5c189532bf38
+solution_ir 46df68a159e3b6f5d0e4e1b0ce52375fef29d92f4e1bfbb9b971178bfb1f3e27
+checker2 ACCEPT
+x445 check oscir OK
+tests inputs=d2c4a07db300a5f2e4acf67d9a7da7754c05d4cf81797a24e82cf6ab9af1e94c expected=0d5d93617b949efc08639f5339d611ef2f9ae27185a0e18a67b5f12f84b12520 ACCEPT n=8

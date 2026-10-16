@@ -8,7 +8,7 @@ params u32
 ret u32
 signature fn digcount_nibbles n uint to uint
 desc four times the number of decimal digits of n, with a digcount helper
-receipt 8d507c4644f58d89f326bf77ec86041b634c59d0bc2e949f4e442f795b7c2edf
+receipt b750ca164953cc90454cfde2b91c2676c01d7e1a565221d480ae03d8f627c8af
 validity verified
 ancestry digcount_nibbles 6ce9611b18235437727db8122382ccf8986749561efac3b7f5dd9ce170023fd7
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

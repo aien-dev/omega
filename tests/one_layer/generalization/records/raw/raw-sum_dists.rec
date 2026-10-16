@@ -8,7 +8,7 @@ params u32 u32
 ret u32
 signature fn sum_dists n uint c uint to uint
 desc sum over i below n of the distance between i and c, with a dist helper
-receipt 901611d2de98bd1f84242d210872eb4160fd74ba23cd892beb8e404726b2d5fd
+receipt ffe57e59ebc1bfc0a271de4916a43b7a01201fd805ccac8f9f6ed3ba90b7aedd
 validity verified
 ancestry sum_dists 7c94e9348429e7768cd6262fde3af52fe70a6156b39343663bff054ecfc78021
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

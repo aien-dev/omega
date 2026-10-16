@@ -8,7 +8,7 @@ params u32 u32 u32 u32
 ret u32
 signature fn max4_half a uint b uint c uint d uint to uint
 desc half of the largest of four values, with a max4 helper over a 4-value sequence
-receipt 8485be736804b18465b246ed2562ccda1df0a959ed7511650a4f2c7e8cb07b3d
+receipt b787640954115033e5db8ae1f2019766331b1ac272af63ad072575292a46d80b
 validity verified
 ancestry max4_half e650e484d0b4b4157749e91103233a49e1940e720a7ec84753bf2236372ba1b1
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

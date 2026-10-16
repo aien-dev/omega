@@ -8,7 +8,7 @@ params u32
 ret u32
 signature fn popcnt_zero x uint to uint
 desc number of zero bits in a 32-bit x, with a popcnt helper
-receipt 94cf38a9ab15f8d21f0307dc99b60c511b61123047ac84ee74e1fd5e6da58e6b
+receipt 43fe5f3a5c427e542e8320b1bf5dad2a43cc916492cfa304c21083f5a0f6fa58
 validity verified
 ancestry popcnt_zero c94d6bd7bf8ff4bf32a5ce80e5a1f17c3d9667dff6c6959c5e1d41f3179decf7
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

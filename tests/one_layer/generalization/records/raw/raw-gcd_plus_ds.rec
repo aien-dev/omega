@@ -8,7 +8,7 @@ params u32 u32
 ret u32
 signature fn gcd_plus_ds a uint b uint to uint
 desc gcd of a and b plus the digit sum of a, with gcd and digsum helpers
-receipt 4af3aaff157f470ffec0569161812d821d588dd8256f92f862d506195f38f123
+receipt dc9ab57eb71944a1429a0207a7599bce6c3ff8fdd2f38a9fcb5f40beea2fd2c6
 validity verified
 ancestry gcd_plus_ds a2a3cc01dd1210aa03a7243e7dbcb5f5ab1f29da70fe4395682ec7803d951b30
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

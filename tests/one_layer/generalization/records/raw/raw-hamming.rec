@@ -8,7 +8,7 @@ params u32 u32
 ret u32
 signature fn hamming x uint y uint to uint
 desc number of differing bits of x and y, with a popcnt helper
-receipt 2d011003dcdd7e3453e03d79191dc244ac7c22cccbea7ced21f1f7a8e39ae1e4
+receipt 4708e7f059ba2aae89b926238eaeab368b14fa3b6de63c4300443c390bd84973
 validity verified
 ancestry hamming ce769d385d785a4bd1f853fb5a552e23f3a42959e778fc6d46d03ad2e65c9af8
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

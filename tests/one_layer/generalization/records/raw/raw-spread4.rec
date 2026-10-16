@@ -8,7 +8,7 @@ params u32 u32 u32 u32
 ret u64
 signature fn spread4 a uint b uint c uint d uint to ulong
 desc four times the largest of four values minus their sum, with max4 and sum4 helpers
-receipt b9cf4dc70319df70935c591114492fdb6b953745eee7b85a6b882aec2139d4ab
+receipt da5285d1e9fbdc3a03a99365e05dda4342b60317b1dfe22a15b9b62d67078915
 validity verified
 ancestry spread4 8f086e170868181ef9b984cfc67ad95b54cb99d594b17725c15afa2578d0cbd2
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

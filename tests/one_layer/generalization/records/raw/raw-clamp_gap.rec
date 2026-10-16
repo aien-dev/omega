@@ -8,7 +8,7 @@ params u32 u32 u32 u32
 ret u32
 signature fn clamp_gap a uint b uint lo uint hi uint to uint
 desc distance between a and b limited to lo..hi, with absdiff and clamp helpers
-receipt d79c5d7e8489219ccfe73a7f2de830ffb5424e9c5ce5870e7ececb80b184c557
+receipt 4421dbb8144ae3e22afc089c7db65dc18951c69b2cd7839da1e1bc702e556e4b
 validity verified
 ancestry clamp_gap 1cd39ad43e8ee6e43d986e579cc8bf82f2309a8a6f74def703730bba333abe91
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

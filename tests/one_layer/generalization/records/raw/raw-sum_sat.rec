@@ -8,7 +8,7 @@ params u32 u32
 ret u32
 signature fn sum_sat n uint k uint to uint
 desc sum over i below n of i times k saturated to 255, with a sat8 helper
-receipt e8c17413884dbbe13710cb5932272b82919e396e9129074155b9a57056114774
+receipt a665f7639a895c1c1a8129c4e2f7fa40863f91806d9ae28854e4e5e336b53003
 validity verified
 ancestry sum_sat 46b5e13917c08c5a4201d3bc5c5616ca98741529405de42f7f31dce1aa368df3
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

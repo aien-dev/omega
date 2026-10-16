@@ -8,7 +8,7 @@ params u32
 ret u32
 signature fn ds2_double n uint to uint
 desc twice the digit sum of the digit sum of n, with digsum and ds2 helpers
-receipt 6d9d586ee91eb94bf51dadb3869e2a6e0a4c5a9493266a9eb198dc3156e96b5f
+receipt a51e3d713fe281e3063db6d3d69e9d0f2769d48fc28887c02e796f7498e30f13
 validity verified
 ancestry ds2_double 5714c7ca5d2edbeefbd6b01301e2783812d1fe1b9be8155bddb2835b7f52b048
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

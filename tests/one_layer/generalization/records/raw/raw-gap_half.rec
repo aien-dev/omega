@@ -8,7 +8,7 @@ params u32 u32
 ret u32
 signature fn gap_half x uint y uint to uint
 desc half the distance between x and y, rounded down, with a gap helper
-receipt ba0381642d319f3ac3542e986f0e7baca99906cd40f7cf349d457120edd1f8ba
+receipt 54f44dd374e9a95e70d73aefa95ad823fbca47f564d9cc62cab1d0ffab83f2d9
 validity verified
 ancestry gap_half 37e5fd88e1438798ff980961a45184872e9cf79fdfe5099d7595eb77a9104b85
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

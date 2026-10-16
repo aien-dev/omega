@@ -8,7 +8,7 @@ params u32 u32
 ret u32
 signature fn gcd_only a uint b uint to uint
 desc greatest common divisor of a and b by repeated remainders
-receipt 5af76e4752ff997576533c45310e4a853fa9c9ab9002e17923485ee06a874ec2
+receipt f1853f8f0043a4a1e9c1fa3b4025b4eb6790ea83b37338098c5f8616af7c935d
 validity verified
 ancestry gcd_only bd5d5f682854b980e0c3b358578eb8ff7cbd9bc49402249f21c7ba32ed73482a
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

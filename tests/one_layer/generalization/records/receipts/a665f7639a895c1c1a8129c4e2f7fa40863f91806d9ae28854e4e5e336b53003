@@ -1,0 +1,9 @@
+gen-receipt 1
+record raw-sum_sat
+tool tools/gen/abstract/extract 09c1b424bf715321a35f8730405f860460f8e62dd31abb5607e1e7956a312968
+tool tools/gen/abstract/genabs.sh a90f07483fe62ae5e7ec9ae55bdb904a106bb5402f96906e4d6cb70b080d18d7
+tool tools/gen/abstract/gabs.c 16023e76cb19000eebb4c341692a831ad3d8d12093a4ecf2ed3e5c189532bf38
+solution_ir b6b6ef6772535b0d16628bb67c57b3945cb31f1a1ad44853f7835cb7ac647e3e
+checker2 ACCEPT
+x445 check oscir OK
+tests inputs=46e236add9385d5f087b9db8fa57c2888d407cc018587af84abad120bdfd85df expected=b3970ca301c0b38026f242b5964dd7e82e43ec2ca6de3796f4da228aae6486a1 ACCEPT n=8

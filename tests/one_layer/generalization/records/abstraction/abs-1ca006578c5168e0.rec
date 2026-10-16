@@ -8,7 +8,7 @@ params u32
 ret u32
 signature fn digcount n uint to uint
 desc number of decimal digits of an unsigned 32-bit value (1 for 0)
-receipt 42377147ff27d5cc2864a5f480b7793d7bfdb34cbd1273f3ee7c5d8882ab3f30
+receipt dd1f0920c0063b5e50e7a7a883b8d41428a1b907d35a44debe0cc2bb8ecd5199
 validity verified
 ancestry digcount_nibbles 6ce9611b18235437727db8122382ccf8986749561efac3b7f5dd9ce170023fd7
 ancestry ds_plus_dc 173c1926c91bc1f34a4088f556a9fe8a2e82dcf0f3ea08eb64b2d5213e0bca0b

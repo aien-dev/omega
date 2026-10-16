@@ -8,7 +8,7 @@ params u32
 ret u32
 signature fn cube_inc x uint to uint
 desc cube of x plus one, with a cube helper
-receipt 45b124a1a93b89f6eb1494a94a82b06123867943edbbb9fafe480c1f72b25e42
+receipt 8bff18d594c0f84553d54652935d05386979c38b8adec575f5f24d5b37e8c041
 validity verified
 ancestry cube_inc b00c5cc72ff16b410ebeafca59023ab710b7771311635185a50454816bbb75c8
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

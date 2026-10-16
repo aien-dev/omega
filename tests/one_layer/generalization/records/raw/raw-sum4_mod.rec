@@ -8,7 +8,7 @@ params u32 u32 u32 u32 u32
 ret u32
 signature fn sum4_mod a uint b uint c uint d uint m uint to uint
 desc sum of four values modulo m, with a sum4 helper over a 4-value sequence
-receipt 526b197541020afa73acf6480ae5baa311732caaeb5d58922eb0f8be74191e0d
+receipt 73a10f4a2b8704a492d0b02e16a99827af561f99f4343c5ba66ae8fc34f41f96
 validity verified
 ancestry sum4_mod 8c7a517aafde98e0703e977bfde942a48fa12df111d61212f7618def17f43230
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

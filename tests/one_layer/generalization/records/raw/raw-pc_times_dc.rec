@@ -8,7 +8,7 @@ params u32
 ret u32
 signature fn pc_times_dc x uint to uint
 desc one-bit count of x times its decimal digit count, with popcnt and digcount helpers
-receipt 4cb7f1ddb1b6759bc3e2320dae8c72697e448c867de0a8b7d23beacc5bff387f
+receipt 0c35b70853587312e715059607b78b28242058f0660d1065de7e10b5add39250
 validity verified
 ancestry pc_times_dc b178217a298a86afb60ca5e6de2d5c8b51d654d16215db7eb3732613f7a6a894
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

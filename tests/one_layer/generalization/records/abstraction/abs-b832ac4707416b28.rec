@@ -8,7 +8,7 @@ params u32 u32
 ret u32
 signature fn absdiff a uint b uint to uint
 desc distance between two unsigned 32-bit values: the larger minus the smaller, never wraps
-receipt 21ff2258ab2852514d6c677398e07e7bf61edbb43a0b85daa89d06680d231016
+receipt da2835fa523c47249582c7205eab478a405c78634761971d6e654ae400a0588e
 validity verified
 ancestry gap_half 37e5fd88e1438798ff980961a45184872e9cf79fdfe5099d7595eb77a9104b85
 ancestry gap_inc ce7cc557bb9c1e5613459a104d3d2b835cb4d4ff4fc2ceef402423a02274f91d

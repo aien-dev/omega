@@ -1,9 +1,0 @@
-gen-receipt 1
-record raw-gcd_or_dc
-tool tools/gen/abstract/extract e9fdce872011a2ed37e0ec6f754eeee453b8b655206f1350a9529b01d6a4aef1
-tool tools/gen/abstract/genabs.sh a90f07483fe62ae5e7ec9ae55bdb904a106bb5402f96906e4d6cb70b080d18d7
-tool tools/gen/abstract/gabs.c 16023e76cb19000eebb4c341692a831ad3d8d12093a4ecf2ed3e5c189532bf38
-solution_ir aa2960ed1b8a9ccdf6b44b553ceb3170dfad7abec157c5af971c8909bb821b6a
-checker2 ACCEPT
-x445 check oscir OK
-tests inputs=ecb0c952593666d2bf3ee50b2fcb5395a8c907a4ae8016773c13eb4935d26b6b expected=2831e6925c42e2a116f366281982b1abaf0b94421e2f9b8e71d1ebec7c6373fa ACCEPT n=8

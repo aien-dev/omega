@@ -8,7 +8,7 @@ params u32 u32
 ret u32
 signature fn clamp_sum a uint b uint to uint
 desc sum of a and b limited to 10..100 with a clamp helper
-receipt 8f56567b4bc29613a77b40be50c98fbe0921400058e6f59a6a3252bc0d54787c
+receipt ec797c99656ff8d158c540c96a72e4b72fe34986cdb21cf9dc80f43b436d9309
 validity verified
 ancestry clamp_sum 1ac3a275e14084decd20e203fbc53bbc83f226517f9dcd7a47aacad7ca2a1bac
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

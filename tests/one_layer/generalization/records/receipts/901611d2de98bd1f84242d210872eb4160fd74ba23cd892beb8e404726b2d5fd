@@ -1,9 +1,0 @@
-gen-receipt 1
-record raw-sum_dists
-tool tools/gen/abstract/extract e9fdce872011a2ed37e0ec6f754eeee453b8b655206f1350a9529b01d6a4aef1
-tool tools/gen/abstract/genabs.sh a90f07483fe62ae5e7ec9ae55bdb904a106bb5402f96906e4d6cb70b080d18d7
-tool tools/gen/abstract/gabs.c 16023e76cb19000eebb4c341692a831ad3d8d12093a4ecf2ed3e5c189532bf38
-solution_ir 7c8e19caf82aced2839471ea09aa732887856c594d8e4ef992fabc24a87f9238
-checker2 ACCEPT
-x445 check oscir OK
-tests inputs=5f9a9e7bd36bbd3d41d454a64d2468e13013e4d41dad87041698b9647cb78b53 expected=43a313eeb51bbc8f1cefc6973fdc9d7fd4dabc19cdf35835a082c19184bb6d3f ACCEPT n=8

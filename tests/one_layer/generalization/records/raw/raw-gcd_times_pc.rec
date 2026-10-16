@@ -8,7 +8,7 @@ params u32 u32
 ret u32
 signature fn gcd_times_pc a uint b uint to uint
 desc gcd of a and b times the one-bit count of b, with gcd and popcnt helpers
-receipt dd5f187257279173c5e1b9fc2af2c7134a00d1597ab24b62eae089c13d7a92b2
+receipt 2b4bc1a486b92590cf0303e568bbb1a6db4de20fe8ee54e77f39b81d45a6f132
 validity verified
 ancestry gcd_times_pc 41800bd38df097304cf1ce838da9ec6c9e3de52656d13029aa41d6df2baf577d
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

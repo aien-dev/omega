@@ -1,9 +1,0 @@
-gen-receipt 1
-record raw-lcm32
-tool tools/gen/abstract/extract e9fdce872011a2ed37e0ec6f754eeee453b8b655206f1350a9529b01d6a4aef1
-tool tools/gen/abstract/genabs.sh a90f07483fe62ae5e7ec9ae55bdb904a106bb5402f96906e4d6cb70b080d18d7
-tool tools/gen/abstract/gabs.c 16023e76cb19000eebb4c341692a831ad3d8d12093a4ecf2ed3e5c189532bf38
-solution_ir 20f8c9ebf45d6a2c95a6452dfc79da6cf6efc4e6e58b24aa350f4b91fd36388d
-checker2 ACCEPT
-x445 check oscir OK
-tests inputs=f1ce751d44bfcb7f4570dbaea8d64be01c097049ced423b6b7a6a7f86250541e expected=8ce5048c3416c5cceb23e509c93ae781a532a452fc19254a17e32e9a086f3828 ACCEPT n=10

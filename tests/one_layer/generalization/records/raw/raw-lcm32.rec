@@ -8,7 +8,7 @@ params u32 u32
 ret u32
 signature fn lcm32 a uint b uint to uint
 desc least common multiple of a and b (0 if either is 0), with a gcd helper
-receipt 1338f9d1f6399a48a7fa76a45da7430191f2637b836dc868c7be5c739665222c
+receipt d1fcc4b9e8cbf182f8d6126dc485713949632687a283b8a039a390bb13b19d7b
 validity verified
 ancestry lcm32 4c4e8d7e3bf018c2d6f9428659a76ed8dca67c9742feac385102e5cfe9e179c9
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

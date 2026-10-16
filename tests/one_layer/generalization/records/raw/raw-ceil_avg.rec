@@ -8,7 +8,7 @@ params u32 u32
 ret u32
 signature fn ceil_avg a uint b uint to uint
 desc average of a and b rounded up, overflow-free
-receipt 2a537a076b57c98ab7be80c9c35c18c61fee0bfdc363f60cdb9ab2bb36893e1f
+receipt dbca217bccce3b397185e767edcb5497c59abb2e65c897e1dd8259eb0d6c719e
 validity verified
 ancestry ceil_avg c5c7c1400f557bb0c27aeda9d5eff2cb3f6158f15ad534507e228ed7eaf23ac2
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

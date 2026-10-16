@@ -1,9 +1,0 @@
-gen-receipt 1
-record raw-clamp_gap
-tool tools/gen/abstract/extract e9fdce872011a2ed37e0ec6f754eeee453b8b655206f1350a9529b01d6a4aef1
-tool tools/gen/abstract/genabs.sh a90f07483fe62ae5e7ec9ae55bdb904a106bb5402f96906e4d6cb70b080d18d7
-tool tools/gen/abstract/gabs.c 16023e76cb19000eebb4c341692a831ad3d8d12093a4ecf2ed3e5c189532bf38
-solution_ir a54e527521eeea389e20423fc21ae33c5ad7b3af549a2e8a3b311d5a426985aa
-checker2 ACCEPT
-x445 check oscir OK
-tests inputs=97124059c7173bcb83c3e772c58afc1633638c564d4e573b437e528f5849213a expected=8ef1065047496280903cd14dffb720c7009bd1da31d04b5e409581582085a9e9 ACCEPT n=8

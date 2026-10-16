@@ -8,7 +8,7 @@ params u32
 ret u32
 signature fn ds_plus_dc n uint to uint
 desc digit sum of n plus its digit count, with digsum and digcount helpers
-receipt 18b8ffda665f6c99e23bb28a435001ee61594072e0a56fd2e98f06da75e16e76
+receipt d814ae865ceb697ff7c22cf3a19f90c840586b1546aca4499c3de4d909a3c4cc
 validity verified
 ancestry ds_plus_dc 173c1926c91bc1f34a4088f556a9fe8a2e82dcf0f3ea08eb64b2d5213e0bca0b
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

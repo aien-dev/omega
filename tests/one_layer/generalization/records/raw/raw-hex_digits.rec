@@ -8,7 +8,7 @@ params u32
 ret u32
 signature fn hex_digits n uint to uint
 desc number of hexadecimal digits of n (1 for n = 0)
-receipt 692be51786f0114c602125120c43c9529e1d063afbc4bb000886691844620ce5
+receipt 11e24d34a37e9674836544236213ebe70054967fcd8f2821a29fcb1a60f7d5ab
 validity verified
 ancestry hex_digits 237867e5afbac6444c42f1523b3ecb0233951d5a67950f9b0ff4aa6f51755b19
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

@@ -8,7 +8,7 @@ params u32
 ret u32
 signature fn even_digsums n uint to uint
 desc count of i below n whose decimal digit sum is even, with a digsum helper
-receipt 87435959863e77d72e5d6f9b8cfbcb13ba13311782177b7c60bfc38531f2be64
+receipt f93e5496dd9b04e836179c08abc104426c5671aa260e1c25ba6b1021b6fc0eb3
 validity verified
 ancestry even_digsums 4d68931c71ce40d1d250c8c7877bd9f5f007df2a34633ee7bc9301e557e571ec
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

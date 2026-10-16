@@ -8,7 +8,7 @@ params u32 u32 u32 u32
 ret u32
 signature fn avg4 a uint b uint c uint d uint to uint
 desc average of the averages of a, b and of c, d, with an overflow-free avg2 helper
-receipt b7c7f8c16e2a5ac010ee29cdf03e3a530d38759eb96830eb53e36c04dff985f9
+receipt 8370d23135fff0bc53375a1ae3d1b3b57c3272479870c6b144fb8cd892016ab3
 validity verified
 ancestry avg4 0d5476a47e8874b32b6a978e6bcc9dc1a68c0992ab43bb6ff9cbc9ea69454e4f
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

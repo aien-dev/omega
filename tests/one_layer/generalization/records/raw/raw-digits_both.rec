@@ -8,7 +8,7 @@ params u32 u32
 ret u32
 signature fn digits_both n uint m uint to uint
 desc decimal digit count of n plus that of m, with a digcount helper
-receipt 3dcf62a4e1f7e65179df3ed6d1574cbf505dd48c875bb75fdffa439dca742f5e
+receipt 679fef102ae32695a5b388265e96ef9fe713a7f334567b49056e7cfa84a81531
 validity verified
 ancestry digits_both 3503998ea3b3ee9364c5b2e3783d9353bd431dc18f4283e89d58baf93bd93d5a
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

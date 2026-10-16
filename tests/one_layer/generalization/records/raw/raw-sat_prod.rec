@@ -8,7 +8,7 @@ params u32 u32
 ret u8
 signature fn sat_prod a uint b uint to uchar
 desc product of a and b saturated to 8 bits with a sat8 helper
-receipt bf6ddb77f5a05d087d31ffa2f317386376095d90aeddf351144081acf4bb30c6
+receipt a964bb921e889eef5f3d5c8405b61baf4ddfdaea327a548873006f37f4c30b96
 validity verified
 ancestry sat_prod ebde60561889466254fcb93a343d7f99be5901dcb2650aecf65d5b83bc33da39
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

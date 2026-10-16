@@ -94,15 +94,21 @@ done
 sed '1s/^\(.*\)$/9999999/' "$CO/tasks/clamp_sum/inputs" | "$B/gen_abstract/oracle" clamp_sum | cmp -s - "$CO/tasks/clamp_sum/expected" \
   && bad "oracle negative control: a changed input still matched" || ok "  negative control: one changed input changes the oracle output"
 if [ -f "$ROOT/tests/one_layer/generalization/dev/META" ]; then cp "$ROOT/tests/one_layer/generalization/dev/META" "$T/devMETA"
-else git -C "$ROOT" show 8255a59031146e9f6de535425d591e0fdcee5b8d:tests/one_layer/generalization/dev/META > "$T/devMETA"; fi
+else git -C "$ROOT" show 7eb8534c42304505640013f64753d9c9db40dcf3:tests/one_layer/generalization/dev/META > "$T/devMETA"; fi
 FS="$B/gen_abstract/famsig"
+FC=7eb8534c42304505640013f64753d9c9db40dcf3
+[ "$(git -C "$ROOT" show "$FC:tests/one_layer/generalization/families/FAMSIG_V1.md" | sha256sum | cut -c1-64)" = dee5b30d9aebfc96b3b9e3418ca3089ab7be2f0f5e02cc4f6cbebe3601db1e76 ] \
+  && cmp -s "$B/gen_abstract/famsig-src/tools/gen/protocol/famsig.c" <(git -C "$ROOT" show "$FC:tools/gen/protocol/famsig.c") \
+  && ok "famsig consumed from gen/protocol 7eb8534c (FAMSIG_V1.md sha256 dee5b30d..., famsig.c as at that commit)" || bad "famsig pin: FAMSIG_V1.md or famsig.c is not the 7eb8534c one"
 "$FS" rule "$T/devMETA" "$CO/META" > "$T/rule.out" 2>&1 && tail -n 1 "$T/rule.out" | grep -qx 'RULE PASS' \
-  && ok "famsig rule dev/META corpus/META: RULE PASS ($(grep -c . "$CO/META") META lines, $(sed -n 's/^split corpus .*families=//p' "$T/rule.out") corpus families)" \
+  && ok "famsig rule dev/META corpus/META: RULE PASS, R1-R7 incl. coarse R6 ($(grep -c . "$CO/META") META lines, $(sed -n 's/^split corpus .*families=//p' "$T/rule.out") corpus families)" \
   || bad "famsig rule: $(tail -n 2 "$T/rule.out")"
 prims=""; for p in arith branch loop array call nested; do grep -v '^#' "$CO/META" | grep -q "$p" || prims+=" $p"; done
 [ -z "$prims" ] && ok "corpus META covers all six primitives" || bad "corpus META misses:$prims"
-{ cat "$CO/META"; echo "zz_reserved corpus 1 0 2 0 0 0 loop(loop(branch(arith)))"; } > "$T/badMETA"
-"$FS" rule "$T/devMETA" "$T/badMETA" > /dev/null 2>&1 && bad "famsig rule accepted a reserved dev shape in the corpus" || ok "  negative control: a reserved dev shape in corpus META fails the rule"
+{ cat "$CO/META"; echo "zz_reserved corpus 1 1 2 0 0 0 loop(loop(branch(arith)))"; } > "$T/badMETA"
+"$FS" rule "$T/devMETA" "$T/badMETA" > "$T/rule5.out" 2>&1 || ! grep -q "^FAIL R3 .*zz_reserved" "$T/rule5.out" && bad "famsig rule did not refuse a reserved dev shape in the corpus with R3" || ok "  negative control: a reserved dev shape in corpus META fails the rule"
+{ cat "$CO/META"; echo "zz_coarse corpus 1 0 1 0 1 1 seq(arith,loop(call(nested)))"; } > "$T/badMETA6"
+"$FS" rule "$T/devMETA" "$T/badMETA6" > "$T/rule6.out" 2>&1 || ! grep -q "^FAIL R6 .*zz_coarse" "$T/rule6.out" && bad "famsig rule did not refuse a corpus shape sharing a dev coarse signature with R6" || ok "  negative control: a corpus shape whose coarse signature is a dev one (gc1:loop(call(arith))) fails R6"
 cmp -s <(grep -v '^#' "$CO/META" | tail -n +2 | cut -d' ' -f1) <(ls "$CO/tasks") && ok "corpus META has exactly one line per task" || bad "corpus META lines differ from the task list"
 # the harness, called (not copied): every solution IR as a candidate, plus a one-task mutant set
 H="$T/ola"; mkdir -p "$H/tasks/cases" "$H/cands/solutions" "$H/cands/mutant/wrap8" "$H/ev"
@@ -135,6 +141,30 @@ for n in clamp absdiff sat8 digsum digcount popcnt sum4 max4 avg2; do
 done
 "$RC" --root "$ROOT" --receipts "$RS/receipts" "$RS"/raw/*.rec "$RS"/abstraction/*.rec > "$T/rc.out" 2>&1 && ok "recheck: all $(grep -c '^OK' "$T/rc.out") committed records" || bad "recheck committed: $(grep -v '^OK' "$T/rc.out" | head -n 2)"
 (cd "$RS" && sha256sum --quiet -c MANIFEST && sha256sum --quiet -c SET.sha256) && ok "MANIFEST and SET.sha256 match the record files" || bad "MANIFEST or SET.sha256 stale"
+# C/D candidate pools (GEN_PROTOCOL_V1.md section 3), recomputed here independently of extract
+grep -v '^#' "$CO/META" | tail -n +2 | while read -r t _ _ _ _ _ _ _ s; do echo "$("$FS" canon "$s") $t"; done | sort > "$T/fo"
+declare -A taken=(); pre=()
+for r in 0 1 2 3; do
+  for f in $(cut -d' ' -f1 "$T/fo" | uniq); do
+    [ "${#pre[@]}" -lt 14 ] || break
+    t="$(awk -v f="$f" '$1 == f { print $2 }' "$T/fo" | sed -n "$((r + 1))p")"
+    if [ -n "$t" ] && [ -z "${taken[$t]:-}" ]; then pre+=("$t"); taken[$t]=1; fi
+  done
+done
+[ "$(printf '%s\n' "${pre[@]}")" = "$(cat "$RS/PREFIX")" ] && ok "PREFIX: the 14 B-prefix ids by the protocol pick rule ($(paste -sd' ' "$RS/PREFIX"))" || bad "PREFIX differs from the recomputed pick"
+# dpool <prefix file>: abstraction MANIFEST lines with at least one ancestry task outside the prefix
+dpool() { grep ' abstraction/' "$RS/MANIFEST" | while read -r h f; do
+  if sed -n '/^body$/q; s/^ancestry \([^ ]*\) .*/\1/p' "$RS/$f" | grep -qvxF -f "$1"; then echo "$h  $f"; fi; done; }
+cmp -s <(grep ' raw/' "$RS/MANIFEST" | grep -vF -f <(sed 's|.*|raw/raw-&.rec|' "$RS/PREFIX")) "$RS/C.MANIFEST" \
+  && [ "$(wc -l < "$RS/C.MANIFEST")" = 35 ] \
+  && ok "C.MANIFEST: the 35 raw records outside the prefix, MANIFEST lines (sha256 $(sha256sum < "$RS/C.MANIFEST" | cut -c1-16)...)" || bad "C.MANIFEST is not MANIFEST raw lines minus the prefix"
+cmp -s <(dpool "$RS/PREFIX") "$RS/D.MANIFEST" \
+  && ok "D.MANIFEST: the $(wc -l < "$RS/D.MANIFEST") abstraction records with ancestry outside the prefix (sha256 $(sha256sum < "$RS/D.MANIFEST" | cut -c1-16)...)" || bad "D.MANIFEST is not the abstraction lines minus prefix-only ancestry"
+{ cat "$RS/PREFIX"; echo avg_inc; } > "$T/pre+"
+dpool "$T/pre+" | grep -q "$(grep -l '^entry avg2$' "$RS"/abstraction/*.rec | xargs basename)" \
+  && bad "D rule kept avg2 although its whole ancestry (avg_double, avg_inc) is in the prefix" || ok "  negative control: with avg_inc added to the prefix, avg2 (ancestry avg_double, avg_inc) leaves D"
+(cd "$RS" && sha256sum --quiet -c C.MANIFEST && sha256sum --quiet -c D.MANIFEST) && "$RC" --receipts "$RS/receipts" $(awk -v d="$RS" '{ print d "/" $2 }' "$RS/C.MANIFEST" "$RS/D.MANIFEST") > /dev/null 2>&1 \
+  && ok "C and D manifests: every listed record matches its digest and passes recheck --receipts (what genret runs)" || bad "C or D manifest lists a bad record"
 
 # ---- 4. verify ------------------------------------------------------------------------------------------
 V="$HERE/verify"

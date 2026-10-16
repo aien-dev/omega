@@ -8,7 +8,7 @@ params u32 u32 u32
 ret u8
 signature fn sat_affine a uint b uint c uint to uchar
 desc a times b plus c saturated to 8 bits, with a sat8 helper
-receipt 0bca2794f8e367f3927de26308021e316c24630dea9e07d5c4ca99236f9b60bd
+receipt f60375c49ce03bbe2f7b2b07d913ace46433391b1678259c6ff78e1bcd8f7a04
 validity verified
 ancestry sat_affine 8424f3648645b0c1ffb27b7a8923ce43f530bb02166c5f3e2f47e9ffd940f211
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

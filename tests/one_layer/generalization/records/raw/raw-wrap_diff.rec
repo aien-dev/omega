@@ -8,7 +8,7 @@ params u32 u32
 ret u32
 signature fn wrap_diff a uint b uint to uint
 desc a minus b wrapped modulo 2^32
-receipt 3b0eb547bed0ccd205e0cc544af8a7a2c174437aa847ceb50c05868f65b658b6
+receipt 086154da730941e525c33a4ed6f93fedf052e2ac55c9fcc1878cb690da47a091
 validity verified
 ancestry wrap_diff 9239fc23fea0d3dbc3601445837f3d4f0e26f3aea6d56925dc19850969c29232
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

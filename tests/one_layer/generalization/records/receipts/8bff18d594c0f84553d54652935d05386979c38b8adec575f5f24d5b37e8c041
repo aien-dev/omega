@@ -1,0 +1,9 @@
+gen-receipt 1
+record raw-cube_inc
+tool tools/gen/abstract/extract 09c1b424bf715321a35f8730405f860460f8e62dd31abb5607e1e7956a312968
+tool tools/gen/abstract/genabs.sh a90f07483fe62ae5e7ec9ae55bdb904a106bb5402f96906e4d6cb70b080d18d7
+tool tools/gen/abstract/gabs.c 16023e76cb19000eebb4c341692a831ad3d8d12093a4ecf2ed3e5c189532bf38
+solution_ir 4187bcf1563f6c0cbcd0810648509295cae567b9658c57166585ae6874db8881
+checker2 ACCEPT
+x445 check oscir OK
+tests inputs=37cb89346d71471b405dac603c2eec3f37a887a9b9615394bbd5f4c0d9f6d538 expected=189689962ef1c12007a573c876d1ce9ba39d4fc29a3d15f0ff0bf8c88d49ccae ACCEPT n=8

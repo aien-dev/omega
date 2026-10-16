@@ -8,7 +8,7 @@ params u32 u32
 ret u32
 signature fn gcd_or_dc a uint b uint to uint
 desc gcd of a and b if a > b, else the digit count of b, with gcd and digcount helpers
-receipt 3feee5bf5324fb5fb5aded4dd5b0911a3c2fec4e7633dae597c121680bdb377b
+receipt 6d2b43d6c1c68ebc9c906eae723dbdde47a979608e6b0d116f91626fed9f2f2b
 validity verified
 ancestry gcd_or_dc c05bde2fbb018eea3e2888245c308976be45e8d91b7b7fce26128673d64c85e9
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

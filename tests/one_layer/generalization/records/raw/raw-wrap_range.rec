@@ -8,7 +8,7 @@ params u32 u32 u32
 ret u32
 signature fn wrap_range x uint lo uint hi uint to uint
 desc x wrapped into lo..hi-1 by a remainder
-receipt 69fd823efa125dc82a9a1700393f425c2138c3f8102abf3d8320d331575fd695
+receipt 390a09925f88cd6684b042ccb86b09ced4d3e2342350e32513644e48f85b2cea
 validity verified
 ancestry wrap_range 5b68036ce4d8a0790e408a373c14afdc670502a4661d049c494e145e4d584cfb
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

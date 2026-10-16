@@ -32,7 +32,7 @@ CR="$ROOT/$GA_CORPUS"
 die() { echo "extract: $*" >&2; exit 1; }
 
 ga_scan || die "corpus scan failed"
-rm -rf "$OUT/raw" "$OUT/abstraction" "$OUT/receipts" "$OUT/MANIFEST" "$OUT/SET.sha256" "$OUT/REJECTIONS"
+rm -rf "$OUT/raw" "$OUT/abstraction" "$OUT/receipts" "$OUT/MANIFEST" "$OUT/SET.sha256" "$OUT/REJECTIONS" "$OUT/PREFIX" "$OUT/C.MANIFEST" "$OUT/D.MANIFEST"
 mkdir -p "$OUT/raw" "$OUT/abstraction" "$OUT/receipts"
 
 # put_receipt: write GA_RCPT under receipts/<its sha256>, print the id
@@ -131,4 +131,25 @@ sort "$W/rej" > "$OUT/REJECTIONS"
 (cd "$OUT" && sha256sum raw/*.rec abstraction/*.rec) > "$W/manifest"
 LC_ALL=C sort -k2,2 "$W/manifest" > "$OUT/MANIFEST"
 (cd "$OUT" && sha256sum MANIFEST) > "$OUT/SET.sha256"
+
+# ---- 4. the 14-task B prefix and the C/D candidate pools (docs/one_layer/GEN_PROTOCOL_V1.md section 3) ----
+# prefix pick: corpus tasks ordered by family signature (famsig canon, byte order) then task id; walk the
+# families round robin in signature order, taking each family's lowest unused task id, until 14 are taken.
+# C.MANIFEST = the raw records minus the prefix tasks; D.MANIFEST = the abstraction records minus those whose
+# ancestry lies entirely within the prefix. Both are MANIFEST lines (genret manifest format, same directory).
+grep -v '^#' "$CR/META" | tail -n +2 | while read -r t _ _ _ _ _ _ _ s; do
+  echo "$("$GA_FAMSIG" canon "$s") $t"
+done | sort > "$W/famorder"
+awk -v want=14 '{ if (!($1 in n)) fam[nf++] = $1; id[$1, n[$1]++] = $2 }
+  END { for (r = 0; got < want; r++) { more = 0
+          for (f = 0; f < nf && got < want; f++) if (r < n[fam[f]]) { print id[fam[f], r]; got++; more = 1 }
+          if (!more) break } }' "$W/famorder" > "$OUT/PREFIX"
+[ "$(wc -l < "$OUT/PREFIX")" = 14 ] || die "fewer than 14 corpus tasks for the prefix"
+awk 'NR == FNR { p["raw/raw-" $1 ".rec"] = 1; next } $2 ~ /^raw\// && !($2 in p)' "$OUT/PREFIX" "$OUT/MANIFEST" > "$OUT/C.MANIFEST"
+while read -r h f; do
+  case "$f" in abstraction/*) ;; *) continue;; esac
+  outside="$(sed -n '/^body$/q; s/^ancestry \([^ ]*\) .*/\1/p' "$OUT/$f" | grep -vxF -f "$OUT/PREFIX" || true)"
+  if [ -n "$outside" ]; then echo "$h  $f"; fi
+done < "$OUT/MANIFEST" > "$OUT/D.MANIFEST"
 echo "extract: raw=$(ls "$OUT/raw" | wc -l) abstraction=$(ls "$OUT/abstraction" | wc -l) rejected=$(wc -l < "$OUT/REJECTIONS") set=$(cut -c1-64 "$OUT/SET.sha256")"
+echo "extract: prefix=$(paste -sd, "$OUT/PREFIX") C=$(wc -l < "$OUT/C.MANIFEST") D=$(wc -l < "$OUT/D.MANIFEST")"

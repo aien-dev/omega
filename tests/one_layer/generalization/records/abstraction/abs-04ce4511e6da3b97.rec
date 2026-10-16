@@ -8,7 +8,7 @@ params view u32 4
 ret u32
 signature fn max4 v view uint 4 to uint
 desc largest of the four unsigned 32-bit values of a 4-value sequence
-receipt 2664c6c717eb20f38a9e2b9857a9ac12edcb1025d4f6633ab27e69f82a57f82d
+receipt cab47d090e9b1e54d29123c940915ca937c5f94c5aa5aaa2f1bd3c0ca7fc5fdc
 validity verified
 ancestry max4_half e650e484d0b4b4157749e91103233a49e1940e720a7ec84753bf2236372ba1b1
 ancestry max4_inc 47c57c40d54a1daaecce038b059219f0276056e3063f820948342048b51f0da3

@@ -1,9 +1,0 @@
-gen-receipt 1
-record raw-sat_sum
-tool tools/gen/abstract/extract e9fdce872011a2ed37e0ec6f754eeee453b8b655206f1350a9529b01d6a4aef1
-tool tools/gen/abstract/genabs.sh a90f07483fe62ae5e7ec9ae55bdb904a106bb5402f96906e4d6cb70b080d18d7
-tool tools/gen/abstract/gabs.c 16023e76cb19000eebb4c341692a831ad3d8d12093a4ecf2ed3e5c189532bf38
-solution_ir bde1a275ada0fa3f9271f662b15e96e1398cd2a0f77209e912f9cb0bbf6befe6
-checker2 ACCEPT
-x445 check oscir OK
-tests inputs=af257cc3388113d61fef88fb9bd55044348f88bb84b4b3416757d29d422f68cb expected=2f26972106236359349c2f14bff0ec65c9f6e7dd0666a04a03a80a5aab0c4d7c ACCEPT n=9

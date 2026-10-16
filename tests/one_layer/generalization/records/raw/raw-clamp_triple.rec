@@ -8,7 +8,7 @@ params u32
 ret u32
 signature fn clamp_triple a uint to uint
 desc three times a limited to 50..1000 with a clamp helper
-receipt 3c0c4d67750fb0ef342ce4548df8aab4376ea16be6ac86bf327b221955907313
+receipt 212885e3076a022c5a6cb38041e8f2d6932142c7f785f2c42f59ed39e8e84bc7
 validity verified
 ancestry clamp_triple 2850efbe16088dfd807e0040e7c05d8222191deddbf0514444ae03eec6d3356d
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

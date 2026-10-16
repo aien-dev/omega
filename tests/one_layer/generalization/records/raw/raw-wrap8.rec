@@ -8,7 +8,7 @@ params u32
 ret u8
 signature fn wrap8 x uint to uchar
 desc lowest 8 bits of x
-receipt 36f908fd259a4f1a441256e6460d9b75102459a956d1599c804441b9ebb9a340
+receipt e1a34d45957568f9a7b91e3ab2a290aae792a116f1177beea12845fca5abf9b2
 validity verified
 ancestry wrap8 c5e92b89717d7ee9f64dde90cefad4eca63b71be12f29f26d04045ffacc39629
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

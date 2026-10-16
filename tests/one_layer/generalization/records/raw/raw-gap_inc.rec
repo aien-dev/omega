@@ -8,7 +8,7 @@ params u32 u32
 ret u32
 signature fn gap_inc a uint b uint to uint
 desc distance between a and b plus one, with an absdiff helper
-receipt 4cc9387c800415e1d0a39b8ef75eb14af34f901acda252dfc71e9273f74f873d
+receipt 4e466ed5d135fb163b89984abe99a3714fd61250d4b7e840953155bea7be492e
 validity verified
 ancestry gap_inc ce7cc557bb9c1e5613459a104d3d2b835cb4d4ff4fc2ceef402423a02274f91d
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

@@ -8,7 +8,7 @@ params u32
 ret u32
 signature fn digsum n uint to uint
 desc sum of the decimal digits of an unsigned 32-bit value (0 for 0)
-receipt 6db690dd0879c8342240b35ecaf8d67aca64b8de669d5e8dca3a2ec4aea95bd3
+receipt 63e55136b68ac4d366697959a6dfd7c9d93c157ae9372cee350f5f10a1ff55cf
 validity verified
 ancestry big_pc_small_ds 34b1df549be18fb3564220e742529892077d336b77410c52047869b17aa1da3a
 ancestry digsum_mod9 7a9b0cdb057c8c408a475b693341f42d5c8bf76db62bc3fd19b7b6b049062b6a

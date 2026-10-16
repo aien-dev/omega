@@ -8,7 +8,7 @@ params u32 u32
 ret u32
 signature fn avg2 a uint b uint to uint
 desc average of two unsigned 32-bit values rounded down, with no intermediate wrap
-receipt 864f8f6449965fd842749b67755cf9639f55f0c666d478758bf0e05a150a0203
+receipt 8bbf2287e8113836aab6c7d970b28340787ca41bbc5b80aa0ecab65bd350bed5
 validity verified
 ancestry avg_double ac7c4d41503e44ba6b346e72429e994ac0ccf763a2718270ae69530ed1791a72
 ancestry avg_inc e34d765d09b44d4ec5fd213a30b7f34bed75b0afd7989a8d0d799b2dfedf9257

@@ -8,7 +8,7 @@ params u32
 ret u32
 signature fn even_ds_odd_dc n uint to uint
 desc digit sum of n if n is even, else its digit count, with digsum and digcount helpers
-receipt 7c5fe81e51c48a549eda5c6a6d7713de02d1936cbd9eef7abddd294c51b659bb
+receipt 12119fa57973682e011d058ad67558583a7dd19da158e79e5cdd7d24aa867ac7
 validity verified
 ancestry even_ds_odd_dc 42de107a6357661aaa7899968ddd26fd882bd111f75775f9dd8af962216637bb
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

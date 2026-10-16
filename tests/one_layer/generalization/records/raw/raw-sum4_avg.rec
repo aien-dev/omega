@@ -8,7 +8,7 @@ params u32 u32 u32 u32
 ret u32
 signature fn sum4_avg a uint b uint c uint d uint to uint
 desc average of four values rounded down, with a sum4 helper over a 4-value sequence
-receipt c4278bc84050b202ce1465dd8da0d9c97da6b2284208d5f597cce79cd96131c6
+receipt ec28572d53cc182421157dbeb2d77c370d03a26dfb9caa53083452e66dae2b43
 validity verified
 ancestry sum4_avg 8ac0d108c6c93fc9ca1c196e954df3f8e4a2722fea5d1dec07ea42becd64c833
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

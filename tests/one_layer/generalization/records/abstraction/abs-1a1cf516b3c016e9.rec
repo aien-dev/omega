@@ -8,7 +8,7 @@ params u32
 ret u8
 signature fn sat8 x uint to uchar
 desc convert an unsigned 32-bit value to unsigned 8-bit, saturating: anything above 255 gives 255
-receipt c75c7407529bbe032a79c255ed7c5b99c38b676f93fb8c29d55543df5237142d
+receipt e37625d5628365ac4c69b6db1209911fbb66109bd3c9e5e6b51d076629e1eb63
 validity verified
 ancestry sat_prod ebde60561889466254fcb93a343d7f99be5901dcb2650aecf65d5b83bc33da39
 ancestry sat_sum c39e9534cda5f8c1e3a6cecb082de8ea17bc3997da9d3e4cddf2e674e5b0f1c2

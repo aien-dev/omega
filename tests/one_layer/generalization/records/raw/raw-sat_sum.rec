@@ -8,7 +8,7 @@ params u32 u32
 ret u8
 signature fn sat_sum a uint b uint to uchar
 desc sum of a and b saturated to 8 bits with a sat8 helper
-receipt 13969a3e58463d2aa193435864e059e13ad5f29555dca39f62531dda7a189e83
+receipt 0ece226070e2286692a5945648a516aa1cb5920dc2d20e3fd48ec9a9bebc4817
 validity verified
 ancestry sat_sum c39e9534cda5f8c1e3a6cecb082de8ea17bc3997da9d3e4cddf2e674e5b0f1c2
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

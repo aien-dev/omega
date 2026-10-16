@@ -8,7 +8,7 @@ params view u32 4
 ret u64
 signature fn sum4 v view uint 4 to ulong
 desc sum of the four unsigned 32-bit values of a 4-value sequence, as unsigned 64-bit (never wraps)
-receipt 6c89bd7c94c5d0154399600fa93c5e93bc573e43d240c30e379a55ff02ed9eb1
+receipt 78e8c959b010aaf71ee893091f4eeb5f57a28f79c652f251d788e50ec4b72c15
 validity verified
 ancestry sum4_avg 8ac0d108c6c93fc9ca1c196e954df3f8e4a2722fea5d1dec07ea42becd64c833
 ancestry sum4_low 56269ec25c560454e8b2dc496f6542ce13a267d8d81a9cdfd035a473df6e8886

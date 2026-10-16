@@ -8,7 +8,7 @@ params u32 u32 u32 u32
 ret u32
 signature fn max4_inc a uint b uint c uint d uint to uint
 desc largest of four values plus one, with a max4 helper over a 4-value sequence
-receipt efeb97bf6928793ccdcdbc965a07be2273be9ed47b971179cf84bf180b598d97
+receipt a5f8f7851484b59d1f50f9b80d693ce2f8d6b0253e7b628866395f7dc54a35bc
 validity verified
 ancestry max4_inc 47c57c40d54a1daaecce038b059219f0276056e3063f820948342048b51f0da3
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

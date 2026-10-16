@@ -1,9 +1,0 @@
-gen-receipt 1
-record raw-hamming
-tool tools/gen/abstract/extract e9fdce872011a2ed37e0ec6f754eeee453b8b655206f1350a9529b01d6a4aef1
-tool tools/gen/abstract/genabs.sh a90f07483fe62ae5e7ec9ae55bdb904a106bb5402f96906e4d6cb70b080d18d7
-tool tools/gen/abstract/gabs.c 16023e76cb19000eebb4c341692a831ad3d8d12093a4ecf2ed3e5c189532bf38
-solution_ir 80aa3e29cce6040bfefde88d488c87ec3d0343f6d7d0a288f8e9279bb730e062
-checker2 ACCEPT
-x445 check oscir OK
-tests inputs=780a8034605abc7c2a56496622ddad126da2828c5ee686345a0aef2050d6db10 expected=209fa5980bd869963a3396321f31b8b363b97a91b51fb73462934c61fabf8629 ACCEPT n=8

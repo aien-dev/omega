@@ -8,7 +8,7 @@ params u32 u32 u32 u32
 ret u64
 signature fn weighted4 a uint b uint c uint d uint to ulong
 desc a + 2b + 3c + 4d as a 64-bit number
-receipt 19cdead950f381fcd41ea29ccafb674c9857446fb552ec75f9565b958a347d74
+receipt 264567c9c6c8bd8775caf22b70808eede2c03dab8685d62bc4826952fc2a2d55
 validity verified
 ancestry weighted4 26595c247248e94960f652bb827ebec1c5a2f724e03b6321d0f2c20ba18b9eea
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

@@ -1,9 +1,0 @@
-gen-receipt 1
-record raw-sum4_avg
-tool tools/gen/abstract/extract e9fdce872011a2ed37e0ec6f754eeee453b8b655206f1350a9529b01d6a4aef1
-tool tools/gen/abstract/genabs.sh a90f07483fe62ae5e7ec9ae55bdb904a106bb5402f96906e4d6cb70b080d18d7
-tool tools/gen/abstract/gabs.c 16023e76cb19000eebb4c341692a831ad3d8d12093a4ecf2ed3e5c189532bf38
-solution_ir e4a5a4fba30f0a3d642dd5c99ed2a38cd2d691e9703613b91b25ad0c14c25feb
-checker2 ACCEPT
-x445 check oscir OK
-tests inputs=35c26b95d92bec5100b6bce3ca976e20b521dfae47996b485052a37d7f45c05a expected=c00bf2118d36c91d96f17a1b393dd0607b889ef89adeb52727cf8a19cc0dd47f ACCEPT n=8

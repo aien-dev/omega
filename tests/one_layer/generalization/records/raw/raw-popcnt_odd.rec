@@ -8,7 +8,7 @@ params u32
 ret bool
 signature fn popcnt_odd x uint to bool
 desc true when a 32-bit x has an odd number of one bits, with a popcnt helper
-receipt 3cbd9e3260a7ba56f319917a357b5ef2e791e583ed207a7c7be1bb3600ec505e
+receipt 62fdf59b9fe1102dbd9914349a636515c2df3f8eac59abe2aa15e6096408a7c2
 validity verified
 ancestry popcnt_odd 478df43357e6202a1f1ddde6ba4f5749807d62a046471ff4e9373c9543df402a
 source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b

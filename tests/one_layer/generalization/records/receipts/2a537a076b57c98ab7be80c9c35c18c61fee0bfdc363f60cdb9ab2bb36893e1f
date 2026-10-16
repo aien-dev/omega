@@ -1,9 +1,0 @@
-gen-receipt 1
-record raw-ceil_avg
-tool tools/gen/abstract/extract e9fdce872011a2ed37e0ec6f754eeee453b8b655206f1350a9529b01d6a4aef1
-tool tools/gen/abstract/genabs.sh a90f07483fe62ae5e7ec9ae55bdb904a106bb5402f96906e4d6cb70b080d18d7
-tool tools/gen/abstract/gabs.c 16023e76cb19000eebb4c341692a831ad3d8d12093a4ecf2ed3e5c189532bf38
-solution_ir 2f00845f0c9d71aae2d72d7487cc6215f1024816489dd4222e046f6081111f71
-checker2 ACCEPT
-x445 check oscir OK
-tests inputs=44c652963e72dab96ec441c07d766597ed407e7a2b3fe24917ef752433f7d918 expected=d5e608b606ab51bd0fc0e7804622009de5d432bc6be5a143bf989184f549e228 ACCEPT n=8

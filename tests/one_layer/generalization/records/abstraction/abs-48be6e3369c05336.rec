@@ -8,7 +8,7 @@ params u32
 ret u32
 signature fn popcnt x uint to uint
 desc number of one bits among the 32 bits of an unsigned 32-bit value (0..32)
-receipt af0339b957e6e29fda7bcbf14a4fb4c6203b13b022e6eb218e7f1014dc8c8231
+receipt f128dc9c8f5caddb3463c82efc106770769c3a6b9c44f3ee4592239a02e013c3
 validity verified
 ancestry big_pc_small_ds 34b1df549be18fb3564220e742529892077d336b77410c52047869b17aa1da3a
 ancestry gcd_times_pc 41800bd38df097304cf1ce838da9ec6c9e3de52656d13029aa41d6df2baf577d

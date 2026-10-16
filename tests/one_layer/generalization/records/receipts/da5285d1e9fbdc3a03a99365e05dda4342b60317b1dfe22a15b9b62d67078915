@@ -1,0 +1,9 @@
+gen-receipt 1
+record raw-spread4
+tool tools/gen/abstract/extract 09c1b424bf715321a35f8730405f860460f8e62dd31abb5607e1e7956a312968
+tool tools/gen/abstract/genabs.sh a90f07483fe62ae5e7ec9ae55bdb904a106bb5402f96906e4d6cb70b080d18d7
+tool tools/gen/abstract/gabs.c 16023e76cb19000eebb4c341692a831ad3d8d12093a4ecf2ed3e5c189532bf38
+solution_ir 3dc158775103093a54782dc726157094a50d127f058b310d021ee642aa0335ec
+checker2 ACCEPT
+x445 check oscir OK
+tests inputs=792f751acee6771df4071b7424035913f3913927e77633d6f4c49d866c541ce8 expected=60f3654946ccef20645f11af76dbb0f329e6b361ca91820c764561e65395375e ACCEPT n=8

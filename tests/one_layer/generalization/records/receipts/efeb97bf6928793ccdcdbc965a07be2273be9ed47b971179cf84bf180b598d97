@@ -1,9 +1,0 @@
-gen-receipt 1
-record raw-max4_inc
-tool tools/gen/abstract/extract e9fdce872011a2ed37e0ec6f754eeee453b8b655206f1350a9529b01d6a4aef1
-tool tools/gen/abstract/genabs.sh a90f07483fe62ae5e7ec9ae55bdb904a106bb5402f96906e4d6cb70b080d18d7
-tool tools/gen/abstract/gabs.c 16023e76cb19000eebb4c341692a831ad3d8d12093a4ecf2ed3e5c189532bf38
-solution_ir 0d98cddf37fc13600f91c366f4e0254ccbc86aae386d17bea2a6441d14efda0a
-checker2 ACCEPT
-x445 check oscir OK
-tests inputs=c23e42597afb3326cebe01e8c07876aa006d976b3a74495a9c44011622600e31 expected=8072005b20578cc9e528ceb0b7943a56525f9d2e2e3c3a6db1c755b614cc2858 ACCEPT n=8

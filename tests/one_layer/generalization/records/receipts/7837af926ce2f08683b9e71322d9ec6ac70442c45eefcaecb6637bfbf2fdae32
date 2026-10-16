@@ -1,0 +1,9 @@
+gen-receipt 1
+record raw-ds2_inc
+tool tools/gen/abstract/extract 09c1b424bf715321a35f8730405f860460f8e62dd31abb5607e1e7956a312968
+tool tools/gen/abstract/genabs.sh a90f07483fe62ae5e7ec9ae55bdb904a106bb5402f96906e4d6cb70b080d18d7
+tool tools/gen/abstract/gabs.c 16023e76cb19000eebb4c341692a831ad3d8d12093a4ecf2ed3e5c189532bf38
+solution_ir 8cd8726751f7fd28bc194b7313585b1b8950083abbf612c53c41c8116cec21d4
+checker2 ACCEPT
+x445 check oscir OK
+tests inputs=a78ca1a40dc8409be3446220b4867f69ee8f1df2a449dcb663fc2898f226dc7c expected=d9ad811f8182bd31d74246bdd07a9a6ecfb4590a27cba4167239cf4f9b4377ec ACCEPT n=8

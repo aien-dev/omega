@@ -1,0 +1,17 @@
+gen-receipt 1
+record abs-48be6e3369c05336
+tool tools/gen/abstract/extract 09c1b424bf715321a35f8730405f860460f8e62dd31abb5607e1e7956a312968
+tool tools/gen/abstract/genabs.sh a90f07483fe62ae5e7ec9ae55bdb904a106bb5402f96906e4d6cb70b080d18d7
+tool tools/gen/abstract/gabs.c 16023e76cb19000eebb4c341692a831ad3d8d12093a4ecf2ed3e5c189532bf38
+helper_ir 2f58f673e627b9620be9384e625e727d037a3716bfcd9388efc680cbe50e1ff4
+checker2 ACCEPT
+pre true
+post and le res 32 eq eq res 0 eq x 0
+example 255 -> 8
+property inputs=01d9e5c8c3c7efd306651e88bd8d3b8d45a1f19223c405d7b4f0ed2e4281d45d expected=23c04e4d3c8d5abea295504bcdab63f60f7d857852a0fe95e049676f6dfc65e4 ACCEPT n=256
+example inputs=ce8bafb38615aeb5d44ebbabe78ec14ac35a5de87bdc5ad5ea82a72656024ce4 expected=aa67a169b0bba217aa0aa88a65346920c84c42447c36ba5f7ea65f422c1fe5d8 ACCEPT n=1
+occurs big_pc_small_ds popcnt
+occurs gcd_times_pc popcnt
+occurs pc_times_dc popcnt
+occurs popcnt_odd popcnt
+occurs popcnt_zero popcnt
