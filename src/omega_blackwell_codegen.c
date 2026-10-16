@@ -380,13 +380,17 @@ static int encode_single_insn(const BlackwellIRInsn *insn, const OmegaRegAlloc *
             }
             break;
 
-        case BW_IR_LDG_E:
-            /* LDG.E Rd, desc[URd][Ra.64] */
+        case BW_IR_LDG_E: {
+            /* LDG.E Rd, desc[URd][Ra.64+imm]: the 32-bit size (4) of the LDG.E.64 / LDG.E.128 words below; imm as there
+             * (signed 24-bit byte offset at bits 40..63, w[1] bits 8..31), unchanged words when imm is 0. */
+            int32_t off = (int32_t)insn->imm;
+            if (off < -(1 << 23) || off >= (1 << 23)) return -1;
             w[0] = 0x7981 | ((uint32_t)(dst & 0xff) << 16) | ((uint32_t)(src1 & 0xff) << 24);
-            w[1] = (uint32_t)(ureg & 0xff);
+            w[1] = (uint32_t)(ureg & 0xff) | (((uint32_t)off & 0xffffffU) << 8);
             w[2] = 0x0c1e1900;
             w[3] = insn->control ? insn->control : 0x000f2200;
             break;
+        }
 
         case BW_IR_STG_E: {
             /* STG.E desc[URd][Ra.64+imm], Rb. imm = signed 24-bit byte offset at bits 40..63 (w[1] bits

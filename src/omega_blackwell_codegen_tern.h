@@ -36,6 +36,14 @@
  * k % 512 == 0). With two chunks each lane l == 0 adds the earlier chunk's int32 y it stored itself (same thread, same
  * address, program order); the f32 epilogue is refused there.
  *
+ * Output path (single chunk, omega_tern_gemv_coalesced_out): every warp of a CTA works on consecutive units in a round
+ * (unit = CTA * W + warp + round * stride, all warps of a CTA take the same number of rounds; a warp past the last unit
+ * recomputes unit U - 1 and its rows fall at or beyond n_padded, never stored). Lane l == 0 of each half-warp writes the
+ * row's result into a shared slot, one CTA barrier, then warp 0 lanes 0 .. 2 R W - 1 store the round's 2 R W consecutive
+ * rows (those < n) with one coalesced STG. Two slot sets alternate by round so one barrier per round suffices. Measured
+ * reason (investigation 2026-10-16-kt1-speed): the per-row 4-byte GPU-uncached stores cost 9 to 11 us per launch.
+ * Chunked kernels keep the per-row store.
+ *
  * Epilogue:
  *   OMEGA_TERN_EPI_I32 (0): y int32.
  *   OMEGA_TERN_EPI_F32 (1): y f32 = ((float)y_int * a_scale) * w_scale[seg(r)], two round-to-nearest FMULs in that order.
@@ -95,7 +103,10 @@ typedef struct {
 int omega_blackwell_codegen_tern_gemv_prog(const OmegaTernGemvSpec *spec, BlackwellIRProgram *prog);
 int omega_tern_gemv_spec_ok(const OmegaTernGemvSpec *spec);
 uint32_t omega_tern_gemv_steps(const OmegaTernGemvSpec *spec);        /* k / 256 (0 when refused) */
-uint32_t omega_tern_gemv_shared_bytes(const OmegaTernGemvSpec *spec); /* 2 * chunk width */
+uint32_t omega_tern_gemv_shared_bytes(const OmegaTernGemvSpec *spec); /* 2 * chunk width, plus two output slot sets when coalesced */
+int omega_tern_gemv_coalesced_out(const OmegaTernGemvSpec *spec);     /* 1 when the round's rows leave through shared memory in one store */
+uint32_t omega_tern_gemv_out_slot_bytes(const OmegaTernGemvSpec *spec); /* 2 * rows * warps * 4: one slot set */
+#define OMEGA_TERN_SHARED_MAX 16384u /* OMEGA_BW_QMD_MAX_SHARED_BYTES */
 uint32_t omega_tern_gemv_chunks(const OmegaTernGemvSpec *spec);       /* x chunks: 1 for k <= 8192, else 2 */
 int omega_tern_gemv_prog_stats(const OmegaTernGemvSpec *spec, uint32_t *insns, uint32_t *gprs);
 
