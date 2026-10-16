@@ -1,0 +1,8 @@
+omega 226c3b34ba7ee7e3d3da3f878d4ec1bfde4f1e68 dirty=0
+branch train/mm-r3-update with origin/main merged after #481 (default CTA budget 1024, receipts report cta_budget 1024)
+d433a3d008a6babf433d1088da4949cb641019f47203890e8cca2d3288c2db84  /tmp/e2-scratch/r3c/api_test
+physics pin 6d7cf0d4
+started 2026-10-16T05:29:58Z finished 2026-10-16T05:30:44Z
+update x3 exit 0, default sweep exit 0 (25/25), host update exit 0
+review fixes (cd9a80a9): mutant controls on the host test: shared rounding NaN branch removed -> FAIL 6 words per shape; shape check removed -> mismatch refusals and buffer checks FAIL
+supersedes the timing context of evidence/R3-TENSOR-UPDATE-40d14a6c (taken at budget 64); that folder is unchanged

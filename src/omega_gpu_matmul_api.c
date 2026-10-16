@@ -364,6 +364,76 @@ int omega_gpu_tensor_upload_f32(uint32_t k, uint32_t n, const float *b, OmegaGpu
     return rc;
 }
 
+/* ---- in-place update ---- */
+
+/* f32 rounding staging for tensor_update: static, used only under the session lock, so an update never asks
+ * for memory (no out-of-memory path, no per-call allocation). 256 Ki elements (512 KiB): one chunk is
+ * UPDATE_STAGE_ELEMS / (k * 8) column tiles, capped at FRAG_PACK_TILES (42 tiles at k = 768, 2 at the
+ * largest k). */
+#define UPDATE_STAGE_ELEMS (256u * 1024u)
+_Static_assert(UPDATE_STAGE_ELEMS / (OMEGA_BW_MATMUL_MAX_K * 8u) >= 1u, "staging holds one column tile at the largest k");
+static uint16_t g_update_stage[UPDATE_STAGE_ELEMS];
+
+/* Packs b (k x n bf16, or f32 rounded as at upload) straight into the tensor's packed buffer dst, a chunk of
+ * column tiles at a time: each chunk is one contiguous run of dst, written while it is hot in cache. An f32
+ * chunk is first rounded into the staging block (omega_fp32_to_bf16_rne, the shared integer form of
+ * omega_fp32_to_bf16), then packed as a k x w matrix whose tiles 0 .. nt1 - nt0 are the tensor's tiles
+ * nt0 .. nt1 (columns past n stay zero either way). */
+static void pack_b_into(const OmegaGpuTensor *t, const uint16_t *b16, const float *b32, uint16_t *dst) {
+    const uint32_t k = t->k, n = t->n, kp = t->kp, nt = t->np / 8u;
+    uint32_t chunk = FRAG_PACK_TILES;
+    if (b32 && UPDATE_STAGE_ELEMS / (k * 8u) < chunk) chunk = UPDATE_STAGE_ELEMS / (k * 8u);
+    for (uint32_t nt0 = 0; nt0 < nt; nt0 += chunk) {
+        const uint32_t nt1 = nt - nt0 < chunk ? nt : nt0 + chunk;
+        uint16_t *out = &dst[(size_t)nt0 * kp * 8u];
+        if (b16) { omega_matmul_frag_pack_b(b16, k, n, kp, nt0, nt1, out); continue; }
+        const uint32_t c0 = nt0 * 8u, w = (nt1 * 8u < n ? nt1 * 8u : n) - c0;
+        for (uint32_t r = 0; r < k; r++) {
+            const float *src = &b32[(size_t)r * n + c0];
+            uint16_t *row = &g_update_stage[(size_t)r * w];
+            for (uint32_t j = 0; j < w; j++) row[j] = omega_fp32_to_bf16_rne(src[j]);
+        }
+        omega_matmul_frag_pack_b(g_update_stage, k, w, kp, 0, nt1 - nt0, out);
+    }
+}
+
+/* b16 or b32 (exactly one non-NULL). Holds the session lock for the whole update (see the header's thread
+ * safety note). The tensor must be a session DATA buffer: the session allocates every buffer GPU-uncached
+ * (mem_alloc, omega_gpu_session.h), so the chip reads what the CPU wrote once the sync below has ordered it;
+ * anything else is refused rather than risk the chip reading stale cached weights. The first sync validates
+ * the handle before anything is written: a handle from a closed or reopened device is refused by the
+ * platform, and its CPU view may be unmapped. */
+static int tensor_update(OmegaGpuTensor *t, uint32_t k, uint32_t n, const uint16_t *b16, const float *b32) {
+    if (!t || !t->mem.cpu || (!b16 && !b32)) return OMEGA_GPU_MATMUL_BAD_ARGS;
+    if (k != t->k || n != t->n) {
+        omega_gpu_session_lock();
+        omega_gpu_session_set_error("tensor update refused: shape differs from the tensor's");
+        omega_gpu_session_unlock();
+        return OMEGA_GPU_MATMUL_BAD_ARGS;
+    }
+    if (t->mem.kind != OMEGA_GPU_HANDLE_BUF_DATA) return OMEGA_GPU_MATMUL_BAD_ARGS;
+    int rc = OMEGA_GPU_MATMUL_OK;
+    omega_gpu_session_lock();
+    if (omega_gpu_session_is_blocked()) {
+        omega_gpu_session_set_error("tensor update refused: the session is latched (the device may still read the buffer)");
+        rc = OMEGA_GPU_MATMUL_CHIP_FAIL;
+    } else if (omega_gpu_session_sync_to_gpu(&t->mem) != 0) {
+        rc = OMEGA_GPU_MATMUL_CHIP_FAIL; /* stale handle or closed device: nothing written */
+    } else {
+        pack_b_into(t, b16, b32, t->mem.cpu);
+        if (omega_gpu_session_sync_to_gpu(&t->mem) != 0) rc = OMEGA_GPU_MATMUL_CHIP_FAIL;
+    }
+    omega_gpu_session_unlock();
+    return rc;
+}
+
+int omega_gpu_tensor_update_bf16(OmegaGpuTensor *t, uint32_t k, uint32_t n, const uint16_t *b) {
+    return b ? tensor_update(t, k, n, b, NULL) : OMEGA_GPU_MATMUL_BAD_ARGS;
+}
+int omega_gpu_tensor_update_f32(OmegaGpuTensor *t, uint32_t k, uint32_t n, const float *b) {
+    return b ? tensor_update(t, k, n, NULL, b) : OMEGA_GPU_MATMUL_BAD_ARGS;
+}
+
 void omega_gpu_tensor_free(OmegaGpuTensor *t) {
     if (!t) return;
     omega_gpu_session_lock();

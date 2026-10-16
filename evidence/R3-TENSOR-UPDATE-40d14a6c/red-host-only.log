@@ -1,0 +1,9 @@
+ERROR: looped MatMul tensor codegen requires M%16, N%8, K%16 (got 16x24x16)
+FAIL: update_f32 NULL tensor refused
+FAIL: update_bf16 NULL tensor refused
+fragment kernel K=2560 N=4096 unroll 4: 72 instructions, 48 registers
+blocked kernel K=4096 N=24576 rt=4 ct=4 unroll 1: 208 instructions, 108 registers
+blocked kernel K=12288 N=4096 rt=4 ct=4 unroll 1: 208 instructions, 108 registers
+blocked kernel K=4096 N=6144 rt=4 ct=4 unroll 1: 208 instructions, 108 registers
+FAIL: 176 checks, 2 failed
+exit=1

@@ -1,0 +1,10 @@
+omega 40d14a6c244d05f2feed8bb9bac9500f5e8fff4f dirty=0
+red = ae4ad9c0 (stub: OK without writing); green = 40d14a6c
+8d3ee5e74ae2cb6b9fefc5b85dde090c5455f253d63f7f16cabcb00a34d76f5d  /tmp/e2-scratch/r3/gpu_matmul_api_test.red
+d7d61f8eee2a8235eab153744f391dfabcf4473b425e24c75ec3f57251024330  /tmp/e2-scratch/r3/gpu_matmul_api_test.green
+physics pin 6d7cf0d4
+cta budget: main default 64 (this branch is off main, before #481)
+red host update exit 1 (9 failed checks), red host-only exit 1 (2 failed), red chip update exit 1 (4 failed)
+green host update exit 0, green chip update exit 0 x3, green default sweep exit 0
+mutant control: NaN branch of the inline rounding removed -> host update FAIL (6 words), restored
+recorded 2026-10-16T02:24Z

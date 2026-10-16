@@ -1,0 +1,10 @@
+FAIL tests/gpu_serving_alloc_count_test.c:510: update_f32 with k + 1 not refused
+FAIL tests/gpu_serving_alloc_count_test.c:511: update_bf16 with n - 1 not refused
+FAIL tests/gpu_serving_alloc_count_test.c:512: update_f32 with k and n swapped not refused
+FAIL tests/gpu_serving_alloc_count_test.c:473: shape-mismatch refusals left the buffer: 79153 of 88320 packed words differ from omega_matmul_frag_pack_b
+FAIL tests/gpu_serving_alloc_count_test.c:510: update_f32 with k + 1 not refused
+FAIL tests/gpu_serving_alloc_count_test.c:511: update_bf16 with n - 1 not refused
+FAIL tests/gpu_serving_alloc_count_test.c:512: update_f32 with k and n swapped not refused
+FAIL tests/gpu_serving_alloc_count_test.c:473: shape-mismatch refusals left the buffer: 818669 of 819200 packed words differ from omega_matmul_frag_pack_b
+gpu_serving_alloc_count_test update: FAIL (8 failed checks)
+exit=1

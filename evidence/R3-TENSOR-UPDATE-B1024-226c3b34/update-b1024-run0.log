@@ -1,0 +1,7 @@
+PASS update 16x768x2304 vs_fresh=0 e2e=1.72538e-07 bad=0 back=0 update_f32_ms=1.56 update_bf16_ms=0.60 upload_f32_free_ms=10.11
+PASS update 16x768x768 vs_fresh=0 e2e=1.75894e-07 bad=0 back=0 update_f32_ms=0.52 update_bf16_ms=0.19 upload_f32_free_ms=3.38
+PASS update 16x768x3072 vs_fresh=0 e2e=2.07271e-07 bad=0 back=0 update_f32_ms=2.16 update_bf16_ms=0.81 upload_f32_free_ms=13.47
+PASS update 16x3072x768 vs_fresh=0 e2e=3.31059e-07 bad=0 back=0 update_f32_ms=2.01 update_bf16_ms=0.80 upload_f32_free_ms=13.55
+PASS update 16x768x50304 vs_fresh=0 e2e=2.51842e-07 bad=0 back=0 update_f32_ms=35.38 update_bf16_ms=14.00 upload_f32_free_ms=237.43
+PASS: 60 checks, 0 failed
+exit=0
