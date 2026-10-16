@@ -40,14 +40,15 @@ typedef struct {
 
 static struct {
     bool hooked;
-    Slot slot;
+    Slot slot[2]; /* [0] today's kernel, [1] the dep-mode kernel (DEPFLAGS): a dep-mode record right after the host path must not evict the resident kernel */
     uint32_t warps, depth;
     int mutant;
 } g;
 static int g_rec; /* 1 while a record call runs (lock held): kernel_for must not evict */
 
-static void slot_clear_locked(void) { if (g.slot.valid) omega_gpu_session_free(&g.slot.code); memset(&g.slot, 0, sizeof g.slot); }
-static void on_session_close(void) { memset(&g.slot, 0, sizeof g.slot); }
+static void slot_free_locked(Slot *s) { if (s->valid) omega_gpu_session_free(&s->code); memset(s, 0, sizeof *s); }
+static void slot_clear_locked(void) { slot_free_locked(&g.slot[0]); slot_free_locked(&g.slot[1]); }
+static void on_session_close(void) { memset(g.slot, 0, sizeof g.slot); }
 static OmegaGpuSession *dev_open_locked(void) {
     if (!g.hooked) { (void)omega_gpu_session_on_close(on_session_close); g.hooked = true; }
     return omega_gpu_session_open();
@@ -157,10 +158,10 @@ int omega_gpu_router_read_back(OmegaGpuRouter *r, float *xout, uint64_t *tab_gu,
 
 /* ---- kernel ---- */
 static int kernel_for(const OmegaRouterSpec *spec, Slot **out, bool *hit) {
-    Slot *s = &g.slot;
+    Slot *s = &g.slot[spec->dep ? 1 : 0]; /* one resident kernel per dep mode */
     if (s->valid && memcmp(&s->spec, spec, sizeof *spec) == 0) { *out = s; *hit = true; return OMEGA_GPU_ROUTER_OK; }
     if (g_rec && s->valid) { omega_gpu_session_set_error("router record: kernel cache miss would evict the resident kernel (warm up before recording)"); return OMEGA_GPU_ROUTER_TOO_LARGE; }
-    slot_clear_locked();
+    slot_free_locked(s);
     BlackwellIRProgram *prog = omega_gpu_host_calloc(1, sizeof *prog);
     if (!prog) { omega_gpu_session_set_error("router codegen: host memory"); return OMEGA_GPU_ROUTER_CODEGEN_FAIL; }
     int cg = omega_blackwell_codegen_router_prog(spec, prog);
