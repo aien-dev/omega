@@ -1,0 +1,23 @@
+# negative fixtures: file | good receipt it was cut from (by one edit) | reason the checker must name
+neg-commit-short.json|good-historical-710d438c-main.json|field source.commit "710d438c" is not 40 lowercase hex digits
+neg-commit-nonhex.json|good-historical-710d438c-main.json|is not 40 lowercase hex digits
+neg-missing-gpu.json|good-historical-710d438c-main.json|missing field hardware.gpu
+neg-missing-counter.json|good-historical-710d438c-main.json|missing field methodology.counters.chip_ns
+neg-overhead-mismatch.json|good-historical-710d438c-main.json|derived graph.host_overhead_ns = 3281 but total_ns - chip_ns = 3280
+neg-stage-sum-mismatch.json|good-historical-710d438c-main.json|but the stages add up to 3989569
+neg-stage-partition.json|good-historical-710d438c-main.json|stamped_token.stage_sum_ns 3989569 differs from span_ns 3989568
+neg-unattributed-mismatch.json|good-historical-710d438c-main.json|derived stamped_token.unattributed_ns = 0 but chip_ns - span_ns = 87285
+neg-span-exceeds-chip.json|good-historical-710d438c-main.json|exceeds chip_ns
+neg-placeholder-tbd.json|good-historical-710d438c-main.json|placeholder value "TBD" at receipt.workload.model
+neg-placeholder-unknown.json|good-historical-710d438c-main.json|placeholder value "unknown" at receipt.hardware.host
+neg-placeholder-empty.json|good-historical-710d438c-main.json|placeholder value "" at receipt.workload.precision
+neg-zero-tokens.json|good-historical-710d438c-main.json|field workload.tokens = 0 is below 1
+neg-status-enum.json|good-historical-710d438c-main.json|status "PASSED" is not one of
+neg-verified-dirty.json|good-historical-710d438c-main.json|a dirty tree cannot be verified
+neg-evidence-missing.json|good-historical-710d438c-main.json|does not exist under
+neg-evidence-absolute.json|good-historical-710d438c-main.json|must be repo-relative
+neg-schema.json|good-historical-710d438c-main.json|schema "omega-decode-graph-receipt/2"
+neg-unknown-field.json|good-historical-710d438c-main.json|unknown top-level field speedup
+neg-sems-done-wrong.json|good-historical-710d438c-main.json|must equal launches or be null
+neg-notrun-with-measurements.json|good-historical-710d438c-main.json|must carry per_token and stamped_token as null
+neg-invalid-json.json|good-historical-710d438c-main.json|invalid JSON

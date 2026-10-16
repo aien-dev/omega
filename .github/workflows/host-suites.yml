@@ -31,8 +31,9 @@ name: Host suites
 #       omegese-oracle (test-omegese: the Omegese legal-word oracle, soundness
 #       walks and mutants on the -O2 build and under ASan and UBSan; omega #464),
 #       chip-tool-selftests (test-m19r-qualify test-gate14-combine
-#       test-window-lane-guard test-unwritten-trap-host test-ldst-host: the
-#       host-only self-tests of chip tooling; omega #425)
+#       test-window-lane-guard test-unwritten-trap-host test-ldst-host
+#       test-dgraph-receipt: the host-only self-tests of chip tooling; omega
+#       #425, decode-graph receipt aien-architecture#233)
 #
 # Deliberately NOT on GitHub (no GB10, no resident seat, no quiet flag here):
 #   test-composition-gate-gpu, test-r12-silicon, test-r13-silicon,
@@ -309,3 +310,5 @@ jobs:
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-unwritten-trap-host
       - name: E1 row 2 global load/store tables (host-only, no device)
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-ldst-host
+      - name: Decode-graph performance receipt (golden from evidence, checker negatives; host-only)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-dgraph-receipt

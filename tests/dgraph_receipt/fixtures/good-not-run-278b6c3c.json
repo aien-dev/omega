@@ -1,0 +1,57 @@
+{
+  "schema": "omega-decode-graph-receipt/1",
+  "status": "NOT_RUN",
+  "status_note": "example NOT_RUN receipt: a decode-graph chip run at omega main 278b6c3c that has not been made (aien-architecture#233 runs host-only and takes no GPU lock)",
+  "run_verdict": "NOT_RUN",
+  "not_run_reason": "no chip run under aien-architecture#233: hardware runs need a separately approved attended run on the GB10",
+  "source": {
+    "repo": "aien-spark/omega",
+    "commit": "278b6c3c5840e5f13472a2f60f50542d81c3821e",
+    "dirty": false
+  },
+  "workload": {
+    "model": "synthetic Qwen3-30B-A3B-shaped decode step, random weights",
+    "precision": "FP8 e4m3 weights (qkv, o, gate_up, down), BF16 lm_head, f32 activations",
+    "mode": "decode, one token per command list (omega_gpu_decode_graph_token), batch 1",
+    "tokens": 20
+  },
+  "hardware": {
+    "host": "spark-b87b",
+    "gpu": "NVIDIA GB10"
+  },
+  "build": {
+    "runner": "tools/run_gpu_decode_graph_chip.sh EVIDENCE_DIR main"
+  },
+  "per_token": null,
+  "stamped_token": null,
+  "aggregate": {
+    "available": false,
+    "reason": "nothing was measured"
+  },
+  "serial_vs_overlap": {
+    "chip_ns": "not measured",
+    "stages": "not measured",
+    "overlap_measurable": false,
+    "reason": "nothing was measured"
+  },
+  "methodology": {
+    "device_clock": "GPU PTIMER ns (omega_gpu_cmdlist.h stamps), when a run is made",
+    "host_clock": "omega_gpu_session_now_ns(), CLOCK_MONOTONIC on Linux, when a run is made",
+    "counters": {
+      "launches": "omega_gpu_decode_graph.h: \"launches recorded for the token\"",
+      "submits": "omega_gpu_decode_graph.h: \"submissions (1 normally; = launches with flush_each)\"",
+      "chip_ns": "omega_gpu_decode_graph.h: \"sum of the list submissions' first-submit-to-last-marker time\" (host clock)",
+      "record_ns": "omega_gpu_decode_graph.h: \"host: begin_token to the submit (recording)\"",
+      "total_ns": "omega_gpu_decode_graph.h: \"host: begin_token to end_token return\"",
+      "sems_done": "omega_gpu_decode_graph.h: \"launch semaphores found DONE\"",
+      "stamps": "omega_gpu_decode_graph.h: \"Launch i took stamps[i + 1] - stamps[i] ns\""
+    }
+  },
+  "evidence": [
+    "tools/run_gpu_decode_graph_chip.sh",
+    "docs/perf/DECODE_GRAPH_RECEIPT.md"
+  ],
+  "limitations": [
+    "NOT_RUN: carries no numbers and supports no performance claim"
+  ]
+}
