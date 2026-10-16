@@ -87,6 +87,7 @@ static int scalar_of(int k)
     case OT_U8: return OSC_T_U8; case OT_U16: return OSC_T_U16; case OT_U32: return OSC_T_U32;
     case OT_U64: return OSC_T_U64; case OT_I8: return OSC_T_I8; case OT_I16: return OSC_T_I16;
     case OT_I32: return OSC_T_I32; case OT_I64: return OSC_T_I64; case OT_BOOL: return OSC_T_BOOL;
+    case OT_F32: return OSC_T_F32; case OT_F64: return OSC_T_F64; /* OSC-4 Slice A */
     default: return 0;
     }
 }
@@ -101,7 +102,7 @@ static int parse_scalar(P *p, OscType *ty)
                      at(p, OT_BYTES) ? "bytes" : "cells");
         return -1;
     }
-    if (!s) return syntax(p, "a type (u8 u16 u32 u64 i8 i16 i32 i64 bool)");
+    if (!s) return syntax(p, "a type (u8 u16 u32 u64 i8 i16 i32 i64 bool f32 f64)");
     memset(ty, 0, sizeof *ty);
     ty->s = (OscScalar)s;
     adv(p);
@@ -498,6 +499,33 @@ static int parse_primary(P *p)
         N(n)->ival = t->ival;
         adv(p);
         return n;
+    case OT_FLOAT: /* OSC-4: the checker parses the spelling once the type is known */
+        n = new_node(p, ON_FLOAT, t);
+        if (n < 0) return -1;
+        N(n)->tok = p->pos;
+        N(n)->ival = t->ival;
+        adv(p);
+        return n;
+    case OT_SQRT: case OT_ABS: case OT_MIN: case OT_MAX: { /* OSC-4 intrinsics */
+        n = new_node(p, ON_INTRIN, t);
+        if (n < 0) return -1;
+        N(n)->op = t->kind;
+        adv(p);
+        if (expect(p, OT_LPAREN)) return -1;
+        if (enter(p)) return -1;
+        int a = parse_expr(p);
+        if (a < 0) return -1;
+        N(n)->a = a;
+        if (t->kind == OT_MIN || t->kind == OT_MAX) {
+            if (expect(p, OT_COMMA)) return -1;
+            int b = parse_expr(p);
+            if (b < 0) return -1;
+            N(n)->b = b;
+        }
+        leave(p);
+        if (expect(p, OT_RPAREN)) return -1;
+        return n;
+    }
     case OT_TRUE: case OT_FALSE:
         n = new_node(p, ON_BOOL, t);
         if (n < 0) return -1;
@@ -561,6 +589,7 @@ static int parse_postfix(P *p)
         if (n < 0) return -1;
         adv(p);
         if (parse_scalar(p, &N(n)->ty)) return -1;
+        if (at(p, OT_BITS)) { N(n)->flag = 1; adv(p); } /* OSC-4 bit cast */
         N(n)->a = e;
         N(n)->line = N(e)->line;
         N(n)->col = N(e)->col;
@@ -644,10 +673,23 @@ static int parse_name_tok(P *p, int n)
     return 0;
 }
 
+/* OSC-4 FLOAT_INDEX: a float literal where a loop bound, range end or arena bound INT belongs */
+static int float_index_lit(P *p, const char *object)
+{
+    const OscToken *t = cur(p);
+    if (t->kind != OT_FLOAT) return 0;
+    char buf[64];
+    osc_tok_text(p->ast->src, t, buf, sizeof buf);
+    osc_diag_set(p->d, OSC_DIAG_FLOAT_INDEX, t->line, t->col, object, 0, NULL, "float as a bound",
+                 "'%s' is a float; loop bounds, range ends and arena bounds are integers", buf);
+    return -1;
+}
+
 static int parse_int_signed(P *p, int64_t *out)
 {
     int neg = 0;
     if (at(p, OT_MINUS)) { neg = 1; adv(p); }
+    if (float_index_lit(p, "for")) return -1;
     if (!at(p, OT_INT)) return syntax(p, "an integer literal");
     const OscToken *t = cur(p);
     if (t->ival > (uint64_t)INT64_MAX + (uint64_t)neg) {
@@ -873,6 +915,7 @@ static int parse_stmt(P *p)
         if (parse_name_tok(p, n)) return -1;
         if (!at(p, OT_BOUND)) return syntax(p, "'bound K' after the arena name");
         adv(p);
+        if (float_index_lit(p, "bound")) return -1;
         if (!at(p, OT_INT)) return syntax(p, "bound INT");
         const OscToken *bt = cur(p);
         if (bt->ival == 0 || bt->ival > OSC_ARENA_MAX_CELLS) {
@@ -905,6 +948,7 @@ static int parse_stmt(P *p)
             return -1;
         }
         adv(p);
+        if (float_index_lit(p, "bound")) return -1;
         if (!at(p, OT_INT)) return syntax(p, "bound INT");
         const OscToken *bt = cur(p);
         if (bt->ival == 0 || bt->ival > LOOP_BOUND_MAX) {
