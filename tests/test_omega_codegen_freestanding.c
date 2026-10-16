@@ -178,6 +178,8 @@ static void golden_fixtures(void) {
     CHECK(omega_blackwell_verify_codegen_fixtures_intops() == 0, "intops golden words");
     CHECK(omega_blackwell_verify_codegen_fixtures_fragmm() == 0, "fragmm golden words");
     CHECK(omega_blackwell_verify_codegen_fixtures_reconv() == 0, "reconv golden words");
+    CHECK(omega_blackwell_verify_codegen_fixtures_bfly_f2fp() == 0, "SHFL.BFLY / F2FP.BF16 golden words (rc %d)", omega_blackwell_verify_codegen_fixtures_bfly_f2fp());
+    CHECK(omega_blackwell_verify_codegen_fixtures_atomf32() == 0, "ATOMG.E.ADD.F32 golden words (rc %d)", omega_blackwell_verify_codegen_fixtures_atomf32());
     CHECK(omega_blackwell_test_regalloc_bounds() == 0, "regalloc bounds");
 }
 

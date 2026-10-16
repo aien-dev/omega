@@ -91,7 +91,6 @@ int omega_gpu_pf_kernel_locked(const OmegaPfKey *key, OmegaPfGen gen, OmegaPfKer
     if (omega_gpu_session_alloc_code(need, &code) != 0) { omega_gpu_host_free(prog); return OMEGA_GPU_PF_CHIP_FAIL; }
     OmegaBlackwellKernel kernel;
     cg = omega_blackwell_kernel_encode_into(prog, code.cpu, need, &kernel);
-    if (cg == 0 && omega_tc_patch_code(prog, code.cpu, need) < 0) cg = -1;
     if (cg == 0 && omega_qmma_patch_code(prog, code.cpu, need) < 0) cg = -1;
     omega_gpu_host_free(prog);
     if (cg != 0 || kernel.code_size != need) { omega_gpu_session_free(&code); omega_gpu_session_set_error("prefill encode failed"); return OMEGA_GPU_PF_CODEGEN_FAIL; }

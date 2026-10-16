@@ -28,7 +28,6 @@ typedef struct {
     int err;
     int open_start[MAX_LOOPS];
     int depth;
-    uint32_t placeholders;
 } Em;
 
 static void emit(Em *e, BlackwellIRInsn in, int kind) {
@@ -104,12 +103,11 @@ static void lds32(Em *e, Op d, int addr, int first) { BlackwellIRInsn i = I0(BW_
 static void sts32(Em *e, int addr, Op val) { BlackwellIRInsn i = I0(BW_IR_STS32); i.src1_vreg = addr; i.src2_vreg = val.v; i.src2_subreg = (uint8_t)val.s; emit(e, i, K_STORE); }
 static void bar_sync(Em *e) { emit(e, I0(BW_IR_BAR_SYNC), K_SYNC); }
 static void shfl_down(Em *e, int d, int a, uint32_t off) { BlackwellIRInsn i = I0(BW_IR_SHFL_DOWN); i.dst_vreg = d; i.src1_vreg = a; i.imm = off; emit(e, i, K_VAR); }
-/* SHFL.BFLY placeholder (omega_blackwell_codegen_tc.h), patched after encoding */
-static void shfl_bfly(Em *e, int d, int a, uint32_t lanes) { shfl_down(e, d, a, OMEGA_TC_MARK_BFLY | (lanes & 31u)); e->placeholders++; }
-/* F2FP.BF16.F32.PACK_AB placeholder: d = bf16_rn(hi) << 16 | bf16_rn(lo) */
+static void shfl_bfly(Em *e, int d, int a, uint32_t lanes) { BlackwellIRInsn i = I0(BW_IR_SHFL_BFLY); i.dst_vreg = d; i.src1_vreg = a; i.imm = lanes & 31u; emit(e, i, K_VAR); }
+/* F2FP.BF16.F32.PACK_AB: d = bf16_rn(hi) << 16 | bf16_rn(lo) */
 static void f2fp(Em *e, Op d, Op hi, Op lo) {
-    BlackwellIRInsn i = I0(BW_IR_FMNMX_MAX); i.dst_vreg = d.v; i.dst_subreg = (uint8_t)d.s; i.src1_vreg = hi.v; i.src1_subreg = (uint8_t)hi.s;
-    i.src2_vreg = lo.v; i.src2_subreg = (uint8_t)lo.s; i.imm = OMEGA_TC_MARK_F2FP; emit(e, i, K_FIXED); e->placeholders++;
+    BlackwellIRInsn i = I0(BW_IR_F2FP_BF16_PACK); i.dst_vreg = d.v; i.dst_subreg = (uint8_t)d.s; i.src1_vreg = hi.v; i.src1_subreg = (uint8_t)hi.s;
+    i.src2_vreg = lo.v; i.src2_subreg = (uint8_t)lo.s; emit(e, i, K_FIXED);
 }
 static void isetp_ge_u32(Em *e, int a, int b) { BlackwellIRInsn i = I0(BW_IR_ISETP_GE_U32); i.src1_vreg = a; i.src2_vreg = b; emit(e, i, K_PRED); }
 static void bra_if_p0(Em *e, int target) { BlackwellIRInsn i = I0(BW_IR_BRA); i.predicate_p0 = true; i.imm = (uint32_t)(target - here(e)); emit(e, i, K_BRA); }
@@ -541,18 +539,10 @@ int omega_blackwell_codegen_prefill_attn_prog(const OmegaPrefillAttnSpec *spec, 
     return 0;
 }
 
-int omega_prefill_attn_prog_stats(const OmegaPrefillAttnSpec *spec, uint32_t *insns, uint32_t *gprs, uint32_t *placeholders) {
+int omega_prefill_attn_prog_stats(const OmegaPrefillAttnSpec *spec, uint32_t *insns, uint32_t *gprs) {
     static BlackwellIRProgram p;
     if (omega_blackwell_codegen_prefill_attn_prog(spec, &p) != 0) return -1;
     if (insns) *insns = (uint32_t)p.count;
     if (gprs) *gprs = p.regalloc.peak_gpr_usage;
-    if (placeholders) {
-        uint32_t n = 0;
-        for (size_t i = 0; i < p.count; i++) {
-            const BlackwellIRInsn *in = &p.insns[i];
-            if ((in->op == BW_IR_SHFL_DOWN && (in->imm & OMEGA_TC_MARK_BFLY)) || (in->op == BW_IR_FMNMX_MAX && in->imm == OMEGA_TC_MARK_F2FP)) n++;
-        }
-        *placeholders = n;
-    }
     return 0;
 }

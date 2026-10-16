@@ -148,24 +148,23 @@ static void rows_vs_emu(const Case *c, const uint16_t *kc, const uint16_t *vc, s
 
 /* ------------------------------------------------------------- host only */
 static void host_only(void) {
-    char msg[200];
-    CHECK(omega_tc_patch_selftest(msg, sizeof msg) == 0, "placeholder self-test: %s", msg);
+    CHECK(omega_blackwell_verify_codegen_fixtures_bfly_f2fp() == 0, "SHFL.BFLY / F2FP.BF16 golden words (rc %d)", omega_blackwell_verify_codegen_fixtures_bfly_f2fp());
     for (uint32_t w = 4; w <= 8; w += 4) for (uint32_t md = 0; md <= 2; md++) for (int m = 0; m <= 4; m++) {
-        OmegaPrefillAttnSpec s = { w, m, md, 0 }; uint32_t n = 0, gp = 0, ph = 0;
-        int rc = omega_prefill_attn_prog_stats(&s, &n, &gp, &ph);
+        OmegaPrefillAttnSpec s = { w, m, md, 0 }; uint32_t n = 0, gp = 0;
+        int rc = omega_prefill_attn_prog_stats(&s, &n, &gp);
         CHECK(rc == 0 && n <= 1024 && omega_bw_gpr_declared(gp) <= 128, "codegen warps %u mode %u mutant %d: rc %d insns %u gprs %u", w, md, m, rc, n, gp);
-        static uint8_t code[1024 * 16]; uint32_t kg = 0; int np = -1;
-        size_t sz = omega_gpu_prefill_attn_encode(&s, code, sizeof code, &kg, &np);
-        CHECK(sz > 0 && np == (int)ph, "encode+patch warps %u mode %u mutant %d: size %zu patched %d of %u", w, md, m, sz, np, ph);
-        if (rc == 0 && m == 0) printf("codegen warps %u mode %u: %u instructions, %u registers (declared %u, %u threads -> %u of 65536), %u placeholders patched\n",
-                                      w, md, n, gp, omega_bw_gpr_declared(gp), 32 * w, 32 * w * omega_bw_gpr_declared(gp), ph);
+        static uint8_t code[1024 * 16]; uint32_t kg = 0;
+        size_t sz = omega_gpu_prefill_attn_encode(&s, code, sizeof code, &kg);
+        CHECK(sz == 16u * ((n + 7u) & ~7u) && kg > 0, "encode warps %u mode %u mutant %d: size %zu for %u instructions", w, md, m, sz, n);
+        if (rc == 0 && m == 0) printf("codegen warps %u mode %u: %u instructions, %u registers (declared %u, %u threads -> %u of 65536)\n",
+                                      w, md, n, gp, omega_bw_gpr_declared(gp), 32 * w, 32 * w * omega_bw_gpr_declared(gp));
     }
-    { OmegaPrefillAttnSpec s = { 2, 0, 0, 0 }; CHECK(omega_prefill_attn_prog_stats(&s, NULL, NULL, NULL) != 0, "warps 2 refused");
-      s.warps = 8; s.mutant = 5; CHECK(omega_prefill_attn_prog_stats(&s, NULL, NULL, NULL) != 0, "mutant 5 refused");
-      s.mutant = 0; s.mode = 3; CHECK(omega_prefill_attn_prog_stats(&s, NULL, NULL, NULL) != 0, "mode 3 refused");
-      s.mode = OMEGA_PATTN_MODE_ATTEND; s.mirror = 1; CHECK(omega_prefill_attn_prog_stats(&s, NULL, NULL, NULL) != 0, "mirror outside APPEND refused");
-      s.mode = OMEGA_PATTN_MODE_APPEND; uint32_t n = 0, gp = 0, ph = 0;
-      CHECK(omega_prefill_attn_prog_stats(&s, &n, &gp, &ph) == 0 && n <= 1024 && omega_bw_gpr_declared(gp) <= 128, "APPEND + mirror in budget: %u insns %u gprs", n, gp);
+    { OmegaPrefillAttnSpec s = { 2, 0, 0, 0 }; CHECK(omega_prefill_attn_prog_stats(&s, NULL, NULL) != 0, "warps 2 refused");
+      s.warps = 8; s.mutant = 5; CHECK(omega_prefill_attn_prog_stats(&s, NULL, NULL) != 0, "mutant 5 refused");
+      s.mutant = 0; s.mode = 3; CHECK(omega_prefill_attn_prog_stats(&s, NULL, NULL) != 0, "mode 3 refused");
+      s.mode = OMEGA_PATTN_MODE_ATTEND; s.mirror = 1; CHECK(omega_prefill_attn_prog_stats(&s, NULL, NULL) != 0, "mirror outside APPEND refused");
+      s.mode = OMEGA_PATTN_MODE_APPEND; uint32_t n = 0, gp = 0;
+      CHECK(omega_prefill_attn_prog_stats(&s, &n, &gp) == 0 && n <= 1024 && omega_bw_gpr_declared(gp) <= 128, "APPEND + mirror in budget: %u insns %u gprs", n, gp);
       printf("codegen warps 8 APPEND + mirror: %u instructions, %u registers\n", n, gp); }
     CHECK(omega_gpu_prefill_attn(NULL, 0, 0, 1, NULL, EPS, 1.0f, NULL, NULL) == OMEGA_GPU_DATTN_BAD_ARGS, "NULL cache refused");
     CHECK(OMEGA_PATTN_SHARED_BYTES <= 16384u, "shared memory within the QMD cap");

@@ -2,8 +2,6 @@
  * omega_gpu_prefill_attn_api.c: chunked launches of the tensor-core causal prefill attention (see the header).
  * Session use mirrors omega_gpu_decode_attn_api.c: buffers from omega_gpu_session_alloc (GPU-uncached, host-visible),
  * sync_to_gpu after host writes, sync_to_cpu before host reads, one omega_gpu_session_launch per chunk.
- * The kernel uses the SHFL.BFLY / F2FP placeholders of omega_blackwell_codegen_tc.h: the code is patched after encoding
- * and the patch count must equal the program's placeholder count.
  */
 #include "omega_gpu_prefill_attn_api.h"
 #include "omega_blackwell_codegen_tc.h"
@@ -128,18 +126,16 @@ static int copy_locked(uint64_t dst, uint64_t src, size_t bytes, uint64_t *ns) {
 }
 #endif
 
-size_t omega_gpu_prefill_attn_encode(const OmegaPrefillAttnSpec *spec, uint8_t *code, size_t cap, uint32_t *gprs, int *patched) {
+size_t omega_gpu_prefill_attn_encode(const OmegaPrefillAttnSpec *spec, uint8_t *code, size_t cap, uint32_t *gprs) {
     BlackwellIRProgram *prog = omega_gpu_host_calloc(1, sizeof *prog);
     if (!prog) return 0;
     size_t need = 0;
     if (omega_blackwell_codegen_prefill_attn_prog(spec, prog) == 0) need = omega_bw_program_code_bytes(prog);
     OmegaBlackwellKernel k;
     if (need == 0 || need > cap || omega_blackwell_kernel_encode_into(prog, code, cap, &k) != 0) { omega_gpu_host_free(prog); return 0; }
-    int np = omega_tc_patch_code(prog, code, need);
     if (gprs) *gprs = k.gpr_count;
-    if (patched) *patched = np;
     omega_gpu_host_free(prog);
-    return np < 0 ? 0 : need;
+    return need;
 }
 
 static int kernel_for(const OmegaPrefillAttnSpec *spec, Slot **out, bool *hit) {
@@ -153,19 +149,12 @@ static int kernel_for(const OmegaPrefillAttnSpec *spec, Slot **out, bool *hit) {
     size_t need = cg == 0 ? omega_bw_program_code_bytes(prog) : 0;
     if (cg != 0 || need == 0) { omega_gpu_host_free(prog); omega_gpu_session_set_error("prefill attn codegen refused the spec"); return OMEGA_GPU_DATTN_CODEGEN_FAIL; }
     if ((uint64_t)32u * spec->warps * omega_bw_gpr_declared(prog->regalloc.peak_gpr_usage) > 65536u) { omega_gpu_host_free(prog); omega_gpu_session_set_error("prefill attn: register file"); return OMEGA_GPU_DATTN_TOO_LARGE; }
-    uint32_t expect = 0;
-    for (size_t i = 0; i < prog->count; i++) {
-        const BlackwellIRInsn *in = &prog->insns[i];
-        if ((in->op == BW_IR_SHFL_DOWN && (in->imm & OMEGA_TC_MARK_BFLY)) || (in->op == BW_IR_FMNMX_MAX && in->imm == OMEGA_TC_MARK_F2FP)) expect++;
-    }
     OmegaGpuMem code;
     if (omega_gpu_session_alloc_code(need, &code) != 0) { omega_gpu_host_free(prog); return OMEGA_GPU_DATTN_CHIP_FAIL; }
     OmegaBlackwellKernel kernel;
     cg = omega_blackwell_kernel_encode_into(prog, code.cpu, need, &kernel);
-    int np = cg == 0 ? omega_tc_patch_code(prog, code.cpu, need) : -1;
     omega_gpu_host_free(prog);
     if (cg != 0 || !kernel.code || kernel.code_size != need) { omega_gpu_session_free(&code); omega_gpu_session_set_error("prefill attn encode"); return OMEGA_GPU_DATTN_CODEGEN_FAIL; }
-    if (np < 0 || (uint32_t)np != expect) { omega_gpu_session_free(&code); omega_gpu_session_set_error("prefill attn: placeholder patch count mismatch"); return OMEGA_GPU_DATTN_CODEGEN_FAIL; }
     if (omega_gpu_session_sync_to_gpu(&code) != 0) { omega_gpu_session_free(&code); return OMEGA_GPU_DATTN_CHIP_FAIL; }
     memset(s, 0, sizeof *s);
     s->valid = true; s->spec = *spec; s->kernel = kernel; s->code = code;

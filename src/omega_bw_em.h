@@ -140,6 +140,6 @@ static void nop(Em *e, uint32_t stall) {
 }
 static void lop3(Em *e, int d, int a, int b, int c, uint32_t lut) { BlackwellIRInsn i = I0(BW_IR_LOP3_LUT); i.dst_vreg = d; i.src1_vreg = a; i.src2_vreg = b; i.src3_vreg = c; i.imm = lut; emit(e, i, K_FIXED); }
 static void iadd(Em *e, int d, int a, int b) { BlackwellIRInsn i = I0(BW_IR_IADD3); i.dst_vreg = d; i.src1_vreg = a; i.src2_vreg = b; emit(e, i, K_FIXED); }
-static void shfl_bfly(Em *e, int d, int a, uint32_t lane) { shfl_down(e, d, a, OMEGA_TC_MARK_BFLY | (lane & 31u)); }
-static void f2fp_pack(Em *e, int d, int hi, int lo) { BlackwellIRInsn i = I0(BW_IR_FMNMX_MAX); i.dst_vreg = d; i.src1_vreg = hi; i.src2_vreg = lo; i.imm = OMEGA_TC_MARK_F2FP; emit(e, i, K_FIXED); }
+static void shfl_bfly(Em *e, int d, int a, uint32_t lane) { BlackwellIRInsn i = I0(BW_IR_SHFL_BFLY); i.dst_vreg = d; i.src1_vreg = a; i.imm = lane & 31u; emit(e, i, K_VAR); }
+static void f2fp_pack(Em *e, int d, int hi, int lo) { BlackwellIRInsn i = I0(BW_IR_F2FP_BF16_PACK); i.dst_vreg = d; i.src1_vreg = hi; i.src2_vreg = lo; emit(e, i, K_FIXED); }
 #endif

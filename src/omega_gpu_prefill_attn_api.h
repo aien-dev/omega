@@ -72,7 +72,7 @@ int omega_gpu_prefill_attn_kv_mirror_available(void);
 uint32_t omega_gpu_prefill_attn_test_launch_ns(uint64_t *ns, uint32_t cap);
 #define OMEGA_GPU_PATTN_HOST_PASS 1024u /* host entry: tokens per staged pass in split mode */
 
-/* host: build + encode + patch the kernel for a spec into code (cap bytes); returns the code size or 0 (tests) */
-size_t omega_gpu_prefill_attn_encode(const OmegaPrefillAttnSpec *spec, uint8_t *code, size_t cap, uint32_t *gprs, int *patched);
+/* host: build + encode the kernel for a spec into code (cap bytes); returns the code size or 0 (tests) */
+size_t omega_gpu_prefill_attn_encode(const OmegaPrefillAttnSpec *spec, uint8_t *code, size_t cap, uint32_t *gprs);
 
 #endif

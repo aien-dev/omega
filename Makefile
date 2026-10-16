@@ -2555,6 +2555,14 @@ GPU_TC_PEAK_TEST = $(OUT_DIR)/gpu_tc_peak_test
 $(GPU_TC_PEAK_TEST): tests/gpu_tc_peak_test.c tests/bw_hmma_model.h tests/bw_warp_sim_tc.h src/omega_blackwell_codegen_tc.h $(OUT_DIR)/libomega_gpu.a
 	$(CC) $(CFLAGS) -ffp-contract=off -DWS_MAX_THREADS=512 -Itests -o $@ tests/gpu_tc_peak_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
 
+# Training R5 part 2 (2026-10-15): f32 global atomic add probe. --host-only is the simulator; the chip run is one short window.
+GPU_ATOMF32_PROBE_TEST = $(OUT_DIR)/gpu_atomf32_probe_test
+$(GPU_ATOMF32_PROBE_TEST): tests/gpu_atomf32_probe_test.c tests/bw_warp_sim_tc.h src/omega_bw_em.h src/omega_blackwell_codegen.h $(OUT_DIR)/libomega_gpu.a
+	$(CC) $(CFLAGS) -ffp-contract=off -DWS_MAX_THREADS=256 -Itests -o $@ tests/gpu_atomf32_probe_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+.PHONY: test-atomf32-probe-host
+test-atomf32-probe-host: $(GPU_ATOMF32_PROBE_TEST)
+	$(GPU_ATOMF32_PROBE_TEST) --host-only
+
 # OWN-30B L1 attention (2026-10-13): tensor-core causal prefill attention. --host-only and --sim are host proofs;
 # the chip gate is tools/run_gpu_prefill_attn_chip.sh.
 GPU_PATTN_TEST = $(OUT_DIR)/gpu_prefill_attn_test
