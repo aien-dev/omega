@@ -1,0 +1,8 @@
+TGEMM 8192x768x2304 uncached rt 2 warps 8 tiles 256 grid_x 6: reference 0 of 6291456 outside 1e-5 (worst 1.16e-06), 6291456 bit-identical to the emulation, repeats identical yes, poison left 0 (reference 11.0 s)
+TGEMM 8192x768x2304 uncached: chip median 5.385 ms (min 5.276) = 5.38 TFLOPS = 4.5% of peak 120.16; whole call median 5.390 ms = 5.38 TFLOPS = 4.5%
+TGEMM 8192x768x2304 mutant 4: caught
+TGEMM 8192x768x2304 mutant 1: caught
+TGEMM 8192x768x2304 cached rt 2 warps 8 tiles 256 grid_x 6: reference 0 of 6291456 outside 1e-5 (worst 1.12e-06), 6291456 bit-identical to the emulation, repeats identical yes, poison left 0 (reference 10.8 s)
+TGEMM 8192x768x2304 cached: chip median 0.807 ms (min 0.802) = 35.92 TFLOPS = 29.9% of peak 120.16; whole call median 0.808 ms = 35.89 TFLOPS = 29.9%
+GPU_TGEMM: PASS
+exit 0 (informational)
