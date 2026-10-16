@@ -131,7 +131,7 @@ cp "$W/suffix.txt" "$W/query.txt" "$W/o/"
 s() { sha256sum < "$1" | cut -d' ' -f1; }
 ex="-"; [ "${#EXF[@]}" = 0 ] || ex="$(IFS=,; echo "${EXF[*]}")"
 {
-  echo "contract=genret-cli-v3"; [ -z "${GEN_STUB_PROVIDER:-}" ] || echo "provider=$GEN_STUB_PROVIDER"; echo "mode=$MODE"; echo "kind=$KIND"; echo "k=$K"; echo "cap_bytes=$CAP"; echo "target_bytes=${TB:--}"
+  echo "contract=${GEN_STUB_CONTRACT:-genret-cli-v3}"; [ -z "${GEN_STUB_PROVIDER:-}" ] || echo "provider=$GEN_STUB_PROVIDER"; echo "mode=$MODE"; echo "kind=$KIND"; echo "k=$K"; echo "cap_bytes=$CAP"; echo "target_bytes=${TB:--}"
   echo "exclude_family=$ex"; echo "manifest_sha256=$MSHA"; echo "recheck_sha256=$RCH"; echo "recheck_source_sha256=${GEN_STUB_RECHECK_SOURCE:-$(printf "%064d" 0)}"; echo "requirement_sha256=$(s "$REQ")"; echo "prompt_sha256=$(s "$PR")"
   echo "query_sha256=$(s "$W/o/query.txt")"; echo "records=$(grep -c . "$CORPUS")"; echo "indexed=$(($(grep -c . "$CORPUS") - $(awk -F'\t' '$3 == "-"' "$W/exc" | grep -c . || true)))"
   echo "total_tokens=0"; echo "selected=$n"; echo "pad=$PAD"; echo "pad_reason=$PR"; echo "unpadded_bytes=$UB"; echo "suffix_bytes=$(wc -c < "$W/o/suffix.txt")"; echo "length_gap=$GAP"; echo "suffix_sha256=$(s "$W/o/suffix.txt")"

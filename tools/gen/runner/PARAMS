@@ -42,6 +42,8 @@ recheck_sha256_file=PLACEHOLDER build/gen_retrieval/recheck.sha256
 # the recheck.c genret was built from (mk/gen-retrieval.mk GENRET_RECHECK_SHA256, gen/retrieval 4a48b613); every
 # provider receipt must name it (genret_anyrecheck test builds say "unverified" and are refused)
 recheck_source_sha256=05cec285f7b7b2be68b1db1287661513e7e4715da44909065bdd0829daac02b6
+# GEN_PROTOCOL_V1 section 14: gencheck run-ready and gencheck open (Agent A, gen/protocol 7eb8534c, gencheck.c e6da5d7a...)
+gencheck=PLACEHOLDER build/gen_protocol/gencheck
 retrieval_mode=normal
 k=3
 cap_bytes=4096

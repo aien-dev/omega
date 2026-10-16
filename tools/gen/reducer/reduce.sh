@@ -4,7 +4,7 @@
 # (tools/gen/reducer/genstat.c: Wilson, exact one-sided McNemar, Newcombe method 10, the verdict rule;
 # checked against Agent A's stats vectors). Shell + jq + the repo's C tools; no Python.
 #
-#   reduce.sh --run <run dir> --harness <ola experiment run dir> [--pins FILE] [--grading FILE] --out <new dir>
+#   reduce.sh --run <run dir> --harness <ola experiment run dir> --open <OPEN> --gencheck <gencheck> [--pins FILE] [--grading FILE] --out <new dir>
 #
 # <run dir>: written by tools/gen/runner/run.sh. <harness run dir>: evidence/ONE-LAYER-2/runs/<id> of
 # `ola.sh experiment <tasks.tar> <TASKS.sha256> <run dir>/cands` (receipts in <harness>/../../receipts).
@@ -26,15 +26,15 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
 die() { echo "gen reduce.sh: $*" >&2; exit 2; }
 TEST="${GEN_TEST:-0}"
-RUN="" H="" PINS="" GRAD="" OUT=""
+RUN="" H="" PINS="" GRAD="" OUT="" OPENF="" GCB=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --run) RUN="$2"; shift 2 ;; --harness) H="$2"; shift 2 ;; --pins) PINS="$2"; shift 2 ;;
-    --grading) GRAD="$2"; shift 2 ;; --out) OUT="$2"; shift 2 ;;
+    --grading) GRAD="$2"; shift 2 ;; --out) OUT="$2"; shift 2 ;; --open) OPENF="$2"; shift 2 ;; --gencheck) GCB="$2"; shift 2 ;;
     *) die "unknown argument $1" ;;
   esac
 done
-[ -n "$RUN" ] && [ -n "$H" ] && [ -n "$OUT" ] || die "usage: reduce.sh --run DIR --harness DIR [--pins FILE] [--grading FILE] --out DIR"
+[ -n "$RUN" ] && [ -n "$H" ] && [ -n "$OUT" ] && [ -n "$OPENF" ] && [ -n "$GCB" ] || die "usage: reduce.sh --run DIR --harness DIR --open OPEN --gencheck GENCHECK [--pins FILE] [--grading FILE] --out DIR"
 [ -f "$RUN/meta.txt" ] && [ -f "$H/score.txt" ] || die "no run meta.txt or harness score.txt"
 [ ! -e "$OUT" ] || die "$OUT exists: never overwritten"
 [ -z "$PINS" ] || [ -f "$PINS" ] || die "no pins file $PINS"
@@ -50,6 +50,16 @@ shas() { printf '%s' "$1" | sha256sum | cut -d' ' -f1; }
 mk() { awk -F= -v k="$1" '$1 == k { print substr($0, length(k) + 2); exit }' "$RUN/meta.txt"; }
 W="$(mktemp -d "${TMPDIR:-/tmp}/gen-reduce.XXXXXXXX")"; trap 'rm -rf "$W"' EXIT
 : > "$W/bad"
+# refusals (GEN_PROTOCOL_V1 sections 6 and 8: no receipt, no verdict at all): gencheck run-ready and gencheck open
+# on the run's protocol.json at the given OPEN, which must be the run's own OPEN copy
+[ -f "$OPENF" ] && [ -x "$GCB" ] || die "no OPEN $OPENF or gencheck $GCB"
+[ -f "$RUN/protocol.json" ] && [ -f "$RUN/OPEN" ] && cmp -s "$RUN/OPEN" "$OPENF" && [ "$(sha "$OPENF")" = "$(mk open_sha256)" ] ||
+  die "the run's OPEN is not $OPENF (or meta.txt open_sha256 differs): refused, no receipt"
+HELDOUT_N="$(jq -r '.splits.heldout.count' "$RUN/protocol.json" 2> /dev/null || echo ?)" # GEN_PROTOCOL_V1 section 6: n = 60
+[ "$HELDOUT_N" = 60 ] || die "protocol.json splits.heldout.count is '$HELDOUT_N', not 60: refused, no receipt"
+[ "$(sha "$GCB")" = "$(mk gencheck_sha256)" ] || die "gencheck $GCB is not the one the run used (meta.txt gencheck_sha256): refused, no receipt"
+gco="$("$GCB" run-ready "$RUN/protocol.json" "$ROOT" 2>&1)" || die "gencheck run-ready refused the run's protocol.json: $(tail -n 2 <<< "$gco" | tr '\n' ' ')"
+gco="$("$GCB" open "$RUN/protocol.json" "$ROOT" "$OPENF" 2>&1)" || die "gencheck open refused the run's protocol.json at $OPENF: $(tail -n 2 <<< "$gco" | tr '\n' ' ')"
 bad() { printf '%s\n' "${*//[$'\t\n']/ }" >> "$W/bad"; }
 cnt() { grep -c . "$1" 2> /dev/null || true; }
 
@@ -61,8 +71,9 @@ if [ -f "$RUN/SHA256SUMS" ] && (cd "$RUN" && sha256sum -c --strict --quiet SHA25
 else bad "run SHA256SUMS missing or does not verify"; fi
 [ "$(mk mask)" = off ] || bad "run mask is '$(mk mask)', not off"
 if [ -f "$RUN/protocol.json" ] && [ "$(sha "$RUN/protocol.json")" = "$(mk protocol_json_sha256)" ]; then
-  jq -e '.decision | .schema == "omega.gen.decision.v1" and .primary == "attempt1_round1_functional" and .controls == ["A","B","C"] and .delta == 0.1 and .alpha == 0.05
-    and .test == "mcnemar_exact_one_sided" and .ci == "newcombe10" and .fail_control == "C" and .sanity_ab_max == 2 and .z95 == 1.959963984540054 and .z90 == 1.644853626951472' \
+  jq -e '(.decision | .schema == "omega.gen.decision.v1" and .primary == "attempt1_round1_functional" and .controls == ["A","B","C"] and .delta == 0.1 and .alpha == 0.05
+    and .test == "mcnemar_exact_one_sided" and .ci == "newcombe10" and .fail_control == "C" and .sanity_ab_max == 2 and .z95 == 1.959963984540054 and .z90 == 1.644853626951472 and .floor_max == 3 and .ceiling_min == 57)
+    and (.retrieval | .length_match_abs_bytes == 256 and .length_match_frac == 0.15 and .length_match_min_matched_frac == 0.5)' \
     "$RUN/protocol.json" > /dev/null 2>&1 ||
     bad "protocol.json decision block is not the rule this reducer applies"
 else bad "run protocol.json missing or not the one meta.txt names"; fi
@@ -80,8 +91,7 @@ GTEMP="$(mk greedy_temperature)" GTOPP="$(mk greedy_top_p)" TEMP="$(mk temperatu
 mapfile -t IDS < <(awk -F'\t' '$1 == "A" { print $2 }' "$RUN/manifests.tsv" 2> /dev/null | LC_ALL=C sort)
 N="${#IDS[@]}"
 [ "$N" -gt 0 ] && [ "$N" = "$(mk tasks)" ] || bad "manifests.tsv names $N tasks, meta.txt $(mk tasks)"
-HELDOUT_N=60 # GEN-1 review relay: the held-out split has exactly 60 tasks (UNVERIFIED until GEN_PROTOCOL_V1 is final)
-[ "$TEST" = 1 ] || [ "$N" = "$HELDOUT_N" ] || bad "the run has $N tasks, the held-out split has $HELDOUT_N"
+[ "$TEST" = 1 ] || [ "$(mk control)" != none ] || [ "$N" = "$HELDOUT_N" ] || die "the run has $N distinct tasks, n must be $HELDOUT_N: refused, no receipt"
 [ "$(sha "$RUN/manifests.tsv")" = "$(mk manifests_sha256)" ] || bad "manifests.tsv is not the one meta.txt names"
 declare -A MAN TI
 i=0; for t in "${IDS[@]}"; do i=$((i + 1)); TI[$t]=$i; done
@@ -100,6 +110,7 @@ while IFS=$'\t' read -r cd t mh; do
     { [ -f "$ro/SHA256SUMS" ] && (cd "$ro" && sha256sum -c --strict --quiet SHA256SUMS > /dev/null 2>&1) && [ "$(sha "$ro/SHA256SUMS")" = "$(mfv retrieval_sha256)" ] &&
       [ "$(rkv suffix_sha256)" = "$sh" ]; } || bad "retrieval $cd $t: output missing, altered, or not the manifest's"
     ! grep -q "^provider=" "$ro/receipt.txt" 2> /dev/null || [ "$(rkv provider)" = genret ] || bad "retrieval $cd $t: provider=$(rkv provider | head -n 1), only genret"
+    [ "$(rkv contract)" = genret-cli-v3 ] || bad "retrieval $cd $t: receipt contract=$(rkv contract | head -n 1), only genret-cli-v3"
     [ "$(rkv recheck_sha256)" = "$(mk recheck_sha256)" ] && [ "$(rkv recheck_source_sha256)" = "$(mk recheck_source_sha256)" ] &&
       [[ "$(mk recheck_source_sha256)" =~ ^[0-9a-f]{64}$ ]] || bad "retrieval $cd $t: validator recheck_source_sha256 '$(rkv recheck_source_sha256)' is not the pinned recheck.c"
   fi
@@ -124,6 +135,14 @@ if [ -d "$RUN/gate/g0" ]; then
   der="$(g0_derive "$RUN/gate/g0" "$(mk g0_seeds)" 2> /dev/null || true)"
   if g0_pass "$der" "$(mk g0_seeds)"; then g=PASS; else g=FAIL; fi
   [ "$g" = "$G0" ] && grep -qxF "derived=$der" "$RUN/gate/g0/verdict.txt" || { bad "G0 verdict '$G0' does not follow from its record ($der)"; G0=FAIL; }
+  # G0 seeds = protocol.json gates.g0.seed_values s1..sN, the repeat = s1 (GEN_PROTOCOL_V1 section 5 step 6)
+  mapfile -t G0S < <(jq -r '.gates.g0.seed_values[]? | tostring' "$RUN/protocol.json" 2> /dev/null)
+  g0n="$(mk g0_seeds)"
+  [ "${#G0S[@]}" = "$g0n" ] && [ "$(mk g0_seed_values)" = "$(IFS=,; echo "${G0S[*]}")" ] || { bad "meta.txt g0_seed_values is not protocol.json gates.g0.seed_values"; G0=FAIL; }
+  for k in $(seq 1 $((g0n + 1))); do
+    s="${G0S[$(( k <= g0n ? k - 1 : 0 ))]:-none}"
+    [ "$(jq -r '.seed' "$RUN/gate/g0/r$k.req.json" 2> /dev/null)" = "$s" ] || { bad "G0 request r$k does not carry seed $s"; G0=FAIL; }
+  done
 fi
 NA=1; P3=UNAVAILABLE
 if [ "$G0" = PASS ]; then NA="$ATT"; P3=AVAILABLE; fi
@@ -133,11 +152,11 @@ mapfile -t SETS < <(printf '%s\n' "${SETS[@]}" | LC_ALL=C sort)
 # run rows and requests
 HDR="$(printf '%s\t' set task rounds prompt_tokens completion_tokens_r1 completion_tokens_r2 finish_r1 finish_r2 wall_s check_r1 check_r2 candidate_sha256 \
   condition attempt seed temperature top_p max_tokens prompt_tokens_r1 prompt_tokens_r2 tries_r1 tries_r2 mode_r1 mode_r2 seed_reported_r1 wall_s_r1 \
-  candidate_r1_sha256 manifest_sha256 retrieval_sha256 retrieved suffix_bytes)"; HDR="${HDR%$'\t'}"
+  candidate_r1_sha256 manifest_sha256 retrieval_sha256 retrieved suffix_bytes selected)"; HDR="${HDR%$'\t'}"
 [ "$(head -n 1 "$RUN/log.tsv")" = "$HDR" ] || bad "log.tsv header is not run row v1"
 tail -n +2 "$RUN/log.tsv" > "$W/rows"
-[ "$(awk -F'\t' 'NF != 31' "$W/rows" | grep -c . || true)" = 0 ] || bad "log.tsv has rows without 31 columns"
-[ "$(cut -f1,2 "$W/rows" | LC_ALL=C sort | uniq -d | grep -c . || true)" = 0 ] || bad "log.tsv has two rows for one generation"
+[ "$(awk -F'\t' 'NF != 32' "$W/rows" | grep -c . || true)" = 0 ] || bad "log.tsv has rows without 32 columns"
+[ "$(cut -f1,2 "$W/rows" | LC_ALL=C sort | uniq -d | grep -c . || true)" = 0 ] || die "log.tsv has two rows for one generation (a duplicated cell): refused, no receipt"
 [ "$(cnt "$W/rows")" = "$((4 * N * NA))" ] || bad "log.tsv has $(cnt "$W/rows") rows, the run needs $((4 * N * NA)) (4 conditions x $N tasks x $NA attempts)"
 [ "$(awk -F'\t' '$14 > 1' "$W/rows" | grep -c . || true)" = 0 ] || [ "$G0" = PASS ] || bad "log.tsv has sampled attempts without a G0 PASS"
 while IFS=$'\t' read -r -a r; do
@@ -154,7 +173,22 @@ while IFS=$'\t' read -r -a r; do
   sfx="$(cat "$RUN/blobs/$sh" 2> /dev/null; printf x)"; sys="$(cat "$RUN/blobs/$ph" 2> /dev/null)${sfx%x}"
   q="$(request_json "$MODEL" "$(first_msgs "$sys" "$(cat "$RUN/blobs/$uh" 2> /dev/null)")" "$MAXT" "$tt" "$tp" "$seed" "$EXTRA")"
   [ -f "$d/r1.req.json" ] && [ "$(cat "$d/r1.req.json")" = "$q" ] || bad "request $s $t round 1 is not the request its manifest, pins and seed rule give"
-  [ "${r[29]}" = "$(sed -n 's/^retrieved=//p' "$mf")" ] && [ "${r[30]}" = "$(sed -n 's/^suffix_bytes=//p' "$mf")" ] || bad "log.tsv row $s $t: retrieved / suffix_bytes differ from the manifest"
+  # the submitted candidates re-derive (runner sub_of): the reader's candidate, else a usable reply's content
+  # (jq -r, trailing newlines dropped as in rN.content), else none (transport failure = no_candidate)
+  fr=""; if [ "${r[9]}" = OK ]; then fr=1; elif [ "${r[2]}" = 2 ]; then fr=2; fi
+  for sx in r1 "f$fr"; do
+    [ "$sx" != f ] || continue
+    rr="${sx#?}"
+    if [ -f "$d/r$rr.candidate.oscir" ]; then ws="$(sha "$d/r$rr.candidate.oscir")"
+    elif round_ok "$d/r$rr"; then ws="$(printf '%s' "$(content_of "$d/r$rr.resp.json")" | sha256sum | cut -d' ' -f1)"
+    else ws=-; fi
+    cs="$s"; [ "$sx" = r1 ] || cs="$s-final"
+    cf="$RUN/cands/$cs/$t/candidate.oscir" have=-; [ -f "$cf" ] && have="$(sha "$cf")"
+    [ "$have" = "$ws" ] || bad "candidate $cs $t is not the one its round-$rr record gives"
+    [ "$sx" != r1 ] || [ "${r[26]}" = "$ws" ] || bad "log.tsv row $s $t: candidate_r1_sha256 is not the submitted round-1 candidate"
+  done
+  [ -n "$fr" ] || [ ! -e "$RUN/cands/$s-final/$t" ] || bad "candidate $s-final $t exists without a final round"
+  [ "${r[29]}" = "$(sed -n 's/^retrieved=//p' "$mf")" ] && [ "${r[30]}" = "$(sed -n 's/^suffix_bytes=//p' "$mf")" ] && [ "${r[31]}" = "$(sed -n 's/^selected=//p' "$mf")" ] || bad "log.tsv row $s $t: retrieved / suffix_bytes / selected differ from the manifest"
 done < "$W/rows"
 # protocol (GEN-1 review): every attempt-1 request got a reply, and every attempt-1 reply reports mode=greedy
 awk -F'\t' '$14 == 1 && ($10 == "REQUEST FAILED" || $11 == "REQUEST FAILED") { print "attempt-1 " $1 " " $2 ": no reply (transport): no_candidate by transport" }
@@ -183,6 +217,8 @@ for s in "${SETS[@]}"; do
   vf="$H/sets/$s/verdicts.txt"
   [ -f "$vf" ] && [ -f "$H/sets/$s/replay/verdicts.txt" ] && cmp -s "$vf" "$H/sets/$s/replay/verdicts.txt" || bad "set $s: verdicts missing or replay differs"
   [ -f "$vf" ] || continue
+  [ "${s#?-}" != 1 ] || [ "$(cut -d' ' -f1 "$vf" | LC_ALL=C sort | uniq -d | grep -c . || true)" = 0 ] ||
+    die "set $s grades a task more than once (a duplicated task x condition cell): refused, no receipt"
   [ "$(cut -d' ' -f1 "$vf" | LC_ALL=C sort)" = "$(printf '%s\n' "${IDS[@]}")" ] || bad "set $s does not hold every task exactly once"
   while read -r t v why rs rest; do
     [ -z "${rest:-}" ] && { [ "$v" = ACCEPT ] || [ "$v" = REJECT ]; } || { bad "set $s task $t: verdict line"; continue; }
@@ -200,14 +236,44 @@ for c in A B C D; do
 done
 
 # outcome class per task x condition, attempt 1 round 1 (GEN-1 review): ACCEPT, REJECT:<reason>, no_candidate
-# (the harness's no_candidate), MISSING (no harness verdict); a MISSING cell makes the run INVALID
+# (the harness's no_candidate: no usable reply), MISSING (no harness verdict): any MISSING cell = refusal, no receipt
 { printf 'task\tA\tB\tC\tD\n'
   for t in "${IDS[@]}"; do printf '%s' "$t"
     for c in a b c d; do v="${V[$c-1:$t]:-}" w="${R[$c-1:$t]:-}"
       if [ -z "$v" ]; then o=MISSING; elif [ "$v" = ACCEPT ]; then o=ACCEPT; elif [ "$w" = no_candidate ]; then o=no_candidate; else o="REJECT:$w"; fi
-      printf '\t%s' "$o"; [ "$o" != MISSING ] || bad "outcome $c-1 $t: MISSING"
+      printf '\t%s' "$o"; [ "$o" != MISSING ] || echo "$c-1 $t" >> "$W/missing"
     done; printf '\n'
   done; } > "$W/outcomes.tsv"
+[ ! -s "$W/missing" ] || die "MISSING outcome (no grading row) for $(head -n 3 "$W/missing" | tr '\n' ' ')($(cnt "$W/missing") cells): refused, no receipt"
+# attempt-1 no_candidate per condition (GEN_PROTOCOL_V1 section 5 step 9): any count above 0 = INVALID
+declare -A NC
+for i in 2 3 4 5; do c="$(printf xABCD | cut -c"$i")"
+  NC[$c]="$(tail -n +2 "$W/outcomes.tsv" | cut -f"$i" | grep -cx no_candidate || true)"
+  [ "${NC[$c]}" = 0 ] || bad "attempt-1 no_candidate in condition $c: ${NC[$c]} (must be 0)"
+done
+# length-matched ablation (dev only, secondary): never feeds the verdict or validity. Per task matched iff
+# |length_gap| <= max(256 B, 15% of D's realised bytes) (genstat lenmatch); matched tasks only; under 50%
+# matched = UNAVAILABLE (genstat lenset)
+LM=""
+if [ "$(mk control)" = length-matched ]; then
+  m=0 kc=0 kd=0 lmw=""
+  for t in "${IDS[@]}"; do
+    fc="$RUN/manifests/${MAN[C:$t]:-none}" fd="$RUN/manifests/${MAN[D:$t]:-none}"
+    tb="$(sed -n 's/^target_bytes=//p' "$fc" 2> /dev/null)" sb="$(sed -n 's/^suffix_bytes=//p' "$fc" 2> /dev/null)"
+    db="$(sed -n 's/^suffix_bytes=//p' "$fd" 2> /dev/null)" lg="$(sed -n 's/^length_gap=//p' "$fc" 2> /dev/null)"
+    if [ "$tb" = "$db" ] && l="$("$GS" lenmatch "$tb" "$sb" 2> /dev/null)" && [ "${l%% *}" = "$lg" ]; then
+      read -r lgg ltl lcl <<< "$l"; LM="${LM}lenmatch.task.$t=target $tb suffix $sb gap $lgg tol $ltl $lcl"$'\n'
+      if [ "${l##* }" = matched ]; then m=$((m + 1))
+        [ "${V[c-1:$t]:-}" = ACCEPT ] && kc=$((kc + 1)); [ "${V[d-1:$t]:-}" = ACCEPT ] && kd=$((kd + 1)); fi
+    else [ -n "$lmw" ] || lmw="task $t: C target_bytes [$tb] is not the D suffix_bytes [$db], or length_gap [$lg] does not follow"
+      LM="${LM}lenmatch.task.$t=UNUSABLE"$'\n'; fi
+  done
+  st="$("$GS" lenset "$N" "$m")"; [ -z "$lmw" ] || st=UNAVAILABLE
+  LM="${LM}lenmatch.matched=$m/$N"$'\n'"lenmatch.status=$st"$'\n'
+  [ -z "$lmw" ] || LM="${LM}lenmatch.unusable=$lmw"$'\n'
+  if [ "$st" = AVAILABLE ]; then LM="${LM}lenmatch.C.success_a1_matched=$kc/$m"$'\n'"lenmatch.D.success_a1_matched=$kd/$m"$'\n'; fi
+  LM="${LM}lenmatch.caveat=dev-only secondary ablation on the matched subset of dev tasks; never decisive, never affects validity"
+fi
 
 # ---- aggregate -----------------------------------------------------------------------------------------------
 NB="$(cnt "$W/bad")"
@@ -236,7 +302,8 @@ if [ "$NB" -gt 0 ]; then VERDICT=INVALID; else VERDICT="$(gv decision)"; fi
   echo "pin.corpus_manifest_sha256=$(mk corpus_manifest_sha256.raw),$(mk corpus_manifest_sha256.abstraction)"; echo "pin.retrieval_mode=$(mk retrieval_mode)"; echo "pin.k=$(mk k)"; echo "pin.cap_bytes=$(mk cap_bytes)"
   echo "pin.manifests_sha256=$(mk manifests_sha256)"
   printf '%s\n' rule.primary=attempt1_round1_functional rule.controls=A,B,C rule.delta=0.100000 rule.alpha=0.050000 rule.fail_control=C rule.ci=newcombe10 rule.sanity_ab_max=2
-  echo "gate.greedy=$GGATE"; echo "gate.g0=$G0"; echo "pass3=$P3"; echo "tasks=$N"
+  echo "gate.greedy=$GGATE"; echo "gate.g0=$G0"; echo "pass3=$P3"; echo "pass3.label=pass@3 (1 greedy + 2 sampled)"; echo "tasks=$N"
+  for c in A B C D; do echo "no_candidate_a1.$c=${NC[$c]}"; done
   if [ "$COMPLETE" = 1 ]; then
     for c in A B C D; do
       l="$(tr A-Z a-z <<< "$c")" k=0 kf=0 k3=0 ck=0
@@ -253,6 +320,8 @@ if [ "$NB" -gt 0 ]; then VERDICT=INVALID; else VERDICT="$(gv decision)"; fi
       echo "arm.$c.prompt_tokens_a1=$pt"; echo "arm.$c.completion_tokens_a1=$ct"
       echo "arm.$c.completion_tokens_per_correct_a1=$(fx "$ct" "$k")"; echo "arm.$c.tokens_per_correct_a1=$(fx "$((pt + ct))" "$k")"
       echo "arm.$c.suffix_bytes_mean=$(fx "$(col "$l-1" 31)" "$N")"
+      if [ "$c" = C ] || [ "$c" = D ]; then echo "arm.$c.selected_mean=$(fx "$(col "$l-1" 32)" "$N")"
+        echo "arm.$c.tasks_selected_below_k=$(awk -F'\t' -v s="$l-1" -v k="$(mk k)" '$1 == s && $32 + 0 < k + 0' "$W/rows" | grep -c . || true)"; fi
     done
     grep '^pair\.\|^sanity\.' "$W/paired"
     for t in "${IDS[@]}"; do echo "paired.$t=$(grep -P "^\Q$t\E\t" "$W/matrix.tsv" | cut -f2- | tr -d '\t')"; done
@@ -264,6 +333,7 @@ if [ "$NB" -gt 0 ]; then VERDICT=INVALID; else VERDICT="$(gv decision)"; fi
         LC_ALL=C sort | uniq -c | awk -v c="$c" '{ print "check." c "." $2 "=" $1 }'
     done
   fi
+  [ -z "$LM" ] || printf '%s\n' "$LM"
 } > "$W/aggregate.txt"
 grep -qP '\t' "$W/aggregate.txt" && die "internal: a tab in aggregate.txt"
 {

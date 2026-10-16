@@ -52,16 +52,17 @@ command -v jq > /dev/null || die "jq is required"
 command -v curl > /dev/null || die "curl is required"
 . "$E445/reader.sh"
 
-TASKS="" OUT="" CONTROL=none
+TASKS="" OUT="" CONTROL=none OPENF=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --tasks) TASKS="$2"; shift 2 ;;
     --out) OUT="$2"; shift 2 ;;
     --control) CONTROL="$2"; shift 2 ;;
-    *) die "unknown argument $1 (usage: run.sh --tasks DIR --out DIR [--control cross-family])" ;;
+    --open) OPENF="$2"; shift 2 ;;
+    *) die "unknown argument $1 (usage: run.sh --tasks DIR --out DIR --open OPEN [--control cross-family|length-matched])" ;;
   esac
 done
-[ -n "$TASKS" ] && [ -n "$OUT" ] || die "usage: run.sh --tasks DIR --out DIR [--control cross-family]"
+[ -n "$TASKS" ] && [ -n "$OUT" ] || die "usage: run.sh --tasks DIR --out DIR --open OPEN [--control cross-family|length-matched]"
 
 # ---- 1. checks ------------------------------------------------------------------------------------------
 if [ "$TEST" != 1 ]; then
@@ -145,7 +146,14 @@ case "$CONTROL" in none) ;; cross-family)
     EXT[$t]="$("$FS" token "$shp")" || die "famsig token $shp failed"
     [[ "${EXT[$t]}" =~ ^gs1-[0-9a-f]{16}$ ]] || die "famsig token of $t is '${EXT[$t]}', not gs1-<16 hex>"
   done ;;
-  *) die "--control $CONTROL: only cross-family" ;; esac
+  length-matched) # GEN_PROTOCOL_V1 section 10: dev-only diagnostic; C padded to D's realised suffix_bytes
+  DM="$(rp "$(pv dev_meta)")"
+  [ -f "$DM" ] || die "length-matched control needs the dev META ($DM)"
+  for t in "${IDS[@]}"; do
+    [[ "$t" == dev* ]] && awk -v t="$t" '$1 == t && $2 == "dev" && NF == 9 { f = 1 } END { exit !f }' "$DM" ||
+      die "length-matched control runs on DEV tasks only: $t is not a dev task of $DM"
+  done ;;
+  *) die "--control $CONTROL: only cross-family or length-matched" ;; esac
 # protocol.json (omega.gen.protocol.v1): every setting the driver uses must equal the preregistered one
 PJ="$(rp "$(pv protocol_json)")" PJS="$(kv protocol_json_sha256)"
 [ -f "$PJ" ] || die "no protocol.json $PJ"
@@ -180,7 +188,24 @@ if [ "$TEST" != 1 ]; then
     [[ "$(pj "$k")" =~ ^[0-9a-f]{64}$ ]] || die "protocol.json $k is $(pj "$k"): the corpus, record sets and held-out pack are not frozen yet"
   done
   pjck .record_sets.raw_manifest_sha256 "${CMH[raw]}"; pjck .record_sets.abstraction_manifest_sha256 "${CMH[abstraction]}"
+  pjck .record_sets.raw_manifest "$(pv corpus_manifest_raw)"; pjck .record_sets.abstraction_manifest "$(pv corpus_manifest_abstraction)"
 fi
+# GEN_PROTOCOL_V1 sections 8 and 14: gencheck run-ready on protocol.json, and gencheck open on protocol.json at the
+# OPEN commit (the seal-open receipt evidence/GEN/OPEN), before any request
+GC="$(rp "$(pv gencheck)")"
+[ -x "$GC" ] || die "gencheck $GC is not executable (make gen-protocol-tools builds build/gen_protocol/gencheck)"
+[ -n "$OPENF" ] && [ -f "$OPENF" ] || die "--open <OPEN> is required: the custodian's seal-open receipt (evidence/GEN/OPEN)"
+OPENF="$(realpath -e "$OPENF")"
+[ "$(grep -c '' "$OPENF")" = 5 ] && [ "$(sed -n 1p "$OPENF")" = "gen-open 1" ] && sed -n 2p "$OPENF" | grep -qE '^omega_commit [0-9a-f]{40}$' &&
+  [ "$(sed -n 3p "$OPENF")" = "protocol_sha256 $(sha "$PJ")" ] || die "OPEN $OPENF is not a seal-open receipt for this protocol.json (5 lines: gen-open 1, omega_commit, protocol_sha256 = $(sha "$PJ"), ...)"
+if [ "$TEST" != 1 ]; then
+  OC="$(sed -n 's/^omega_commit //p' "$OPENF")"
+  [ "$(git -C "$ROOT" show "$OC:$(pv protocol_json)" 2> /dev/null | sha256sum | cut -d' ' -f1)" = "$(sha "$PJ")" ] ||
+    die "protocol.json at the OPEN commit $OC is not $PJ"
+fi
+gco="$("$GC" run-ready "$PJ" "$ROOT" 2>&1)" || die "gencheck run-ready refused $PJ: $(tail -n 1 <<< "$gco")"
+gco="$("$GC" open "$PJ" "$ROOT" "$OPENF" 2>&1)" || die "gencheck open refused $PJ with $OPENF: $(tail -n 1 <<< "$gco")"
+OPENSHA="$(sha "$OPENF")"
 [[ "$K" =~ ^[1-9][0-9]?$ ]] && [[ "$CAP" =~ ^[1-9][0-9]*$ ]] || die "k / cap_bytes"
 case "$RMODE" in normal|irrelevant|empty) ;; *) die "retrieval_mode $RMODE (length-matched runs through a separate ablation revision)" ;; esac
 GATE_SH="$E445/sampling-gate.sh" GSHA="$(ekv g0_gate_sha256)"
@@ -210,16 +235,25 @@ HA="$(blob "$PFX_A")" HB="$(blob "$PFX_B")" HE="$(blob "")"
 PSHA="$(sha "$PROV")"
 declare -A MAN PFXH SUFH
 : > "$S/manifests.tsv"
+mv_() { awk -F= -v k="$1" '$1 == k { print substr($0, length(k) + 2); exit }' "$S/manifests/$2"; }
 for t in "${IDS[@]}"; do
   req="$TASKS/tasks/cases/$t/requirement" pr="$TASKS/tasks/cases/$t/prompt"
   user="$(user_msg "$req" "$pr")"; hu="$(blob "$user")"
-  for cd in "${CONDS[@]}"; do
-    c="$(tr A-Z a-z <<< "$cd")" ph="$HB" suffix="" sh="$HE" pc=- pcs=- ps=- cms=- kind=- md=- kk=- cap=- ex=- qs=- rs=- ret=-
+  MCONDS=("${CONDS[@]}"); [ "$CONTROL" = length-matched ] && MCONDS=(A B D C) # C's target is D's realised bytes
+  for cd in "${MCONDS[@]}"; do
+    c="$(tr A-Z a-z <<< "$cd")" ph="$HB" suffix="" sh="$HE" pc=- pcs=- ps=- cms=- kind=- md=- kk=- cap=- ex=- qs=- rs=- ret=- tb=- sel=- lg=-
     [ "$cd" = A ] && ph="$HA"
     if [ "$cd" = C ] || [ "$cd" = D ]; then
       kind=raw; [ "$cd" = D ] && kind=abstraction
       rd="$S/retrieval/$c/$t"; mkdir -p "$rd"
-      args=(query --corpus "${CMF[$kind]}" --manifest-sha256 "${CMH[$kind]}" --recheck "$RCK" --recheck-sha256 "$RCKH" --kind "$kind" --k "$K" --cap-bytes "$CAP" --requirement "$req" --prompt "$pr" --out "$rd/out" --mode "$RMODE")
+      md="$RMODE"
+      if [ "$CONTROL" = length-matched ] && [ "$cd" = C ]; then
+        tb="$(mv_ suffix_bytes "${MAN[D:$t]}")"
+        # a target of 0 (D selected nothing) cannot be passed (--target-bytes 1..cap): C runs normal, gap = its bytes
+        [ "$tb" -ge 1 ] && md=length-matched
+      fi
+      args=(query --corpus "${CMF[$kind]}" --manifest-sha256 "${CMH[$kind]}" --recheck "$RCK" --recheck-sha256 "$RCKH" --kind "$kind" --k "$K" --cap-bytes "$CAP" --requirement "$req" --prompt "$pr" --out "$rd/out" --mode "$md")
+      [ "$md" = length-matched ] && args+=(--target-bytes "$tb")
       [ "$CONTROL" = cross-family ] && args+=(--exclude-family "${EXT[$t]}")
       printf '%s\n' "${args[@]}" | awk -v a="${CMF[$kind]}" -v b="$req" -v c="$pr" -v d="$rd/out" -v e="$RCK" \
         '{ if ($0 == a) $0 = "<corpus_manifest>"; else if ($0 == b) $0 = "<requirement>"; else if ($0 == c) $0 = "<prompt>"; else if ($0 == d) $0 = "<out>"; else if ($0 == e) $0 = "<recheck>"; print }' > "$rd/argv"
@@ -228,21 +262,27 @@ for t in "${IDS[@]}"; do
       rkv() { sed -n "s/^$1=//p" "$rd/out/receipt.txt"; }
       ! grep -q "^provider=" "$rd/out/receipt.txt" || [ "$(rkv provider)" = genret ] ||
         die "provider receipt for $cd $t says provider=$(rkv provider | head -n 1) (only genret; cortex-interop receipts are refused); no generation sent"
-      [ "$(rkv contract)" = "$PCN" ] && [ "$(rkv mode)" = "$RMODE" ] && [ "$(rkv kind)" = "$kind" ] && [ "$(rkv k)" = "$K" ] &&
+      [ "$(grep -c '^contract=' "$rd/out/receipt.txt")" = 1 ] && [ "$(rkv contract)" = genret-cli-v3 ] && [ "$PCN" = genret-cli-v3 ] ||
+        die "provider receipt for $cd $t has contract=$(rkv contract | head -n 1), not genret-cli-v3 (cortex-interop-v1 and every other contract are refused); no generation sent"
+      [ "$(rkv recheck_source_sha256)" != unverified ] ||
+        die "provider receipt for $cd $t has recheck_source_sha256=unverified (recheck_source unverified vs pinned $RCSH); no generation sent"
+      [ "$(rkv contract)" = "$PCN" ] && [ "$(rkv mode)" = "$md" ] && [ "$(rkv target_bytes)" = "$([ "$md" = length-matched ] && echo "$tb" || echo -)" ] && [ "$(rkv kind)" = "$kind" ] && [ "$(rkv k)" = "$K" ] &&
         [ "$(rkv cap_bytes)" = "$CAP" ] && [ "$(rkv manifest_sha256)" = "${CMH[$kind]}" ] && [ "$(rkv recheck_sha256)" = "$RCKH" ] && [ "$(rkv recheck_source_sha256)" = "$RCSH" ] &&
         [ "$(rkv suffix_sha256)" = "$(sha "$rd/out/suffix.txt")" ] && [ "$(rkv exclude_family)" = "$([ "$CONTROL" = cross-family ] && echo "${EXT[$t]}" || echo -)" ] ||
         die "provider receipt for $cd $t does not match the call (contract, mode, kind, k, cap, manifest, recheck, recheck_source $(rkv recheck_source_sha256) vs pinned $RCSH, family, suffix); no generation sent"
       suffix="$(cat "$rd/out/suffix.txt"; printf x)"; suffix="${suffix%x}"
       sh="$(blob "$suffix")"
-      pc="$PCN" pcs="$PCS" ps="$PSHA" cms="${CMH[$kind]}" md="$RMODE" kk="$K" cap="$CAP" ex="$([ "$CONTROL" = cross-family ] && echo "${EXT[$t]}" || echo -)"
+      pc="$PCN" pcs="$PCS" ps="$PSHA" cms="${CMH[$kind]}" kk="$K" cap="$CAP" ex="$([ "$CONTROL" = cross-family ] && echo "${EXT[$t]}" || echo -)"
       qs="$(sed -n 's/^query_sha256=//p' "$rd/out/receipt.txt")" rs="$(sha "$rd/out/SHA256SUMS")"
       ret="$(tail -n +2 "$rd/out/selected.tsv" | awk -F'\t' '{ printf "%s%s:%s:%s:%s", s, $1, $2, $3, $6; s = "," }')"; [ -n "$ret" ] || ret=-
+      sel="$(rkv selected)"; [[ "$sel" =~ ^[0-9]+$ ]] && [ "$sel" = "$(($(grep -c "" "$rd/out/selected.tsv") - 1))" ] || die "provider receipt for $cd $t: selected '$sel' is not its selected.tsv"
+      if [ "$md" = length-matched ]; then lg="$(rkv length_gap)"; elif [ "$tb" = 0 ]; then lg="$(wc -c < "$rd/out/suffix.txt")"; fi
     fi
     sys="$(cat "$S/blobs/$ph")$suffix"
     m="$(printf '%s\n' "schema=omega.gen.prompt_manifest.v1" "condition=$cd" "task=$t" "prefix_sha256=$ph" "suffix_sha256=$sh" \
       "suffix_bytes=$(printf '%s' "$suffix" | wc -c)" "system_sha256=$(shas "$sys")" "user_sha256=$hu" "provider_contract=$pc" \
       "provider_contract_sha256=$pcs" "provider_sha256=$ps" "corpus_manifest_sha256=$cms" "kind=$kind" "mode=$md" "k=$kk" "cap_bytes=$cap" \
-      "target_bytes=-" "exclude_family=$ex" "query_sha256=$qs" "retrieval_sha256=$rs" "retrieved=$ret")"
+      "target_bytes=$tb" "exclude_family=$ex" "query_sha256=$qs" "retrieval_sha256=$rs" "retrieved=$ret" "selected=$sel" "length_gap=$lg")"
     mh="$(printf '%s\n' "$m" | sha256sum | cut -d' ' -f1)"
     printf '%s\n' "$m" > "$S/manifests/$mh"
     printf '%s\t%s\t%s\n' "$cd" "$t" "$mh" >> "$S/manifests.tsv"
@@ -250,7 +290,6 @@ for t in "${IDS[@]}"; do
   done
 done
 LC_ALL=C sort -o "$S/manifests.tsv" "$S/manifests.tsv"
-mv_() { awk -F= -v k="$1" '$1 == k { print substr($0, length(k) + 2); exit }' "$S/manifests/$2"; }
 
 # ---- 3. meta.txt and resume -------------------------------------------------------------------------------
 srcsha="$( (cd "$ROOT" && find tools/gen/runner tools/gen/reducer -type f ! -path '*/testdata/*' -print0 | LC_ALL=C sort -z | xargs -0 sha256sum
@@ -260,7 +299,7 @@ pubsha() { (cd "$1" && find tasks -type f -print0 | LC_ALL=C sort -z | xargs -0 
 devsha="$(for t in "${DEVIDS[@]}"; do sha256sum "$DEVD/$t/requirement" "$DEVD/$t/prompt" | sed "s|$DEVD/||"; done | sha256sum | cut -d' ' -f1)"
 {
   echo "schema=omega.gen.run_meta.v1"; echo "revision=$(kv revision)"; echo "test_mode=$([ "$TEST" = 1 ] && echo yes || echo no)"
-  echo "params_sha256=$(sha "$PARAMS")"; echo "protocol_sha256=$PROTOSHA"; echo "protocol_json_sha256=$(sha "$PJ")"; echo "exp445_params_sha256=$(sha "$EP")"
+  echo "params_sha256=$(sha "$PARAMS")"; echo "protocol_sha256=$PROTOSHA"; echo "protocol_json_sha256=$(sha "$PJ")"; echo "open_sha256=$OPENSHA"; echo "gencheck_sha256=$(sha "$GC")"; echo "exp445_params_sha256=$(sha "$EP")"
   echo "config=$CONFIG"; echo "model=$MODEL"; echo "base_url=$BASE"; echo "request_extra=$EXTRA"; echo "server=$SERVER"
   echo "weights_list_sha256=$(sha "$WLIST")"; echo "mask=off"; echo "conditions=$(kv conditions)"; echo "attempts=$ATT"
   echo "max_tokens=$MAXT"; echo "greedy_temperature=$GTEMP"; echo "greedy_top_p=$GTOPP"; echo "temperature=$TEMP"; echo "top_p=$TOPP"
@@ -280,7 +319,7 @@ if [ -f "$OUT/meta.txt" ]; then
   echo "gen run.sh: resuming $OUT (identity unchanged)" >&2
 else
   [ -z "$(ls -A "$OUT" | grep -vxE 'weights\.check|server\.json|\.lock' || true)" ] || die "$OUT holds files but no meta.txt: refused"
-  cp -R "$S/blobs" "$S/manifests" "$S/retrieval" "$S/manifests.tsv" "$OUT/"; cp "$PJ" "$OUT/protocol.json"
+  cp -R "$S/blobs" "$S/manifests" "$S/retrieval" "$S/manifests.tsv" "$OUT/"; cp "$PJ" "$OUT/protocol.json"; cp "$OPENF" "$OUT/OPEN"
   mv "$S/meta.txt" "$OUT/meta.txt"
 fi
 
@@ -315,7 +354,7 @@ fi
 # ---- 5-7. attempts -----------------------------------------------------------------------------------------
 HDR="$(printf '%s\t' set task rounds prompt_tokens completion_tokens_r1 completion_tokens_r2 finish_r1 finish_r2 wall_s check_r1 check_r2 candidate_sha256 \
   condition attempt seed temperature top_p max_tokens prompt_tokens_r1 prompt_tokens_r2 tries_r1 tries_r2 mode_r1 mode_r2 seed_reported_r1 wall_s_r1 \
-  candidate_r1_sha256 manifest_sha256 retrieval_sha256 retrieved suffix_bytes)"; HDR="${HDR%$'\t'}"
+  candidate_r1_sha256 manifest_sha256 retrieval_sha256 retrieved suffix_bytes selected)"; HDR="${HDR%$'\t'}"
 [ -f "$OUT/log.tsv" ] || printf '%s\n' "$HDR" > "$OUT/log.tsv"
 [ "$(head -n 1 "$OUT/log.tsv")" = "$HDR" ] || die "log.tsv header is not run row v1"
 declare -A TI; i=0; for t in "${IDS[@]}"; do i=$((i + 1)); TI[$t]=$i; done
@@ -347,6 +386,11 @@ g0_gate() { # sets G0V to PASS or FAIL; writes gate/g0 once (EXP445 G0 layout an
   mv "$w" "$g"
 }
 
+# sub_of <gen dir> <round>: the file submitted to the harness for that round (protocol section 5 step 9): the
+# reader's candidate when it made one, else, when the round got a usable reply, the reply content itself
+# (empty, a refusal or not a program: it is the candidate, graded, and fails); nothing only when the round
+# got no usable reply (transport failure = no_candidate)
+sub_of() { if [ -f "$1/r$2.candidate.oscir" ]; then echo "$1/r$2.candidate.oscir"; elif round_ok "$1/r$2" && [ -f "$1/r$2.content" ]; then echo "$1/r$2.content"; fi; }
 # protocol (GEN-1 review): every attempt-1 request gets a reply (a transport failure there is no_candidate by
 # transport) and every attempt-1 reply reports mode=greedy; otherwise the run is INVALID and stops sending
 a1bad() { awk -F'\t' 'NR > 1 && $14 == 1 && ($10 == "REQUEST FAILED" || $11 == "REQUEST FAILED" || $23 != "greedy" || ($3 == 2 && $24 != "greedy")) { print $1 " " $2 ": check " $10 " / " $11 ", mode " $23 " / " $24; exit }' "$OUT/log.tsv"; }
@@ -386,13 +430,14 @@ for at in $(seq 1 "$ATT"); do
         sr="$(jq -r '.usage.aien_sampling.seed | if type == "number" and . == floor then tostring else "-" end' "$d/r1.resp.json" 2> /dev/null || echo -)"; fi
       if round_ok "$d/r2"; then pt2="$(usage_of "$d/r2.resp.json" | cut -f1)"; m2="$(cmode "$d/r2.resp.json")"; fi
       w1="$(if [ -f "$d/r1.transport" ]; then sed -n 's/.* time_s=\([^ ]*\).*/\1/p' "$d/r1.transport"; fi | awk '{ s += $1 } END { printf "%.6f", s }')"
-      [ -f "$d/r1.candidate.oscir" ] && c1="$(sha "$d/r1.candidate.oscir")"
+      s1="$(sub_of "$d" 1)"; [ -z "$s1" ] || c1="$(sha "$s1")"
       mh="${MAN[$cd:$task]}"
       ROW="$ROW$(printf '\t%s' "$cd" "$at" "$seed" "$tt" "$tp" "$MAXT" "$pt1" "$pt2" "$tr1" "$tr2" "$m1" "$m2" "$sr" "$w1" "$c1" "$mh" \
-        "$(mv_ retrieval_sha256 "$mh")" "$(mv_ retrieved "$mh")" "$(mv_ suffix_bytes "$mh")")"
+        "$(mv_ retrieval_sha256 "$mh")" "$(mv_ retrieved "$mh")" "$(mv_ suffix_bytes "$mh")" "$(mv_ selected "$mh")")"
       rm -rf "$OUT/cands/$set_id/$task" "$OUT/cands/$set_id-final/$task"
-      if [ -f "$d/r1.candidate.oscir" ]; then mkdir -p "$OUT/cands/$set_id/$task"; cp "$d/r1.candidate.oscir" "$OUT/cands/$set_id/$task/candidate.oscir"; fi
-      if [ -n "$FINAL" ] && [ -f "$d/r$FINAL.candidate.oscir" ]; then mkdir -p "$OUT/cands/$set_id-final/$task"; cp "$d/r$FINAL.candidate.oscir" "$OUT/cands/$set_id-final/$task/candidate.oscir"; fi
+      if [ -n "$s1" ]; then mkdir -p "$OUT/cands/$set_id/$task"; cp "$s1" "$OUT/cands/$set_id/$task/candidate.oscir"; fi
+      sf=""; [ -z "$FINAL" ] || sf="$(sub_of "$d" "$FINAL")"
+      if [ -n "$sf" ]; then mkdir -p "$OUT/cands/$set_id-final/$task"; cp "$sf" "$OUT/cands/$set_id-final/$task/candidate.oscir"; fi
       mkdir -p "$OUT/cands/$set_id" "$OUT/cands/$set_id-final"
       have="$(awk -F'\t' -v s="$set_id" -v t="$task" '$1 == s && $2 == t' "$OUT/log.tsv")"
       if [ -z "$have" ]; then printf '%s\n' "$ROW" >> "$OUT/log.tsv"

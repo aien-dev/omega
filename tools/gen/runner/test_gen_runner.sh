@@ -135,11 +135,42 @@ gp() { # gp <out file> [sed expressions...]
       -e "s|^corpus_manifest_raw_sha256=.*|corpus_manifest_raw_sha256=$(cat "$CR/SET.sha256")|" -e "s|^recheck=.*|recheck=$T/recheck|" -e "s|^recheck_sha256_file=.*|recheck_sha256_file=$T/recheck.sha256|" -e "s|^recheck_source_sha256=.*|recheck_source_sha256=$(printf %064d 0)|" \
       -e "s|^corpus_manifest_abstraction=.*|corpus_manifest_abstraction=$CA/MANIFEST|" -e "s|^corpus_manifest_abstraction_sha256=.*|corpus_manifest_abstraction_sha256=$(cat "$CA/SET.sha256")|" \
       -e "s|^protocol_json=.*|protocol_json=$PJT|" -e "s|^provider_contract_sha256=.*|provider_contract_sha256=$(printf '%064d' 0)|" \
-      -e "s|^famsig=.*|famsig=$T/famsig|" -e "s|^dev_meta=.*|dev_meta=$T/devmeta|" -e "s|^dev_tasks=.*|dev_tasks=$T/src|" \
+      -e "s|^famsig=.*|famsig=$T/famsig|" -e "s|^gencheck=.*|gencheck=$T/gencheck|" -e "s|^dev_meta=.*|dev_meta=$T/devmeta|" -e "s|^dev_tasks=.*|dev_tasks=$T/src|" \
       -e 's/^greedy_gate_tasks=.*/greedy_gate_tasks=3/' -e 's/^timeout_s=.*/timeout_s=5/' -e 's/^revision=.*/revision=gen-v1-test/' "$@" "$HERE/PARAMS" > "$o"
 }
 gp "$T/P"
 ! grep -v "^#" "$T/P" | grep -q PLACEHOLDER && ok "test PARAMS: every placeholder replaced by a test path" || bad "test PARAMS still holds placeholders"
+# gencheck stand-in (Agent A's gencheck is on gen/protocol, not merged): run-ready / open pass unless told to fail,
+# and open checks that line 3 of OPEN names this protocol.json; run-open = run.sh with a seal-open receipt for the
+# protocol.json that GEN_PARAMS names (5 lines, GEN_PROTOCOL_V1 section 8)
+cat > "$T/gencheck" <<EOF2
+#!/usr/bin/env bash
+# test stand-in for gencheck run-ready <protocol.json> <root> | open <protocol.json> <root> <OPEN>
+case "\$1" in
+  run-ready) [ ! -e "$T/gc.fail.run-ready" ] || { echo "not run-ready: record_sets.raw_manifest_sha256 is null"; exit 1; }; echo "ok run-ready" ;;
+  open) [ ! -e "$T/gc.fail.open" ] || { echo "OPEN: tasks_sha256 differs from protocol.json"; exit 1; }
+        [ "\$(sed -n 3p "\$4")" = "protocol_sha256 \$(sha256sum < "\$2" | cut -c1-64)" ] || { echo "OPEN: protocol_sha256 differs"; exit 1; }; echo "ok open" ;;
+  *) echo "usage" >&2; exit 2 ;;
+esac
+EOF2
+cat > "$T/run-open" <<EOF2
+#!/usr/bin/env bash
+# run.sh --open <a seal-open receipt for GEN_PARAMS's protocol.json> ...
+p="\$(sed -n 's/^protocol_json=//p' "\${GEN_PARAMS:-$HERE/PARAMS}")"
+if [ -f "\$p" ]; then o="$T/\$(basename "\$p").OPEN"
+  printf 'gen-open 1\nomega_commit %040d\nprotocol_sha256 %s\ntasks_sha256 %064d\nheldout_pub_sha256 %064d\n' 0 "\$(sha256sum < "\$p" | cut -c1-64)" 0 0 > "\$o"
+  exec "$HERE/run.sh" --open "\$o" "\$@"
+fi
+exec "$HERE/run.sh" "\$@"
+EOF2
+chmod +x "$T/gencheck" "$T/run-open"; RUN="$T/run-open"
+cat > "$T/red-open" <<EOF2
+#!/usr/bin/env bash
+# reduce.sh --open <the run's own OPEN copy> --gencheck <the stand-in> ...
+r=""; a=("\$@"); for i in "\${!a[@]}"; do [ "\${a[\$i]}" != --run ] || r="\${a[\$((i + 1))]}"; done
+exec "$RED" --open "\$r/OPEN" --gencheck "$T/gencheck" "\$@"
+EOF2
+chmod +x "$T/red-open"; REDX="$RED"; RED="$T/red-open"
 export GEN_PARAMS="$T/P"
 cw() { EXP445_PARAMS="$T/E445" "$ROOT/tools/exp445/check_weights.sh" A "$1" > /dev/null 2>&1; }
 greq() { cat "$A/requests.log" 2> /dev/null | wc -l; }
@@ -171,8 +202,8 @@ done; done
 [ "$(lg "$R" b-2 devgen03 15)" = 478003 ] && [ "$(lg "$R" b-1 devgen03 15)" = 477003 ] && [ "$(lg "$R" b-1 devgen03 16)" = 0 ] && [ "$(lg "$R" b-2 devgen03 16)" = 0.7 ] &&
   [ "$(lg "$R" b-2 devgen03 23)" = sampled ] && [ "$(lg "$R" b-1 devgen03 23)" = greedy ] &&
   ok "seeds 476000 + 1000 x attempt + task index; attempt 1 greedy (temperature 0), attempts 2-3 sampled at 0.7" || bad "seed / sampling rule in run rows"
-[ "$(lg "$R" b-1 devgen02 11)" = OK ] && [ "$(lg "$R" b-1 devgen02 27)" = - ] && [ -f "$R/cands/b-1-final/devgen02/candidate.oscir" ] && [ ! -e "$R/cands/b-1/devgen02" ] &&
-  ok "repair round: refused round-1 answer has no primary candidate; the repaired one goes to b-1-final only" || bad "repair round sets"
+[ "$(lg "$R" b-1 devgen02 11)" = OK ] && [ ! -e "$R/gen/b-1/devgen02/r1.candidate.oscir" ] && [ "$(lg "$R" b-1 devgen02 27)" = "$(sha "$R/gen/b-1/devgen02/r1.content")" ] && cmp -s "$R/cands/b-1/devgen02/candidate.oscir" "$R/gen/b-1/devgen02/r1.content" && [ -f "$R/cands/b-1-final/devgen02/candidate.oscir" ] &&
+  ok "repair round: a round-1 reply with no program is itself the b-1 candidate (graded, fails); the repaired one goes to b-1-final" || bad "repair round sets"
 n0="$(greq)"; s0="$(sha "$R/SHA256SUMS")"
 "$RUN" --tasks "$T/pub" --out "$R" > /dev/null 2> "$T/replay.err" && [ "$(greq)" = "$n0" ] && [ "$(sha "$R/SHA256SUMS")" = "$s0" ] &&
   ok "replay: rerun on the finished run sends 0 requests and leaves SHA256SUMS identical" || bad "replay idempotence ($(greq) vs $n0 requests): $(tail -n 2 "$T/replay.err")"
@@ -301,7 +332,17 @@ for pv in cortex-interop other; do o="$T/o-pv-$pv"; cw "$o"
 done
 o="$T/o-pv-both"; cw "$o"
 refuse "Cortex adapter receipt (provider=cortex-interop, recheck_source_sha256=unverified): run fails closed" "provider=cortex-interop" env GEN_STUB_PROVIDER=cortex-interop GEN_STUB_RECHECK_SOURCE=unverified "$RUN" --tasks "$T/pub" --out "$o"
+o="$T/o-ct-cortex"; cw "$o"
+refuse "receipt contract=cortex-interop-v1 (not genret-cli-v3): run fails closed" "contract=cortex-interop-v1, not genret-cli-v3" env GEN_STUB_CONTRACT=cortex-interop-v1 "$RUN" --tasks "$T/pub" --out "$o"
+[ ! -e "$o/log.tsv" ] && [ ! -d "$o/gen" ] && ok "  (no log rows, no generation dir)" || bad "contract refusal left rows in $o"
 o="$T/o-pv-genret"; cw "$o"; GEN_STUB_PROVIDER=genret GEN_PARAMS="$T/P1" "$RUN" --tasks "$T/pub" --out "$o" > /dev/null 2> "$o.err" && ok "provider=genret receipt line: accepted (control)" || bad "provider=genret refused: $(tail -n 1 "$o.err")"
+# gencheck run-ready / open and the seal-open receipt (GEN_PROTOCOL_V1 sections 8, 14): refused before any request
+cw "$T/o-gc"; refuse "no --open receipt" "--open <OPEN> is required" "$HERE/run.sh" --tasks "$T/pub" --out "$T/o-gc"
+touch "$T/gc.fail.run-ready"; refuse "gencheck run-ready fails" "gencheck run-ready refused" "$RUN" --tasks "$T/pub" --out "$T/o-gc"; rm -f "$T/gc.fail.run-ready"
+touch "$T/gc.fail.open"; refuse "gencheck open fails" "gencheck open refused" "$RUN" --tasks "$T/pub" --out "$T/o-gc"; rm -f "$T/gc.fail.open"
+sed '3s/.*/protocol_sha256 0000000000000000000000000000000000000000000000000000000000000000/' "$T/pj1.json.OPEN" > "$T/OPEN.bad"
+refuse "OPEN for another protocol.json" "is not a seal-open receipt for this protocol.json" "$HERE/run.sh" --open "$T/OPEN.bad" --tasks "$T/pub" --out "$T/o-gc"
+[ ! -e "$T/o-gc/meta.txt" ] && ok "  (no run record written by those refusals)" || bad "gencheck refusals wrote a run record"
 # dirty tree: a private clone of the current sources, committed there, then one file changed
 G="$T/clone"; git clone -q --shared "$ROOT" "$G" 2> /dev/null && rm -rf "$G/tools/gen" && cp -R "$ROOT/tools/gen" "$G/tools/" && cp "$ROOT/mk/gen-runner.mk" "$G/mk/" &&
   git -C "$G" add -A tools/gen mk/gen-runner.mk && git -C "$G" -c user.name=test -c user.email=test@invalid commit -qm test --allow-empty
@@ -351,14 +392,58 @@ cpr; sed 's/^tasks_public_sha256=.*/tasks_public_sha256='"$(printf '%064d' 2)"'/
 mut "split (the run's public tasks are not the pinned split)" "pin tasks_public_sha256" "$T/mr" "$MH" "$T/pins.p"
 cpr; v="$MH/sets/a-1/verdicts.txt"; sed -i '1s/ REJECT / ACCEPT /' "$v"; sed -i '1s/ REJECT / ACCEPT /' "$MH/sets/a-1/replay/verdicts.txt"
 mut "verdict (a REJECT turned ACCEPT in both passes)" "set a-1 task devgen01: receipt" "$T/mr" "$MH"
-cpr; sed -i '2d' "$MH/sets/d-1/verdicts.txt" "$MH/sets/d-1/replay/verdicts.txt"
-mut "a missing cell (one verdict line removed)" "the paired matrix is incomplete" "$T/mr" "$MH"
 cpr; rm -rf "$T/mr/gen/c-1/devgen05/done"; rehash "$T/mr"
 mut "an unfinished generation (no done marker)" "has no done marker" "$T/mr" "$MH"
 cpr; sed -i 's/^GREEDY PASS$/GREEDY PASS/; s/identical=yes mode_r1=greedy/identical=yes mode_r1=greedy/' "$T/mr/gate/greedy/verdict.txt"; jq -c '.choices[0].message.content += "x"' "$T/mr/gate/greedy/devgen02/r2.resp.json" > "$T/x.json" && mv "$T/x.json" "$T/mr/gate/greedy/devgen02/r2.resp.json"; rehash "$T/mr"
 mut "greedy gate record (a reply changed, verdict kept PASS)" "greedy gate verdict PASS but task devgen02" "$T/mr" "$MH"
 cpr; echo extra > "$T/mr/blobs/extra"
 mut "an unlisted file in the run dir" "run SHA256SUMS" "$T/mr" "$MH"
+
+cpr; awk -F'\t' 'BEGIN { OFS = "\t" } $1 == "a-1" && $2 == "devgen01" { $10 = "REQUEST FAILED" } { print }' "$T/mr/log.tsv" > "$T/x.tsv" && mv "$T/x.tsv" "$T/mr/log.tsv"; rehash "$T/mr"
+mut "an attempt-1 transport failure (no_candidate by transport)" "no reply (transport)" "$T/mr" "$MH"
+# refusals (GEN_PROTOCOL_V1 section 6): no receipt, no verdict at all
+rref() { # rref <label> <expected message fragment> <reducer args...>
+  local l="$1" m="$2" o="$T/rref$((++NM))"; shift 2
+  "$@" --out "$o" > /dev/null 2> "$o.err"; local e=$?
+  if [ "$e" = 2 ] && [ ! -e "$o" ] && grep -qF -- "$m" "$o.err"; then ok "reducer refuses, no receipt: $l"
+  else bad "reducer did not refuse: $l (exit $e: $(tail -n 1 "$o.err"))"; fi
+}
+cpr; sed -i '2d' "$MH/sets/d-1/verdicts.txt" "$MH/sets/d-1/replay/verdicts.txt"
+rref "a MISSING cell (one d-1 verdict line removed)" "MISSING outcome" "$RED" --run "$T/mr" --harness "$MH" --pins "$T/pins"
+cpr; sed -i '1p' "$MH/sets/b-1/verdicts.txt" "$MH/sets/b-1/replay/verdicts.txt"
+rref "a duplicated cell (a b-1 task graded twice)" "grades a task more than once" "$RED" --run "$T/mr" --harness "$MH" --pins "$T/pins"
+cpr; sed -n '2p' "$T/mr/log.tsv" >> "$T/mr/log.tsv"; rehash "$T/mr"
+rref "a duplicated cell (two log rows for one generation)" "two rows for one generation" "$RED" --run "$T/mr" --harness "$MH" --pins "$T/pins"
+cpr; sed '5s/.*/heldout_pub_sha256 '"$(printf %064d 9)"'/' "$T/mr/OPEN" > "$T/OPEN.other"
+rref "an OPEN that is not the run's own" "is not $T/OPEN.other" "$REDX" --run "$T/mr" --harness "$MH" --open "$T/OPEN.other" --gencheck "$T/gencheck"
+cpr; touch "$T/gc.fail.run-ready"
+rref "gencheck run-ready fails" "gencheck run-ready refused" "$RED" --run "$T/mr" --harness "$MH"; rm -f "$T/gc.fail.run-ready"
+cpr; touch "$T/gc.fail.open"
+rref "gencheck open fails" "gencheck open refused" "$RED" --run "$T/mr" --harness "$MH"; rm -f "$T/gc.fail.open"
+cpr; jq '.splits.heldout.count = 59' "$T/mr/protocol.json" > "$T/x.json" && mv "$T/x.json" "$T/mr/protocol.json"; rehash "$T/mr"
+rref "protocol.json heldout.count is not 60" "splits.heldout.count is '59'" "$RED" --run "$T/mr" --harness "$MH"
+[ "$(grep -c '^no_candidate_a1\.[ABCD]=0$' "$T/red1/aggregate.txt")" = 4 ] && grep -qx 'pass3.label=pass@3 (1 greedy + 2 sampled)' "$T/red1/aggregate.txt" &&
+  grep -qx "outcomes_sha256=$(sha "$T/red1/outcomes.tsv")" "$T/red1/receipt.txt" && [ "$(tail -n +2 "$T/red1/outcomes.tsv" | wc -l)" = 8 ] &&
+  ! grep -q 'no_candidate\|MISSING' "$T/red1/outcomes.tsv" && [ "$(gk "$T/red1" arm.C.tasks_selected_below_k)" != "" ] && [ -n "$(gk "$T/red1" arm.D.selected_mean)" ] &&
+  ok "receipt: no_candidate_a1 = 0 per condition, pass@3 label, outcomes.tsv (8 tasks, one class per cell, hashed), selected per C and D" || bad "receipt outcome / selected lines"
+
+# ---- 6. length-matched control (dev only, secondary) --------------------------------------------------------------
+o="$T/lm"; cw "$o"
+if GEN_PARAMS="$T/P1" "$RUN" --tasks "$T/pub" --out "$o" --control length-matched > /dev/null 2> "$o.err"; then
+  okm=1
+  for t in devgen01 devgen04; do
+    [ "$(mfk "$o" C mode "$t")" = length-matched ] || [ "$(mfk "$o" D suffix_bytes "$t")" = 0 ] || okm=0
+    [ "$(mfk "$o" C target_bytes "$t")" = "$(mfk "$o" D suffix_bytes "$t")" ] || okm=0
+  done
+  [ "$okm" = 1 ] && grep -qx control=length-matched "$o/meta.txt" && ok "length-matched control: C targets D's realised suffix bytes per task" || bad "length-matched control manifests"
+  HL="$(hrun "$o/cands")" && "$RED" --run "$o" --harness "$HL" --out "$T/redlm" > /dev/null 2> "$T/redlm.err"
+  m="$(gk "$T/redlm" lenmatch.matched)"; st="$(gk "$T/redlm" lenmatch.status)"
+  want=UNAVAILABLE; [ -n "$m" ] && [ $((2 * ${m%/*})) -ge "${m#*/}" ] && want=AVAILABLE
+  [ "$(grep -c '^lenmatch\.task\.' "$T/redlm/aggregate.txt")" = 8 ] && [ "$st" = "$want" ] && grep -q '^lenmatch.caveat=' "$T/redlm/aggregate.txt" &&
+    { [ "$st" = UNAVAILABLE ] || [ -n "$(gk "$T/redlm" lenmatch.D.success_a1_matched)" ]; } && ! grep -q '^reason.*lenmatch' "$T/redlm/aggregate.txt" &&
+    ok "length-matched ablation: 8 per-task lines, matched $m, status $st (genstat lenset), caveat, never a validity reason" ||
+    bad "length-matched ablation lines: $(grep '^lenmatch\|^verdict' "$T/redlm/aggregate.txt" 2> /dev/null | head -n 4 | tr '\n' ' ') $(tail -n 1 "$T/redlm.err")"
+else bad "length-matched control run failed: $(tail -n 1 "$o.err")"; fi
 
 echo "test_gen_runner: $PASS passed, $FAIL failed"
 [ "$FAIL" = 0 ]
