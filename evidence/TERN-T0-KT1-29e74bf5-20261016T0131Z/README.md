@@ -1,5 +1,8 @@
 # Ternary engine T0 on the GB10: KT1, our own W2A8 ternary GEMV, plus the BitNet-shape baselines
 
+Superseded for the verdicts by `../TERN-T0-KT1-18185404-20261016T0151Z/` (review fixes: one output slice per
+timed launch). This folder stays as the record of the 29e74bf5 run and holds the informational sweep.
+
 KT1 multiplies ternary weights (each -1, 0 or +1, packed in omega's 2-bit trit code) by int8 activations and gives
 exact int32 sums, or f32 with one weight scale per output segment (q|k|v and gate|up, explicit row boundaries).
 Written by our own Blackwell code generator (`src/omega_blackwell_codegen_tern.c`); no CUDA, no PTX, no third-party

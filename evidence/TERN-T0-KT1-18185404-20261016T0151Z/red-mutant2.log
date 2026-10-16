@@ -1,0 +1,4 @@
+FAIL: f32 q|k|v with mutant 2 forced: OK, 1919 of 3840 rows differ from ((float)y * a) * scale[seg]
+receipt: /home/drakestapleton/workspace/omega-tern-t0/evidence/TERN-T0-KT1-18185404-20261016T0151Z/receipt-red-mutant2.json
+gpu_tern_test: 1 checks, 1 failed: FAIL
+mutant 2 exit 1 (must be 1: FAIL)

@@ -1,0 +1,13 @@
+phase base start 2026-10-16T01:51:53Z omega=181854043cdb328a881c71af71d6ebfda4f495ca branch=tern/t0-kt1 dirty=0 physics=/home/drakestapleton/workspace/physics-own30b-k physics_commit=6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf
+7.0.0-1019-nvidia
+NVIDIA GB10, 580.173.02
+phase base end 2026-10-16T01:52:01Z
+phase red start 2026-10-16T01:52:02Z omega=181854043cdb328a881c71af71d6ebfda4f495ca branch=tern/t0-kt1 dirty=0 physics=/home/drakestapleton/workspace/physics-own30b-k physics_commit=6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf
+7.0.0-1019-nvidia
+NVIDIA GB10, 580.173.02
+phase red end 2026-10-16T01:52:07Z
+phase main start 2026-10-16T01:52:07Z omega=181854043cdb328a881c71af71d6ebfda4f495ca branch=tern/t0-kt1 dirty=0 physics=/home/drakestapleton/workspace/physics-own30b-k physics_commit=6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf
+7.0.0-1019-nvidia
+NVIDIA GB10, 580.173.02
+phase main end 2026-10-16T01:52:11Z
+bandwidth repeats 2 and 3: ./build/gpu_tern_test --bw-only --reps 5 at 181854043cdb328a881c71af71d6ebfda4f495ca, 2026-10-16T01:52:23Z

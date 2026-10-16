@@ -1,0 +1,5 @@
+sim: 14 int32 points x 2 orders bit-equal to oma_rz_oracle (200314 warp issues)
+sim: mutant 1 caught (16 of 16 rows differ)
+sim: mutant 3 caught (16 of 16 rows differ)
+sim: mutant 2 caught (24 of 48 rows take the wrong scale)
+gpu_tern_test: 34 checks, 0 failed: PASS

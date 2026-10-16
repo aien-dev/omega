@@ -1,0 +1,22 @@
+host: word arithmetic exact on 434000 words (random, all +1, all -1; x random, -128, 127, -1, 0, alternating)
+host: codegen k 2560 layout rowmajor epi i32 rows 1 depth 10 warps 8: 629 instructions, peak 45 registers (declared 48), shared 5120 B
+host:   stall distances >= 6 cycles hold; 2098 stall cycles in program order; shortened-stall control caught
+host: codegen k 2560 layout rowmajor epi f32 rows 1 depth 10 warps 8: 649 instructions, peak 51 registers (declared 56), shared 5120 B
+host:   stall distances >= 6 cycles hold; 2189 stall cycles in program order; shortened-stall control caught
+host: codegen k 2560 layout block epi i32 rows 4 depth 2 warps 8: 569 instructions, peak 69 registers (declared 72), shared 5120 B
+host:   stall distances >= 6 cycles hold; 1426 stall cycles in program order; shortened-stall control caught
+host: codegen k 2560 layout block epi f32 rows 4 depth 2 warps 8: 631 instructions, peak 75 registers (declared 80), shared 5120 B
+host:   stall distances >= 6 cycles hold; 1718 stall cycles in program order; shortened-stall control caught
+host: codegen k 6912 layout rowmajor epi i32 rows 1 depth 9 warps 8: 582 instructions, peak 44 registers (declared 48), shared 13824 B
+host:   stall distances >= 6 cycles hold; 1962 stall cycles in program order; shortened-stall control caught
+host: codegen k 6912 layout rowmajor epi f32 rows 1 depth 9 warps 8: 602 instructions, peak 50 registers (declared 56), shared 13824 B
+host:   stall distances >= 6 cycles hold; 2053 stall cycles in program order; shortened-stall control caught
+host: codegen k 6912 layout block epi i32 rows 4 depth 3 warps 8: 744 instructions, peak 81 registers (declared 88), shared 13824 B
+host:   stall distances >= 6 cycles hold; 1626 stall cycles in program order; shortened-stall control caught
+host: codegen k 6912 layout block epi f32 rows 4 depth 3 warps 8: 806 instructions, peak 87 registers (declared 96), shared 13824 B
+host:   stall distances >= 6 cycles hold; 1918 stall cycles in program order; shortened-stall control caught
+host: codegen k 16384 layout rowmajor epi i32 rows 1 depth 16 warps 8: 922 instructions, peak 61 registers (declared 64), shared 16384 B
+host:   stall distances >= 6 cycles hold; 2965 stall cycles in program order; shortened-stall control caught
+host: codegen k 16384 layout block epi i32 rows 4 depth 4 warps 8: 936 instructions, peak 99 registers (declared 104), shared 16384 B
+host:   stall distances >= 6 cycles hold; 1907 stall cycles in program order; shortened-stall control caught
+gpu_tern_test: 56 checks, 0 failed: PASS

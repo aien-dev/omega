@@ -1,0 +1,7 @@
+REFUSED: decode attention at 20 query / 5 KV heads, head dim 128
+  reason 1: head layout fixed at 32 query / 4 KV heads (8 per KV head); asked 20 / 5 (4 per KV head)
+  reason 2: fused q|k|v input fixed at 5120 words; the asked layout needs 3840
+  reason 3: per-head q_norm / k_norm is built in (Qwen3); a model without QK norm needs a kernel without it
+  needed: a decode attention kernel for this geometry (ternary engine design KT3)
+gpu_decode_attn_test: REFUSED (geometry 20/5/128 not built)
+attn-20-5 exit 3 (3 = recorded refusal)
