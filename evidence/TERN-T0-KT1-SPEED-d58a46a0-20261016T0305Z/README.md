@@ -72,3 +72,13 @@ counted (in a dependent chain the floor is real cost), beside the design-doc end
   descriptor) were not touched; the documentation for them was not read. Next variable, not this PR.
 - Resident CTA capacity and SM count were not measured; the 16x-list camera run failed its oracle check (cause not found).
 - Why uncached 4-byte stores cost 9 to 11 us per launch (measured, mechanism not).
+
+## Added after review (omega#490)
+
+- `investigation/clockcam-1-cam.csv`: the in-kernel clock camera's raw stamps (SR_CLOCKLO against the global timer per
+  CTA), the 2560 MHz evidence behind the closed clock lead.
+- The warp simulator now visits warps in a chosen order per barrier phase (ascending, descending, or a seeded shuffle;
+  `WsSim.warp_sched`). Test mutant 4 (one output slot set) is hidden by the ascending order and caught by the other two
+  (30 and 18 rows wrong of 64); test mutant 5 (no unit clamp) is refused on a partial last round with two K iterations.
+  `make test-gpu-tern` (host battery plus simulator, no chip) runs in the smoke workflow.
+- `SHA256SUMS`: every file in this folder.

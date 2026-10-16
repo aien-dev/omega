@@ -228,6 +228,7 @@ static void host_battery(void) {
 /* ------------------------------------------------------------- simulator */
 static uint64_t g_sim_issues;
 /* Runs spec on the simulator; y_out n words. bounds: the boundaries to pass (NULL: one segment). */
+static uint32_t g_sim_wsched; /* warp visit order per barrier phase (WsSim.warp_sched): 0 ascending, 1 descending, else a shuffle seed */
 static int sim_run(const OmegaTernGemvSpec *spec, uint32_t n, const int8_t *w, const int8_t *x, const uint32_t *bounds, const float *scale4,
                    float a, uint32_t grid_x, int order, uint32_t *y_out, char *msg, size_t msgn) {
     static BlackwellIRProgram prog;
@@ -248,7 +249,7 @@ static int sim_run(const OmegaTernGemvSpec *spec, uint32_t n, const int8_t *w, c
     uint8_t *smem = aligned_alloc(16, sh);
     for (uint32_t i = 0; i < n; i++) y[i] = 0xdeadbeefu;
     WsSim s; memset(&s, 0, sizeof s);
-    s.p = &prog; s.threads = 32u * spec->warps; s.order = order; s.smem = smem; s.smem_bytes = sh;
+    s.p = &prog; s.threads = 32u * spec->warps; s.order = order; s.warp_sched = g_sim_wsched; s.smem = smem; s.smem_bytes = sh;
     uint64_t A[5] = { (uintptr_t)pk, (uintptr_t)xd, (uintptr_t)y, (uintptr_t)ws, (uintptr_t)as };
     for (unsigned i = 0; i < 5; i++) { s.cbank[(OMEGA_TERN_ARG_W + 8 * i) / 4] = (uint32_t)A[i]; s.cbank[(OMEGA_TERN_ARG_W + 8 * i) / 4 + 1] = (uint32_t)(A[i] >> 32); }
     s.cbank[OMEGA_TERN_ARG_U / 4] = np / (2u * spec->rows);
@@ -291,14 +292,42 @@ static void sim_battery(void) {
         { 512, 16, 1, 2, 2, 2, 1 }, { 1024, 37, 1, 4, 2, 4, 3 }, { 2560, 32, 1, 4, 4, 2, 1 }, { 2560, 8, 1, 2, 1, 5, 1 },
         { 768, 64, 1, 4, 2, 1, 2 }, { 8704, 16, 0, 2, 1, 1, 1 }, { 8704, 16, 1, 2, 2, 1, 1 },
         { 2560, 20, 0, 1, 2, 10, 2 }, { 6912, 9, 0, 1, 2, 9, 1 }, { 16384, 8, 0, 1, 1, 16, 1 }, /* the API defaults (row-major, rows 1) */
+        { 1024, 18, 0, 1, 5, 2, 1 },  /* coalesced path: 12 units (24 padded rows) over 5 warps = 2 full rounds and a partial one, 2 K iterations */
+        { 512, 64, 0, 1, 2, 2, 1 },   /* coalesced path: 32 units over 2 warps = 16 rounds through the two slot sets */
     };
+    const uint32_t wscheds[3] = { 0, 1, 12345u };
     for (unsigned i = 0; i < sizeof pts / sizeof pts[0]; i++)
-        for (int order = 0; order < 2; order++) {
-            long bad = sim_i32(pts[i].k, pts[i].n, pts[i].layout, pts[i].rows, pts[i].warps, pts[i].depth, pts[i].grid, 0, 100u + i, order);
-            CHECK(bad == 0, "sim k %u n %u layout %u rows %u warps %u depth %u grid %u order %d: %ld rows differ from oma_rz_oracle",
-                  pts[i].k, pts[i].n, pts[i].layout, pts[i].rows, pts[i].warps, pts[i].depth, pts[i].grid, order, bad);
-        }
-    printf("sim: %u int32 points x 2 orders bit-equal to oma_rz_oracle (%" PRIu64 " warp issues)\n", (unsigned)(sizeof pts / sizeof pts[0]), g_sim_issues);
+        for (int order = 0; order < 2; order++)
+            for (int ws = 0; ws < 3; ws++) {
+                g_sim_wsched = wscheds[ws];
+                long bad = sim_i32(pts[i].k, pts[i].n, pts[i].layout, pts[i].rows, pts[i].warps, pts[i].depth, pts[i].grid, 0, 100u + i, order);
+                CHECK(bad == 0, "sim k %u n %u layout %u rows %u warps %u depth %u grid %u order %d warp order %u: %ld rows differ from oma_rz_oracle",
+                      pts[i].k, pts[i].n, pts[i].layout, pts[i].rows, pts[i].warps, pts[i].depth, pts[i].grid, order, wscheds[ws], bad);
+            }
+    g_sim_wsched = 0;
+    printf("sim: %u int32 points x 2 fragment orders x 3 warp orders bit-equal to oma_rz_oracle (%" PRIu64 " warp issues)\n",
+           (unsigned)(sizeof pts / sizeof pts[0]), g_sim_issues);
+    /* the second output slot set: with one set (mutant 4) a warp that reaches the next round before warp 0 has stored
+     * this one overwrites its slot. The ascending warp order hides it (warp 0 always runs first), the descending and
+     * shuffled orders must catch it; the production kernel must stay exact under all three. */
+    {
+        long hidden = -1, caught_desc = -1, caught_shuf = -1;
+        g_sim_wsched = 0; hidden = sim_i32(512, 64, 0, 1, 2, 2, 1, 4, 500u, 0);
+        g_sim_wsched = 1; caught_desc = sim_i32(512, 64, 0, 1, 2, 2, 1, 4, 500u, 0);
+        g_sim_wsched = 12345u; caught_shuf = sim_i32(512, 64, 0, 1, 2, 2, 1, 4, 500u, 0);
+        g_sim_wsched = 0;
+        CHECK(caught_desc != 0, "sim mutant 4 (one slot set) not caught under the descending warp order");
+        CHECK(caught_shuf != 0, "sim mutant 4 (one slot set) not caught under the shuffled warp order");
+        printf("sim: mutant 4 (one slot set): ascending warp order %ld rows differ (the order that hid it), descending %ld, shuffled %ld\n",
+               hidden, caught_desc, caught_shuf);
+    }
+    /* the unit clamp: without it (mutant 5) the warps of a partial last round read past the tensor (the simulator refuses
+     * the access, -1) or store wrong rows */
+    {
+        long bad = sim_i32(1024, 18, 0, 1, 5, 2, 1, 5, 501u, 0);
+        CHECK(bad != 0, "sim mutant 5 (no unit clamp) not caught on a partial last round");
+        if (bad != 0) printf("sim: mutant 5 (no unit clamp) caught (%s)\n", bad < 0 ? "out-of-range access refused" : "rows differ");
+    }
     /* extremes: x all -128 / 127 with all-+1 and all--1 rows */
     {
         const uint32_t k = 1024, n = 8;

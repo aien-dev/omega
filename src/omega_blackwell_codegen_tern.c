@@ -133,7 +133,7 @@ int omega_tern_gemv_spec_ok(const OmegaTernGemvSpec *s) {
     if (s->depth == 0 || s->depth > 16 || ksc % s->depth || s->rows * s->depth > 16u) return 0;
     if (s->epi != OMEGA_TERN_EPI_I32 && s->epi != OMEGA_TERN_EPI_F32) return 0;
     if (s->epi == OMEGA_TERN_EPI_F32 && nch != 1) return 0;
-    if (s->mutant < 0 || s->mutant > 3) return 0;
+    if (s->mutant < 0 || s->mutant > 5) return 0;
     return 1;
 }
 uint32_t omega_tern_gemv_steps(const OmegaTernGemvSpec *s) { return omega_tern_gemv_spec_ok(s) ? s->k / 256u : 0; }
@@ -379,7 +379,7 @@ int omega_blackwell_codegen_tern_gemv_prog(const OmegaTernGemvSpec *spec, Blackw
         imadi(e, um1, one, 0, 0xffffffffu, ureg);     /* U - 1 */
         imadi(e, negU, ureg, 0, 0xffffffffu, NOREG);  /* -U */
         movi(e, sbase, x_bytes);                      /* slot set of this round (alternates) */
-        movi(e, stog, slot_bytes);
+        movi(e, stog, spec->mutant == 4 ? 0u : slot_bytes); /* mutant 4: one slot set, the round race the second set prevents */
         imadi(e, so, warp, 0, 2u * R * 4u, NOREG); imadi(e, so, h, 0, R * 4u, so); /* this half-warp's slot: (2 warp + h) R words */
         imadi(e, tu, lane, 0, 0xffffffffu, NOREG); imadi(e, tu, one, 0, nrow - 1u, tu); shr(e, tu, tu, 0, 31); /* 1 if lane >= 2 R W */
         imadi(e, wl1, warp, 0, 1, tu); imadi(e, wl1, one, 0, 1, wl1);                                       /* warp + (lane >= 2 R W) + 1 */
@@ -397,7 +397,8 @@ int omega_blackwell_codegen_tern_gemv_prog(const OmegaTernGemvSpec *spec, Blackw
         imadi(e, tu, u, 0, 1, negU);                  /* u - U */
         shr(e, okw, tu, 0, 31);                       /* 1 if u < U */
         imadi(e, tu, one, 0, 1, tu);                  /* u - U + 1 */
-        imadr(e, ueff, okw, tu, 0, um1);              /* u < U ? u : U - 1 */
+        if (spec->mutant == 5) imadi(e, ueff, u, 0, 1, NOREG); /* mutant 5: no clamp, a warp past U reads past the tensor */
+        else imadr(e, ueff, okw, tu, 0, um1);         /* u < U ? u : U - 1 */
     } else ueff = u;
     imadi(e, rowbase, ueff, 0, 2u * R, hR);
     imadw(e, pw, ueff, 2u * R * row_bytes, pl);

@@ -60,7 +60,8 @@
  *   0x3b0 negn u32  -n (store rows < n) 0x3b4, 0x3b8, 0x3bc: -b0, -b1, -b2
  *
  * mutant (tests only): 1 flips the planes (the staged X_j are negated: plus acts as minus, y becomes -y), 2 is host-side only
- * (the API maps segments as ws_idx = r / (n / segments)), 3 drops pair j = 7 (trits 7 and 15 of every word).
+ * (the API maps segments as ws_idx = r / (n / segments)), 3 drops pair j = 7 (trits 7 and 15 of every word), 4 uses one
+ * output slot set (the round race, simulator with a reversed warp order), 5 drops the unit clamp of the coalesced path.
  */
 #include <stdint.h>
 #include "omega_blackwell_codegen.h"
@@ -97,7 +98,7 @@ typedef struct {
     uint32_t warps;  /* 1 .. 32 */
     uint32_t depth;  /* K steps per loop iteration: divides chunk / 256; rows * depth <= 16 */
     uint32_t epi;    /* OMEGA_TERN_EPI_* */
-    int mutant;      /* 0 production; 1, 3 kernel mutants (2 is host-side, kernel identical to 0) */
+    int mutant;      /* 0 production; 1, 3, 4, 5 kernel mutants (2 is host-side, kernel identical to 0) */
 } OmegaTernGemvSpec;
 
 int omega_blackwell_codegen_tern_gemv_prog(const OmegaTernGemvSpec *spec, BlackwellIRProgram *prog);
