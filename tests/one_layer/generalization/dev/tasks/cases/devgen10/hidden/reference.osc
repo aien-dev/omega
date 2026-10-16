@@ -1,0 +1,15 @@
+fn grid_le(n: u8, m: u16) -> u32 {
+    let nn: u32 = n as u32;
+    let mm: u32 = m as u32;
+    let mut c: u32 = 0;
+    let mut i: u32 = 1;
+    while i <= nn bound 256 {
+        let mut j: u32 = 1;
+        while j <= nn bound 256 {
+            if i * j <= mm { c = c + 1; }
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    return c;
+}

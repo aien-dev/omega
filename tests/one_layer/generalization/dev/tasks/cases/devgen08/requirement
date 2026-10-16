@@ -1,0 +1,5 @@
+# public GEN dev task (omega#476), not held out
+kind task
+entry count_rising5
+params i16 i16 i16 i16 i16
+ret u8

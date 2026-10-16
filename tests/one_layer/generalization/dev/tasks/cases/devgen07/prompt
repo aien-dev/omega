@@ -1,0 +1,4 @@
+Write a function max_rise4 that takes four signed 32-bit numbers a, b, c, d and returns a signed 64-bit
+number. Put the four values into an array v in this order (v[0] = a, v[1] = b, v[2] = c, v[3] = d). Return
+the largest of v[i + 1] - v[i] for i = 0, 1, 2, computed exactly as a signed 64-bit number (it can be
+negative). It never traps.

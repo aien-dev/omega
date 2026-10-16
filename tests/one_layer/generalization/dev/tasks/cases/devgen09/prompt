@@ -1,0 +1,3 @@
+Write a function pair_sum_div that takes unsigned 8-bit numbers n and k and returns an unsigned 32-bit
+number: how many pairs (i, j) with 1 <= i < j <= n have i + j divisible by k (remainder 0). For every
+input checked k is at least 1. It never traps for the inputs checked.

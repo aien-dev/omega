@@ -1,0 +1,4 @@
+Write a function mix_hash that takes an unsigned 16-bit number seed and an unsigned 8-bit number n and
+returns an unsigned 16-bit number. Define a helper function h that takes unsigned 32-bit numbers s and i
+and returns (s * 31 + i * i + 7) modulo 65536. Start with s = seed; then for each i from 0 to n - 1 in
+order, replace s by h(s, i). Return the final s (mix_hash(seed, 0) = seed). It never traps.

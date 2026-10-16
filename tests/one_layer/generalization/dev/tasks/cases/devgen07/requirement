@@ -1,0 +1,5 @@
+# public GEN dev task (omega#476), not held out
+kind task
+entry max_rise4
+params i32 i32 i32 i32
+ret i64

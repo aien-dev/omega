@@ -1,0 +1,4 @@
+Write a function poly_sum that takes an unsigned 8-bit number n and returns an unsigned 32-bit number.
+Define a helper function f that takes an unsigned 32-bit number x and returns 3*x*x + 2*x + 1, and use
+it: poly_sum(n) is the sum of f(i) for every i from 0 to n - 1 (poly_sum(0) = 0). The result always
+fits in 32 bits. It never traps.

@@ -1,0 +1,14 @@
+fn grow_or_poly(x: i16, k: u8) -> i64 {
+    let v: i64 = x as i64;
+    if v >= 0 {
+        let m: u32 = k as u32;
+        let mut t: i64 = v;
+        let mut i: u32 = 0;
+        while i < m bound 256 {
+            t = 2 * t + 1;
+            i = i + 1;
+        }
+        return t;
+    }
+    return 3 * v * v + 5 * v - 2;
+}

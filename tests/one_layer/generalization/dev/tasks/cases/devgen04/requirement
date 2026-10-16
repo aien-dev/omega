@@ -1,0 +1,5 @@
+# public GEN dev task (omega#476), not held out
+kind task
+entry even_tri_odd_cube
+params u16
+ret u64

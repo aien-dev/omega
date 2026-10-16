@@ -1,0 +1,4 @@
+Write a function grow_or_poly that takes a signed 16-bit number x and an unsigned 8-bit number k and
+returns a signed 64-bit number. If x is at least 0: start with t = x and repeat k times: t becomes
+2*t + 1; return t. Use signed 64-bit arithmetic; when a value does not fit in a signed 64-bit number the
+function traps (overflow). If x is negative: return 3*x*x + 5*x - 2 (this always fits).

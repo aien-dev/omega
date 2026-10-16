@@ -1,0 +1,81 @@
+{
+  "schema": "omega.gen.protocol.v1",
+  "revision": 1,
+  "issue": "aien-spark/omega#476",
+  "doc": "docs/one_layer/GEN_PROTOCOL_V1.md",
+  "question": "Does retrieving checker-verified abstractions (D) beat 1-shot (A), many-shot (B) and raw retrieval (C) on attempt-1 functional success for sealed held-out composition families?",
+  "config": {"name": "A", "params": "tools/exp445/PARAMS", "masking": false, "harness_kind": "oscir", "writer": "omegese", "reader": "tools/exp445/reader.sh"},
+  "conditions": [
+    {"name": "A", "prefix_examples": 1, "retrieval": "none"},
+    {"name": "B", "prefix_examples": 14, "retrieval": "none"},
+    {"name": "C", "prefix_examples": 14, "retrieval": "raw"},
+    {"name": "D", "prefix_examples": 14, "retrieval": "abstraction"}
+  ],
+  "retrieval": {"contract": "genret-cli-v3", "record_schema": "gen-record-1", "k": 3, "cap_bytes": 4096, "mode": "normal", "query": "requirement+prompt", "c_pool_excludes_prefix": true, "length_match_abs_bytes": 256, "length_match_frac": 0.15, "length_match_min_matched_frac": 0.5},
+  "generation": {
+    "primary": "attempt1_round1_functional",
+    "max_tokens": 3072, "max_rounds": 2, "attempts": 3,
+    "attempt1_temperature": 0, "sampled_temperature": 0.7, "sampled_top_p": 0.8,
+    "seed_base": 476000, "seed_attempt_stride": 1000,
+    "retries": 2, "retry_pause_s": 5,
+    "order": "attempt,task,condition", "in_flight": 1,
+    "sets": ["<c>-<attempt>", "<c>-<attempt>-final"]
+  },
+  "gates": {
+    "greedy": {"tasks": "dev", "condition": "B", "repeats": 2},
+    "g0": {"script": "tools/exp445/sampling-gate.sh", "task": "devgen01", "condition": "B", "seeds": 8, "repeat": 1, "otherwise": "UNAVAILABLE", "seed_values": [476901, 476902, 476903, 476904, 476905, 476906, 476907, 476908]}
+  },
+  "decision": {
+    "schema": "omega.gen.decision.v1",
+    "primary": "attempt1_round1_functional",
+    "controls": ["A", "B", "C"],
+    "delta": 0.10, "alpha": 0.05,
+    "test": "mcnemar_exact_one_sided", "ci": "newcombe10",
+    "z95": 1.959963984540054, "z90": 1.644853626951472,
+    "fail_control": "C", "sanity_ab_max": 2,
+    "verdicts": ["INVALID", "PASS", "FAIL", "INCONCLUSIVE"],
+    "vectors": "tests/one_layer/generalization/stats_vectors.tsv",
+    "floor_max": 3, "ceiling_min": 57
+  },
+  "splits": {
+    "dev": {
+      "count": 10,
+      "meta": "tests/one_layer/generalization/dev/META",
+      "meta_sha256": "1de87149b3c2e0ab80b9ba225bdd1e8b928e7a2c921d18df7dcb804daec6f0b2",
+      "cases": "tests/one_layer/generalization/dev/tasks/cases",
+      "pack_sha256": "5f06a64a8579fe806119a9831f55290863396dab72ab955a972463004464b718",
+      "tasks": ["devgen01", "devgen02", "devgen03", "devgen04", "devgen05", "devgen06", "devgen07", "devgen08", "devgen09", "devgen10"],
+      "families": ["gs1:branch(loop(arith),nested)", "gs1:loop(call(nested))", "gs1:loop(loop(branch(arith)))", "gs1:seq(array,loop(array,branch(arith)))"]
+    },
+    "corpus": {"count_target": 48, "meta": "tests/one_layer/generalization/corpus/META", "meta_sha256": "179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b"},
+    "heldout": {"count": 60, "min_families": 6, "pub_sha256": null, "tasks_sha256": null, "near_dup_threshold": 0.5}
+  },
+  "record_sets": {"prefix_ids": ["wrap8", "big_pc_small_ds", "gcd_only", "sum_clamped", "even_digsums", "ceil_avg", "sum4_avg", "max4_half", "lcm32", "clamp_sum", "ds2_double", "digcount_nibbles", "digits_both", "avg_double"], "prefix_sha256": "b1a3d7beaae4b1c4220b4bb8f221f31e1ffb87c219119b10449ea2d792c132ef", "raw_manifest_sha256": "9177b5b7fae1bb8a23d6f3d487d9ead833f2edbaa60788707340e0af33cef3db", "abstraction_manifest_sha256": "3379aae255d652212332ae6116b853b736259c5b866ba9b8d6730ca292c86a52", "raw_manifest": "tests/one_layer/generalization/records/C.MANIFEST", "abstraction_manifest": "tests/one_layer/generalization/records/D.MANIFEST"},
+  "pins": [
+    {"path": "docs/one_layer/GEN_PROTOCOL_V1.md", "sha256": "d1945031e55b422ef7f49ac75718292ea9b497b0fd2d2967a532231aa4aa77d7"},
+    {"path": "docs/one_layer/OMEGESE.md", "sha256": "1306642c1fcaf0febb9cd6b299ccb96bdc46cb0d3f688c5f799297bebf55e3cf"},
+    {"path": "tests/one_layer/acceptance/HARNESS_INTERFACE_V2.md", "sha256": "a7e38a6faa7cdf7d479891209055f4fe789a55f5d377e4b6e36840aefe7f04c8"},
+    {"path": "tests/one_layer/acceptance/ola.sh", "sha256": "cf73c2bb5e5160c977a0a3e495d625e98795ff362b6e697742d0ccc47dfcd726"},
+    {"path": "tests/one_layer/generalization/dev/META", "sha256": "1de87149b3c2e0ab80b9ba225bdd1e8b928e7a2c921d18df7dcb804daec6f0b2"},
+    {"path": "tests/one_layer/generalization/dev/gen_expected.c", "sha256": "166f7945a95a98789764cd439f7d8ced126a542a9a251e860df29bf661232506"},
+    {"path": "tests/one_layer/generalization/dev/pack_dev.sh", "sha256": "40dd2dcceb8a8570c40022e059f396d3064238134081cabafd993f40222f2390"},
+    {"path": "tests/one_layer/generalization/families/FAMSIG_V1.md", "sha256": "5ebbc8efe6e125863b17fb8b73a3b56a191d18d8a9be730dd2b4ea7133714092"},
+    {"path": "tests/one_layer/generalization/stats_vectors.tsv", "sha256": "522c534402bf1eadc0c08b8f926c0cffa504b263935b49903064a1f2404a80b5"},
+    {"path": "tools/exp445/PARAMS", "sha256": "a37136fb7fa81e9e0730c847b888d890ac8fd0cd79fdf41ee63cc5e762960aa1"},
+    {"path": "tools/exp445/arms/common.md", "sha256": "990ffb25bc4bf9da4dacc7f80c39d7b24803aa8dd78eab2d92e2dee88cd0790f"},
+    {"path": "tools/exp445/arms/omegese.md", "sha256": "5d1468799559f8042652437e0b13945c4e25e32d783b5624c32821efb47a8cfe"},
+    {"path": "tools/exp445/reader.sh", "sha256": "9bc3f90194683eacaeb46a102b7b00fda4b8472970eb13e540d21f987397fd5a"},
+    {"path": "tools/exp445/sampling-gate.sh", "sha256": "2934e348676e531f8c08584548f7d3e31e1320788c197da7304544ab1453f5cc"},
+    {"path": "tools/exp445/weights.A.sha256", "sha256": "a00f5c31ce1f1c1f400a22cbc6ba58ce217d62991a6e7fa590e5803dcfb2ed8b"},
+    {"path": "tools/gen/protocol/famsig.c", "sha256": "42d372ffab771b2796e885563de7ff6ec36244fefc6533a09988690562c05c75"},
+    {"path": "tools/gen/protocol/famsig_lib.h", "sha256": "13405b3615c7aa792cb357af1e2ce1ecfca7dec8366d3369a4ba3e7cdd73454c"},
+    {"path": "tools/gen/protocol/gencheck.c", "sha256": "855eae3032985f5a74fe40f06c77d8e2048df8ada8acad2ca88c4d088f2057d0"},
+    {"path": "tools/gen/protocol/genjac.c", "sha256": "c8c5790c4fc5cd4bab0f6a562f7470895ae9b3803124ad83dbb46252108e2ee9"},
+    {"path": "tools/gen/protocol/genstats.c", "sha256": "a57e964b0b2b47668346d46f0d8a7ea4f556378e140153bfbb0f3039f5ff0769"}
+  ],
+  "interfaces": [
+    {"name": "gen-record-1", "path": "tools/gen/abstract/RECORD_SCHEMA.md", "commit": "937b033c78d087f1a0c64f28a29f4bab69f0a18a", "sha256": "9be17b6bc6f97c7420ced722bb258c420944bd87461097163df0992112ae6b53"},
+    {"name": "gen-runner-formats-v1", "path": "tools/gen/runner/FORMATS.md", "commit": "9d81b78fb10cbc57d1178df0def8acb992927318", "sha256": "392ed623bec9d73771ee67434dc73a4bd74914868405bbe6a9d424aeef234293"},
+    {"name": "genret-cli-v3", "path": "tools/gen/retrieval/CONTRACT.md", "commit": "4a48b61325865b1edc2d021d621a51f0f515963d", "sha256": "48006271d18394c40daf96120eaa20fbe3908d9a12b08cab7994ee02a6351e9d"}
+  ]
+}

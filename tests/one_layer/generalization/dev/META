@@ -1,0 +1,13 @@
+gen-meta 1
+# GEN public dev fixtures (aien-spark/omega#476): family metadata, FAMSIG_V1.md format.
+# task split arith branch loop array call nested shape
+devgen01 dev 0 0 1 0 1 1 loop(call(nested))
+devgen02 dev 0 0 1 0 1 1 loop(call(nested))
+devgen03 dev 0 0 1 0 1 1 loop(call(nested))
+devgen04 dev 1 1 1 0 0 1 branch(loop(arith),nested)
+devgen05 dev 1 1 1 0 0 1 branch(loop(arith),nested)
+devgen06 dev 1 1 1 0 0 1 branch(loop(arith),nested)
+devgen07 dev 1 1 1 2 0 0 seq(array,loop(array,branch(arith)))
+devgen08 dev 1 1 1 2 0 0 seq(array,loop(array,branch(arith)))
+devgen09 dev 1 1 2 0 0 0 loop(loop(branch(arith)))
+devgen10 dev 1 1 2 0 0 0 loop(loop(branch(arith)))

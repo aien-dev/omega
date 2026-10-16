@@ -1,0 +1,6 @@
+Write a function shift_sq_sum that takes an unsigned 8-bit number n and a signed 16-bit number c and
+returns a signed 32-bit number. Define a helper function g that takes signed 32-bit numbers x and c and
+returns (x - c) * (x + c) + x, and use it: shift_sq_sum(n, c) is the sum of g(i, c) for every i from 0 to
+n - 1 (shift_sq_sum(0, c) = 0). Use signed 32-bit arithmetic: when the sum does not fit in a signed
+32-bit number, the function traps (overflow). For every input checked, either every partial result fits
+in a signed 32-bit number or the final sum itself does not fit.
