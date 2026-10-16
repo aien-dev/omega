@@ -504,7 +504,7 @@ static uint32_t g_shape[8][2]; static int g_shape_n;
 static uint64_t cold_ns(uint32_t n, uint32_t k, uint32_t copies, uint32_t reps, uint64_t *bytes_out, uint64_t *min_out) {
     int8_t *w = make_w((size_t)n * k, 1.0 / 3.0, 555u + n + k), *x = make_x(k, 556);
     int32_t *ref = oracle(w, n, k, x), *y = malloc((size_t)n * 4);
-    OmegaGpuTernTensor **ts = calloc(copies, sizeof *ts);
+    OmegaGpuTernTensor **ts = calloc(copies, sizeof(OmegaGpuTernTensor *));
     uint64_t *d = calloc((size_t)copies * reps, 8), med = 0; size_t nd = 0;
     OmegaGpuCmdList *cl = NULL; OmegaGpuMem xd, yd; memset(&xd, 0, sizeof xd); memset(&yd, 0, sizeof yd);
     int ok = 1;
