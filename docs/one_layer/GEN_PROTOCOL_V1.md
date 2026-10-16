@@ -89,12 +89,15 @@ its own revision and is never pooled with these results.
 
 - **B prefix pick (deterministic, diverse):** order the corpus tasks by family signature (byte order),
   then task id; walk the families round robin in signature order, taking each family's lowest unused
-  task id, until 14 tasks are taken. A's single example is the first task taken. The 14 ids and the
-  prefix sha256 are pinned in protocol.json when the corpus is frozen. If the prefix reuses EXP445
+  task id, until 14 tasks are taken. Every task line of corpus META is eligible, GEN-3 transfer-probe tasks
+  included (probes are withheld only from abstraction extraction). A's single example is the first task
+  taken. The 14 ids (`record_sets.prefix_ids`, in pick order) and `record_sets.prefix_sha256` = sha256 of
+  `tests/one_layer/generalization/records/PREFIX` (those ids, one per line) are pinned in protocol.json when
+  the corpus is frozen. If the prefix reuses EXP445
   examples, they are corpus tasks with corpus META lines and must pass `famsig rule`.
 - **Retrieval (C and D):** the file-backed provider `genret` (`tools/gen/retrieval/CONTRACT.md`,
-  contract `genret-cli-v3`, pinned in protocol.json `interfaces` at commit `a26be577` with CONTRACT.md
-  sha256 `ee21d714d911cf1cc459cba00805cceb9354b02bf8d6974e4d96c5c5dd01a3ac`; it validates every record
+  contract `genret-cli-v3`, pinned in protocol.json `interfaces` at commit `4a48b613` with CONTRACT.md
+  sha256 `48006271d18394c40daf96120eaa20fbe3908d9a12b08cab7994ee02a6351e9d`; it validates every record
   with the GEN-3 `recheck`), the same `--k`, `--cap-bytes`, mode `normal` and lexical ranker for C and D;
   only `--kind raw` (C) versus `--kind abstraction` (D) and the record manifest differ. k = 3,
   cap_bytes = 4096. **Query** = the task's public `requirement` and `prompt` files passed as
@@ -415,3 +418,6 @@ The runner, reducer, corpus builder and custodian scripts are specified by their
   closed on null digests; custodian model-query ban; oracle_match; numeric G0 seeds; base_url and query
   bytes stated; genret-cli-v3 pinned with its heading approved; length-matched ablation made a dev-only
   diagnostic with matched/unmatched tasks and UNAVAILABLE below 50% matched.
+- **v1, record sets pinned (before merge, before any held-out task):** corpus META, the 14 prefix ids,
+  records/PREFIX and the C and D manifests from GEN-3 commit 856cc977 (prefix recomputed from the pick
+  rule and matching); genret-cli-v3 re-pinned at 4a48b613.

@@ -47,12 +47,12 @@
       "tasks": ["devgen01", "devgen02", "devgen03", "devgen04", "devgen05", "devgen06", "devgen07", "devgen08", "devgen09", "devgen10"],
       "families": ["gs1:branch(loop(arith),nested)", "gs1:loop(call(nested))", "gs1:loop(loop(branch(arith)))", "gs1:seq(array,loop(array,branch(arith)))"]
     },
-    "corpus": {"count_target": 48, "meta": "tests/one_layer/generalization/corpus/META", "meta_sha256": null},
+    "corpus": {"count_target": 48, "meta": "tests/one_layer/generalization/corpus/META", "meta_sha256": "179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b"},
     "heldout": {"count": 60, "min_families": 6, "pub_sha256": null, "tasks_sha256": null, "near_dup_threshold": 0.5}
   },
-  "record_sets": {"prefix_ids": null, "prefix_sha256": null, "raw_manifest_sha256": null, "abstraction_manifest_sha256": null, "raw_manifest": null, "abstraction_manifest": null},
+  "record_sets": {"prefix_ids": ["wrap8", "big_pc_small_ds", "gcd_only", "sum_clamped", "even_digsums", "ceil_avg", "sum4_avg", "max4_half", "lcm32", "clamp_sum", "ds2_double", "digcount_nibbles", "digits_both", "avg_double"], "prefix_sha256": "b1a3d7beaae4b1c4220b4bb8f221f31e1ffb87c219119b10449ea2d792c132ef", "raw_manifest_sha256": "9177b5b7fae1bb8a23d6f3d487d9ead833f2edbaa60788707340e0af33cef3db", "abstraction_manifest_sha256": "3379aae255d652212332ae6116b853b736259c5b866ba9b8d6730ca292c86a52", "raw_manifest": "tests/one_layer/generalization/records/C.MANIFEST", "abstraction_manifest": "tests/one_layer/generalization/records/D.MANIFEST"},
   "pins": [
-    {"path": "docs/one_layer/GEN_PROTOCOL_V1.md", "sha256": "854c49b6f4c39b2075c51e3670fcc54146f6d62e4832f32eb664515805efe1d8"},
+    {"path": "docs/one_layer/GEN_PROTOCOL_V1.md", "sha256": "e213fe2389364a16b470094503164c1659d1e49f169b565adc8101f977036ce7"},
     {"path": "docs/one_layer/OMEGESE.md", "sha256": "1306642c1fcaf0febb9cd6b299ccb96bdc46cb0d3f688c5f799297bebf55e3cf"},
     {"path": "tests/one_layer/acceptance/HARNESS_INTERFACE_V2.md", "sha256": "a7e38a6faa7cdf7d479891209055f4fe789a55f5d377e4b6e36840aefe7f04c8"},
     {"path": "tests/one_layer/acceptance/ola.sh", "sha256": "cf73c2bb5e5160c977a0a3e495d625e98795ff362b6e697742d0ccc47dfcd726"},
@@ -76,6 +76,6 @@
   "interfaces": [
     {"name": "gen-record-1", "path": "tools/gen/abstract/RECORD_SCHEMA.md", "commit": "937b033c78d087f1a0c64f28a29f4bab69f0a18a", "sha256": "9be17b6bc6f97c7420ced722bb258c420944bd87461097163df0992112ae6b53"},
     {"name": "gen-runner-formats-v1", "path": "tools/gen/runner/FORMATS.md", "commit": "9d81b78fb10cbc57d1178df0def8acb992927318", "sha256": "392ed623bec9d73771ee67434dc73a4bd74914868405bbe6a9d424aeef234293"},
-    {"name": "genret-cli-v3", "path": "tools/gen/retrieval/CONTRACT.md", "commit": "a26be5771acd2ca731d98ab94de51d24b4ffe300", "sha256": "ee21d714d911cf1cc459cba00805cceb9354b02bf8d6974e4d96c5c5dd01a3ac"}
+    {"name": "genret-cli-v3", "path": "tools/gen/retrieval/CONTRACT.md", "commit": "4a48b61325865b1edc2d021d621a51f0f515963d", "sha256": "48006271d18394c40daf96120eaa20fbe3908d9a12b08cab7994ee02a6351e9d"}
   ]
 }

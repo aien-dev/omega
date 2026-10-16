@@ -138,10 +138,36 @@ sed 's/^h2 /h3 /' "$T/cmpB" > "$T/cmpD"; refuse "compare: different task ids" "$
 head -3 "$T/cmpB" > "$T/cmpE"; refuse "compare: different task counts" "$FS" compare "$T/cmpA" "$T/cmpE"
 
 # ---- 3. gencheck ----
-if "$GC" manifest "$P" "$ROOT" > "$T/gc.out" 2>&1 && tail -1 "$T/gc.out" | grep -qx 'GENCHECK PASS'; then pass "gencheck manifest protocol.json"; else fail "gencheck manifest protocol.json"; cat "$T/gc.out"; fi
+# The GEN-3 corpus files that protocol.json pins (corpus META, record-set manifests) arrive with GEN-3's own
+# PR. Until that is merged, they are taken from git at GEN3_COMMIT into a private overlay tree, and the real
+# protocol.json is checked there; once they exist in this tree, this tree is checked directly.
+GEN3_COMMIT=856cc9772f5fbdddb1590f3572a271058cd7bba6
+GEN3_FILES="tests/one_layer/generalization/corpus/META tests/one_layer/generalization/records/C.MANIFEST tests/one_layer/generalization/records/D.MANIFEST"
+gen3_into() { # dest-root: copy the GEN-3 files from this tree, else from git at GEN3_COMMIT
+  local p ok=1
+  for p in $GEN3_FILES; do
+    mkdir -p "$1/$(dirname "$p")"
+    if [ -f "$ROOT/$p" ]; then cp "$ROOT/$p" "$1/$p"; else git -C "$ROOT" show "$GEN3_COMMIT:$p" > "$1/$p" 2>/dev/null || ok=0; fi
+  done
+  [ "$ok" = 1 ]
+}
+tree_copy() { # dest-root: a private copy of every file gencheck reads
+  mkdir -p "$1"
+  (cd "$ROOT" && tar -cf - docs/one_layer/GEN_PROTOCOL_V1.md docs/one_layer/OMEGESE.md tests/one_layer/acceptance/HARNESS_INTERFACE_V2.md \
+    tests/one_layer/acceptance/ola.sh tests/one_layer/generalization tools/exp445/PARAMS tools/exp445/arms tools/exp445/reader.sh \
+    tools/exp445/sampling-gate.sh tools/exp445/weights.A.sha256 tools/gen/protocol) | (cd "$1" && tar -xf -)
+}
+LR="$ROOT"
+if [ ! -f "$ROOT/tests/one_layer/generalization/corpus/META" ]; then
+  LR="$T/live"; tree_copy "$LR"
+  if gen3_into "$LR"; then pass "GEN-3 corpus files taken from git at ${GEN3_COMMIT:0:8} (not yet merged here)"; else fail "GEN-3 files not available from git (fetch origin gen/abstract)"; fi
+fi
+# P0: protocol.json with the corpus and record sets unfrozen, the base of the synthetic-corpus tests below
+sed -E 's/("corpus": \{[^}]*"meta_sha256": )"[0-9a-f]{64}"/\1null/; s/"record_sets": \{[^}]*\}/"record_sets": {"prefix_ids": null, "prefix_sha256": null, "raw_manifest_sha256": null, "abstraction_manifest_sha256": null, "raw_manifest": null, "abstraction_manifest": null}/' "$P" > "$T/P0.json"
+if "$GC" manifest "$P" "$LR" > "$T/gc.out" 2>&1 && tail -1 "$T/gc.out" | grep -qx 'GENCHECK PASS'; then pass "gencheck manifest protocol.json"; else fail "gencheck manifest protocol.json"; cat "$T/gc.out"; fi
 
 gmut() { # name expected-stderr-substring sed-or-perl-expression [root]
-  local n="$1" want="$2" ex="$3" r="${4:-$ROOT}"
+  local n="$1" want="$2" ex="$3" r="${4:-$LR}"
   sed -zE "$ex" "$P" > "$T/mut.json"
   if cmp -s "$T/mut.json" "$P"; then fail "mutant did not apply: $n"; return; fi
   if "$GC" manifest "$T/mut.json" "$r" > /dev/null 2> "$T/mut.err"; then fail "mutant not caught: $n"; return; fi
@@ -178,7 +204,7 @@ gmut "condition order changed" "conditions[0].name changed" 's/\{"name": "A", "p
 gmut "extra condition" "conditions: 5 elements" 's/(\{"name": "D"[^\n]*)\n/\1,\n    {"name": "E", "prefix_examples": 14, "retrieval": "raw"}\n/'
 gmut "wrong type" "revision: type s" 's/"revision": 1/"revision": "1"/'
 gmut "null where not allowed" "splits.dev.meta_sha256: type z" 's/"meta_sha256": "[0-9a-f]{64}"/"meta_sha256": null/'
-gmut "record set frozen before corpus" "record_sets.raw_manifest_sha256 is set while the corpus META is not frozen" 's/"raw_manifest_sha256": null/"raw_manifest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"/'
+gmut "record set frozen before corpus" "is set while the corpus META is not frozen" 's/("corpus": \{[^}]*"meta_sha256": )"[0-9a-f]{64}"/\1null/'
 gmut "trailing bytes" "trailing bytes" 's/\}\n$/}\n}\n/'
 gmut "non-ASCII byte" "ASCII only" 's/"question": "Does/"question": "D\xc3\xb6es/'
 gmut "bad escape" "escape" 's/"issue": "aien-spark\/omega#476"/"issue": "aien-spark\\u002fomega#476"/'
@@ -190,7 +216,7 @@ mkdir -p "$R"
 (cd "$ROOT" && tar -cf - docs/one_layer/GEN_PROTOCOL_V1.md docs/one_layer/OMEGESE.md tests/one_layer/acceptance/HARNESS_INTERFACE_V2.md \
   tests/one_layer/acceptance/ola.sh tests/one_layer/generalization tools/exp445/PARAMS tools/exp445/arms tools/exp445/reader.sh \
   tools/exp445/sampling-gate.sh tools/exp445/weights.A.sha256 tools/gen/protocol) | (cd "$R" && tar -xf -)
-if "$GC" manifest "$P" "$R" >/dev/null 2>&1; then pass "gencheck on the private tree copy"; else fail "gencheck on the private tree copy"; fi
+gen3_into "$R"; if "$GC" manifest "$P" "$R" >/dev/null 2>&1; then pass "gencheck on the private tree copy"; else fail "gencheck on the private tree copy"; fi
 mkdir "$R/tests/one_layer/generalization/dev/tasks/cases/devgen11"
 if "$GC" manifest "$P" "$R" >/dev/null 2>"$T/e"; then fail "extra dev case directory not caught"
 elif grep -q 'dev cases: 11 directories' "$T/e"; then pass "refused: extra dev case directory"
@@ -200,7 +226,7 @@ mkdir -p "$R/tests/one_layer/generalization/corpus"
 CM="$R/tests/one_layer/generalization/corpus/META"
 corpus_json() { # write $T/c.json with the corpus META digest set
   local s; s="$(sha256sum "$CM" | cut -c1-64)"
-  sed "s/\"meta_sha256\": null/\"meta_sha256\": \"$s\"/" "$P" > "$T/c.json"
+  sed "s/\"meta_sha256\": null/\"meta_sha256\": \"$s\"/" "$T/P0.json" > "$T/c.json"
 }
 printf 'gen-meta 1\nc9 corpus 0 0 1 0 1 1 loop(call(nested))\n' > "$CM"; corpus_json
 if "$GC" manifest "$T/c.json" "$R" >/dev/null 2>"$T/e"; then fail "mutant not caught: corpus shares a dev signature"; else grep -qF 'R1..R7' "$T/e" && pass "refused: corpus family shared with dev (R3)" || fail "corpus/dev R3: other reason"; fi
@@ -277,7 +303,7 @@ anchor "$T/c.json" "$T/c4.json" "$PUB" "$TS"; sed -i 's/"pub_sha256": "\([0-9a-f
 refuse_why "HELDOUT.pub differs from the anchored pub_sha256" "digest drift: HELDOUT.pub" "$GC" split "$T/c4.json" "$R" "$SP" "$PUB"
 
 # run-ready and seal-open on a fully frozen SYNTHETIC manifest (test-only values)
-refuse_why "run-ready on the committed protocol.json (nulls pending)" "GENCHECK FAIL" "$GC" run-ready "$P" "$ROOT"
+refuse_why "run-ready on the committed protocol.json (nulls pending)" "GENCHECK FAIL" "$GC" run-ready "$P" "$LR"
 {
   echo 'gen-meta 1'
   echo 'c01 corpus 1 1 1 0 0 0 loop(branch(arith))'
@@ -288,10 +314,11 @@ refuse_why "run-ready on the committed protocol.json (nulls pending)" "GENCHECK 
 } > "$CM"; corpus_json
 mkdir -p "$R/records"; printf 'raw manifest (test)\n' > "$R/records/MANIFEST.C"; printf 'abstraction manifest (test)\n' > "$R/records/MANIFEST.D"
 ifok=1
-for ic in 937b033c78d087f1a0c64f28a29f4bab69f0a18a:tools/gen/abstract/RECORD_SCHEMA.md 9d81b78fb10cbc57d1178df0def8acb992927318:tools/gen/runner/FORMATS.md a26be5771acd2ca731d98ab94de51d24b4ffe300:tools/gen/retrieval/CONTRACT.md; do
+ic=""
+for ic in $(sed -nE 's/.*"path": "([^"]*)", "commit": "([0-9a-f]{40})".*/\2:\1/p' "$P"); do
   mkdir -p "$R/$(dirname "${ic#*:}")"; git -C "$ROOT" show "$ic" > "$R/${ic#*:}" 2>/dev/null || ifok=0
 done
-[ "$ifok" = 1 ] && pass "interface files available from git at their pinned commits" || fail "interface files not available from git (fetch origin)"
+[ "$ifok" = 1 ] && [ -n "$ic" ] && pass "interface files available from git at their pinned commits (read from protocol.json)" || fail "interface files not available from git (fetch origin)"
 ids="$(for i in 01 02 03 04 05 06 07 08 09 10 11 12 13 14; do printf '"c%s", ' "$i"; done | sed 's/, $//')"
 hC="$(sha256sum "$R/records/MANIFEST.C" | cut -c1-64)"; hD="$(sha256sum "$R/records/MANIFEST.D" | cut -c1-64)"
 sed -E "s|\"record_sets\": \{[^}]*\}|\"record_sets\": {\"prefix_ids\": [$ids], \"prefix_sha256\": \"$(printf '%064d' 7)\", \"raw_manifest_sha256\": \"$hC\", \"abstraction_manifest_sha256\": \"$hD\", \"raw_manifest\": \"records/MANIFEST.C\", \"abstraction_manifest\": \"records/MANIFEST.D\"}|" "$T/c.json" > "$T/f0.json"
