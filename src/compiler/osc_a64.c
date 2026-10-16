@@ -12,11 +12,13 @@
 
 typedef enum {
     CLS_NONE = 0, CLS_RRR_SH, CLS_RI, CLS_R4, CLS_MULH, CLS_R3, CLS_BFM, CLS_CSINC,
-    CLS_MOV16, CLS_MEM, CLS_PAIR, CLS_B26, CLS_BCOND, CLS_CB, CLS_BREG, CLS_BRK
+    CLS_MOV16, CLS_MEM, CLS_PAIR, CLS_B26, CLS_BCOND, CLS_CB, CLS_BREG, CLS_BRK,
+    /* OSC-4 scalar FP: type (S/D) in imm2 -> bit 22 (data processing) or bit 30 (loads/stores) */
+    CLS_FP3, CLS_FP2, CLS_FCMP, CLS_FMOV_GP, CLS_FCVT_FF, CLS_CVT, CLS_FMEM_UOFF, CLS_FMEM_REG
 } Cls;
 
-/* operand kinds for rd / rn / rm / ra positions */
-enum { K_NONE = 0, K_ZR, K_SP, K_X };
+/* operand kinds for rd / rn / rm / ra positions; K_V (OSC-4) is a V register 0..31 */
+enum { K_NONE = 0, K_ZR, K_SP, K_X, K_V };
 
 typedef struct {
     const char *name;
@@ -70,6 +72,32 @@ static const OpInfo OPS[OSC_A64_NOPS] = {
     [OSC_A64_RET]      = {"ret",   0xD65F0000u, CLS_BREG,   K_NONE, K_X, K_NONE, K_NONE},
     [OSC_A64_BRK]      = {"brk",   0xD4200000u, CLS_BRK,    K_NONE, K_NONE, K_NONE, K_NONE},
     [OSC_A64_LDRB_REG] = {"ldrb",  0x38606800u, CLS_R3,     K_ZR, K_SP, K_ZR, K_NONE},
+    /* OSC-4 Slice A (docs/osc/OSC-4-DESIGN.md 1.6 table; S-form bases, D adds bit 22 or bit 30) */
+    [OSC_A64_FMOV_RR]  = {"fmov",  0x1E204000u, CLS_FP2,    K_V, K_V, K_NONE, K_NONE},
+    [OSC_A64_FMOV_XD]  = {"fmov",  0x9E670000u, CLS_FMOV_GP, K_V, K_ZR, K_NONE, K_NONE},
+    [OSC_A64_FMOV_DX]  = {"fmov",  0x9E660000u, CLS_FMOV_GP, K_ZR, K_V, K_NONE, K_NONE},
+    [OSC_A64_FMOV_WS]  = {"fmov",  0x1E270000u, CLS_FMOV_GP, K_V, K_ZR, K_NONE, K_NONE},
+    [OSC_A64_FMOV_SW]  = {"fmov",  0x1E260000u, CLS_FMOV_GP, K_ZR, K_V, K_NONE, K_NONE},
+    [OSC_A64_FADD]     = {"fadd",  0x1E202800u, CLS_FP3,    K_V, K_V, K_V, K_NONE},
+    [OSC_A64_FSUB]     = {"fsub",  0x1E203800u, CLS_FP3,    K_V, K_V, K_V, K_NONE},
+    [OSC_A64_FMUL]     = {"fmul",  0x1E200800u, CLS_FP3,    K_V, K_V, K_V, K_NONE},
+    [OSC_A64_FDIV]     = {"fdiv",  0x1E201800u, CLS_FP3,    K_V, K_V, K_V, K_NONE},
+    [OSC_A64_FMAXNM]   = {"fmaxnm",0x1E206800u, CLS_FP3,    K_V, K_V, K_V, K_NONE},
+    [OSC_A64_FMINNM]   = {"fminnm",0x1E207800u, CLS_FP3,    K_V, K_V, K_V, K_NONE},
+    [OSC_A64_FSQRT]    = {"fsqrt", 0x1E21C000u, CLS_FP2,    K_V, K_V, K_NONE, K_NONE},
+    [OSC_A64_FNEG]     = {"fneg",  0x1E214000u, CLS_FP2,    K_V, K_V, K_NONE, K_NONE},
+    [OSC_A64_FABS]     = {"fabs",  0x1E20C000u, CLS_FP2,    K_V, K_V, K_NONE, K_NONE},
+    [OSC_A64_FCMP]     = {"fcmp",  0x1E202000u, CLS_FCMP,   K_NONE, K_V, K_V, K_NONE},
+    [OSC_A64_FCVT_SD]  = {"fcvt",  0x1E624000u, CLS_FCVT_FF, K_V, K_V, K_NONE, K_NONE},
+    [OSC_A64_FCVT_DS]  = {"fcvt",  0x1E22C000u, CLS_FCVT_FF, K_V, K_V, K_NONE, K_NONE},
+    [OSC_A64_SCVTF_X]  = {"scvtf", 0x9E220000u, CLS_CVT,    K_V, K_ZR, K_NONE, K_NONE},
+    [OSC_A64_UCVTF_X]  = {"ucvtf", 0x9E230000u, CLS_CVT,    K_V, K_ZR, K_NONE, K_NONE},
+    [OSC_A64_FCVTZS_X] = {"fcvtzs",0x9E380000u, CLS_CVT,    K_ZR, K_V, K_NONE, K_NONE},
+    [OSC_A64_FCVTZU_X] = {"fcvtzu",0x9E390000u, CLS_CVT,    K_ZR, K_V, K_NONE, K_NONE},
+    [OSC_A64_LDR_F_UOFF] = {"ldr", 0xBD400000u, CLS_FMEM_UOFF, K_V, K_SP, K_NONE, K_NONE},
+    [OSC_A64_STR_F_UOFF] = {"str", 0xBD000000u, CLS_FMEM_UOFF, K_V, K_SP, K_NONE, K_NONE},
+    [OSC_A64_LDR_F_REG]  = {"ldr", 0xBC607800u, CLS_FMEM_REG,  K_V, K_SP, K_ZR, K_NONE},
+    [OSC_A64_STR_F_REG]  = {"str", 0xBC207800u, CLS_FMEM_REG,  K_V, K_SP, K_ZR, K_NONE},
 };
 
 /* variable-field mask per class (bits not fixed by the opcode) */
@@ -90,6 +118,15 @@ static uint32_t cls_varmask(int cls) {
     case CLS_CB:     return 0x00FFFFFFu;
     case CLS_BREG:   return 0x000003E0u;
     case CLS_BRK:    return 0x001FFFE0u;
+    /* OSC-4 scalar FP */
+    case CLS_FP3:    return 0x005F03FFu;  /* type 22, Rm 20:16, Rn, Rd */
+    case CLS_FP2:    return 0x004003FFu;  /* type 22, Rn, Rd */
+    case CLS_FCMP:   return 0x005F03E0u;  /* type 22, Rm, Rn (Rd field fixed 00000, E bit 4 fixed 0) */
+    case CLS_FMOV_GP: return 0x000003FFu; /* Rn, Rd (one fixed width each) */
+    case CLS_FCVT_FF: return 0x000003FFu;
+    case CLS_CVT:    return 0x004003FFu;  /* type 22, Rn, Rd */
+    case CLS_FMEM_UOFF: return 0x403FFFFFu; /* size bit 30, imm12 21:10, Rn, Rt */
+    case CLS_FMEM_REG:  return 0x401F03FFu; /* size bit 30, Rm 20:16, Rn, Rt */
     default:         return 0;
     }
 }
@@ -106,6 +143,12 @@ static int fail(char *err, size_t n, const char *fmt, ...) {
 
 /* map typed operand -> 5-bit field, refusing the wrong kind */
 static int regfield(int kind, int r, uint32_t *f, const char *pos, const char *op, char *err, size_t n) {
+    if (kind == K_V) { /* OSC-4: V0..V31; the XZR / SP spellings are not V registers */
+        if (r >= 0 && r <= 31) { *f = (uint32_t)r; return 0; }
+        if (r == OSC_A64_SP) return fail(err, n, "%s: %s cannot be SP (V register expected)", op, pos);
+        if (r == OSC_A64_XZR) return fail(err, n, "%s: %s cannot be XZR (V register expected)", op, pos);
+        return fail(err, n, "%s: %s V register %d out of range", op, pos, r);
+    }
     if (r >= 0 && r <= 30) { *f = (uint32_t)r; return 0; }
     if (kind == K_ZR && r == OSC_A64_XZR) { *f = 31; return 0; }
     if (kind == K_SP && r == OSC_A64_SP) { *f = 31; return 0; }
@@ -115,7 +158,7 @@ static int regfield(int kind, int r, uint32_t *f, const char *pos, const char *o
 }
 
 static int unreg(int kind, uint32_t f) {
-    if (f < 31) return (int)f;
+    if (f < 31 || kind == K_V) return (int)f;
     if (kind == K_ZR) return OSC_A64_XZR;
     if (kind == K_SP) return OSC_A64_SP;
     return 255; /* not encodable: re-encode check refuses */
@@ -142,9 +185,13 @@ int osc_a64_encode(const OscA64Insn *in, uint32_t *word, char *err, size_t n) {
     if (oi->ka != K_NONE && regfield(oi->ka, in->ra, &ra, "ra", nm, err, n)) return -1;
     int uses_shift = oi->cls == CLS_RRR_SH;
     int uses_cond = oi->cls == CLS_CSINC || oi->cls == CLS_BCOND;
-    int uses_imm2 = oi->cls == CLS_RI || oi->cls == CLS_BFM || oi->cls == CLS_MOV16;
+    int fp_typed = oi->cls == CLS_FP3 || oi->cls == CLS_FP2 || oi->cls == CLS_FCMP || oi->cls == CLS_CVT ||
+                   oi->cls == CLS_FMEM_UOFF || oi->cls == CLS_FMEM_REG;
+    int uses_imm2 = oi->cls == CLS_RI || oi->cls == CLS_BFM || oi->cls == CLS_MOV16 || fp_typed;
     int uses_imm = !(oi->cls == CLS_R4 || oi->cls == CLS_MULH || oi->cls == CLS_R3 ||
-                     oi->cls == CLS_CSINC || oi->cls == CLS_BREG);
+                     oi->cls == CLS_CSINC || oi->cls == CLS_BREG || oi->cls == CLS_FP3 || oi->cls == CLS_FP2 ||
+                     oi->cls == CLS_FCMP || oi->cls == CLS_FMOV_GP || oi->cls == CLS_FCVT_FF || oi->cls == CLS_CVT ||
+                     oi->cls == CLS_FMEM_REG);
     if (!uses_shift && in->shift) return fail(err, n, "%s: shift unused but set", nm);
     if (!uses_cond && in->cond) return fail(err, n, "%s: cond unused but set", nm);
     if (!uses_imm2 && in->imm2) return fail(err, n, "%s: imm2 unused but set", nm);
@@ -225,6 +272,37 @@ int osc_a64_encode(const OscA64Insn *in, uint32_t *word, char *err, size_t n) {
         if (imm < 0 || imm > 0xFFFF) return fail(err, n, "%s: imm16 %lld out of range", nm, (long long)imm);
         w |= (uint32_t)imm << 5;
         break;
+    /* OSC-4 scalar FP: imm2 is the type, 0 = S, 1 = D */
+    case CLS_FP3:
+        if (imm2 != 0 && imm2 != 1) return fail(err, n, "%s: type %lld refused (0 = S, 1 = D)", nm, (long long)imm2);
+        w |= ((uint32_t)imm2 << 22) | (rm << 16) | (rn << 5) | rd;
+        break;
+    case CLS_FP2:
+    case CLS_CVT:
+        if (imm2 != 0 && imm2 != 1) return fail(err, n, "%s: type %lld refused (0 = S, 1 = D)", nm, (long long)imm2);
+        w |= ((uint32_t)imm2 << 22) | (rn << 5) | rd;
+        break;
+    case CLS_FCMP:
+        if (imm2 != 0 && imm2 != 1) return fail(err, n, "%s: type %lld refused (0 = S, 1 = D)", nm, (long long)imm2);
+        w |= ((uint32_t)imm2 << 22) | (rm << 16) | (rn << 5);
+        break;
+    case CLS_FMOV_GP:
+    case CLS_FCVT_FF:
+        w |= (rn << 5) | rd; /* one fixed form each; imm2 was refused above if set */
+        break;
+    case CLS_FMEM_UOFF: {
+        if (imm2 != 0 && imm2 != 1) return fail(err, n, "%s: type %lld refused (0 = S, 1 = D)", nm, (long long)imm2);
+        int64_t sc = imm2 ? 8 : 4;
+        if (imm < 0 || imm > 4095 * sc || (imm % sc))
+            return fail(err, n, "%s: offset %lld not a multiple of %lld in 0..%lld", nm, (long long)imm, (long long)sc,
+                        (long long)(4095 * sc));
+        w |= ((uint32_t)imm2 << 30) | ((uint32_t)(imm / sc) << 10) | (rn << 5) | rd;
+        break;
+    }
+    case CLS_FMEM_REG:
+        if (imm2 != 0 && imm2 != 1) return fail(err, n, "%s: type %lld refused (0 = S, 1 = D)", nm, (long long)imm2);
+        w |= ((uint32_t)imm2 << 30) | (rm << 16) | (rn << 5) | rd;
+        break;
     default:
         return fail(err, n, "bad class");
     }
@@ -266,6 +344,13 @@ int osc_a64_decode(uint32_t w, OscA64Insn *out) {
         case CLS_BCOND: d.imm = sext((w >> 5) & 0x7FFFF, 19) * 4; d.cond = (uint8_t)(w & 15); break;
         case CLS_CB: d.imm = sext((w >> 5) & 0x7FFFF, 19) * 4; break;
         case CLS_BRK: d.imm = (w >> 5) & 0xFFFF; break;
+        /* OSC-4 scalar FP */
+        case CLS_FP3: case CLS_FP2: case CLS_FCMP: case CLS_CVT: d.imm2 = (w >> 22) & 1; break;
+        case CLS_FMEM_UOFF:
+            d.imm2 = (w >> 30) & 1;
+            d.imm = (int64_t)((w >> 10) & 0xFFF) * (d.imm2 ? 8 : 4);
+            break;
+        case CLS_FMEM_REG: d.imm2 = (w >> 30) & 1; break;
         default: break;
         }
         uint32_t re;
@@ -332,3 +417,20 @@ OscA64Insn osc_a64_bcond(OscA64Cond c, int64_t off) {
 OscA64Insn osc_a64_cb(OscA64Op op, int rt, int64_t off) { OscA64Insn i = mk(op); i.rd = r8(rt); i.imm = off; return i; }
 OscA64Insn osc_a64_breg(OscA64Op op, int rn) { OscA64Insn i = mk(op); i.rn = r8(rn); return i; }
 OscA64Insn osc_a64_brk(int64_t imm16) { OscA64Insn i = mk(OSC_A64_BRK); i.imm = imm16; return i; }
+
+/* OSC-4 floats: dbl lands in imm2 unchanged so the encoder sees and refuses anything but 0 / 1 */
+OscA64Insn osc_a64_f3(OscA64Op op, int vd, int vn, int vm, int dbl) {
+    OscA64Insn i = osc_a64_r3(op, vd, vn, vm); i.imm2 = dbl; return i;
+}
+OscA64Insn osc_a64_f2(OscA64Op op, int rd, int rn, int dbl) {
+    OscA64Insn i = mk(op); i.rd = r8(rd); i.rn = r8(rn); i.imm2 = dbl; return i;
+}
+OscA64Insn osc_a64_fcmp(int vn, int vm, int dbl) {
+    OscA64Insn i = mk(OSC_A64_FCMP); i.rn = r8(vn); i.rm = r8(vm); i.imm2 = dbl; return i;
+}
+OscA64Insn osc_a64_fmem(OscA64Op op, int vt, int rn, int64_t off, int dbl) {
+    OscA64Insn i = osc_a64_mem(op, vt, rn, off); i.imm2 = dbl; return i;
+}
+OscA64Insn osc_a64_fmem_reg(OscA64Op op, int vt, int rn, int rm, int dbl) {
+    OscA64Insn i = osc_a64_r3(op, vt, rn, rm); i.imm2 = dbl; return i;
+}
