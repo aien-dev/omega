@@ -29,6 +29,9 @@
 #define SPEC_GBS 273.0
 #define PRACTICAL_GBS 237.2
 
+/* The layout the bandwidth runs use: the API default (row-major) unless --layout chose another. Restored after the
+ * correctness loop, which sets both layouts in turn. */
+static uint32_t g_lay = OMEGA_TERN_LAYOUT_ROWMAJOR, g_brows;
 static int g_checks, g_failed;
 #define CHECK(cond, ...) do { g_checks++; if (!(cond)) { g_failed++; printf("FAIL: "); printf(__VA_ARGS__); printf("\n"); } } while (0)
 static uint32_t lcg(uint32_t *s) { *s = *s * 1664525u + 1013904223u; return *s; }
@@ -396,7 +399,7 @@ static void chip_correctness(void) {
             s_bad += bad < 0 ? (long)shp[i][0] : bad;
         }
     }
-    omega_gpu_tern_set_layout(OMEGA_TERN_LAYOUT_BLOCK, 4);
+    omega_gpu_tern_set_layout(g_lay, g_brows);
     printf("chip: BitNet shapes x 2 layouts, rows differing %ld\n", s_bad);
     RC("  \"bitnet_shapes\": {\"layouts\": 2, \"differing\": %ld},\n", s_bad);
     /* extremes: all +1 / all -1 rows, x all -128 and all 127, k 16384 (|y| = 2^21) */
@@ -576,13 +579,13 @@ int main(int argc, char **argv) {
     if (host_only) host_battery();
     else if (sim) sim_battery();
     else {
-        if (layout != 99) omega_gpu_tern_set_layout(layout, brows);
+        if (layout != 99) { g_lay = layout; g_brows = brows; omega_gpu_tern_set_layout(layout, brows); }
         if (rows || warps || depth) omega_gpu_tern_set_shape(rows, warps, depth);
         if (ctas) omega_gpu_tern_set_cta_budget(ctas);
         if (wmode) omega_gpu_tern_set_weight_cache(strcmp(wmode, "uncached") != 0);
         RC("{\n  \"test\": \"gpu_tern_test\",\n  \"stage\": \"TERN-T0 KT1\",\n  \"mutant_forced\": %d,\n", mutant);
-        uint32_t sr = 0, sw = 0, sd = 0, sc = 0; omega_gpu_tern_shape_for(2560, layout == 99 ? OMEGA_TERN_LAYOUT_BLOCK : layout, brows ? brows : 4, &sr, &sw, &sd, &sc);
-        RC("  \"shape_k2560\": {\"layout\": %u, \"rows\": %u, \"warps\": %u, \"depth\": %u, \"ctas\": %u},\n", layout == 99 ? 1u : layout, sr, sw, sd, sc);
+        uint32_t sr = 0, sw = 0, sd = 0, sc = 0; omega_gpu_tern_shape_for(2560, g_lay, g_brows ? g_brows : 4, &sr, &sw, &sd, &sc);
+        RC("  \"shape_k2560\": {\"layout\": %u, \"rows\": %u, \"warps\": %u, \"depth\": %u, \"ctas\": %u},\n", g_lay, sr, sw, sd, sc);
         if (mutant) {
             if (mutant == 2) { int rc = 0; long bad = chip_qkv(1, &rc); /* the f32 q|k|v test with the r / (n / 3) map forced */
                                CHECK(rc == 0 && bad == 0, "f32 q|k|v with mutant 2 forced: %s, %ld of 3840 rows differ from ((float)y * a) * scale[seg]", omega_gpu_tern_rc_name(rc), bad);
