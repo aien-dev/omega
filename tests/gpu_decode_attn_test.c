@@ -192,12 +192,18 @@ static void host_only(void) {
       free(ref); case_free(&c); }
     /* codegen budget */
     for (uint32_t d = 1; d <= 4; d++) for (int m = 0; m <= 4; m++) {
-        OmegaDecodeAttnSpec s = { d, m }; uint32_t n = 0, gp = 0;
+        OmegaDecodeAttnSpec s = { d, m, 0 }; uint32_t n = 0, gp = 0;
         int rc = omega_decode_attn_prog_stats(&s, &n, &gp);
         CHECK(rc == 0 && n <= 1024 && gp <= 128, "codegen depth %u mutant %d: rc %d insns %u gprs %u", d, m, rc, n, gp);
         if (rc == 0 && m == 0) printf("codegen depth %u: %u instructions, %u registers (declared %u, 256 threads -> %u of 65536)\n", d, n, gp, ((gp + 8) / 8) * 8, 256 * ((gp + 8) / 8) * 8);
     }
-    { OmegaDecodeAttnSpec s = { 0, 0 }; CHECK(omega_decode_attn_prog_stats(&s, NULL, NULL) != 0, "depth 0 refused");
+    for (uint32_t dep = 1; dep <= 3; dep += 2) { /* DEPFLAGS: the production depth with the counter prologue/epilogue (and the camera) stays within budget */
+        OmegaDecodeAttnSpec s = { OMEGA_GPU_DATTN_DEPTH, 0, dep }; uint32_t n = 0, gp = 0;
+        int rc = omega_decode_attn_prog_stats(&s, &n, &gp);
+        CHECK(rc == 0 && n <= BW_MAX_IR_INSNS && gp <= 128, "codegen depth %u dep %u: rc %d insns %u gprs %u (IR cap %u)", OMEGA_GPU_DATTN_DEPTH, dep, rc, n, gp, BW_MAX_IR_INSNS);
+    }
+    CHECK(OMEGA_DATTN_ARGS_WORDS <= OMEGA_DEP_MAX_KERNEL_ARGS, "argument words end before the dep words (0x3e8)");
+    { OmegaDecodeAttnSpec s = { 0, 0, 0 }; CHECK(omega_decode_attn_prog_stats(&s, NULL, NULL) != 0, "depth 0 refused");
       s.depth = 5; CHECK(omega_decode_attn_prog_stats(&s, NULL, NULL) != 0, "depth 5 refused");
       s.depth = 1; s.mutant = 5; CHECK(omega_decode_attn_prog_stats(&s, NULL, NULL) != 0, "mutant 5 refused"); }
     CHECK(omega_gpu_decode_attn_cache_alloc(0, 256, THETA, NULL) == OMEGA_GPU_DATTN_BAD_ARGS, "NULL out refused");
@@ -208,9 +214,10 @@ static void host_only(void) {
 
 /* ------------------------------------------------------------- simulator */
 static uint64_t g_sim_issues;
+static uint32_t g_sim_dep; /* DEPFLAGS: spec.dep for the next sim point (0, or OMEGA_DEP_FLAGS: counter armed by ws_dep_arm) */
 static int sim_point(uint32_t max_pos, uint32_t pos, uint32_t depth, int mutant, uint32_t per_split, float qscale, uint32_t seed, char *msg, size_t n, double *worst, size_t *bad, char *rows, size_t rn) {
     static BlackwellIRProgram prog;
-    OmegaDecodeAttnSpec spec = { depth, mutant };
+    OmegaDecodeAttnSpec spec = { depth, mutant, g_sim_dep };
     if (omega_blackwell_codegen_decode_attn_prog(&spec, &prog) != 0) { snprintf(msg, n, "codegen refused"); return -1; }
     Case c; case_make(&c, max_pos, pos, seed, qscale);
     const uint32_t splits = (pos + per_split) / per_split;
@@ -243,8 +250,10 @@ static int sim_point(uint32_t max_pos, uint32_t pos, uint32_t depth, int mutant,
         s.ranges[4].lo = (uintptr_t)out; s.ranges[4].hi = (uintptr_t)out + 4096 * 4;
         s.ranges[5].lo = (uintptr_t)part; s.ranges[5].hi = (uintptr_t)part + (size_t)4 * splits * OMEGA_DATTN_PARTIAL_WORDS * 4;
         s.ranges[6].lo = (uintptr_t)cnt; s.ranges[6].hi = (uintptr_t)cnt + 16;
+        static uint32_t depline[16]; if (g_sim_dep) ws_dep_arm(&s, depline);
         err = ws_run(&s, splits, 4);
         if (err) { snprintf(msg, n, "order %d: %s (pc %d)", order, s.msg, s.err_pc); break; }
+        if (g_sim_dep && depline[0] != splits * 4u) { err = -1; snprintf(msg, n, "dep counter %u after %u CTAs", depline[0], splits * 4u); break; }
         g_sim_issues += s.warp_issues;
         size_t unwritten = 0; for (unsigned i = 0; i < 4096; i++) if (out[i] == -999.0f) unwritten++;
         if (unwritten) { err = -1; snprintf(msg, n, "%zu output words never written", unwritten); break; }
@@ -281,6 +290,13 @@ static void sim_battery(void) {
         int err = sim_point(pts[i].max_pos, pts[i].pos, pts[i].depth, 0, pts[i].per, pts[i].qscale, 100 + (uint32_t)i, msg, sizeof msg, &worst, &bad, rows, sizeof rows);
         CHECK(err == 0 && bad == 0, "sim %s depth %u: %s", pts[i].name, pts[i].depth, msg);
         printf("sim %-50s depth %u: %s %s\n", pts[i].name, pts[i].depth, err ? "ERROR" : bad ? "MISMATCH" : "ok", msg);
+    }
+    { /* DEPFLAGS: the dep-mode kernel (2 splits x 4 groups = 8 CTAs) computes the same output and every CTA counts itself in */
+        g_sim_dep = OMEGA_DEP_FLAGS;
+        int err = sim_point(512, 300, 2, 0, 256, 1.0f, 100, msg, sizeof msg, &worst, &bad, rows, sizeof rows);
+        g_sim_dep = 0;
+        CHECK(err == 0 && bad == 0, "sim context 301 depth 2 with dep flags: %s", msg);
+        printf("sim context 301 (2 splits) depth 2 dep 1: %s %s\n", err ? "ERROR" : bad ? "MISMATCH" : "ok", msg);
     }
     for (int m = 1; m <= 4; m++) {
         int err = sim_point(512, 300, 2, m, 256, 1.0f, 200, msg, sizeof msg, &worst, &bad, rows, sizeof rows);

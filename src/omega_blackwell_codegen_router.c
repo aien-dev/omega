@@ -100,6 +100,7 @@ static void isetp_ge_u32(Em *e, int a, int b) { BlackwellIRInsn i = I0(BW_IR_ISE
 static void bra(Em *e, int target) { BlackwellIRInsn i = I0(BW_IR_BRA); i.imm = (uint32_t)(target - here(e)); emit(e, i, K_BRA); }
 static int bra_if_p0_fwd(Em *e) { int at = here(e); BlackwellIRInsn i = I0(BW_IR_BRA); i.predicate_p0 = true; i.imm = 1; emit(e, i, K_BRA); return at; }
 static void patch_bra(Em *e, int at, int target) { if (!e->err) e->p->insns[at].imm = (uint32_t)(target - at); }
+#include "omega_bw_dep.h" /* DEPFLAGS: needs Em, emit, I0, V, V64, here, patch_bra, K_* above */
 static int bssy_fwd(Em *e) { int at = here(e); BlackwellIRInsn i = I0(BW_IR_BSSY); i.bar_reg = 0; i.imm = 2; emit(e, i, K_BSSY); return at; }
 static void bsync(Em *e) { BlackwellIRInsn i = I0(BW_IR_BSYNC); i.bar_reg = 0; emit(e, i, K_BSYNC); }
 static void exit_k(Em *e) { emit(e, I0(BW_IR_EXIT), K_EXIT); }
@@ -171,6 +172,7 @@ int omega_blackwell_codegen_router_prog(const OmegaRouterSpec *spec, BlackwellIR
     s2r(e, tid, BW_SR_TID_X);
     movi(e, one, 1); movrz(e, R(zero)); movi(e, c2p23, C_2P23); movi(e, cneg, NEG_BIG);
     shr(e, warp, tid, 5);
+    OmegaBwDep Dp; dep_prologue(e, spec->dep, udesc, tid, &Dp);
     andi(e, R(lane), R(tid), 31u);
 
     /* ---- phase 1: RMSNorm ---- */
@@ -390,6 +392,7 @@ int omega_blackwell_codegen_router_prog(const OmegaRouterSpec *spec, BlackwellIR
         region_end(e, rg);
     }
     patch_bra(e, bra_tail, here(e));
+    dep_epilogue(e, udesc, tid, &Dp);
     tail(e);
     (void)zero;
     if (e->err) return -1;

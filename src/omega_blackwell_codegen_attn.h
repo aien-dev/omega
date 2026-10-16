@@ -79,6 +79,7 @@ typedef struct {
     uint32_t depth;  /* prefetch depth of the K and V streams, 1..4 */
     int mutant;      /* TEST ONLY. 0 none; 1 no RoPE on q and k; 2 V read one position late; 3 the new K/V are not
                       * written to the cache; 4 the cross-split combine ignores the max (differs only when splits > 1). */
+    uint32_t dep;    /* OMEGA_DEP_FLAGS | OMEGA_DEP_CAMERA (omega_bw_dep.h); 0 = none */
 } OmegaDecodeAttnSpec;
 
 /* Builds the IR program (register-allocated) into *prog. 0 ok, -1 refused (depth 0 or > 4, mutant outside 0..4,

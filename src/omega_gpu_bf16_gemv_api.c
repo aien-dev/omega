@@ -196,7 +196,7 @@ static int gemv_core(const OmegaGpuBf16Tensor *t, const float *x32, const uint16
     if (rec && (!dev_x || !dev_y)) return OMEGA_GPU_BF16_BAD_ARGS;
     if (!t || !t->w.cpu || (!rec && ((!x32 && !x16) || !y))) return OMEGA_GPU_BF16_BAD_ARGS;
     const uint32_t n = t->n, k = t->k;
-    OmegaBf16GemvSpec spec; uint32_t ctas; spec_for(k, &spec, &ctas);
+    OmegaBf16GemvSpec spec; uint32_t ctas; spec_for(k, &spec, &ctas); spec.dep = rec ? omega_gpu_cmdlist_dep(rec) : 0; /* dep-mode list: the kernel carries the counter protocol */
     if (n % spec.rows) return OMEGA_GPU_BF16_CODEGEN_FAIL;
     const uint32_t RG = n / spec.rows;
     uint32_t grid_x = (RG + spec.warps - 1) / spec.warps;

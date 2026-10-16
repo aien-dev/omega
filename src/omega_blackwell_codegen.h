@@ -6,7 +6,8 @@
 #include <stdint.h>
 #include "omega_blackwell_matmul.h"
 
-#define BW_MAX_IR_INSNS         1024 /* cut K: the four-head hd 128 attention kernel is ~700 instructions */
+#define BW_MAX_IR_INSNS         1280 /* cut K: the four-head hd 128 attention kernel is ~700 instructions; DEPFLAGS (2026-10-16): the depth-4 decode attention
+                                        kernel (1012) plus the counter prologue and epilogue passes 1024. Programs are heap-allocated and code is sized by need. */
 #define BW_MAX_VREGS            256
 #define BW_MAX_UVREGS           32
 #define BW_PHYS_GPR_START       2    /* Reserve R0, R1 */
@@ -100,7 +101,17 @@ typedef enum {
     BW_IR_LDG_E_128,    /* LDG.E.128 Rd..Rd+3, desc[URd][Ra.64+imm] */
     /* Batched attention loads (2026-10-12). Words matched against nvcc 13.0.88 -arch=sm_121
      * (omega_blackwell_verify_codegen_fixtures_fragmm). imm = unsigned byte offset < 2^23; dst an aligned quad. */
-    BW_IR_LDS128        /* LDS.128 Rd..Rd+3, [Ra+imm] */
+    BW_IR_LDS128,       /* LDS.128 Rd..Rd+3, [Ra+imm] */
+    /* Dependency flags between the launches of one command list (DEPFLAGS, 2026-10-16). Words from nvcc 13.0.88
+     * -arch=sm_121 + nvdisasm (investigations/2026-10-16-DEPFLAGS/sass): ld.acquire.gpu -> LDG.E.STRONG.GPU + CCTL.IVALL;
+     * red.release.gpu.add -> MEMBAR.ALL.GPU; ERRBAR; CGAERRBAR; REDG/ATOMG.E.ADD.STRONG.GPU; mov.u64 %globaltimer ->
+     * CS2R Rd:Rd+1, SR_GLOBALTIMERLO. Scope field = w[2] bits 13..16 (0xa SYS, 0x7 GPU), as PR #484 found for the F32 twins. */
+    BW_IR_LDG_STRONG_GPU,      /* LDG.E.STRONG.GPU Rd, desc[URd][Ra.64]: a flag another CTA of this GPU writes */
+    BW_IR_ATOMG_ADD_STRONG_GPU,/* ATOMG.E.ADD.STRONG.GPU PT, Rd, desc[URd][Ra.64], Rb */
+    BW_IR_MEMBAR_ALL_GPU,      /* MEMBAR.ALL.GPU */
+    BW_IR_ERRBAR,              /* ERRBAR */
+    BW_IR_CGAERRBAR,           /* CGAERRBAR */
+    BW_IR_CS2R_GLOBALTIMER     /* CS2R Rd:Rd+1, SR_GLOBALTIMERLO (64-bit ns timer; dst a register pair) */
 } BlackwellIROpcode;
 
 /* Barrier (reconvergence) registers: the sm_121 BSSY/BSYNC words carry a 4-bit barrier id

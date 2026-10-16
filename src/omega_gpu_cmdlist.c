@@ -7,6 +7,8 @@
  * written by the CPU, WAIT_FOR_IDLE sits between launches, and the PCAS launch method.
  */
 #include "omega_gpu_cmdlist.h"
+#include "omega_gpu_dep.h"
+#include "omega_gpu_fmt.h"
 #include "omega_blackwell_codegen.h"
 #include "omega_blackwell_qmd.h"
 #include "omega_blackwell_submit.h"
@@ -46,18 +48,48 @@ struct OmegaGpuCmdList {
     uint32_t nop_gpr;
     uint8_t *indep;       /* per launch: 1 = shares no data with the launch before it (mark_independent): no barrier before it */
     int stamped;          /* the last submit had opts.stamps (the accessor refuses stale stamps from an earlier submit) */
+    /* dependency flags (omega_gpu_dep.h): the counter line (+0 done, +4 camera slot allocator, +8 u64 camera base), the camera
+     * records (OMEGA_DEP_CAM_SLOTS x 16 B, allocated with OMEGA_DEP_CAMERA), per-launch CTA counts, the running CTA total */
+    OmegaGpuMem dep_line, dep_cam;
+    uint32_t dep, dep_sum, dep_observed;
+    uint32_t *ctas;
 };
 
 static uint32_t g_latched;
 
 int omega_gpu_cmdlist_is_latched(void) { return __atomic_load_n(&g_latched, __ATOMIC_ACQUIRE) ? 1 : 0; }
 uint32_t omega_gpu_cmdlist_count(const OmegaGpuCmdList *cl) { return cl ? cl->n : 0; }
-void omega_gpu_cmdlist_reset(OmegaGpuCmdList *cl) { if (cl) cl->n = 0; }
+void omega_gpu_cmdlist_reset(OmegaGpuCmdList *cl) { if (cl) { cl->n = 0; cl->dep_sum = 0; } }
+static inline uint32_t *dep_target_word(OmegaGpuCmdList *cl, uint32_t i) {
+    return (uint32_t *)((uint8_t *)cl->banks.cpu + (size_t)i * OMEGA_GPU_CMDLIST_BANK_BYTES + OMEGA_DEP_ARG_TARGET);
+}
 int omega_gpu_cmdlist_mark_independent(OmegaGpuCmdList *cl) {
     if (!cl || cl->n == 0) { omega_gpu_session_set_error("cmdlist mark_independent: no launch recorded"); return -1; }
+    if (cl->indep[cl->n - 1]) return 0; /* already marked: do not lower the target twice */
     cl->indep[cl->n - 1] = 1;
+    /* dep mode: wait for the launches before the previous one only (S_(i-2)); the launch after this one keeps S_i, which counts both */
+    if ((cl->dep & OMEGA_DEP_FLAGS) && cl->n >= 2) *dep_target_word(cl, cl->n - 1) -= cl->ctas[cl->n - 2];
     return 0;
 }
+int omega_gpu_cmdlist_set_dep(OmegaGpuCmdList *cl, uint32_t dep) {
+    if (!cl || (dep & ~(OMEGA_DEP_FLAGS | OMEGA_DEP_CAMERA))) { omega_gpu_session_set_error("cmdlist set_dep: arguments (FLAGS | CAMERA only)"); return -1; }
+    if (cl->n) { omega_gpu_session_set_error("cmdlist set_dep: the list is not empty (reset first)"); return -1; }
+    if ((dep & OMEGA_DEP_CAMERA) && !cl->dep_cam.cpu) {
+        /* one slot past the ring so the base can be moved up by 16 B when its low word would read as zero (the kernel tests the low word) */
+        if (omega_gpu_session_alloc((size_t)(OMEGA_DEP_CAM_SLOTS + 1u) * 16u, &cl->dep_cam) != 0) { omega_gpu_session_set_error("cmdlist set_dep: camera alloc"); return -1; }
+        memset(cl->dep_cam.cpu, 0, (size_t)(OMEGA_DEP_CAM_SLOTS + 1u) * 16u);
+        if (omega_gpu_session_sync_to_gpu(&cl->dep_cam) != 0) return -1;
+    }
+    uint64_t cam = (dep & OMEGA_DEP_CAMERA) ? cl->dep_cam.va : 0;
+    if (cam && (uint32_t)cam == 0) cam += 16u;
+    uint64_t *line = cl->dep_line.cpu;
+    line[0] = 0; line[1] = cam;
+    if (omega_gpu_session_sync_to_gpu(&cl->dep_line) != 0) return -1;
+    cl->dep = dep; cl->dep_sum = 0; cl->dep_observed = 0;
+    return 0;
+}
+uint32_t omega_gpu_cmdlist_dep(const OmegaGpuCmdList *cl) { return cl ? cl->dep : 0; }
+uint32_t omega_gpu_cmdlist_dep_counter(const OmegaGpuCmdList *cl) { return cl ? cl->dep_observed : 0; }
 
 static int build_nop(OmegaGpuCmdList *cl) {
     BlackwellIRProgram *prog = omega_gpu_host_calloc(1, sizeof *prog);
@@ -88,19 +120,22 @@ int omega_gpu_cmdlist_create(uint32_t cap, OmegaGpuCmdList **out) {
     cl->words_cap = RING_WORDS;
     cl->words = omega_gpu_host_alloc((size_t)cl->words_cap * 4u);
     cl->indep = omega_gpu_host_calloc(cap, 1);
-    int rc = cl->words && cl->indep ? 0 : -1;
+    cl->ctas = omega_gpu_host_calloc(cap, sizeof *cl->ctas);
+    int rc = cl->words && cl->indep && cl->ctas ? 0 : -1;
     omega_gpu_session_lock();
     if (rc == 0 && !omega_gpu_session_open()) rc = -1;
     if (rc == 0 && (omega_gpu_session_alloc((size_t)cap * OMEGA_GPU_CMDLIST_BANK_BYTES, &cl->banks) != 0 ||
                     omega_gpu_session_alloc((size_t)cap * OMEGA_GPU_CMDLIST_QMD_BYTES, &cl->qmds) != 0 ||
                     omega_gpu_session_alloc((size_t)cap * 16u, &cl->sems) != 0 ||
                     omega_gpu_session_alloc((size_t)(cap + 1u) * 16u, &cl->stamps) != 0 ||
-                    omega_gpu_session_alloc(0x4000, &cl->scratch) != 0))
+                    omega_gpu_session_alloc(0x4000, &cl->scratch) != 0 ||
+                    omega_gpu_session_alloc(OMEGA_DEP_LINE_BYTES, &cl->dep_line) != 0))
         rc = -1;
     if (rc == 0 && build_nop(cl) != 0) { omega_gpu_session_set_error("cmdlist create: nop kernel"); rc = -1; }
     if (rc == 0) {
         memset(cl->scratch.cpu, 0, 0x4000);
-        if (omega_gpu_session_sync_to_gpu(&cl->scratch) != 0) rc = -1;
+        memset(cl->dep_line.cpu, 0, OMEGA_DEP_LINE_BYTES);
+        if (omega_gpu_session_sync_to_gpu(&cl->scratch) != 0 || omega_gpu_session_sync_to_gpu(&cl->dep_line) != 0) rc = -1;
     }
     omega_gpu_session_unlock();
     if (rc != 0) { omega_gpu_cmdlist_free(cl); return -1; }
@@ -111,11 +146,12 @@ int omega_gpu_cmdlist_create(uint32_t cap, OmegaGpuCmdList **out) {
 void omega_gpu_cmdlist_free(OmegaGpuCmdList *cl) {
     if (!cl) return;
     omega_gpu_session_lock();
-    OmegaGpuMem *m[] = { &cl->banks, &cl->qmds, &cl->sems, &cl->stamps, &cl->scratch, &cl->nop_code };
+    OmegaGpuMem *m[] = { &cl->banks, &cl->qmds, &cl->sems, &cl->stamps, &cl->scratch, &cl->nop_code, &cl->dep_line, &cl->dep_cam };
     for (unsigned i = 0; i < sizeof m / sizeof m[0]; i++) if (m[i]->cpu) omega_gpu_session_free(m[i]);
     omega_gpu_session_unlock();
     omega_gpu_host_free(cl->words);
     omega_gpu_host_free(cl->indep);
+    omega_gpu_host_free(cl->ctas);
     omega_gpu_host_free(cl);
 }
 
@@ -125,6 +161,8 @@ int omega_gpu_cmdlist_add(OmegaGpuCmdList *cl, const OmegaGpuLaunch *L) {
     if (!cl || !L || !L->args || L->n_args == 0 || L->n_args > OMEGA_GPU_SESSION_MAX_ARGS || L->threads_x == 0 || L->grid_x == 0 || L->grid_y == 0 ||
         L->code_va == 0) { omega_gpu_session_set_error("cmdlist add: arguments"); return -1; }
     if (cl->n >= cl->cap) { omega_gpu_session_set_error("cmdlist add: list full"); return -1; }
+    const int depmode = (cl->dep & OMEGA_DEP_FLAGS) != 0;
+    if (cl->dep && L->n_args > OMEGA_DEP_MAX_KERNEL_ARGS) { omega_gpu_session_set_error("cmdlist add: more than 26 argument words in dep mode (words 0x3e8.. carry the counter)"); return -1; }
     const uint32_t i = cl->n;
     const uint32_t ty = L->threads_y ? L->threads_y : 1;
     const uint64_t bank_va = cl->banks.va + (uint64_t)i * OMEGA_GPU_CMDLIST_BANK_BYTES;
@@ -132,8 +170,15 @@ int omega_gpu_cmdlist_add(OmegaGpuCmdList *cl, const OmegaGpuLaunch *L) {
     uint32_t drv[OMEGA_BW_CBANK_DRIVER_WORDS];
     omega_blackwell_build_cbank_driver_2d(drv, bank_va, L->threads_x, ty, L->grid_x, L->grid_y);
     memcpy(bank, drv, sizeof drv);
-    memset(bank + sizeof drv, 0, 0x380 - sizeof drv);
+    memset(bank + sizeof drv, 0, OMEGA_GPU_CMDLIST_BANK_BYTES - sizeof drv);
     memcpy(bank + 0x380, L->args, (size_t)L->n_args * 4u);
+    if (cl->dep) { /* counter address for the wait and the add, target = CTAs of every launch before this one (camera-only lists too: the add stays off) */
+        const uint64_t line_va = cl->dep_line.va;
+        memcpy(bank + OMEGA_DEP_ARG_WAIT, &line_va, 8); memcpy(bank + OMEGA_DEP_ARG_DONE, &line_va, 8);
+        memcpy(bank + OMEGA_DEP_ARG_TARGET, &cl->dep_sum, 4);
+    }
+    cl->ctas[i] = L->grid_x * L->grid_y;
+    if (depmode) cl->dep_sum += cl->ctas[i];
 
     const uint64_t q1_va = cl->qmds.va + (uint64_t)i * OMEGA_GPU_CMDLIST_QMD_BYTES, q0_va = q1_va + 0x200;
     const uint64_t sem_va = cl->sems.va + (uint64_t)i * 16u;
@@ -243,12 +288,20 @@ int omega_gpu_cmdlist_submit(OmegaGpuCmdList *cl, const OmegaGpuCmdListOpts *opt
     const uint64_t timeout = o.timeout_ms ? o.timeout_ms : DEFAULT_TIMEOUT_MS;
     const uint32_t spin = o.spin_us ? o.spin_us : omega_gpu_session_spin_us();
     const uint64_t th0 = p->time_now_ns(p->ctx);
+    const int depmode = (cl->dep & OMEGA_DEP_FLAGS) != 0;
+    if (depmode && o.mode == OMEGA_GPU_CMDLIST_INLINE) { omega_gpu_session_set_error("cmdlist submit: dep flags need PCAS mode (one submission, no per-launch barrier)"); return -1; }
+    if (depmode && o.skip_launch) { omega_gpu_session_set_error("cmdlist submit: skip_launch with dep flags would hang the launches after it (the sentinel bounds the wait)"); return -1; }
 
-    /* semaphores INIT, markers 0, everything the CPU wrote made visible */
+    /* semaphores INIT, markers 0, dep counter and camera slot 0, everything the CPU wrote made visible */
     uint32_t *sem = cl->sems.cpu;
     for (uint32_t i = 0; i < cl->n; i++) sem[4 * i] = OMEGA_BW_SEMAPHORE_INTERMEDIATE_INIT;
     volatile uint32_t *mk = (volatile uint32_t *)((uint8_t *)marker->cpu + MARKER_OFF);
     mk[0] = 0; mk[4] = 0;
+    if (cl->dep) {
+        uint32_t *line = cl->dep_line.cpu;
+        line[0] = 0; line[1] = 0; cl->dep_observed = 0;
+        if (p->sync_cpu_to_gpu(p->ctx, cl->dep_line.handle, 0, OMEGA_DEP_LINE_BYTES) != OMEGA_GPU_PLAT_OK) { omega_gpu_session_set_error("cmdlist submit: sync dep line"); return -1; }
+    }
     if (p->sync_cpu_to_gpu(p->ctx, cl->banks.handle, 0, (uint64_t)cl->n * OMEGA_GPU_CMDLIST_BANK_BYTES) != OMEGA_GPU_PLAT_OK ||
         p->sync_cpu_to_gpu(p->ctx, cl->qmds.handle, 0, (uint64_t)cl->n * OMEGA_GPU_CMDLIST_QMD_BYTES) != OMEGA_GPU_PLAT_OK ||
         p->sync_cpu_to_gpu(p->ctx, cl->sems.handle, 0, (uint64_t)cl->n * 16u) != OMEGA_GPU_PLAT_OK ||
@@ -271,6 +324,7 @@ int omega_gpu_cmdlist_submit(OmegaGpuCmdList *cl, const OmegaGpuCmdListOpts *opt
         }
     }
     const uint32_t room = (avail - prefix) / per_launch;
+    if (depmode && room < cl->n) { omega_gpu_session_set_error("cmdlist submit: dep flags need the whole list in one submission (ring too small for this many launches)"); return -1; }
     uint64_t elapsed = 0, host = p->time_now_ns(p->ctx) - th0;
     uint32_t done = 0, submits = 0, words = 0;
     while (done < cl->n) {
@@ -282,7 +336,8 @@ int omega_gpu_cmdlist_submit(OmegaGpuCmdList *cl, const OmegaGpuCmdListOpts *opt
         for (uint32_t i = done; i < end; i++) {
             if (o.skip_launch && i == (uint32_t)(o.skip_launch - 1)) continue;
             /* the first launch of a submission always gets the full barrier (CPU-written QMDs, code and banks before it) */
-            const int indep = i != done && cl->indep[i]; /* marked independent: no barrier, overlaps the launch before it */
+            /* marked independent, or dep flags (the kernels order themselves): no barrier, the grid may overlap the launch before it */
+            const int indep = i != done && (cl->indep[i] || depmode);
             const OmegaGpuCmdListBarrier b = i == done ? OMEGA_GPU_CMDLIST_BARRIER_WFI : indep ? OMEGA_GPU_CMDLIST_BARRIER_NONE : o.barrier;
             if (indep && o.stamps) n = emit_stamp(pb, n, cl->stamps.va, i); /* no WFI: slot i is the front-end time, launch i - 1 may still run */
             if (b != OMEGA_GPU_CMDLIST_BARRIER_NONE) {
@@ -341,6 +396,19 @@ int omega_gpu_cmdlist_submit(OmegaGpuCmdList *cl, const OmegaGpuCmdListOpts *opt
     }
     if (st) { st->launches = cl->n; st->submits = submits; st->words = words; st->elapsed_ns = elapsed; st->host_ns = host; st->sems_done = ok; st->first_missing = missing; }
     if (missing >= 0) { omega_gpu_session_set_error("cmdlist: a launch semaphore is not DONE (launch did not run)"); return -1; }
+    if (cl->dep) {
+        (void)p->sync_gpu_to_cpu(p->ctx, cl->dep_line.handle, 0, OMEGA_DEP_LINE_BYTES);
+        if (cl->dep_cam.cpu) (void)p->sync_gpu_to_cpu(p->ctx, cl->dep_cam.handle, 0, (uint64_t)(OMEGA_DEP_CAM_SLOTS + 1u) * 16u);
+        cl->dep_observed = ((const uint32_t *)cl->dep_line.cpu)[0];
+        if (st) { st->dep_expected = cl->dep_sum; st->dep_observed = cl->dep_observed; }
+        if (depmode && cl->dep_observed != cl->dep_sum) {
+            char e[160];
+            omega_gpu_fmt(e, sizeof e, "cmdlist: dep counter %u after completion, expected %u CTAs%s", cl->dep_observed, cl->dep_sum,
+                          cl->dep_observed > cl->dep_sum ? " (a launch's poll timed out: sentinel added)" : " (a launch did not count itself in)");
+            omega_gpu_session_set_error(e);
+            return -1;
+        }
+    }
     return 0;
 }
 

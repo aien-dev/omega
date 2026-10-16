@@ -104,6 +104,7 @@ static void isetp_ge_u32(Em *e, int a, int b) { BlackwellIRInsn i = I0(BW_IR_ISE
 static void bra(Em *e, int target) { BlackwellIRInsn i = I0(BW_IR_BRA); i.imm = (uint32_t)(target - here(e)); emit(e, i, K_BRA); }
 static int bra_if_p0_fwd(Em *e) { int at = here(e); BlackwellIRInsn i = I0(BW_IR_BRA); i.predicate_p0 = true; i.imm = 1; emit(e, i, K_BRA); return at; }
 static void patch_bra(Em *e, int at, int target) { if (!e->err) e->p->insns[at].imm = (uint32_t)(target - at); }
+#include "omega_bw_dep.h" /* DEPFLAGS: needs Em, emit, I0, V, V64, here, patch_bra, K_* above */
 static int bssy_fwd(Em *e) { int at = here(e); BlackwellIRInsn i = I0(BW_IR_BSSY); i.bar_reg = 0; i.imm = 2; emit(e, i, K_BSSY); return at; }
 static void bsync(Em *e) { BlackwellIRInsn i = I0(BW_IR_BSYNC); i.bar_reg = 0; emit(e, i, K_BSYNC); }
 static void tail(Em *e) {
@@ -188,6 +189,7 @@ int omega_blackwell_codegen_fp8_gemv2_prog(const OmegaFp8GemvSpec *spec, Blackwe
     ldc64(e, ptab, OMEGA_FP8_ARG_TAB); ldc64(e, px, OMEGA_FP8_ARG_X); ldc64(e, py, OMEGA_FP8_ARG_Y);
     ldc32(e, rgn, OMEGA_FP8_ARG_RG); ldc32(e, xs, OMEGA_FP8_ARG_XSTRIDE); ldc32(e, ys, OMEGA_FP8_ARG_YSTRIDE); ldc32(e, stride, OMEGA_FP8_ARG_STRIDE);
     s2r(e, tid, BW_SR_TID_X); s2r(e, cx, BW_SR_CTAID_X); s2r(e, cy, BW_SR_CTAID_Y);
+    OmegaBwDep Dp; dep_prologue(e, spec->dep, udesc, tid, &Dp); /* before the first LDG: the table entry is router-written */
     movi(e, one, 1);
     shr(e, warp, tid, 0, 5);
     andi(e, lane, tid, 0, 31);
@@ -311,6 +313,7 @@ int omega_blackwell_codegen_fp8_gemv2_prog(const OmegaFp8GemvSpec *spec, Blackwe
     const int L_end = here(e);
     patch_bra(e, bra_none, L_end);
     patch_bra(e, bra_done, L_end);
+    dep_epilogue(e, udesc, tid, &Dp);
     tail(e);
     if (e->err) return -1;
     return omega_bw_regalloc_solve(prog);

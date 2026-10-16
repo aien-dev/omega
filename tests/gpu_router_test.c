@@ -107,26 +107,34 @@ static void host_only(void) {
     /* codegen budgets: every production shape fits the register file (32 * warps * declared <= 65536) and the IR limit */
     uint32_t ws[] = { 8, 16, 32 }, ds[] = { 1, 2, 4, 8 };
     for (unsigned i = 0; i < 3; i++) for (unsigned j = 0; j < 4; j++) for (int m = 0; m <= 4; m++) {
-        OmegaRouterSpec s = { ws[i], ds[j], m }; uint32_t n = 0, g = 0;
+        OmegaRouterSpec s = { ws[i], ds[j], m, 0 }; uint32_t n = 0, g = 0;
         int rc = omega_router_prog_stats(&s, &n, &g);
         uint32_t decl = ((g + 1 + 7) / 8) * 8;
         CHECK(rc == 0 && n <= 1024 && 32u * ws[i] * decl <= 65536u, "codegen warps %u depth %u mutant %d: rc %d insns %u gprs %u declared %u", ws[i], ds[j], m, rc, n, g, decl);
         if (m == 0 && rc == 0) printf("codegen warps %2u depth %u: %u instructions, %u registers (declared %u, register file %u of 65536)\n", ws[i], ds[j], n, g, decl, 32u * ws[i] * decl);
     }
-    { OmegaRouterSpec s = { 4, 8, 0 }; CHECK(omega_router_prog_stats(&s, NULL, NULL) != 0, "warps 4 refused"); }
-    { OmegaRouterSpec s = { 8, 3, 0 }; CHECK(omega_router_prog_stats(&s, NULL, NULL) != 0, "depth 3 refused"); }
-    { OmegaRouterSpec s = { 8, 8, 5 }; CHECK(omega_router_prog_stats(&s, NULL, NULL) != 0, "mutant 5 refused"); }
+    for (uint32_t dep = 1; dep <= 3; dep += 2) { /* DEPFLAGS: the production shape with the counter prologue/epilogue (and the camera) stays within budget */
+        OmegaRouterSpec s = { OMEGA_GPU_ROUTER_WARPS, OMEGA_GPU_ROUTER_DEPTH, 0, dep }; uint32_t n = 0, g = 0;
+        int rc = omega_router_prog_stats(&s, &n, &g);
+        uint32_t decl = ((g + 1 + 7) / 8) * 8;
+        CHECK(rc == 0 && n <= 1024 && 32u * OMEGA_GPU_ROUTER_WARPS * decl <= 65536u, "codegen production shape dep %u: rc %d insns %u gprs %u declared %u", dep, rc, n, g, decl);
+    }
+    CHECK(OMEGA_ROUTER_ARGS_WORDS <= OMEGA_DEP_MAX_KERNEL_ARGS, "argument words end before the dep words (0x3e8)");
+    { OmegaRouterSpec s = { 4, 8, 0, 0 }; CHECK(omega_router_prog_stats(&s, NULL, NULL) != 0, "warps 4 refused"); }
+    { OmegaRouterSpec s = { 8, 3, 0, 0 }; CHECK(omega_router_prog_stats(&s, NULL, NULL) != 0, "depth 3 refused"); }
+    { OmegaRouterSpec s = { 8, 8, 5, 0 }; CHECK(omega_router_prog_stats(&s, NULL, NULL) != 0, "mutant 5 refused"); }
     CHECK(OMEGA_ROUTER_ARGS_WORDS <= OMEGA_GPU_SESSION_MAX_ARGS, "argument words fit the constant bank window");
 }
 
 /* ------------------------------------------------------------- simulator */
 static uint64_t g_sim_issues;
+static uint32_t g_sim_dep; /* DEPFLAGS: spec.dep for the next sim point (0, or OMEGA_DEP_FLAGS: counter armed by ws_dep_arm) */
 /* one "device" block: x | xout | ids | wts | tab_gu | tab_dn | dir_gu | dir_dn | norm; the gate row block apart */
 enum { B_X = 0, B_XOUT = 8192, B_IDS = 16384, B_WTS = 16448, B_TGU = 16512, B_TDN = 16640, B_DGU = 16768, B_DDN = 16768 + 2048, B_NORM = 16768 + 4096, B_BYTES = 16768 + 4096 + 8192 };
 static void fake_dirs(uint64_t *dgu, uint64_t *ddn) { for (unsigned e = 0; e < NE; e++) { dgu[2 * e] = 0x100000000ull + e * 16; dgu[2 * e + 1] = 0x200000000ull + e * 16 + 8; ddn[2 * e] = 0x300000000ull + e * 32; ddn[2 * e + 1] = 0x400000000ull + e * 32 + 16; } }
 static int sim_point(uint32_t depth, int mutant, int norm_topk, float out_scale, uint32_t seed, char *msg, size_t n, int *bad, int *margin_case) {
     static BlackwellIRProgram prog;
-    OmegaRouterSpec spec = { 8, depth, mutant };
+    OmegaRouterSpec spec = { 8, depth, mutant, g_sim_dep };
     if (omega_blackwell_codegen_router_prog(&spec, &prog) != 0) { snprintf(msg, n, "codegen refused"); return -1; }
     Case c; case_make(&c, seed, 1.0f, norm_topk);
     uint8_t *blk = aligned_alloc(16, B_BYTES); memset(blk, 0, B_BYTES);
@@ -152,8 +160,10 @@ static int sim_point(uint32_t depth, int mutant, int norm_topk, float out_scale,
         s.nranges = 2;
         s.ranges[0].lo = (uintptr_t)blk; s.ranges[0].hi = (uintptr_t)blk + B_BYTES;
         s.ranges[1].lo = (uintptr_t)gate; s.ranges[1].hi = (uintptr_t)gate + (size_t)NE * H * 2;
+        static uint32_t depline[16]; if (g_sim_dep) ws_dep_arm(&s, depline);
         err = ws_run(&s, 1, 1);
         if (err) { snprintf(msg, n, "order %d: %s (pc %d)", order, s.msg, s.err_pc); break; }
+        if (g_sim_dep && depline[0] != 1u) { err = -1; snprintf(msg, n, "dep counter %u after 1 CTA (want 1)", depline[0]); break; }
         g_sim_issues += s.warp_issues;
         size_t unwritten = 0; for (unsigned i = 0; i < H; i++) if (xo[i] == -999.0f) unwritten++;
         for (unsigned i = 0; i < TK; i++) if (wd[i] == -999.0f || idd[i] == 0xffffffffu) unwritten++;
@@ -176,6 +186,14 @@ static void sim_battery(void) {
         int err = sim_point(pts[i].depth, 0, pts[i].norm_topk, pts[i].oscale, pts[i].seed, msg, sizeof msg, &bad, &mc);
         CHECK(!err && bad == 0, "sim %s: %s", pts[i].name, msg);
         printf("sim %s: %s %s\n", pts[i].name, err ? "ERROR" : bad ? "MISMATCH" : "ok", msg);
+    }
+    { /* DEPFLAGS: the dep-mode kernel (poll, BAR, CCTL.IVALL in front; fence, BAR, counter add behind) computes the same answer and counts itself in */
+        char msg[300]; int bad = 0, mc = 0;
+        g_sim_dep = OMEGA_DEP_FLAGS;
+        int err = sim_point(8, 0, 1, 1.0f, 11, msg, sizeof msg, &bad, &mc);
+        g_sim_dep = 0;
+        CHECK(!err && bad == 0, "sim depth 8 norm with dep flags: %s", msg);
+        printf("sim depth 8 norm dep 1: %s %s\n", err ? "ERROR" : bad ? "MISMATCH" : "ok", msg);
     }
     for (int m = 1; m <= 4; m++) {
         char msg[300]; int bad = 0, mc = 0;

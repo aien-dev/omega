@@ -42,6 +42,7 @@
  * The simulator runs CTAs one after another, so an atomic counter sees every earlier CTA's add. */
 
 #include "omega_blackwell_codegen.h"
+#include "omega_gpu_dep.h"
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -81,7 +82,7 @@ typedef struct {
 } WsWarp;
 typedef struct { uintptr_t lo, hi; } WsRange;
 
-typedef struct {
+typedef struct WsSim {
     const BlackwellIRProgram *p;
     uint32_t cbank[256];      /* constant bank 0 words (byte offset / 4) */
     uint32_t threads;         /* per CTA, a multiple of 32, <= WS_MAX_THREADS */
@@ -97,7 +98,23 @@ typedef struct {
     uint64_t splits;          /* branches that split a fragment */
     uint64_t bar_split_arrivals; /* BAR.SYNC reached by a fragment that is not the whole live warp */
     int max_frags, peak_bars;
+    /* DEPFLAGS (2026-10-16): called on every LDG.E.STRONG.GPU (once per lane) with the address, so a test can play a late
+     * producer (bump the counter after N polls). timer: the 64-bit value CS2R SR_GLOBALTIMERLO returns, +1 per read. */
+    void (*poll_hook)(struct WsSim *s, uint64_t addr, void *ctx); void *poll_ctx;
+    uint64_t timer;
 } WsSim;
+
+/* DEPFLAGS: arm a pre-satisfied counter line for a dep-mode kernel the way omega_gpu_cmdlist_add does for the first launch of a
+ * list: bank words 0x3e8 / 0x3f0 = the line, 0x3f8 = target 0 (nothing to wait for), the line declared in the range table.
+ * After ws_run the test checks line[0] == CTAs of the grid (every CTA's thread 0 added 1 at exit). */
+static inline void ws_dep_arm(WsSim *s, uint32_t *line16) {
+    memset(line16, 0, 64);
+    const uint64_t va = (uintptr_t)line16;
+    s->cbank[OMEGA_DEP_ARG_WAIT / 4] = (uint32_t)va; s->cbank[OMEGA_DEP_ARG_WAIT / 4 + 1] = (uint32_t)(va >> 32);
+    s->cbank[OMEGA_DEP_ARG_DONE / 4] = (uint32_t)va; s->cbank[OMEGA_DEP_ARG_DONE / 4 + 1] = (uint32_t)(va >> 32);
+    s->cbank[OMEGA_DEP_ARG_TARGET / 4] = 0;
+    if (s->nranges < WS_MAX_RANGES) { s->ranges[s->nranges].lo = (uintptr_t)va; s->ranges[s->nranges].hi = (uintptr_t)va + 64; s->nranges++; }
+}
 
 static void ws_fail(WsSim *s, int err, int pc, const char *what) {
     if (s->err) return;
@@ -155,7 +172,7 @@ static void ws_lane_exec(WsSim *s, WsLane *l, const BlackwellIRInsn *in, int pc,
     case BW_IR_ISETP_GE_U32: l->p0 = a >= b; break;
     case BW_IR_LDG_E: { uint64_t ad = ws_rd64(l, in->src1_vreg, p); if (!ws_mem_ok(s, ad, 4, pc)) return; uint32_t x; memcpy(&x, (const void *)(uintptr_t)ad, 4); ws_wrs(l, in->dst_vreg, in->dst_subreg, x, p); break; }
     case BW_IR_LDG_E_U16: { uint64_t ad = ws_rd64(l, in->src1_vreg, p); if (!ws_mem_ok(s, ad, 2, pc)) return; uint16_t x; memcpy(&x, (const void *)(uintptr_t)ad, 2); ws_wrs(l, in->dst_vreg, in->dst_subreg, x, p); break; }
-    case BW_IR_STG_E: { uint64_t ad = ws_rd64(l, in->src1_vreg, p); if (!ws_mem_ok(s, ad, 4, pc)) return; memcpy((void *)(uintptr_t)ad, &b, 4); break; }
+    case BW_IR_STG_E: { uint64_t ad = ws_rd64(l, in->src1_vreg, p) + (uint64_t)(int64_t)(int32_t)in->imm; if (!ws_mem_ok(s, ad, 4, pc)) return; memcpy((void *)(uintptr_t)ad, &b, 4); break; } /* + imm: the encoder honours a signed 24-bit offset */
     case BW_IR_LDG_E_64: case BW_IR_LDG_E_128: { unsigned n = in->op == BW_IR_LDG_E_64 ? 8u : 16u; uint64_t ad = ws_rd64(l, in->src1_vreg, p) + (uint64_t)(int64_t)(int32_t)in->imm; if (!ws_mem_ok(s, ad, n, pc)) { if (getenv("WS_DBG")) fprintf(stderr, "  tid %u cx %u cy %u\n", tid, cx, cy); return; } if (ad & (n - 1)) { ws_fail(s, WS_E_MEM, pc, "wide global load not naturally aligned"); return; } uint32_t x[4]; memcpy(x, (const void *)(uintptr_t)ad, n); for (unsigned i = 0; i < n / 4; i++) ws_wrs(l, in->dst_vreg, i, x[i], p); break; }
     case BW_IR_LDS128: { uint32_t ad = a + in->imm; if (ad & 15u) { ws_fail(s, WS_E_SMEM, pc, "LDS.128 address not 16-byte aligned"); return; } for (unsigned i = 0; i < 4; i++) { uint32_t *m = ws_smem(s, ad + 4u * i, pc); if (!m) return; ws_wrs(l, in->dst_vreg, i, *m, p); } break; }
     case BW_IR_LDS32: { uint32_t *m = ws_smem(s, a, pc); if (!m) return; ws_wrs(l, in->dst_vreg, in->dst_subreg, *m, p); break; }
@@ -174,6 +191,12 @@ static void ws_lane_exec(WsSim *s, WsLane *l, const BlackwellIRInsn *in, int pc,
     case BW_IR_STG_STRONG_SYS: { uint64_t ad = ws_rd64(l, in->src1_vreg, p); if (!ws_mem_ok(s, ad, 4, pc)) return; memcpy((void *)(uintptr_t)ad, &b, 4); break; }
     case BW_IR_ATOMG_ADD_STRONG_SYS: { uint64_t ad = ws_rd64(l, in->src1_vreg, p); if (!ws_mem_ok(s, ad, 4, pc)) return; uint32_t old; memcpy(&old, (const void *)(uintptr_t)ad, 4); uint32_t nw = old + b; memcpy((void *)(uintptr_t)ad, &nw, 4); ws_wrs(l, in->dst_vreg, in->dst_subreg, old, p); break; }
     case BW_IR_MEMBAR_ALL_SYS: break;
+    /* DEPFLAGS opcodes (omega_bw_dep.h). GPU scope behaves like SYS scope here: CTAs run one after another, so every
+     * earlier add is visible; the fences and the L1 invalidate are no-ops (the simulator has no caches). */
+    case BW_IR_LDG_STRONG_GPU: { uint64_t ad = ws_rd64(l, in->src1_vreg, p); if (s->poll_hook) s->poll_hook(s, ad, s->poll_ctx); if (!ws_mem_ok(s, ad, 4, pc)) return; uint32_t x; memcpy(&x, (const void *)(uintptr_t)ad, 4); ws_wrs(l, in->dst_vreg, in->dst_subreg, x, p); break; }
+    case BW_IR_ATOMG_ADD_STRONG_GPU: { uint64_t ad = ws_rd64(l, in->src1_vreg, p); if (!ws_mem_ok(s, ad, 4, pc)) return; uint32_t old; memcpy(&old, (const void *)(uintptr_t)ad, 4); uint32_t nw = old + b; memcpy((void *)(uintptr_t)ad, &nw, 4); ws_wrs(l, in->dst_vreg, in->dst_subreg, old, p); break; }
+    case BW_IR_MEMBAR_ALL_GPU: case BW_IR_ERRBAR: case BW_IR_CGAERRBAR: case BW_IR_CCTL_IVALL: break;
+    case BW_IR_CS2R_GLOBALTIMER: ws_wr64(l, in->dst_vreg, s->timer++, p); break;
     default: ws_fail(s, WS_E_OP, pc, "opcode not modelled"); return;
     }
 }

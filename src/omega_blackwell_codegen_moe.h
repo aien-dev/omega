@@ -84,6 +84,7 @@ typedef struct {
                           * flight per warp); x comes from shared memory (LDS.128). Needs KS % D == 0,
                           * rows * D * lane_bytes <= 128, k % (32 * warps) == 0 and k <= 512 * warps (staging rounds). */
     int mutant;          /* 0 production; 1, 2, 3 as above */
+    uint32_t dep;        /* OMEGA_DEP_FLAGS | OMEGA_DEP_CAMERA (omega_bw_dep.h): launch ordering by GPU-side counters; 0 = none */
 } OmegaFp8GemvSpec;
 
 /* 0 on success (prog solved and register-allocated), -1 on a refused spec or an allocator failure. */

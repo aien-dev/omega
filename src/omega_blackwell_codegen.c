@@ -522,6 +522,47 @@ static int encode_single_insn(const BlackwellIRInsn *insn, const OmegaRegAlloc *
             w[3] = insn->control ? insn->control : 0x00321e00;
             break;
 
+        case BW_IR_LDG_STRONG_GPU:
+            /* LDG.E.STRONG.GPU Rd, desc[URd][Ra.64]: LDG.E.STRONG.SYS with the scope field (w[2] bits 13..16) 0x7 (nvdisasm:
+             * 0x0000000402007981 / 0x004ea8000c1ef900). */
+            w[0] = 0x7981 | ((uint32_t)(dst & 0xff) << 16) | ((uint32_t)(src1 & 0xff) << 24);
+            w[1] = (uint32_t)(ureg & 0xff);
+            w[2] = 0x0c1ef900;
+            w[3] = insn->control ? insn->control : 0x000f2200;
+            break;
+
+        case BW_IR_ATOMG_ADD_STRONG_GPU:
+            /* ATOMG.E.ADD.STRONG.GPU PT, Rd, desc[URd][Ra.64], Rb (nvdisasm: 0x80000009040509a8 / 0x001ea200081ef104). */
+            w[0] = 0x79a8 | ((uint32_t)(dst & 0xff) << 16) | ((uint32_t)(src1 & 0xff) << 24);
+            w[1] = (uint32_t)(src2 & 0xff) | 0x80000000u;
+            w[2] = 0x081ef100 | (uint32_t)(ureg & 0xff);
+            w[3] = insn->control ? insn->control : 0x00321e00;
+            break;
+
+        case BW_IR_MEMBAR_ALL_GPU:
+            /* MEMBAR.ALL.GPU (nvdisasm: 0x0000000000007992 / 0x000fec000000a000) */
+            w[0] = 0x00007992; w[1] = 0; w[2] = 0x0000a000;
+            w[3] = insn->control ? insn->control : 0x000fec00;
+            break;
+
+        case BW_IR_ERRBAR:
+            /* ERRBAR (nvdisasm: 0x00000000000079ab / 0x000fc00000000000) */
+            w[0] = 0x000079ab; w[1] = 0; w[2] = 0;
+            w[3] = insn->control ? insn->control : 0x000fc000;
+            break;
+
+        case BW_IR_CGAERRBAR:
+            /* CGAERRBAR (nvdisasm: 0x00000000000075ab / 0x000fec0000000000) */
+            w[0] = 0x000075ab; w[1] = 0; w[2] = 0;
+            w[3] = insn->control ? insn->control : 0x000fec00;
+            break;
+
+        case BW_IR_CS2R_GLOBALTIMER:
+            /* CS2R Rd:Rd+1, SR_GLOBALTIMERLO (nvdisasm: 0x0000000000087805 / 0x000fca0000015200; the .32 form has w[2] 0x5200) */
+            w[0] = 0x7805 | ((uint32_t)(dst & 0xff) << 16); w[1] = 0; w[2] = 0x00015200;
+            w[3] = insn->control ? insn->control : 0x000fca00;
+            break;
+
         case BW_IR_ATOMG_EXCH_STRONG_SYS:
             w[0] = 0x79a8 | ((uint32_t)(dst & 0xff) << 16) | ((uint32_t)(src1 & 0xff) << 24);
             w[1] = (uint32_t)(src2 & 0xff) | 0x80000000u;

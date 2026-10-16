@@ -39,6 +39,7 @@
 #define BW_WARP_SIM_H
 
 #include "omega_blackwell_codegen.h"
+#include "omega_gpu_dep.h"
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -92,7 +93,20 @@ typedef struct {
     uint64_t splits;          /* branches that split a fragment */
     uint64_t bar_split_arrivals; /* BAR.SYNC reached by a fragment that is not the whole live warp */
     int max_frags, peak_bars;
+    uint64_t timer;           /* DEPFLAGS camera: the value CS2R SR_GLOBALTIMERLO returns, +1 per read */
 } WsSim;
+
+/* DEPFLAGS: arm a pre-satisfied counter line for a dep-mode kernel the way omega_gpu_cmdlist_add does for the first launch of a
+ * list: bank words 0x3e8 / 0x3f0 = the line, 0x3f8 = target 0 (nothing to wait for), the line declared in the range table.
+ * After ws_run the test checks line[0] == CTAs of the grid (every CTA's thread 0 added 1 at exit). Same helper as bw_warp_sim_k.h. */
+static inline void ws_dep_arm(WsSim *s, uint32_t *line16) {
+    memset(line16, 0, 64);
+    const uint64_t va = (uintptr_t)line16;
+    s->cbank[OMEGA_DEP_ARG_WAIT / 4] = (uint32_t)va; s->cbank[OMEGA_DEP_ARG_WAIT / 4 + 1] = (uint32_t)(va >> 32);
+    s->cbank[OMEGA_DEP_ARG_DONE / 4] = (uint32_t)va; s->cbank[OMEGA_DEP_ARG_DONE / 4 + 1] = (uint32_t)(va >> 32);
+    s->cbank[OMEGA_DEP_ARG_TARGET / 4] = 0;
+    if (s->nranges < WS_MAX_RANGES) { s->ranges[s->nranges].lo = (uintptr_t)va; s->ranges[s->nranges].hi = (uintptr_t)va + 64; s->nranges++; }
+}
 
 static void ws_fail(WsSim *s, int err, int pc, const char *what) {
     if (s->err) return;
@@ -163,6 +177,12 @@ static void ws_lane_exec(WsSim *s, WsLane *l, const BlackwellIRInsn *in, int pc,
     case BW_IR_MUFU_EX2: ws_wrs(l, in->dst_vreg, in->dst_subreg, ws_f2u(exp2f(ws_u2f(a))), p); break;
     case BW_IR_MUFU_RCP: ws_wrs(l, in->dst_vreg, in->dst_subreg, ws_f2u(1.0f / ws_u2f(a)), p); break;
     case BW_IR_MUFU_RSQ: ws_wrs(l, in->dst_vreg, in->dst_subreg, ws_f2u(1.0f / sqrtf(ws_u2f(a))), p); break;
+    /* DEPFLAGS opcodes (omega_bw_dep.h), as bw_warp_sim_k.h: GPU scope behaves like SYS scope here (CTAs run one after another,
+     * every earlier add is visible); the fences and the L1 invalidate are no-ops (the simulator has no caches). */
+    case BW_IR_LDG_STRONG_GPU: { uint64_t ad = ws_rd64(l, in->src1_vreg, p); if (!ws_mem_ok(s, ad, 4, pc)) return; uint32_t x; memcpy(&x, (const void *)(uintptr_t)ad, 4); ws_wrs(l, in->dst_vreg, in->dst_subreg, x, p); break; }
+    case BW_IR_ATOMG_ADD_STRONG_GPU: { uint64_t ad = ws_rd64(l, in->src1_vreg, p); if (!ws_mem_ok(s, ad, 4, pc)) return; uint32_t old; memcpy(&old, (const void *)(uintptr_t)ad, 4); uint32_t nw = old + b; memcpy((void *)(uintptr_t)ad, &nw, 4); ws_wrs(l, in->dst_vreg, in->dst_subreg, old, p); break; }
+    case BW_IR_MEMBAR_ALL_GPU: case BW_IR_ERRBAR: case BW_IR_CGAERRBAR: case BW_IR_CCTL_IVALL: break;
+    case BW_IR_CS2R_GLOBALTIMER: ws_wr64(l, in->dst_vreg, s->timer++, p); break;
     default: ws_fail(s, WS_E_OP, pc, "opcode not modelled"); return;
     }
 }

@@ -95,6 +95,7 @@ static void bra(Em *e, int target) { BlackwellIRInsn i = I0(BW_IR_BRA); i.imm = 
 /* a forward branch whose target is patched when known: returns the instruction index */
 static int bra_if_p0_fwd(Em *e) { int at = here(e); BlackwellIRInsn i = I0(BW_IR_BRA); i.predicate_p0 = true; i.imm = 1; emit(e, i, K_BRA); return at; }
 static void patch_bra(Em *e, int at, int target) { if (!e->err) e->p->insns[at].imm = (uint32_t)(target - at); }
+#include "omega_bw_dep.h" /* DEPFLAGS: needs Em, emit, I0, V, V64, here, patch_bra, K_* above */
 static int bssy_fwd(Em *e) { int at = here(e); BlackwellIRInsn i = I0(BW_IR_BSSY); i.bar_reg = 0; i.imm = 2; emit(e, i, K_BSSY); return at; }
 static void bsync(Em *e) { BlackwellIRInsn i = I0(BW_IR_BSYNC); i.bar_reg = 0; emit(e, i, K_BSYNC); }
 static void tail(Em *e) {
@@ -151,6 +152,7 @@ int omega_blackwell_codegen_bf16_gemv_prog(const OmegaBf16GemvSpec *spec, Blackw
     s2r(e, tid, BW_SR_TID_X); s2r(e, cx, BW_SR_CTAID_X);
     movi(e, one, 1);
     shr(e, warp, tid, 0, 5);
+    OmegaBwDep Dp; dep_prologue(e, spec->dep, udesc, tid, &Dp);
     andi(e, lane, tid, 0, 31);
     imadi(e, wlane, lane, 0, 16, NOREG);  /* byte offset of this lane's chunk in a row step */
     imadi(e, rg, cx, 0, W, warp);         /* first row group of this warp */
@@ -232,6 +234,7 @@ int omega_blackwell_codegen_bf16_gemv_prog(const OmegaBf16GemvSpec *spec, Blackw
     loop_end(e);
     const int L_end = here(e);
     patch_bra(e, bra_end, L_end);
+    dep_epilogue(e, udesc, tid, &Dp);
     tail(e);
     if (e->err) return -1;
     return omega_bw_regalloc_solve(prog);
