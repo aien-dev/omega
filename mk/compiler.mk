@@ -219,6 +219,27 @@ test-compiler-quick: $(OSC_DIR)/test_osc_model $(OSC_DIR)/test_osc_backend $(OSC
 	@tail -1 $(OSC_QDIR)/legacy_callers.out; grep -q '^OSC2_LEGACY_CALLERS_PASS ' $(OSC_QDIR)/legacy_callers.out
 	@echo "test-compiler-quick: PASS (smoke counts; not receipt evidence; full = make test-compiler-full. OSC-3 slice; not a general Omega compiler; no self-hosting.)"
 
+# OSC-4 Slice A evidence targets (docs/osc/OSC-4-DESIGN.md 1.8). test-compiler runs the float dual run at
+# 250 units; the 100k receipt run and the C oracle check are reached by name.
+$(OSC_DIR)/float_oracle: tests/compiler/float_oracle.c
+	@mkdir -p $(OSC_DIR)
+	$(CC) $(OSC_CFLAGS) -o $@ tests/compiler/float_oracle.c $(OSC_LDLIBS)
+
+# Rebuild every expect-run value of tests/compiler/progs/f_*.osc with the C oracle and diff.
+test-compiler-float-oracle: $(OSC_DIR)/float_oracle
+	$(abspath $(OSC_DIR)/float_oracle) | sort > $(OSC_DIR)/float_oracle.out
+	grep -h '^// expect-run: ' tests/compiler/progs/f_*.osc | sed 's#^// expect-run: ##' | sort > $(OSC_DIR)/float_expect.out
+	diff -u $(OSC_DIR)/float_expect.out $(OSC_DIR)/float_oracle.out
+	@echo "test-compiler-float-oracle: PASS ($$(wc -l < $(OSC_DIR)/float_oracle.out) expect-run values reproduced by the C oracle)"
+
+# The 100k-unit interpreter-vs-native float dual run (receipt evidence; test-compiler runs 250 units).
+OSC_FLOAT_FUZZ_FULL ?= 100000
+test-compiler-float-fuzz-full: $(OSC_DIR)/test_osc_compiler
+	OSC_FLOAT_FUZZ_UNITS=$(OSC_FLOAT_FUZZ_FULL) $(abspath $(OSC_DIR)/test_osc_compiler) > $(OSC_DIR)/float_fuzz_full.out
+	@tail -1 $(OSC_DIR)/float_fuzz_full.out; grep -Eq '^OSC1_COMPILER_PASS( |$$)' $(OSC_DIR)/float_fuzz_full.out
+	@grep "^float fuzz: units=$(OSC_FLOAT_FUZZ_FULL) .* mismatches=0$$" $(OSC_DIR)/float_fuzz_full.out
+	@echo "test-compiler-float-fuzz-full: PASS"
+
 osc0b-model-receipt:
 	sh tests/compiler/osc0b_model_receipt.sh
 
