@@ -12,6 +12,8 @@ name: Host suites 3
 #   language              test-language (Omega language V0 golden)
 #   milestones            test-m6 .. test-m15 (omegatool gates + reference
 #                         demonstrations; models and host reference, no chip)
+#   gpu-libm-free         test-gpu-libm-free (libomega_gpu.a has no libm reference;
+#                         libm-free replacements bit-identical, omega#471)
 # Listed as skipped jobs so GitHub shows them skipped, never green:
 #   test-numeric-transc-full (2^32 inputs against the binary128 oracle, twice;
 #       too long for a hosted runner, run detached on the Spark)
@@ -19,10 +21,24 @@ name: Host suites 3
 # NOT WIRED, no such Makefile target on main: test-tensor, test-m16.
 
 on:
-  # Retired from pull requests and pushes on 2026-10-16 (ADR 0033 Decision 11, phase 3): the Spark
-  # runs these gates (tests/gates/) and the required AIEN Verification check verifies its signed
-  # bundle. Kept as a manual trigger so a hosted run is still possible when needed.
   workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - 'Makefile'
+      - 'mk/**'
+      - '.github/workflows/host-suites-3.yml'
+      - 'physics.lock'
+      - 'src/**'
+      - 'tools/omegatool.c'
+      - 'tests/test_omega_transc.c'
+      - 'tests/gpu_libm_free_test.c'
+      - 'tests/test_numeric_lifecycle.c'
+      - 'tests/numeric_native/**'
+      - 'tests/language/**'
+      - 'tests/run_m*_gates.sh'
+      - 'docs/numeric/E1_TRANSCENDENTAL_CONTRACT.md'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -128,3 +144,34 @@ jobs:
     runs-on: ubuntu-24.04-arm
     steps:
       - run: echo skipped
+
+  gpu-libm-free:
+    # omega#471: libomega_gpu.a must link without -lm. Builds the archive against the
+    # pinned Physics (lock check on); host-only, nothing touches a GPU.
+    name: test-gpu-libm-free
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read pinned Physics
+        id: pins
+        run: |
+          sha=$(tr -d '[:space:]' < physics.lock)
+          test -n "$sha"
+          echo "physics=$sha" >> "$GITHUB_OUTPUT"
+      - name: Checkout pinned Physics
+        uses: actions/checkout@v4
+        with:
+          repository: aien-spark/physics
+          ref: ${{ steps.pins.outputs.physics }}
+          path: physics-src
+      - name: Keep Physics checkout out of Omega tree status
+        run: echo 'physics-src/' >> .git/info/exclude
+      - name: make test-gpu-libm-free
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+        run: |
+          set -o pipefail
+          make -j"$(nproc)" test-gpu-libm-free | tee libm.log
+          grep -q '^test-gpu-libm-free: PASS$' libm.log
+          ! grep -q '^FAIL' libm.log
