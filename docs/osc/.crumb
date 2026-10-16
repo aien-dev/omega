@@ -29,7 +29,7 @@
       "generated_at_commit": "e0abd0b524f5bf8e3ba6960b53868980bdd41b4e",
       "source_tree": "sha256:a78dbe34dd5fb95c2520006f5485ab0ece8e125632e72dbb3ebcc2da042941b5"
     },
-    "owner_lane": "osc4 (research-0c session; Drake 2026-10-16: \"Just start building the compiler\", Rust trainer stays the bit-exact oracle per ADR 0024)",
+    "owner_lane": "research-0c",
     "provenance": {
       "entries": [
         {
