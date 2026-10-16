@@ -92,13 +92,21 @@ One line per task, fields separated by exactly one space:
   has (`novel_edges >= 1`). Wrapping a corpus shape in `seq(...)` or relabelling a leaf adds no edge, so
   it fails R7.
   (R6 and R7 added 2026-10-15 at review of PR #486, before any held-out task existed.)
+- **R8** no top-level step of a dev or held-out shape is a corpus family in coarse form: after the
+  top-level `seq` is flattened, every step that is a container (`branch`, `loop`, `call`) has a coarse
+  form (section 3) that differs from the coarse signature of every corpus task. Leaf steps are not
+  compared (R4 requires leaves to be reused); a shape whose whole coarse signature equals a corpus one is
+  R3/R6. `seq(loop(branch(arith)),loop(array))` next to a corpus `loop(branch(arith))` fails R8.
+  (R8 added 2026-10-16 at review of PR #486, before any held-out task existed; dev/META passes it against
+  the GEN-3 corpus META.)
 
-Known limit: R6 and R7 are syntactic. `loop(branch(arith),arith)` next to a corpus `loop(branch(arith))`
-passes R6 (different coarse form) and passes R7 only if no corpus shape has the edge `loop>arith`. What
-the shape cannot show (the same algorithm declared under a different shape) is the job of the reviewer's
-blind re-declaration and the near-duplicate check (GEN_PROTOCOL_V1 section 2).
+Known limit: R6, R7 and R8 are syntactic. A corpus family nested below the top level and given a leaf
+sibling, such as `loop(branch(arith),arith)` next to a corpus `loop(branch(arith))`, passes R6 (different
+coarse form) and R8 (not a top-level step), and passes R7 only if no corpus shape has the edge
+`loop>arith`. What the shape cannot show (the same algorithm declared under a different shape) is the job
+of the reviewer's blind re-declaration and the near-duplicate check (GEN_PROTOCOL_V1 section 2).
 
-`famsig rule <file>...` applies R1..R7 over every task of every file given, prints per split
+`famsig rule <file>...` applies R1..R8 over every task of every file given, prints per split
 `split <s> tasks=<n> families=<m>`, then one `family <split> <signature> tasks=<k>` line per family
 (held-out families only with `--show-heldout`, adding `novel_edges=<e>`: coarse edges no corpus shape
 has), and ends `RULE PASS` (exit 0) or `FAIL R<k> ...` lines and `RULE FAIL` (exit 1). A failure that
@@ -144,7 +152,7 @@ are exactly the case directories of the sealed `tasks.tar`.
 - `famsig split SPLIT` checks the format and prints `split_sha256=`, `famlist_sha256=`, `tasks=`,
   `families=` (nothing else); `famsig famlist SPLIT` prints FAMLIST.
 
-Before sealing, the custodian runs (as `gencust`) `famsig rule dev/META corpus/META SPLIT` (R1..R7) and seals
+Before sealing, the custodian runs (as `gencust`) `famsig rule dev/META corpus/META SPLIT` (R1..R8) and seals
 only on `RULE PASS`. It must use the corpus META at the commit the run pins.
 
 ## 7. The public commitment (`HELDOUT.pub`, published by the custodian before any held-out generation)
@@ -162,7 +170,7 @@ task <task_id>                            (one per task, strictly ascending, n l
 Exactly these lines in this order, single spaces, final `\n`. Nothing about any family is published
 except `families <m>` and the two salted digests. After the run (or for the independent review, after
 the seal), anyone holding SPLIT verifies with `gencheck split` that SPLIT matches HELDOUT.pub
-(digests, ids, counts) and that R1..R7 pass against the pinned dev and corpus META.
+(digests, ids, counts) and that R1..R8 pass against the pinned dev and corpus META.
 
 ## 8. Reserved dev families (v1): signature and token
 

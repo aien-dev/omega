@@ -8,7 +8,7 @@
  *       Parse the manifest with a strict JSON reader (ASCII only; duplicate keys, unknown keys, missing keys
  *       and wrong types are refused), check every frozen v1 constant, re-hash every pinned file under <root>,
  *       check the dev split (task list = META ids = case directories, families = META signatures) and, once
- *       the corpus META is frozen, apply the disjointness rule R1..R7 over dev + corpus.
+ *       the corpus META is frozen, apply the disjointness rule R1..R8 over dev + corpus.
  *       Record-set manifests (C and D) are re-hashed once their paths and digests are set.
  *   gencheck run-ready <protocol.json> <root>
  *       Everything `manifest` checks with nothing pending: any null field, any interface file missing from
@@ -22,7 +22,7 @@
  *   gencheck split <protocol.json> <root> <SPLIT> <HELDOUT.pub>
  *       Everything `manifest` checks, then (reviewer, after the seal): SPLIT parses (gen-split 1), HELDOUT.pub
  *       parses (gen-heldout-pub 1) and matches SPLIT (split_sha256, famlist_sha256, task ids, counts), the
- *       held-out count and minimum family count of the manifest hold, and R1..R7 pass over dev + corpus +
+ *       held-out count and minimum family count of the manifest hold, and R1..R8 pass over dev + corpus +
  *       SPLIT. Fails closed when splits.heldout.pub_sha256 or tasks_sha256 is null in the manifest. Held-out
  *       signatures are never printed.
  * Output: "ok ..." lines on stdout, then "GENCHECK PASS" (exit 0). A refusal prints "gencheck: FAIL <reason>"
@@ -617,8 +617,8 @@ static void check_manifest(const char *json_path)
         if (fs_read(full, &both, err, sizeof err)) gc_fail("%s", err);
         snprintf(full, sizeof full, "%s/%s", root, cmeta);
         if (fs_read(full, &both, err, sizeof err)) gc_fail("%s", err);
-        if (fs_rule(&both, stdout, 0)) gc_fail("disjointness rule (R1..R7) fails on dev + corpus");
-        printf("ok corpus split: %d tasks, dev + corpus pass R1..R7\n", corpus.n);
+        if (fs_rule(&both, stdout, 0)) gc_fail("disjointness rule (R1..R8) fails on dev + corpus");
+        printf("ok corpus split: %d tasks, dev + corpus pass R1..R8\n", corpus.n);
         Ent *pi = get("record_sets.prefix_ids");
         if (pi->type == 'a') {
             int n = count_elems("record_sets.prefix_ids");
@@ -740,8 +740,8 @@ static void check_split(const char *split_path, const char *pub_path)
     snprintf(full, sizeof full, "%s/%s", root, str("splits.corpus.meta"));
     if (fs_read(full, &all, err, sizeof err)) gc_fail("%s", err);
     if (fs_read(split_path, &all, err, sizeof err)) gc_fail("%s", err);
-    if (fs_rule(&all, stdout, 0)) gc_fail("disjointness rule (R1..R7) fails on dev + corpus + SPLIT");
-    printf("ok dev + corpus + SPLIT pass R1..R7\n");
+    if (fs_rule(&all, stdout, 0)) gc_fail("disjointness rule (R1..R8) fails on dev + corpus + SPLIT");
+    printf("ok dev + corpus + SPLIT pass R1..R8\n");
 }
 
 

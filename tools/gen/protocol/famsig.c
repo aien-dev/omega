@@ -10,7 +10,7 @@
  *   famsig meta <file>...            validate gen-meta / gen-split files; one line per task:
  *                                    "<task_id>\t<split>\t<signature>"
  *   famsig rule [--show-heldout] <file>...
- *                                    apply the disjointness rule (R1..R7) over every task of every file;
+ *                                    apply the disjointness rule (R1..R8) over every task of every file;
  *                                    report, then "RULE PASS" (exit 0) or "RULE FAIL" (exit 1). Heldout
  *                                    family signatures are printed only with --show-heldout.
  *   famsig split <gen-split file>    validate a sealed split file; print split_sha256, famlist_sha256,

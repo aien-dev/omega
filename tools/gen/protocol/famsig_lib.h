@@ -518,6 +518,29 @@ static int fs_rule(FsSet *set, FILE *out, int show_heldout)
         if (m[i].split != FS_HELDOUT) continue;
         if (fs_novel(m[i].shape, cedge, nce) < 1) { fprintf(out, "FAIL R7 heldout task %s has no composition edge absent from the corpus (novel_edges=0)\n", m[i].id); fails++; }
     }
+    /* R8 no top-level step of a dev or heldout shape (after seq flattening) is a container subtree whose coarse form
+     * equals the coarse signature of a corpus task. Leaf steps are not compared (leaf reuse is what R4 requires); a
+     * shape whose whole coarse signature already equals the corpus one is left to R3/R6. */
+    for (int i = 0; i < n; i++) {
+        if (m[i].split == FS_CORPUS) continue;
+        FsShape sh;
+        if (fs_shape(m[i].shape, &sh) || sh.node[sh.root].kind != FS_SEQ) continue;
+        int kids[FS_MAXNODES], nk = 0;
+        fs_flat(&sh, sh.root, kids, &nk);
+        for (int q = 0; q < nk; q++) {
+            if (!fs_is_container(sh.node[kids[q]].kind)) continue;
+            char *c = fs_coarse_node(&sh, kids[q]);
+            for (int j = 0; j < n; j++)
+                if (m[j].split == FS_CORPUS && !strncmp(m[j].coarse, "gc1:", 4) && !strcmp(m[j].coarse + 4, c) && strcmp(m[j].coarse, m[i].coarse)) {
+                    int ho = m[i].split == FS_HELDOUT;
+                    fprintf(out, "FAIL R8 %s task %s has a top-level step equal to corpus family %s of %s: %s\n", fs_split[m[i].split], m[i].id,
+                            m[j].sig, m[j].id, ho && !show_heldout ? "(heldout step hidden)" : c);
+                    fails++;
+                    break;
+                }
+            free(c);
+        }
+    }
     /* report: per split counts, then families in signature order */
     FsMeta *s = malloc((size_t)(n ? n : 1) * sizeof *s);
     if (!s) { perror("famsig"); exit(2); }

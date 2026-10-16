@@ -4,7 +4,7 @@
 #   1. genstats: selftest (Newcombe 1998 Table III, McNemar, Wilson), byte-identical regeneration of
 #      tests/one_layer/generalization/stats_vectors.tsv, length-match classes; genjac known answers
 #   2. famsig: known answers (canonical forms, the reserved dev family tokens), RULE PASS on the dev META,
-#      coarse forms, mutants (bad shapes and files, R2..R7 violations) that must each be refused, and
+#      coarse forms, mutants (bad shapes and files, R2..R8 violations) that must each be refused, and
 #      famsig compare (blind re-declaration)
 #   3. gencheck: PASS on the real protocol.json, then mutants of the manifest (unknown, duplicate, missing
 #      keys, missing or changed splits, duplicate task ids, digest drift, changed constants, bad types) and
@@ -14,8 +14,8 @@
 #      manifest (interface files taken from git at their pinned commits) and their mutants
 #   4. dev pack: pack_dev.sh twice (byte-identical, sha256 = splits.dev.pack_sha256) and a negative control
 #      (one wrong hidden/expected line must refuse)
-# GEN_TASKS_CHECK=1 also runs ola.sh tasks-check on the dev pack (needs a clean git tree and built ola tools)
-# and then removes the run and receipt entries that tasks-check added under evidence/ONE-LAYER-2.
+# GEN_TASKS_CHECK=1 also runs ola.sh tasks-check on the dev pack inside a private git worktree of HEAD (under the
+# test temp dir, removed afterwards), so the shared evidence/ONE-LAYER-2 tree is never written or deleted.
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 B="${1:?usage: test_gen_protocol.sh <builddir>}"
@@ -50,6 +50,10 @@ FS="$B/famsig"; GC="$B/gencheck"; GS="$B/genstats"; JC="$B/genjac"
 # ---- 1. statistics ----
 if "$GS" selftest | tail -1 | grep -q '^SELFTEST PASS'; then pass "genstats selftest"; else fail "genstats selftest"; fi
 if "$GS" vectors | cmp -s - "$G/stats_vectors.tsv"; then pass "stats_vectors.tsv regenerates byte-identical"; else fail "stats_vectors.tsv regenerates byte-identical"; fi
+z59=$(printf '%059d' 0); o59=$(printf '1%.0s' $(seq 59)); z60="0$z59"; o60="1$o59"; z61="0$z60"
+refuse_why "genstats verdict with n = 59" "n = 60 only" "$GS" verdict 1 "$o59" "$z59" "$z59" "$o59"
+refuse_why "genstats verdict with n = 61" "n = 60 only" "$GS" verdict 1 "${o60}1" "$z61" "$z61" "${o60}1"
+if "$GS" verdict 1 "$o60" "$z60" "$z60" "$o60" >/dev/null 2>&1; then pass "genstats verdict with n = 60 runs"; else fail "genstats verdict with n = 60"; fi
 
 expect_out "lenmatch reviewer fixture 295 vs 945: unmatched" "task 1 target_bytes=295 suffix_bytes=945 length_gap=650 tolerance_bytes=256.00 class=unmatched" sh -c "\"$GS\" lenmatch 295:945 | head -1"
 expect_out "lenmatch 256 B boundary: matched" "tasks=2 matched=1 unmatched=1 status=AVAILABLE" sh -c "\"$GS\" lenmatch 300:556 300:557 | tail -1"
@@ -128,6 +132,13 @@ printf 'gen-meta 1\nc1 corpus 1 1 1 0 0 0 loop(branch(arith))\nc2 corpus 0 0 0 1
 printf 'gen-split 1\nsalt %s\nh1 heldout 2 1 1 0 0 0 loop(branch(arith),arith)\n' "$SALT" > "$T/r7"
 refuse_why "R7 held-out with no novel coarse edge" "FAIL R7" "$FS" rule "$T/corpus.ok2" "$T/r7"
 if "$FS" rule "$T/corpus.ok" "$T/r7" >/dev/null 2>&1; then pass "R6/R7 known limit: loop(branch(arith),arith) passes when loop>arith is new"; else fail "R7 limit control"; fi
+printf 'gen-split 1\nsalt %s\nh1 heldout 1 1 2 1 0 0 seq(loop(branch(arith)),loop(array))\n' "$SALT" > "$T/r8"
+refuse_why "R8 held-out top-level step = corpus family loop(branch(arith))" "FAIL R8" "$FS" rule "$T/corpus.ok" "$T/r8"
+if ! "$FS" rule "$T/corpus.ok" "$T/r8" 2>/dev/null | grep -q 'seq(loop'; then pass "R8 failure hides the held-out shape"; else fail "R8 failure leaks the held-out shape"; fi
+printf 'gen-split 1\nsalt %s\nh1 heldout 0 1 2 2 0 0 seq(loop(branch(array)),loop(array))\n' "$SALT" > "$T/r8ok"
+if "$FS" rule "$T/corpus.ok" "$T/r8ok" >/dev/null 2>&1; then pass "R8 control: top-level steps that are no corpus family pass"; else fail "R8 positive control"; fi
+refuse_why "R8 dev top-level step = corpus family loop(branch(arith))" "FAIL R8" "$FS" rule "$T/corpus.ok" "$(m 'gen-meta 1' 'd1 dev 1 1 1 1 1 0 seq(loop(branch(arith)),call(array))')"
+if "$FS" rule "$T/corpus.ok" "$G/dev/META" >/dev/null 2>&1; then pass "R8 control: dev/META against a corpus with loop(branch(arith))"; else fail "R8 dev control"; fi
 # blind re-declaration
 printf 'gen-split 1\nsalt %s\nh1 heldout 1 1 1 1 0 0 seq(array,branch(loop(arith)))\nh2 heldout 0 0 1 1 1 0 loop(call(array))\n' "$SALT" > "$T/cmpA"
 printf 'gen-split 1\nsalt %s\nh1 heldout 1 1 1 1 0 0 seq(branch(loop(arith)),array)\nh2 heldout 0 0 1 1 1 0 loop(call(array))\n' "$(printf '%s' "$SALT" | tr '0-9a-f' '1-9a-f0')" > "$T/cmpB"
@@ -165,6 +176,7 @@ fi
 # P0: protocol.json with the corpus and record sets unfrozen, the base of the synthetic-corpus tests below
 sed -E 's/("corpus": \{[^}]*"meta_sha256": )"[0-9a-f]{64}"/\1null/; s/"record_sets": \{[^}]*\}/"record_sets": {"prefix_ids": null, "prefix_sha256": null, "raw_manifest_sha256": null, "abstraction_manifest_sha256": null, "raw_manifest": null, "abstraction_manifest": null}/' "$P" > "$T/P0.json"
 if "$GC" manifest "$P" "$LR" > "$T/gc.out" 2>&1 && tail -1 "$T/gc.out" | grep -qx 'GENCHECK PASS'; then pass "gencheck manifest protocol.json"; else fail "gencheck manifest protocol.json"; cat "$T/gc.out"; fi
+if "$FS" rule "$LR/tests/one_layer/generalization/dev/META" "$LR/tests/one_layer/generalization/corpus/META" > "$T/dc.out" 2>&1 && grep -qx 'RULE PASS' "$T/dc.out"; then pass "famsig rule dev/META + GEN-3 corpus/META (R1..R8)"; else fail "famsig rule dev/META + GEN-3 corpus/META"; grep FAIL "$T/dc.out"; fi
 
 gmut() { # name expected-stderr-substring sed-or-perl-expression [root]
   local n="$1" want="$2" ex="$3" r="${4:-$LR}"
@@ -229,9 +241,9 @@ corpus_json() { # write $T/c.json with the corpus META digest set
   sed "s/\"meta_sha256\": null/\"meta_sha256\": \"$s\"/" "$T/P0.json" > "$T/c.json"
 }
 printf 'gen-meta 1\nc9 corpus 0 0 1 0 1 1 loop(call(nested))\n' > "$CM"; corpus_json
-if "$GC" manifest "$T/c.json" "$R" >/dev/null 2>"$T/e"; then fail "mutant not caught: corpus shares a dev signature"; else grep -qF 'R1..R7' "$T/e" && pass "refused: corpus family shared with dev (R3)" || fail "corpus/dev R3: other reason"; fi
+if "$GC" manifest "$T/c.json" "$R" >/dev/null 2>"$T/e"; then fail "mutant not caught: corpus shares a dev signature"; else grep -qF 'R1..R8' "$T/e" && pass "refused: corpus family shared with dev (R3)" || fail "corpus/dev R3: other reason"; fi
 printf 'gen-meta 1\ndevgen01 corpus 1 0 1 0 0 0 loop(arith)\n' > "$CM"; corpus_json
-if "$GC" manifest "$T/c.json" "$R" >/dev/null 2>"$T/e"; then fail "mutant not caught: corpus reuses a dev task id"; else grep -qF 'R1..R7' "$T/e" && pass "refused: duplicate task id across splits (R2)" || fail "R2: other reason"; fi
+if "$GC" manifest "$T/c.json" "$R" >/dev/null 2>"$T/e"; then fail "mutant not caught: corpus reuses a dev task id"; else grep -qF 'R1..R8' "$T/e" && pass "refused: duplicate task id across splits (R2)" || fail "R2: other reason"; fi
 printf 'gen-meta 1\nc1 dev 1 0 1 0 0 0 loop(arith)\n' > "$CM"; corpus_json
 refuse "corpus META with a dev line" "$GC" manifest "$T/c.json" "$R"
 # synthetic valid corpus: every primitive, no dev signature
@@ -249,7 +261,7 @@ refuse "corpus META digest drift" "$GC" manifest "$T/c2.json" "$R"
 
 # reviewer split check on a SYNTHETIC held-out split (test-only)
 SP="$T/SPLIT"; PUB="$T/HELDOUT.pub"
-shapes='branch(call(nested)) loop(call(array)) seq(array,branch(loop(nested))) branch(array,loop(nested)) call(loop(branch(arith))) seq(call(array),loop(nested))'
+shapes='branch(call(nested)) loop(call(array)) seq(array,branch(loop(nested))) branch(array,loop(nested)) call(loop(branch(arith))) seq(call(array),branch(nested))'
 {
   echo 'gen-split 1'; echo "salt $SALT"
   i=0
@@ -276,7 +288,7 @@ spl() { # SPLIT HELDOUT.pub: gencheck split with the digests of that HELDOUT.pub
   anchor "$T/c.json" "$T/cs.json" "$2" "$TS"
   "$GC" split "$T/cs.json" "$R" "$1" "$2"
 }
-if spl "$SP" "$PUB" > "$T/sp.out" 2>&1 && tail -1 "$T/sp.out" | grep -qx 'GENCHECK PASS'; then pass "gencheck split (synthetic 60 tasks, 6 families, R1..R7)"; else fail "gencheck split positive"; cat "$T/sp.out"; fi
+if spl "$SP" "$PUB" > "$T/sp.out" 2>&1 && tail -1 "$T/sp.out" | grep -qx 'GENCHECK PASS'; then pass "gencheck split (synthetic 60 tasks, 6 families, R1..R8)"; else fail "gencheck split positive"; cat "$T/sp.out"; fi
 if ! grep -q 'branch(call' "$T/sp.out"; then pass "gencheck split prints no held-out signature"; else fail "gencheck split leaks a held-out signature"; fi
 refuse_why "split check with null held-out digests (fail closed)" "fail closed on null" "$GC" split "$T/c.json" "$R" "$SP" "$PUB"
 anchor "$T/c.json" "$T/cn.json" "$PUB" "$TS"; sed -i 's/"tasks_sha256": "a\{64\}"/"tasks_sha256": null/' "$T/cn.json"
@@ -289,7 +301,7 @@ sed 's/^families 6$/families 7/' "$PUB" > "$T/p3"; refuse "HELDOUT.pub families 
 sed 's/^task q60$/task q61/' "$PUB" > "$T/p4"; refuse "HELDOUT.pub task id differs" spl "$SP" "$T/p4"
 sed "s/^salt .*/salt $(printf '%s' "$SALT" | tr '0-9a-f' '1-9a-f0')/" "$SP" > "$T/s5"; refuse "SPLIT salt changed after publication" spl "$T/s5" "$PUB"
 head -61 "$SP" > "$T/s6"; mkpub "$TS" "$T/s6" > "$T/p6"; refuse "held-out split with 59 tasks" spl "$T/s6" "$T/p6"
-{ head -2 "$SP"; tail -n +3 "$SP" | sed 's/ 0 0 1 1 1 1 seq(call(array),loop(nested))$/ 0 1 0 0 1 1 branch(call(nested))/'; } > "$T/s7"
+{ head -2 "$SP"; tail -n +3 "$SP" | sed 's/ 0 1 0 1 1 1 seq(call(array),branch(nested))$/ 0 1 0 0 1 1 branch(call(nested))/'; } > "$T/s7"
 mkpub "$TS" "$T/s7" > "$T/p7"; refuse_why "held-out split with 5 families" "famil" spl "$T/s7" "$T/p7"
 { head -2 "$SP"; tail -n +3 "$SP" | sed 's/^q01 .*/q01 heldout 1 1 1 0 0 0 loop(branch(arith))/'; } > "$T/s8"
 mkpub "$TS" "$T/s8" > "$T/p8"; refuse_why "held-out family shared with corpus (R3)" "FAIL R3" spl "$T/s8" "$T/p8"
@@ -297,6 +309,8 @@ mkpub "$TS" "$T/s8" > "$T/p8"; refuse_why "held-out family shared with corpus (R
 mkpub "$TS" "$T/s9" > "$T/p9"; refuse_why "held-out coarse family shared with corpus (R6)" "FAIL R6" spl "$T/s9" "$T/p9"
 { head -2 "$SP"; tail -n +3 "$SP" | sed 's/^q01 .*/q01 heldout 2 1 1 0 0 0 loop(branch(arith),arith)/'; } > "$T/s10"
 mkpub "$TS" "$T/s10" > "$T/p10"; refuse_why "held-out family with no novel coarse edge (R7)" "FAIL R7" spl "$T/s10" "$T/p10"
+{ head -2 "$SP"; tail -n +3 "$SP" | sed 's/^q01 .*/q01 heldout 1 1 2 1 0 0 seq(loop(branch(arith)),loop(array))/'; } > "$T/s11"
+mkpub "$TS" "$T/s11" > "$T/p11"; refuse_why "held-out top-level step equal to a corpus family (R8)" "FAIL R8" spl "$T/s11" "$T/p11"
 anchor "$T/c.json" "$T/c3.json" "$PUB" "$(printf '%s' "$TS" | tr a b)"
 refuse_why "HELDOUT.pub tasks_sha256 differs from protocol" "tasks_sha256 mismatch" "$GC" split "$T/c3.json" "$R" "$SP" "$PUB"
 anchor "$T/c.json" "$T/c4.json" "$PUB" "$TS"; sed -i 's/"pub_sha256": "\([0-9a-f]\)/"pub_sha256": "f\1/; s/"pub_sha256": "\([0-9a-f]\{64\}\)[0-9a-f]"/"pub_sha256": "\1"/' "$T/c4.json"
@@ -362,14 +376,18 @@ cp -r "$ROOT/tests/one_layer/generalization/dev" "$T/devneg"
 sed -i '1s/.*/1/' "$T/devneg/tasks/cases/devgen04/hidden/expected"
 if bash "$T/devneg/pack_dev.sh" "$T/packneg" >/dev/null 2>&1; then fail "wrong hidden/expected not refused"; else pass "refused: dev pack with one wrong expected line (oracle check)"; fi
 if [ "${GEN_TASKS_CHECK:-0}" = 1 ]; then
-  # ola.sh always writes evidence/ONE-LAYER-2/{runs,receipts}; OLA_EVIDENCE_ROOT would redirect it but forces
-  # RUN INVALID (ola.sh line 27), so the test removes exactly the entries this run added, nothing else.
-  EV="$ROOT/evidence/ONE-LAYER-2"
-  ls -1 "$EV/runs" "$EV/receipts" 2>/dev/null | LC_ALL=C sort > "$T/ev.before"
-  if bash "$ROOT/tests/one_layer/acceptance/ola.sh" tasks-check "$T/pack1/tasks.tar" "$T/pack1/TASKS.sha256" 2>"$T/tc.err" | grep -q 'RUN VALID'; then pass "ola.sh tasks-check dev pack: RUN VALID"; else fail "ola.sh tasks-check dev pack"; fi
-  for d in runs receipts; do
-    for e in $(ls -1 "$EV/$d" 2>/dev/null); do grep -qxF "$e" "$T/ev.before" || rm -rf "${EV:?}/$d/$e"; done
-  done
+  # ola.sh writes evidence under its own repo root and OLA_EVIDENCE_ROOT forces RUN INVALID (ola.sh line 27), so it
+  # runs in a private detached git worktree of HEAD under $T; that worktree (with its evidence and build output) is
+  # removed afterwards. Nothing in this checkout's evidence/ tree is written or deleted.
+  WT="$T/wt"
+  if git -C "$ROOT" worktree add -q --detach "$WT" HEAD 2>"$T/wt.err"; then
+    # OUT_DIR from an outer make call would reach ola.sh's own make through MAKEFLAGS; it is dropped so ola
+    # builds into the worktree's build/one_layer, where it looks for its tools.
+    if env -u MAKEFLAGS -u MFLAGS -u MAKELEVEL -u OUT_DIR bash "$WT/tests/one_layer/acceptance/ola.sh" tasks-check "$T/pack1/tasks.tar" "$T/pack1/TASKS.sha256" 2>"$T/tc.err" | grep -q 'RUN VALID'; then pass "ola.sh tasks-check dev pack in a private worktree of HEAD: RUN VALID"; else fail "ola.sh tasks-check dev pack (private worktree)"; tail -5 "$T/tc.err"; fi
+    git -C "$ROOT" worktree remove --force "$WT" || fail "private worktree not removed: $WT"
+  else
+    fail "git worktree add for the tasks-check"; cat "$T/wt.err"
+  fi
 fi
 
 echo "test-gen-protocol: $ok ok, $bad failed"

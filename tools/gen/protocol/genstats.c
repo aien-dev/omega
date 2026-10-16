@@ -10,7 +10,7 @@
  *                                               "theta lo hi": Newcombe (1998, Stat Med 17:2635) paired
  *                                               interval for p1 - p2, method 10 (default) or 8; a = both,
  *                                               b = first only, c = second only, d = neither
- *   genstats verdict <valid 0|1> <A> <B> <C> <D>  the full decision from four 0/1 strings (one char per task);
+ *   genstats verdict <valid 0|1> <A> <B> <C> <D>  the full decision from four 0/1 strings (one char per task, n = 60 only);
  *                                               order INVALID > floor/ceiling INCONCLUSIVE > PASS > FAIL > INCONCLUSIVE
  *   genstats lenmatch <target>:<suffix>...      length-matched ablation classes (section 10): per task gap,
  *                                               tolerance, matched|unmatched; then matched count and status
@@ -107,7 +107,7 @@ static int decide(int valid, char *const v[4], Decision *r, char *err, size_t er
 {
     memset(r, 0, sizeof *r);
     size_t n = strlen(v[0]);
-    if (n == 0 || n > 120) { snprintf(err, errn, "vector length %zu, must be 1..120", n); return -1; }
+    if (n != 60) { snprintf(err, errn, "vector length %zu, the verdict is defined for n = 60 only (GEN_PROTOCOL_V1 section 9)", n); return -1; }
     for (int x = 0; x < 4; x++) {
         if (strlen(v[x]) != n) { snprintf(err, errn, "vectors differ in length (incomplete paired matrix)"); return -1; }
         for (size_t i = 0; i < n; i++) if (v[x][i] != '0' && v[x][i] != '1') { snprintf(err, errn, "vector %c holds a byte other than 0/1", "ABCD"[x]); return -1; }
@@ -181,7 +181,7 @@ static const VCase vcases[] = {
     {"v12_all_fail", 1, "0000:60", "nothing succeeds: INCONCLUSIVE floor (was FAIL before the floor rule)"},
     {"v13_all_pass", 1, "1111:60", "everything succeeds: INCONCLUSIVE ceiling"},
     {"v14_d_worse", 1, "1111:20 1110:8 0001:1 0000:31", "D behind every control"},
-    {"v15_dev_size", 1, "1111:3 0001:4 0000:3", "n = 10 (dev size)"},
+    /* v15 (n = 10, dev size) removed 2026-10-16: the verdict is defined for n = 60 only; other n stay in the CI rows */
     {"v16_pass_vs_ab_not_c", 1, "1111:10 0011:12 0001:4 0000:34", "D ahead of A and B, tied-ish with C"},
     {"v17_floor_boundary", 1, "0001:3 0000:57", "max successes = 3 (D): INCONCLUSIVE floor"},
     {"v18_floor_above", 1, "0001:4 0000:56", "max successes = 4: not floor (INCONCLUSIVE on lift and p)"},

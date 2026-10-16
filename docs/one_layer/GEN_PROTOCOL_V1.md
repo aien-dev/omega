@@ -37,18 +37,20 @@ Renaming identifiers or changing constants never makes a new family.
   corpus task (R4); every held-out family combines at least two distinct primitives (R5); coarse
   signatures (duplicate siblings collapsed, `nested` read as `arith`, a top-level `seq` wrapper around one
   container plus leaves dropped) are pairwise disjoint across the three splits (R6); every held-out family
-  has at least one coarse composition edge that no corpus shape has, `novel_edges >= 1` (R7).
+  has at least one coarse composition edge that no corpus shape has, `novel_edges >= 1` (R7); no top-level
+  step of a dev or held-out shape (after `seq` flattening) is a container whose coarse form equals a corpus
+  coarse signature (R8).
 - Held-out family metadata lives only in the sealed `SPLIT` file (FAMSIG_V1 section 6), never inside
   `tasks.tar`. Before any held-out generation the custodian publishes `HELDOUT.pub` (FAMSIG_V1 section 7):
   task ids, the salted family-list digest, the split digest, counts. The independent reviewer verifies
-  SPLIT against HELDOUT.pub and R1..R7 after the seal (`gencheck split`) and audits semantic overlap with
+  SPLIT against HELDOUT.pub and R1..R8 after the seal (`gencheck split`) and audits semantic overlap with
   the corpus using `famsig rule --show-heldout` (`novel_edges` per family). The reviewer who runs any
   `--show-heldout` or `--show` command is never a corpus, record or tool builder.
 - **Blind re-declaration (before the seal is opened):** the reviewer reads every held-out prompt and
   requirement read-only, as `gencust`, without seeing SPLIT, and declares each task's metadata line in
   its own `gen-split 1` file (own salt). `famsig compare SPLIT REDECLARED` (as `gencust`; prints only
   `tasks=<n> mismatches=<k>`) must give `mismatches=0`. Any mismatch forces the custodian to fix the
-  declaration or the task and re-seal (new SPLIT, HELDOUT.pub and pack digests, R1..R7 again) before the
+  declaration or the task and re-seal (new SPLIT, HELDOUT.pub and pack digests, R1..R8 again) before the
   seal is opened. The compare line is published with the run meta.
 - **Near-duplicate check (before the seal is opened):** `tools/gen/protocol/genjac scan` (as `gencust`)
   of every held-out prompt against every corpus prompt and every corpus reference solution: word
@@ -90,7 +92,7 @@ its own revision and is never pooled with these results.
 - **B prefix pick (deterministic, diverse):** order the corpus tasks by family signature (byte order),
   then task id; walk the families round robin in signature order, taking each family's lowest unused
   task id, until 14 tasks are taken. Every task line of corpus META is eligible, GEN-3 transfer-probe tasks
-  included (probes are withheld only from abstraction extraction). A's single example is the first task
+  included (probes are withheld from both retrieval pools, see Candidate pool below). A's single example is the first task
   taken. The 14 ids (`record_sets.prefix_ids`, in pick order) and `record_sets.prefix_sha256` = sha256 of
   `tests/one_layer/generalization/records/PREFIX` (those ids, one per line) are pinned in protocol.json when
   the corpus is frozen. If the prefix reuses EXP445
@@ -104,8 +106,10 @@ its own revision and is never pooled with these results.
   `--requirement` and `--prompt`: genret's query text is the `entry`, `params` and `ret` values plus the
   whole prompt, the same bytes `tools/exp445/reader.sh` `user_msg` shows the model (CONTRACT.md section
   3). Retrieved text appears only in the suffix, after the shared prefix. A and B never call the provider.
-- **Candidate pool:** C's raw-record manifest holds the verified corpus solutions EXCEPT the 14 prefix
-  tasks (already in every B, C, D prompt; retrieving them would waste C's budget). D's manifest holds the
+- **Candidate pool:** C's raw-record manifest is the probe-free set: the verified corpus solutions EXCEPT every
+  GEN-3 transfer-probe task (`split=probe` in the GEN-3 manifest) and EXCEPT the 14 prefix tasks (already in
+  every B, C, D prompt; retrieving them would waste C's budget), [C POOL COUNT: pending, the count GEN-3
+  reports] records. D's manifest holds the probe-free
   abstraction records produced by the deterministic GEN-3 tool from the corpus solutions, EXCEPT every
   abstraction whose ancestry lies entirely within the 14 prefix tasks (the same rule as C: nothing the
   prefix already shows). Both are filtered views of the GEN-3 `records/MANIFEST`, written in the genret
@@ -421,3 +425,9 @@ The runner, reducer, corpus builder and custodian scripts are specified by their
 - **v1, record sets pinned (before merge, before any held-out task):** corpus META, the 14 prefix ids,
   records/PREFIX and the C and D manifests from GEN-3 commit 856cc977 (prefix recomputed from the pick
   rule and matching); genret-cli-v3 re-pinned at 4a48b613.
+- **v1, R8 and verdict n (before merge, before any held-out task):** rule R8 (no dev or held-out
+  top-level step is a corpus family in coarse form; dev/META passes against the GEN-3 corpus META);
+  `genstats verdict` refuses n != 60; the dev-pack tasks-check test runs in a private git worktree; the C and D pools stated as
+  probe-free (GEN-3 `split=probe` filtered out; C pool count pending from GEN-3). The sentence "Every task
+  line of corpus META is eligible, GEN-3 transfer-probe tasks included" (probes allowed in the B prefix)
+  was added in commit 8d940556; probes stay eligible for the prefix only.
