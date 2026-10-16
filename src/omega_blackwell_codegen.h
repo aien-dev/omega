@@ -81,11 +81,12 @@ typedef enum {
                          * truth table over Ra = 0xf0, Rb = 0xcc, Rc = 0xaa (a|b = 0xfc, ~(a|b) = 0x03) */
     BW_IR_SHF_L_U32,    /* SHF.L.U32 Rd, Ra, Rb, RZ: Rd = Ra << Rb, register amount (the form nvcc emits
                          * for PTX shl.b32). Amounts >= 32 are NOT chip-verified: callers keep Rb < 32 */
-    BW_IR_IMAD_HI_U32,  /* IMAD.HI.U32 Rd, Ra, Rb, Rc: Rd = hi32(Ra * Rb + Rc:Rc+1). Rc is a 64-bit register pair
-                         * (even-aligned), NOT one 32-bit word: nvcc 13.0 zeroes the upper half before using a
-                         * 32-bit c, and puts __umulhi(a, b) + c through the pair {0, c}
-                         * (evidence/IMADHI-RC-ORACLE-nvcc13.0-20261016). Chip probe pending (omega #492); until
-                         * then the warp simulators refuse a non-RZ Rc. Callers pass Rc = RZ (src3_vreg = -1) */
+    BW_IR_IMAD_HI_U32,  /* IMAD.HI.U32 Rd, Ra, Rb, Rc: Rd = hi32(Ra * Rb + Rc:Rc+1). Rc is a 64-bit register pair,
+                         * NOT one 32-bit word: nvcc 13.0 zeroes the upper half before using a 32-bit c, puts
+                         * __umulhi(a, b) + c through the pair {0, c}, and emits only even pair bases (R2, R4, UR4
+                         * in evidence/IMADHI-RC-ORACLE-nvcc13.0-20261016). Odd-Rc chip behaviour is unknown until
+                         * the chip probe (omega #492); until then the warp simulators refuse a non-RZ Rc.
+                         * Callers pass Rc = RZ (src3_vreg = -1) */
     /* Structured warp reconvergence (omega #308, 2026-10-05), additive. Words matched against
      * nvcc 13.0.88 -arch=sm_121 output (BSSY.RECONVERGENT / BSYNC.RECONVERGENT; the oracle
      * kernels are listed in docs/gpu-reconvergence-308.md) and the Mesa NAK encoder
