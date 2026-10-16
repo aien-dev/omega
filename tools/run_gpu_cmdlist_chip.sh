@@ -9,6 +9,7 @@
 # Verdict line last: "GPU_CMDLIST_CHIP: PASS|FAIL".
 set -u
 EVID="${1:?evidence dir}"; PHYS="${2:-$HOME/workspace/physics-own30b-k}"
+"$(dirname "$0")/require_physics_pin.sh" "$PHYS" || exit 2  # omega#456: refuse a Physics checkout other than physics.lock
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 mkdir -p "$EVID"
 cd "$HERE" || exit 2

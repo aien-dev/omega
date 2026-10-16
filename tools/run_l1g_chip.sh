@@ -7,6 +7,7 @@
 set -u
 EVID="${1:?evidence dir}"; shift; WHAT="${*:-qmma pfgemm}"
 PHYS="${PHYS:-$HOME/workspace/physics-own30b-k}"; OUT="${OUT_DIR:-/tmp/wl1g-omega}"
+"$(dirname "$0")/require_physics_pin.sh" "$PHYS" || exit 2  # omega#456: refuse a Physics checkout other than physics.lock
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 mkdir -p "$EVID"; cd "$HERE" || exit 2
 {

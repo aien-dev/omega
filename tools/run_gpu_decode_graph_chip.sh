@@ -11,6 +11,7 @@
 # Verdict line last: "GPU_DECODE_GRAPH_CHIP: PASS|FAIL" (red: "GPU_DECODE_GRAPH_CHIP_RED: FAILED_AS_EXPECTED|UNEXPECTED_PASS").
 set -u
 EVID="${1:?evidence dir}"; MODE="${2:-main}"; PHYS="${3:-$HOME/workspace/physics-own30b-k}"
+"$(dirname "$0")/require_physics_pin.sh" "$PHYS" || exit 2  # omega#456: refuse a Physics checkout other than physics.lock
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 mkdir -p "$EVID"
 cd "$HERE" || exit 2

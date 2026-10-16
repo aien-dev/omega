@@ -16,6 +16,7 @@
 # Speeds are judged only against the physical limit: 273 GB/s spec, 237.2 GB/s practical.
 set -u
 PHASE="${1:?phase}"; EVID="${2:?evidence dir}"; PHYS="${3:-$HOME/workspace/physics-own30b-k}"
+"$(dirname "$0")/require_physics_pin.sh" "$PHYS" || exit 2  # omega#456: refuse a Physics checkout other than physics.lock
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 mkdir -p "$EVID"; cd "$HERE" || exit 2
 {
