@@ -1,0 +1,62 @@
+FAIL: random tensor 0 (2000 x 16384, sparsity 0.378): 1999 rows differ from oma_rz_oracle
+FAIL: random tensor 1 (2000 x 5120, sparsity 0.124): 2000 rows differ from oma_rz_oracle
+FAIL: random tensor 2 (2000 x 2048, sparsity 0.550): 2000 rows differ from oma_rz_oracle
+FAIL: random tensor 3 (2000 x 7168, sparsity 0.384): 2000 rows differ from oma_rz_oracle
+FAIL: random tensor 4 (2000 x 4096, sparsity 0.426): 2000 rows differ from oma_rz_oracle
+FAIL: random tensor 5 (2000 x 9216, sparsity 0.020): 2000 rows differ from oma_rz_oracle
+FAIL: random tensor 6 (2000 x 6144, sparsity 0.750): 2000 rows differ from oma_rz_oracle
+FAIL: random tensor 7 (2000 x 11264, sparsity 0.992): 2000 rows differ from oma_rz_oracle
+FAIL: random tensor 8 (2000 x 8192, sparsity 0.674): 2000 rows differ from oma_rz_oracle
+FAIL: random tensor 9 (2000 x 13312, sparsity 0.108): 2000 rows differ from oma_rz_oracle
+chip: random rows 20000, rows differing from oma_rz_oracle 19999
+FAIL: MA grid width 1024 rows 1 sparsity 0.0: 1 rows differ
+FAIL: MA grid width 1024 rows 1 sparsity 0.3: 1 rows differ
+FAIL: MA grid width 1024 rows 1 sparsity 0.6: 1 rows differ
+FAIL: MA grid width 1024 rows 1 sparsity 0.9: 1 rows differ
+FAIL: MA grid width 1024 rows 64 sparsity 0.0: 64 rows differ
+FAIL: MA grid width 1024 rows 64 sparsity 0.3: 64 rows differ
+FAIL: MA grid width 1024 rows 64 sparsity 0.6: 64 rows differ
+FAIL: MA grid width 1024 rows 64 sparsity 0.9: 64 rows differ
+FAIL: MA grid width 1024 rows 4096 sparsity 0.0: 4095 rows differ
+FAIL: MA grid width 1024 rows 4096 sparsity 0.3: 4095 rows differ
+FAIL: MA grid width 1024 rows 4096 sparsity 0.6: 4095 rows differ
+FAIL: MA grid width 1024 rows 4096 sparsity 0.9: 4095 rows differ
+FAIL: MA grid width 4096 rows 1 sparsity 0.0: 1 rows differ
+FAIL: MA grid width 4096 rows 1 sparsity 0.3: 1 rows differ
+FAIL: MA grid width 4096 rows 1 sparsity 0.6: 1 rows differ
+FAIL: MA grid width 4096 rows 1 sparsity 0.9: 1 rows differ
+FAIL: MA grid width 4096 rows 64 sparsity 0.0: 64 rows differ
+FAIL: MA grid width 4096 rows 64 sparsity 0.3: 64 rows differ
+FAIL: MA grid width 4096 rows 64 sparsity 0.6: 64 rows differ
+FAIL: MA grid width 4096 rows 64 sparsity 0.9: 64 rows differ
+FAIL: MA grid width 4096 rows 4096 sparsity 0.0: 4096 rows differ
+FAIL: MA grid width 4096 rows 4096 sparsity 0.3: 4096 rows differ
+FAIL: MA grid width 4096 rows 4096 sparsity 0.6: 4095 rows differ
+FAIL: MA grid width 4096 rows 4096 sparsity 0.9: 4095 rows differ
+FAIL: MA grid width 16384 rows 1 sparsity 0.0: 1 rows differ
+FAIL: MA grid width 16384 rows 1 sparsity 0.3: 1 rows differ
+FAIL: MA grid width 16384 rows 1 sparsity 0.6: 1 rows differ
+FAIL: MA grid width 16384 rows 1 sparsity 0.9: 1 rows differ
+FAIL: MA grid width 16384 rows 64 sparsity 0.0: 64 rows differ
+FAIL: MA grid width 16384 rows 64 sparsity 0.3: 64 rows differ
+FAIL: MA grid width 16384 rows 64 sparsity 0.6: 64 rows differ
+FAIL: MA grid width 16384 rows 64 sparsity 0.9: 64 rows differ
+FAIL: MA grid width 16384 rows 4096 sparsity 0.0: 4095 rows differ
+FAIL: MA grid width 16384 rows 4096 sparsity 0.3: 4096 rows differ
+FAIL: MA grid width 16384 rows 4096 sparsity 0.6: 4096 rows differ
+FAIL: MA grid width 16384 rows 4096 sparsity 0.9: 4096 rows differ
+chip: MA grid 36 points (49932 rows), rows differing 49925
+FAIL: BitNet shape 3840x2560 layout 0: 3840 rows differ
+FAIL: BitNet shape 2560x2560 layout 0: 2560 rows differ
+FAIL: BitNet shape 13824x2560 layout 0: 13823 rows differ
+FAIL: BitNet shape 2560x6912 layout 0: 2560 rows differ
+FAIL: BitNet shape 3840x2560 layout 1: 3840 rows differ
+FAIL: BitNet shape 2560x2560 layout 1: 2560 rows differ
+FAIL: BitNet shape 13824x2560 layout 1: 13823 rows differ
+FAIL: BitNet shape 2560x6912 layout 1: 2560 rows differ
+chip: BitNet shapes x 2 layouts, rows differing 45566
+FAIL: extremes (|y| = 128 * 16384): OK, 32 rows differ
+chip: rows checked against oma_rz_oracle 115500
+receipt: /home/drakestapleton/workspace/omega-tern-t0/evidence/TERN-T0-KT1-f202e87a-20261016T0102Z/receipt-red-mutant1.json
+gpu_tern_test: 55 checks, 55 failed: FAIL
+mutant 1 exit 1 (must be 1: FAIL)

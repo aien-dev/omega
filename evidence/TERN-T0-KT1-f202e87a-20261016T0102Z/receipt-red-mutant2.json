@@ -1,0 +1,8 @@
+{
+  "test": "gpu_tern_test",
+  "stage": "TERN-T0 KT1",
+  "mutant_forced": 2,
+  "shape_k2560": {"layout": 1, "rows": 4, "warps": 8, "depth": 2, "ctas": 96},
+  "forced_mutant_2_differing": 1919,
+  "checks": 1, "failed": 1, "verdict": "FAIL"
+}

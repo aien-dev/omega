@@ -55,6 +55,8 @@ SRCS += src/omega_blackwell_codegen_pf.c src/omega_gpu_prefill.c src/omega_black
 SRCS += src/omega_blackwell_codegen_qmma.c src/omega_blackwell_codegen_qg.c
 # OWN-30B W-L1G-D (2026-10-14): router logits + MoE combine for the whole-prompt prefill, new files only
 SRCS += src/omega_blackwell_codegen_pfhost.c src/omega_gpu_pfhost.c
+# Ternary engine T0 (2026-10-15): KT1, the W2A8 ternary GEMV (omega_gpu_tern_api.h), new files only
+SRCS += src/omega_blackwell_codegen_tern.c src/omega_gpu_tern_api.c
 OBJS = $(patsubst %.c,$(OUT_DIR)/%.o,$(notdir $(SRCS)))
 DEPS = $(OBJS:.o=.d)
 -include $(DEPS)
@@ -2498,6 +2500,17 @@ $(GPU_BF16_TEST): tests/gpu_bf16_gemv_test.c tests/bw_warp_sim_k.h src/omega_gpu
 test-gpu-bf16-gemv: $(GPU_BF16_TEST)
 	$(GPU_BF16_TEST) --host-only
 	$(GPU_BF16_TEST) --sim
+
+# Ternary engine T0 (2026-10-15): KT1 W2A8 ternary GEMV (omega_gpu_tern_api.h). test-gpu-tern is host-only (word
+# arithmetic, packing, segments, budgets, refusals) plus the warp simulator (bit-equal to oma_rz_oracle, f32 segment
+# epilogue, mutants 1-3 caught); the chip gate is tools/run_gpu_tern_chip.sh with the quiet flag held.
+.PHONY: test-gpu-tern
+GPU_TERN_TEST = $(OUT_DIR)/gpu_tern_test
+$(GPU_TERN_TEST): tests/gpu_tern_test.c tests/bw_warp_sim_k.h src/omega_gpu_tern_api.h src/omega_blackwell_codegen_tern.h $(OMA_RZ_SRCS) $(OMA_RZ_HDRS) $(OUT_DIR)/libomega_gpu.a
+	$(CC) $(CFLAGS) -ffp-contract=off $(OMA_RZ_ARCH) -Itests -o $@ tests/gpu_tern_test.c $(OMA_RZ_SRCS) $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+test-gpu-tern: $(GPU_TERN_TEST)
+	$(GPU_TERN_TEST) --host-only
+	$(GPU_TERN_TEST) --sim
 
 # OWN-30B (2026-10-13): report-only lm_head study, fp8 vs bf16 argmax agreement on the real checkpoint (chip, GB10 lock).
 $(OUT_DIR)/gpu_lmhead_fp8_study: tests/gpu_lmhead_fp8_study.c src/omega_gpu_bf16_gemv_api.h src/omega_gpu_fp8_api.h $(OUT_DIR)/libomega_gpu.a

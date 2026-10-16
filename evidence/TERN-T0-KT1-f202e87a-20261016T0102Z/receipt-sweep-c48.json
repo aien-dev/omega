@@ -1,0 +1,14 @@
+{
+  "test": "gpu_tern_test",
+  "stage": "TERN-T0 KT1",
+  "mutant_forced": 0,
+  "shape_k2560": {"layout": 1, "rows": 4, "warps": 8, "depth": 2, "ctas": 48},
+  "launch_floor_in_list": {"median_us": 4.608, "min_us": 4.384},
+  "cold": [
+    {"n": 3840, "k": 2560, "bytes": 2457600, "copies": 41, "median_ns": 38688, "min_ns": 25984, "gbs": 63.52, "of_spec_273": 0.2327, "of_practical_237_2": 0.2678, "gate_gbs": 180, "pass": false},
+    {"n": 2560, "k": 2560, "bytes": 1638400, "copies": 62, "median_ns": 28192, "min_ns": 23040, "gbs": 58.12, "of_spec_273": 0.2129, "of_practical_237_2": 0.2450, "gate_gbs": 180, "pass": false},
+    {"n": 13824, "k": 2560, "bytes": 8847360, "copies": 12, "median_ns": 92736, "min_ns": 74368, "gbs": 95.40, "of_spec_273": 0.3495, "of_practical_237_2": 0.4022, "gate_gbs": 200, "pass": false},
+    {"n": 2560, "k": 6912, "bytes": 4423680, "copies": 23, "median_ns": 45280, "min_ns": 37952, "gbs": 97.70, "of_spec_273": 0.3579, "of_practical_237_2": 0.4119, "gate_gbs": 180, "pass": false}
+  ],
+  "checks": 9, "failed": 4, "verdict": "FAIL"
+}

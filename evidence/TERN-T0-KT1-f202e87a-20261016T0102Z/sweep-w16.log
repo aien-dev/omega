@@ -1,0 +1,12 @@
+chip: in-list launch floor (8 x 256, 512 B) median 4.70 us, min 4.45 us
+chip: cold 3840x2560 (2457600 B x 41 copies = 96.1 MiB per list): 30.21 us per launch -> 81.4 GB/s = 0.298 of 273 spec, 0.343 of 237.2 practical; minus the launch floor 25.50 us -> 96.4 GB/s (0.406 of 237.2)
+FAIL: cold GB/s at 3840x2560: 81.4, gate >= 180
+chip: cold 2560x2560 (1638400 B x 62 copies = 96.9 MiB per list): 23.04 us per launch -> 71.1 GB/s = 0.260 of 273 spec, 0.300 of 237.2 practical; minus the launch floor 18.34 us -> 89.4 GB/s (0.377 of 237.2)
+FAIL: cold GB/s at 2560x2560: 71.1, gate >= 180
+chip: cold 13824x2560 (8847360 B x 12 copies = 101.2 MiB per list): 80.45 us per launch -> 110.0 GB/s = 0.403 of 273 spec, 0.464 of 237.2 practical; minus the launch floor 75.74 us -> 116.8 GB/s (0.492 of 237.2)
+FAIL: cold GB/s at 13824x2560: 110.0, gate >= 200
+chip: cold 2560x6912 (4423680 B x 23 copies = 97.0 MiB per list): 40.74 us per launch -> 108.6 GB/s = 0.398 of 273 spec, 0.458 of 237.2 practical; minus the launch floor 36.03 us -> 122.8 GB/s (0.518 of 237.2)
+FAIL: cold GB/s at 2560x6912: 108.6, gate >= 180
+receipt: /home/drakestapleton/workspace/omega-tern-t0/evidence/TERN-T0-KT1-f202e87a-20261016T0102Z/receipt-sweep-w16.json
+gpu_tern_test: 9 checks, 4 failed: FAIL
+--warps 16 exit 1 (informational)
