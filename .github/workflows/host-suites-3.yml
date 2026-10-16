@@ -19,23 +19,10 @@ name: Host suites 3
 # NOT WIRED, no such Makefile target on main: test-tensor, test-m16.
 
 on:
+  # Retired from pull requests and pushes on 2026-10-16 (ADR 0033 Decision 11, phase 3): the Spark
+  # runs these gates (tests/gates/) and the required AIEN Verification check verifies its signed
+  # bundle. Kept as a manual trigger so a hosted run is still possible when needed.
   workflow_dispatch:
-  push:
-    branches: [main]
-  pull_request:
-    paths:
-      - 'Makefile'
-      - 'mk/**'
-      - '.github/workflows/host-suites-3.yml'
-      - 'physics.lock'
-      - 'src/**'
-      - 'tools/omegatool.c'
-      - 'tests/test_omega_transc.c'
-      - 'tests/test_numeric_lifecycle.c'
-      - 'tests/numeric_native/**'
-      - 'tests/language/**'
-      - 'tests/run_m*_gates.sh'
-      - 'docs/numeric/E1_TRANSCENDENTAL_CONTRACT.md'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}

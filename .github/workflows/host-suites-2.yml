@@ -66,33 +66,10 @@ name: Host suites 2
 #   every *-silicon target and test-m5..test-m19 (GB10 chip).
 
 on:
+  # Retired from pull requests and pushes on 2026-10-16 (ADR 0033 Decision 11, phase 3): the Spark
+  # runs these gates (tests/gates/) and the required AIEN Verification check verifies its signed
+  # bundle. Kept as a manual trigger so a hosted run is still possible when needed.
   workflow_dispatch:
-  # Push to main is not path-filtered: the runtime and argus jobs re-test every
-  # merge result; the other jobs still run only when their own files changed.
-  push:
-    branches: [main]
-  pull_request:
-    paths:
-      - 'Makefile'
-      - '.github/workflows/host-suites-2.yml'
-      - 'physics.lock'
-      - 'aienos.lock'
-      - 'argus.lock'
-      - 'src/**'
-      - 'tests/**'
-      - 'tools/**'
-      - 'mk/**'
-      - 'spec/polyglot-0.md'
-      - 'spec/r16-*'
-      - 'docs/r16-*'
-      - 'docs/turing/**'
-      - 'calibration/**'
-      - 'data/crumbline/**'
-      - 'data/turing-cal/**'
-      - 'evidence/TURING_YIELD/**'
-      - 'evidence/POLYGLOT/**'
-      - 'evidence/MIXED_ALGEBRA/**'
-      - 'evidence/R15/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}

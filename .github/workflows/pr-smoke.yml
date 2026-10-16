@@ -10,9 +10,9 @@ name: Omega smoke
 # On pull_request actions/checkout uses refs/pull/N/merge: the merged result is tested.
 
 on:
-  pull_request:
-  push:
-    branches: [main]
+  # Retired from pull requests and pushes on 2026-10-16 (ADR 0033 Decision 11, phase 3): the Spark
+  # runs these gates (tests/gates/) and the required AIEN Verification check verifies its signed
+  # bundle. Kept as a manual trigger so a hosted run is still possible when needed.
   workflow_dispatch:
 
 permissions:
