@@ -1,0 +1,10 @@
+upload 128256 x 2560 bf16 (657 MB): rc=OK 313 ms ()
+parity: 0 of 128256 rows differ from the f32 emulation (bit compare); worst error vs double oracle 2.09e-08 of the term scale (y 2.346); argmax chip 59784 oracle 59784
+second call: bit-identical
+bf16-x entry: bit-identical to the emulation
+timing (medians of 20, evict 1): rows 1 warps 16 depth 10 ctas 96: chip 3031.4 us = 216.6 GB/s on 657 MB; call 3126.3 us = 210.0 GB/s
+chip mutant 1: caught (4096 of 4096 rows differ)
+chip mutant 2: caught (4096 of 4096 rows differ)
+chip mutant 3: caught (4096 of 4096 rows differ)
+gpu_bf16_gemv_test: 12 checks, 0 failed: PASS
+table-bf16 exit 0

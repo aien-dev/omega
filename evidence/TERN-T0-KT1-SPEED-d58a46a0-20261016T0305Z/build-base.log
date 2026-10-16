@@ -1,0 +1,4 @@
+make: 'build/gpu_bf16_gemv_test' is up to date.
+make: 'build/gpu_fp8_api_test' is up to date.
+make: 'build/gpu_decode_attn_test' is up to date.
+make: 'build/gpu_launch_cost_test' is up to date.

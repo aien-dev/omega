@@ -1,0 +1,14 @@
+{
+  "test": "gpu_tern_test",
+  "stage": "TERN-T0 KT1",
+  "mutant_forced": 0,
+  "shape_k2560": {"layout": 0, "rows": 2, "warps": 8, "depth": 5, "ctas": 160},
+  "launch_floor_in_list": {"median_us": 3.904, "min_us": 3.616},
+  "cold": [
+    {"n": 3840, "k": 2560, "bytes": 2457600, "copies": 41, "median_ns": 29504, "min_ns": 23552, "gbs": 83.30, "of_spec_273": 0.3051, "of_practical_237_2": 0.3512, "minus_floor_ns": 25600, "minus_floor_gbs": 96.00, "minus_floor_of_spec_273": 0.3516, "minus_floor_of_practical_237_2": 0.4047, "gate_gbs": 180, "gate_on": "minus_floor_gbs", "pass": false},
+    {"n": 2560, "k": 2560, "bytes": 1638400, "copies": 62, "median_ns": 22496, "min_ns": 16288, "gbs": 72.83, "of_spec_273": 0.2668, "of_practical_237_2": 0.3070, "minus_floor_ns": 18592, "minus_floor_gbs": 88.12, "minus_floor_of_spec_273": 0.3228, "minus_floor_of_practical_237_2": 0.3715, "gate_gbs": 180, "gate_on": "minus_floor_gbs", "pass": false},
+    {"n": 13824, "k": 2560, "bytes": 8847360, "copies": 12, "median_ns": 65536, "min_ns": 32416, "gbs": 135.00, "of_spec_273": 0.4945, "of_practical_237_2": 0.5691, "minus_floor_ns": 61632, "minus_floor_gbs": 143.55, "minus_floor_of_spec_273": 0.5258, "minus_floor_of_practical_237_2": 0.6052, "gate_gbs": 200, "gate_on": "minus_floor_gbs", "pass": false},
+    {"n": 2560, "k": 6912, "bytes": 4423680, "copies": 23, "median_ns": 35712, "min_ns": 25344, "gbs": 123.87, "of_spec_273": 0.4537, "of_practical_237_2": 0.5222, "minus_floor_ns": 31808, "minus_floor_gbs": 139.07, "minus_floor_of_spec_273": 0.5094, "minus_floor_of_practical_237_2": 0.5863, "gate_gbs": 180, "gate_on": "minus_floor_gbs", "pass": false}
+  ],
+  "checks": 9, "failed": 4, "verdict": "FAIL"
+}

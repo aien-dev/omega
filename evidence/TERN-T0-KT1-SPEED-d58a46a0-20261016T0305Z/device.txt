@@ -1,0 +1,12 @@
+phase base start 2026-10-16T03:05:15Z omega=d58a46a0ae0efb7a2ad496fd1528418d23925b54 branch=tern/kt1-speed dirty=0 physics=/home/drakestapleton/workspace/physics-own30b-k physics_commit=6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf
+7.0.0-1019-nvidia
+NVIDIA GB10, 580.173.02
+phase base end 2026-10-16T03:05:24Z
+phase red start 2026-10-16T03:05:24Z omega=d58a46a0ae0efb7a2ad496fd1528418d23925b54 branch=tern/kt1-speed dirty=0 physics=/home/drakestapleton/workspace/physics-own30b-k physics_commit=6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf
+7.0.0-1019-nvidia
+NVIDIA GB10, 580.173.02
+phase red end 2026-10-16T03:05:30Z
+phase main start 2026-10-16T03:05:30Z omega=d58a46a0ae0efb7a2ad496fd1528418d23925b54 branch=tern/kt1-speed dirty=0 physics=/home/drakestapleton/workspace/physics-own30b-k physics_commit=6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf
+7.0.0-1019-nvidia
+NVIDIA GB10, 580.173.02
+phase main end 2026-10-16T03:05:34Z
