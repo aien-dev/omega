@@ -1,0 +1,14 @@
+{
+  "test": "gpu_tern_test",
+  "stage": "TERN-T0 KT1",
+  "mutant_forced": 0,
+  "shape_k2560": {"layout": 0, "rows": 2, "warps": 8, "depth": 5, "ctas": 160},
+  "launch_floor_in_list": {"median_us": 3.840, "min_us": 3.680},
+  "cold": [
+    {"n": 3840, "k": 2560, "bytes": 2457600, "copies": 41, "median_ns": 30688, "min_ns": 17888, "gbs": 80.08, "of_spec_273": 0.2933, "of_practical_237_2": 0.3376, "kernel_ns": 26848, "kernel_gbs": 91.54, "kernel_of_spec_273": 0.3353, "kernel_of_practical_237_2": 0.3859, "gate_gbs": 180, "gate_on": "kernel_gbs", "pass": false},
+    {"n": 2560, "k": 2560, "bytes": 1638400, "copies": 62, "median_ns": 25568, "min_ns": 18816, "gbs": 64.08, "of_spec_273": 0.2347, "of_practical_237_2": 0.2702, "kernel_ns": 21728, "kernel_gbs": 75.41, "kernel_of_spec_273": 0.2762, "kernel_of_practical_237_2": 0.3179, "gate_gbs": 180, "gate_on": "kernel_gbs", "pass": false},
+    {"n": 13824, "k": 2560, "bytes": 8847360, "copies": 12, "median_ns": 63936, "min_ns": 32448, "gbs": 138.38, "of_spec_273": 0.5069, "of_practical_237_2": 0.5834, "kernel_ns": 60096, "kernel_gbs": 147.22, "kernel_of_spec_273": 0.5393, "kernel_of_practical_237_2": 0.6207, "gate_gbs": 200, "gate_on": "kernel_gbs", "pass": false},
+    {"n": 2560, "k": 6912, "bytes": 4423680, "copies": 23, "median_ns": 33440, "min_ns": 24992, "gbs": 132.29, "of_spec_273": 0.4846, "of_practical_237_2": 0.5577, "kernel_ns": 29600, "kernel_gbs": 149.45, "kernel_of_spec_273": 0.5474, "kernel_of_practical_237_2": 0.6301, "gate_gbs": 180, "gate_on": "kernel_gbs", "pass": false}
+  ],
+  "checks": 9, "failed": 4, "verdict": "FAIL"
+}

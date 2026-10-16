@@ -1,0 +1,10 @@
+{
+  "test": "gpu_tern_test",
+  "stage": "TERN-T0 KT1",
+  "mutant_forced": 1,
+  "shape_k2560": {"layout": 1, "rows": 4, "warps": 8, "depth": 2, "ctas": 96},
+  "random_rows": {"rows": 20000, "differing": 19999},
+  "ma_grid": {"points": 36, "rows": 49932, "differing": 49925},
+  "bitnet_shapes": {"layouts": 2, "differing": 45566},
+  "checks": 55, "failed": 55, "verdict": "FAIL"
+}

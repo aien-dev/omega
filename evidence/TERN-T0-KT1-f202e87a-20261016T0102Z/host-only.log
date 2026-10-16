@@ -1,0 +1,12 @@
+host: word arithmetic exact on 434000 words (random, all +1, all -1; x random, -128, 127, -1, 0, alternating)
+host: codegen k 2560 layout rowmajor epi i32 rows 4 depth 2 warps 8: 583 instructions, peak 46 registers (declared 48), shared 5120 B
+host: codegen k 2560 layout rowmajor epi f32 rows 4 depth 2 warps 8: 645 instructions, peak 52 registers (declared 56), shared 5120 B
+host: codegen k 2560 layout block epi i32 rows 4 depth 2 warps 8: 569 instructions, peak 47 registers (declared 56), shared 5120 B
+host: codegen k 2560 layout block epi f32 rows 4 depth 2 warps 8: 631 instructions, peak 53 registers (declared 56), shared 5120 B
+host: codegen k 6912 layout rowmajor epi i32 rows 4 depth 3 warps 8: 765 instructions, peak 50 registers (declared 56), shared 13824 B
+host: codegen k 6912 layout rowmajor epi f32 rows 4 depth 3 warps 8: 827 instructions, peak 56 registers (declared 64), shared 13824 B
+host: codegen k 6912 layout block epi i32 rows 4 depth 3 warps 8: 744 instructions, peak 51 registers (declared 56), shared 13824 B
+host: codegen k 6912 layout block epi f32 rows 4 depth 3 warps 8: 806 instructions, peak 57 registers (declared 64), shared 13824 B
+host: codegen k 16384 layout rowmajor epi i32 rows 4 depth 4 warps 8: 964 instructions, peak 64 registers (declared 72), shared 16384 B
+host: codegen k 16384 layout block epi i32 rows 4 depth 4 warps 8: 936 instructions, peak 61 registers (declared 64), shared 16384 B
+gpu_tern_test: 36 checks, 0 failed: PASS
