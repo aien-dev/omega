@@ -1,4 +1,5 @@
-bash: GNU bash, version 5.2.21(1)-release (aarch64-unknown-linux-gnu)
+bash: GNU bash, version 5.2.21(1)-release (aarch64-unknown-linux-gnu) (/usr/bin/bash)
+env: env -i, LC_ALL=C TZ=UTC PATH=/usr/bin:/bin
 file: bash_vectors.tsv
 c01 same out:[a][b]|errmark|out:[x=]|errmark
 c02 same out:[a]|errmark|out:[x=]|errmark
