@@ -2472,6 +2472,32 @@ test-gpu-fp8: $(GPU_FP8_TEST)
 	./$(GPU_FP8_TEST) --host-only
 	./$(GPU_FP8_TEST) --sim
 
+# omega#471: libomega_gpu.a links without -lm (Makefile:35). Two halves, host-only:
+#  1. symbol check: no undefined symbol of the archive (one not defined by another member) may be a name that the
+#     toolchain's libm.so.6 exports. libm's own export table is the denylist, so nothing is hand-maintained; a missing
+#     libm.so.6 is a FAIL, never a silent pass. glibc also resolves some libm names from libc (ldexpf did), which is
+#     why a plain link without -lm cannot catch this.
+#  2. tests/gpu_libm_free_test.c (links -lm): the libm-free replacements are bit-identical to the libm calls they
+#     replaced over every relevant input (all exponents, all 256 e4m3 bytes, all 65536 bf16 codes, all 2^32 f32).
+.PHONY: test-gpu-libm-free
+GPU_LIBM_FREE_TEST = $(OUT_DIR)/gpu_libm_free_test
+$(GPU_LIBM_FREE_TEST): tests/gpu_libm_free_test.c src/omega_gpu_fp8_api.h src/omega_gpu_hostmath.h src/omega_blackwell_codegen_moe.h $(OUT_DIR)/libomega_gpu.a
+	$(CC) $(CFLAGS) -o $@ tests/gpu_libm_free_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+test-gpu-libm-free: $(OUT_DIR)/libomega_gpu.a $(GPU_LIBM_FREE_TEST)
+	@set -e; libm=$$($(CC) -print-file-name=libm.so.6); \
+	if [ ! -f "$$libm" ]; then echo "test-gpu-libm-free: FAIL (libm.so.6 not found: '$$libm')"; exit 1; fi; \
+	nm -D --defined-only "$$libm" | awk 'NF>=3{print $$NF}' | sed 's/@.*//' | sort -u > $(OUT_DIR)/libm.exports; \
+	nm $(OUT_DIR)/libomega_gpu.a | awk '$$1=="U"{print $$2}' | sort -u > $(OUT_DIR)/libomega_gpu.undef; \
+	nm --defined-only $(OUT_DIR)/libomega_gpu.a | awk 'NF==3{print $$3}' | sort -u > $(OUT_DIR)/libomega_gpu.def; \
+	test -s $(OUT_DIR)/libm.exports && test -s $(OUT_DIR)/libomega_gpu.undef && test -s $(OUT_DIR)/libomega_gpu.def; \
+	hits=$$(comm -23 $(OUT_DIR)/libomega_gpu.undef $(OUT_DIR)/libomega_gpu.def | comm -12 - $(OUT_DIR)/libm.exports); \
+	if [ -n "$$hits" ]; then \
+	  echo "test-gpu-libm-free: FAIL, libomega_gpu.a references libm:"; \
+	  for s in $$hits; do nm -A $(OUT_DIR)/libomega_gpu.a | grep -w "U $$s" | sed 's/^/  /'; done; exit 1; fi; \
+	echo "PASS libomega_gpu.a: 0 of $$(comm -23 $(OUT_DIR)/libomega_gpu.undef $(OUT_DIR)/libomega_gpu.def | wc -l) external symbols are libm exports ($$(wc -l < $(OUT_DIR)/libm.exports) names in $$libm)"
+	./$(GPU_LIBM_FREE_TEST)
+	@echo "test-gpu-libm-free: PASS"
+
 # omega #457 (2026-10-15): host rewrite of a GPU-cached buffer must be visible to the next launch. Chip only; the gate
 # is tools/run_gpu_l2_stale_chip.sh.
 GPU_L2_STALE_TEST = $(OUT_DIR)/gpu_l2_stale_test
