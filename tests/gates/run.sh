@@ -19,8 +19,10 @@ step="${1:?usage: tests/gates/run.sh <step>}"
 # at the same moment in one worktree; with one shared build/ a gate links an object another gate's
 # compiler is still writing (omega#511: OMEGA-M12 "undefined reference to omega_tern_*" with the
 # object on the link line). OUT_DIR is read by the Makefile (?=) and by every make it spawns.
-# The pins stay at build/pins, shared read-only under their own lock.
-export OUT_DIR="build/step-$step"
+# The pins stay at build/pins, shared read-only under their own lock. The directory name keeps
+# only [A-Za-z0-9_.-] from the step word: "spark:test-r13-host" would put a colon in a make
+# target ("multiple target patterns").
+export OUT_DIR="build/step-$(printf '%s' "$step" | tr -c 'A-Za-z0-9_.-' '-')"
 mkdir -p "$OUT_DIR"
 obs() { printf 'AIEN-OBS %s %s\n' "$1" "$2"; }
 

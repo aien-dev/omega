@@ -96,6 +96,9 @@ echo 'int dirty;' >> "$CL/native/capability/aienos_capability.c"
 check "dirty checkout of the locked commit: exit 1" '[ "$(rc env AIENOS_LOCK_REPO=/nonexistent AIENOS_R7_DIR="$CL" AIENOS_LOCK=$GOOD bash "$T" verify-dir "$CL" native/capability)" = 1 ]'
 
 # 3. the Makefile rule: the capability library is built only from a proven source, on every build
+# This section drives the Makefile in its own private copy $W and checks the default layout
+# ($W/build/...); a per-step OUT_DIR exported by tests/gates/run.sh does not apply here.
+unset OUT_DIR
 W=$SCR/omega; mkdir -p "$W"
 cp -r "$HERE/Makefile" "$HERE/mk" "$HERE/tools" "$W/"
 cp "$HERE/physics.lock" "$W/" 2>/dev/null || true
