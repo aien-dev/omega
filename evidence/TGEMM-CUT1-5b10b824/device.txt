@@ -1,0 +1,6 @@
+start 2026-10-16T02:52:13Z omega=5b10b82445c984ae91e3709bc2151a2ec9abde5c branch=train/tgemm-cut1 dirty=1 physics=/home/drakestapleton/workspace/physics-own30b-k physics_commit=6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf
+Linux spark-b87b 7.0.0-1019-nvidia #19~24.04.2-Ubuntu SMP PREEMPT_DYNAMIC Sun Sep  6 18:35:11 UTC 2 aarch64 aarch64 aarch64 GNU/Linux
+NVIDIA GB10, 580.173.02, 208 MHz, 3003 MHz, 47
+               total        used        free      shared  buff/cache   available
+Mem:             121          15          14           2          96         106
+end 2026-10-16T02:56:02Z

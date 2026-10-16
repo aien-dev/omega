@@ -53,6 +53,13 @@ jobs:
           make test | tee base.log
           grep -E 'TOTAL GATES: ([0-9]+) \| PASSED: \1 \| FAILED: 0' base.log
           ! grep -qE 'FAILED: [1-9]|\[FAIL\]|\(FAIL\)' base.log
+      - name: Training GEMM host proofs (budgets and warp simulator, no GPU)
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+        run: |
+          set -o pipefail
+          make test-gpu-tgemm | tee tgemm.log
+          test "$(grep -c '^GPU_TGEMM: PASS' tgemm.log)" = 2
       - name: Language V0 golden
         run: |
           set -o pipefail
