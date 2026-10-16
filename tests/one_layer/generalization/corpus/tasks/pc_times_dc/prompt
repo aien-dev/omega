@@ -1,0 +1,1 @@
+Write a function pc_times_dc that takes an unsigned 32-bit number x and returns the number of its one bits times the number of its decimal digits. Write and use a helper function popcnt(x) that returns how many of the 32 bits of x are 1. Write and use a helper function digcount(n) that returns how many decimal digits n has (1 for n = 0).

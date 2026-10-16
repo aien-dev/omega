@@ -1,0 +1,19 @@
+# GEN-3 transfer probes: <task_id> positive|negative <record name>; probe tasks are withheld from extraction
+avg4 positive avg2
+ceil_avg negative avg2
+clamp_gap positive absdiff
+clamp_gap positive clamp
+digit_product negative digsum
+digits_both positive digcount
+even_digsums positive digsum
+hamming positive popcnt
+hex_digits negative digcount
+sat_affine positive sat8
+second_max negative max4
+spread4 positive max4
+spread4 positive sum4
+weighted4 negative sum4
+wrap8 negative sat8
+wrap_diff negative absdiff
+wrap_range negative clamp
+zero_bits8 negative popcnt

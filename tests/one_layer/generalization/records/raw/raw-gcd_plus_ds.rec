@@ -1,0 +1,40 @@
+gen-record 1
+id raw-gcd_plus_ds
+kind raw
+split corpus
+family gs1-0846032659bd1c21
+entry gcd_plus_ds
+params u32 u32
+ret u32
+signature fn gcd_plus_ds a uint b uint to uint
+desc gcd of a and b plus the digit sum of a, with gcd and digsum helpers
+receipt 4af3aaff157f470ffec0569161812d821d588dd8256f92f862d506195f38f123
+validity verified
+ancestry gcd_plus_ds a2a3cc01dd1210aa03a7243e7dbcb5f5ab1f29da70fe4395682ec7803d951b30
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/gcd_plus_ds/desc e9af6288eef62f1361639ce196130bb6d4607d7649700997a676cc0ff0d1bf5a
+source tests/one_layer/generalization/corpus/tasks/gcd_plus_ds/expected ba2e02b68461de1f53050190dfe12b6e76b69c7f730e420eaa794f0dfd574064
+source tests/one_layer/generalization/corpus/tasks/gcd_plus_ds/inputs 5fc2014270d48c8bc429fb7fd00898457ccf353d8d99e8b1edb4924822a128c9
+source tests/one_layer/generalization/corpus/tasks/gcd_plus_ds/requirement acfe1dd5b98ca31ce29e3d4adb1f5700b047ddc9f14e959cb5d48c1a70e19c00
+source tests/one_layer/generalization/corpus/tasks/gcd_plus_ds/solution.omegese a2a3cc01dd1210aa03a7243e7dbcb5f5ab1f29da70fe4395682ec7803d951b30
+body
+fn gcd a uint b uint to uint
+while ne b 0 bound 100
+t = rem a b
+a = b
+b = t
+end
+ret a
+end
+fn digsum n uint to uint
+s = uint 0
+while gt n 0 bound 20
+s = add s rem n 10
+n = div n 10
+end
+ret s
+end
+fn gcd_plus_ds a uint b uint to uint
+ret add gcd a b digsum a
+end

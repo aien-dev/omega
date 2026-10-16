@@ -1,0 +1,1 @@
+Write a function second_max that takes four unsigned 32-bit numbers a, b, c, d and returns the second largest of them, counting repeats: if the largest value occurs at least twice, it is also the second largest.

@@ -1,0 +1,1 @@
+Write a function wrap_range that takes three unsigned 32-bit numbers x, lo, hi and returns lo + (x mod (hi - lo)), which wraps x into the range lo..hi - 1. Unsigned 32-bit arithmetic wraps around modulo 2^32 (so hi - lo wraps when hi is less than lo); when hi equals lo the function must stop with trap kind 2 (division by zero).

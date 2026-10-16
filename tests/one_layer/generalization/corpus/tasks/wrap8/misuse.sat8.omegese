@@ -1,0 +1,3 @@
+fn wrap8 x uint to uchar
+ret sat8 x
+end

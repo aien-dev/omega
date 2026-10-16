@@ -1,0 +1,9 @@
+gen-receipt 1
+record raw-gap_inc
+tool tools/gen/abstract/extract e9fdce872011a2ed37e0ec6f754eeee453b8b655206f1350a9529b01d6a4aef1
+tool tools/gen/abstract/genabs.sh a90f07483fe62ae5e7ec9ae55bdb904a106bb5402f96906e4d6cb70b080d18d7
+tool tools/gen/abstract/gabs.c 16023e76cb19000eebb4c341692a831ad3d8d12093a4ecf2ed3e5c189532bf38
+solution_ir 31372f8a4025692ca1fea53c9a01c9566873661d955b1ac0b3520a40412400a0
+checker2 ACCEPT
+x445 check oscir OK
+tests inputs=e350c8b8b5d5ec6f0cad3bad037dcebeb1baea3af0d3c6b18d0d042ff0644a3f expected=eefbd35699a03520870946e8f6f58978f27153faa82a75fd2d3136488b978bc4 ACCEPT n=9

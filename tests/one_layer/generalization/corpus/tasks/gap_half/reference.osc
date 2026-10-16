@@ -1,0 +1,7 @@
+fn gap(p: u32, q: u32) -> u32 {
+    if p > q { return p - q; }
+    return q - p;
+}
+fn gap_half(x: u32, y: u32) -> u32 {
+    return gap(x, y) / 2;
+}

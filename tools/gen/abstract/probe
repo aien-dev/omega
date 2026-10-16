@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# tools/gen/abstract/probe [--root <repo>] <build dir> <records dir>
+#
+# GEN-3 (aien-spark/omega#478) local transfer probes, functional (run in the harness runner, not just parsed).
+# The probe tasks are the corpus tasks named in corpus/PROBES; the extractor never reads their helpers, so no
+# abstraction record descends from them (checked first). For each PROBES line `<task> positive|negative <name>`
+# with the abstraction record whose entry is <name> (taken from MANIFEST, digests checked):
+#   positive  the task's own solution with its helper <name> replaced by the record body passes the task's
+#             public tests: the record fits a task it was not extracted from
+#   negative  the record body plus tasks/<task>/misuse.<name>.omegese (the entry a model might write with the
+#             record) passes the reader chain but FAILS the task's public tests: the record looks related but
+#             does not apply, and the tests catch its misuse
+# Prints `PROBE <task> <polarity> <name> PASS|FAIL <detail>` lines and a summary; exit 1 if any probe fails.
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$HERE/genabs.sh"
+ROOT="$(cd "$HERE/../../.." && pwd)"
+if [ "${1:-}" = --root ]; then ROOT="$(cd "$2" && pwd)"; shift 2; fi
+[ $# -eq 2 ] || { echo "usage: probe [--root <repo>] <build dir> <records dir>" >&2; exit 2; }
+B="$(cd "$1" && pwd)" RS="$(cd "$2" && pwd)"
+W="$(mktemp -d "${TMPDIR:-/tmp}/gen-probe.XXXXXXXX")"
+trap 'rm -rf "$W"' EXIT
+ga_init "$B" "$ROOT" "$W" || exit 2
+CR="$ROOT/$GA_CORPUS"
+(cd "$RS" && sha256sum --quiet -c MANIFEST) || { echo "probe: MANIFEST digests do not match the record files" >&2; exit 1; }
+pass=0 fail=0
+res() { echo "PROBE $1 $2 $3 $4 $5"; if [ "$4" = PASS ]; then pass=$((pass + 1)); else fail=$((fail + 1)); fi; }
+
+# probe tasks are withheld: no abstraction record may name one in its ancestry
+probes="$(grep -v '^#' "$CR/PROBES" | cut -d' ' -f1 | sort -u)"
+leak="$(for f in $(awk '$2 ~ /^abstraction\// { print $2 }' "$RS/MANIFEST"); do sed -n 's/^ancestry \([^ ]*\) .*/\1/p' "$RS/$f"; done | sort -u | comm -12 - <(printf '%s\n' "$probes"))"
+if [ -z "$leak" ]; then echo "probe: withheld ok: no abstraction record descends from a probe task"; else echo "probe: LEAK: probe tasks in ancestry: $leak"; fail=$((fail + 1)); fi
+
+while read -r t pol name; do
+  d="$CR/tasks/$t"
+  rec="$(for f in $(awk '$2 ~ /^abstraction\// { print $2 }' "$RS/MANIFEST"); do grep -qx "entry $name" "$RS/$f" && echo "$RS/$f"; done | head -n 1 || true)"
+  [ -n "$rec" ] || { res "$t" "$pol" "$name" FAIL "no abstraction record named $name in the manifest"; continue; }
+  sed '1,/^body$/d' "$rec" > "$W/rb"
+  p="$(sed -n 's/^params//p' "$d/requirement")" ret="$(sed -n 's/^ret //p' "$d/requirement")"
+  if [ "$pol" = positive ]; then
+    fns="$("$GA_GABS" split "$d/solution.omegese" "$W/p.$t")"
+    printf '%s\n' "$fns" | awk -v n="$name" '$3 == n { f = 1 } END { exit !f }' || { res "$t" "$pol" "$name" FAIL "the probe solution has no helper $name"; continue; }
+    while read -r _ k fname _; do
+      if [ "$fname" = "$name" ]; then cat "$W/rb"; else cat "$W/p.$t.$k.omegese"; fi
+    done <<< "$fns" > "$W/prog.omegese"
+    ga_chain "$W/prog.omegese" "$W/prog" || { res "$t" "$pol" "$name" FAIL "$GA_ERR"; continue; }
+    v="$("$GA_GABS" run "$GA_RUNNER" "$W/scratch" "$W/prog.ir" "$t" "$ret" "$d/inputs" "$d/expected" $p 2>&1)" || true
+    case "$v" in "ACCEPT n="*) res "$t" "$pol" "$name" PASS "record body in the probe solution: $v";;
+      *) res "$t" "$pol" "$name" FAIL "record body in the probe solution: $v";; esac
+  else
+    m="$d/misuse.$name.omegese"
+    [ -f "$m" ] || { res "$t" "$pol" "$name" FAIL "no misuse.$name.omegese"; continue; }
+    cat "$W/rb" "$m" > "$W/prog.omegese"
+    ga_chain "$W/prog.omegese" "$W/prog" || { res "$t" "$pol" "$name" FAIL "misuse program must pass the reader chain: $GA_ERR"; continue; }
+    v="$("$GA_GABS" run "$GA_RUNNER" "$W/scratch" "$W/prog.ir" "$t" "$ret" "$d/inputs" "$d/expected" $p 2>&1)" || true
+    case "$v" in "REJECT wrong_result"*|"REJECT unexpected_trap"*|"REJECT missing_trap"*|"REJECT wrong_trap"*)
+        res "$t" "$pol" "$name" PASS "record misused, tests catch it: $v";;
+      *) res "$t" "$pol" "$name" FAIL "record misuse not caught by the tests: $v";; esac
+  fi
+done < <(grep -v '^#' "$CR/PROBES")
+echo "probe: $pass pass, $fail fail"
+[ "$fail" = 0 ]

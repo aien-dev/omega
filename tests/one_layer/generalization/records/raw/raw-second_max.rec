@@ -1,0 +1,50 @@
+gen-record 1
+id raw-second_max
+kind raw
+split probe
+family gs1-c453424072d6f01e
+entry second_max
+params u32 u32 u32 u32
+ret u32
+signature fn second_max a uint b uint c uint d uint to uint
+desc second largest of four values, counting repeats
+receipt 4c0ec062faffdf43d6e21b5a4e775401ff41bf047566ab27dbe59b012cfd2f15
+validity verified
+ancestry second_max e47c2e2199df706e05b23806e53ea726c80ddf1826167f05e50e0d53f7f98f1c
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/second_max/desc a6b5a047fbb2e38cbf69a3230cbe241dbf7e7212afd5c90a674cd312724b49cf
+source tests/one_layer/generalization/corpus/tasks/second_max/expected 654998e38d4f19351d094a6f71345a0faa073fe96e121eb36bbe359f2ed13982
+source tests/one_layer/generalization/corpus/tasks/second_max/inputs 95e141c93bc0da44637cf82046e2c6470e216681a99d5c74e9658d626d886867
+source tests/one_layer/generalization/corpus/tasks/second_max/requirement 7eab14b3362f1681af52d9869a766d13cacead72a5f905dc23192f08301d4924
+source tests/one_layer/generalization/corpus/tasks/second_max/solution.omegese e47c2e2199df706e05b23806e53ea726c80ddf1826167f05e50e0d53f7f98f1c
+body
+fn second_max a uint b uint c uint d uint to uint
+v = new uint 4 0
+put v 0 a
+put v 1 b
+put v 2 c
+put v 3 d
+m = uint 0
+for i uint 4
+if gt get v i m
+m = get v i
+end
+end
+n = uint 0
+s = uint 0
+for j uint 4
+if eq get v j m
+n = add n 1
+end
+if and lt get v j m gt get v j s
+s = get v j
+end
+end
+r = s
+if ge n 2
+r = m
+end
+free v
+ret r
+end

@@ -1,0 +1,32 @@
+gen-record 1
+id raw-digsum_mod9
+kind raw
+split corpus
+family gs1-0f1c0e4d3df8946d
+entry digsum_mod9
+params u32
+ret u32
+signature fn digsum_mod9 n uint to uint
+desc decimal digit sum of n modulo 9, with a digsum helper
+receipt a51acb0219ad76cb036067c418dde5595d0037e6e5e4b5bdf6ae8de4f7723339
+validity verified
+ancestry digsum_mod9 7a9b0cdb057c8c408a475b693341f42d5c8bf76db62bc3fd19b7b6b049062b6a
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/digsum_mod9/desc 83b8998886d1ebc314dcbd2b10db867fa4c634cb38bafa54f0e3a0aa1e380954
+source tests/one_layer/generalization/corpus/tasks/digsum_mod9/expected 7395f4abce301862174827bf2c01e5e91ef5b460b2e4817f23ce12f7bcdfa415
+source tests/one_layer/generalization/corpus/tasks/digsum_mod9/inputs f124e4de6012f38ff069cfe8ea45bdbfcd28e24ffb924da5cf00ea17cffad9dd
+source tests/one_layer/generalization/corpus/tasks/digsum_mod9/requirement a823ab2ab5ea28ad462393a05121aea6b056fbf4ded659a63742c72be8f66076
+source tests/one_layer/generalization/corpus/tasks/digsum_mod9/solution.omegese 7a9b0cdb057c8c408a475b693341f42d5c8bf76db62bc3fd19b7b6b049062b6a
+body
+fn digsum n uint to uint
+s = uint 0
+while gt n 0 bound 20
+s = add s rem n 10
+n = div n 10
+end
+ret s
+end
+fn digsum_mod9 n uint to uint
+ret rem digsum n 9
+end

@@ -1,0 +1,24 @@
+gen-record 1
+id raw-wrap8
+kind raw
+split probe
+family gs1-08a1288b8a59e505
+entry wrap8
+params u32
+ret u8
+signature fn wrap8 x uint to uchar
+desc lowest 8 bits of x
+receipt 36f908fd259a4f1a441256e6460d9b75102459a956d1599c804441b9ebb9a340
+validity verified
+ancestry wrap8 c5e92b89717d7ee9f64dde90cefad4eca63b71be12f29f26d04045ffacc39629
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/wrap8/desc e161ec141d609ad6daa67af560b5d8ad2faae4d4edd10fb21e441024aefc7293
+source tests/one_layer/generalization/corpus/tasks/wrap8/expected eea288c1bb140f5191e3cf99b5e72d2411dba83a31a1354e48c14ef25d9f6e4b
+source tests/one_layer/generalization/corpus/tasks/wrap8/inputs c5bde4452274c82b5bf81d79eaf6f2feef39bab8364870fb6e979bf277b72bd6
+source tests/one_layer/generalization/corpus/tasks/wrap8/requirement a63873111d9a91d01829e3a974a83f1cf10262457cdf29faf0016cd535f29185
+source tests/one_layer/generalization/corpus/tasks/wrap8/solution.omegese c5e92b89717d7ee9f64dde90cefad4eca63b71be12f29f26d04045ffacc39629
+body
+fn wrap8 x uint to uchar
+ret uchar and x 255
+end

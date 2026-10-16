@@ -1,0 +1,26 @@
+fn max4 v view uint 4 to uint
+m = get v 0
+for i uint 4
+if gt get v i m
+m = get v i
+end
+end
+ret m
+end
+fn sum4 v view uint 4 to ulong
+s = ulong 0
+for i uint 4
+s = add s ulong get v i
+end
+ret s
+end
+fn spread4 a uint b uint c uint d uint to ulong
+v = new uint 4 0
+put v 0 a
+put v 1 b
+put v 2 c
+put v 3 d
+r = sub mul ulong max4 v 4 sum4 v
+free v
+ret r
+end

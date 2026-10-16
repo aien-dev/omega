@@ -1,0 +1,11 @@
+fn digit_product n uint to uint
+if eq n 0
+ret 0
+end
+p = uint 1
+while gt n 0 bound 20
+p = mul p rem n 10
+n = div n 10
+end
+ret p
+end

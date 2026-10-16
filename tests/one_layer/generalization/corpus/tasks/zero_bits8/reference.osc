@@ -1,0 +1,5 @@
+fn zero_bits8(x: u32) -> u32 {
+    let mut c: u32 = 0;
+    for i in 0 .. 8 { c = c + (1 - ((x >> i) & 1)); }
+    return c;
+}

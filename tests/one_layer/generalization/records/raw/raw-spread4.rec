@@ -1,0 +1,47 @@
+gen-record 1
+id raw-spread4
+kind raw
+split probe
+family gs1-1fd45a53360ad17c
+entry spread4
+params u32 u32 u32 u32
+ret u64
+signature fn spread4 a uint b uint c uint d uint to ulong
+desc four times the largest of four values minus their sum, with max4 and sum4 helpers
+receipt b9cf4dc70319df70935c591114492fdb6b953745eee7b85a6b882aec2139d4ab
+validity verified
+ancestry spread4 8f086e170868181ef9b984cfc67ad95b54cb99d594b17725c15afa2578d0cbd2
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/spread4/desc f6f911895f1e97abca1220584ee3b3be475e43e0aa96806b488a4c322035a95c
+source tests/one_layer/generalization/corpus/tasks/spread4/expected 60f3654946ccef20645f11af76dbb0f329e6b361ca91820c764561e65395375e
+source tests/one_layer/generalization/corpus/tasks/spread4/inputs 792f751acee6771df4071b7424035913f3913927e77633d6f4c49d866c541ce8
+source tests/one_layer/generalization/corpus/tasks/spread4/requirement 3891e78cd612ae6d3e91a68015c51527612bdc1d7be38bda7866591831fcd2a1
+source tests/one_layer/generalization/corpus/tasks/spread4/solution.omegese 8f086e170868181ef9b984cfc67ad95b54cb99d594b17725c15afa2578d0cbd2
+body
+fn max4 v view uint 4 to uint
+m = get v 0
+for i uint 4
+if gt get v i m
+m = get v i
+end
+end
+ret m
+end
+fn sum4 v view uint 4 to ulong
+s = ulong 0
+for i uint 4
+s = add s ulong get v i
+end
+ret s
+end
+fn spread4 a uint b uint c uint d uint to ulong
+v = new uint 4 0
+put v 0 a
+put v 1 b
+put v 2 c
+put v 3 d
+r = sub mul ulong max4 v 4 sum4 v
+free v
+ret r
+end

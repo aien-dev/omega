@@ -1,0 +1,1 @@
+sum over i below n of i times k saturated to 255, with a sat8 helper

@@ -1,0 +1,1 @@
+Write a function digits_both that takes two unsigned 32-bit numbers n and m and returns the number of decimal digits of n plus the number of decimal digits of m. Write and use a helper function digcount(n) that returns how many decimal digits n has (1 for n = 0).

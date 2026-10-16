@@ -1,0 +1,1 @@
+Write a function gap_half that takes two unsigned 32-bit numbers x and y and returns half of the distance between them, rounded down, where the distance is the larger minus the smaller. Write and use a helper function gap(p, q) that returns the distance between p and q.

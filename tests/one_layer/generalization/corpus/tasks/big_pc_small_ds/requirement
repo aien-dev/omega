@@ -1,0 +1,5 @@
+# GEN-3 public corpus task (exemplar family), not a held-out task
+kind task
+entry big_pc_small_ds
+params u32
+ret u32

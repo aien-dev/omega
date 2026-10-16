@@ -1,0 +1,1 @@
+Write a function ds_plus_dc that takes an unsigned 32-bit number n and returns the sum of its decimal digits plus the number of its decimal digits. Write and use a helper function digsum(n) that returns the sum of the decimal digits of n (0 for n = 0). Write and use a helper function digcount(n) that returns how many decimal digits n has (1 for n = 0).

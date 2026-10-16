@@ -1,0 +1,1 @@
+Write a function zero_bits8 that takes an unsigned 32-bit number x and returns how many of its lowest 8 bits are 0; higher bits are ignored.

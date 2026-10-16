@@ -1,0 +1,17 @@
+fn sum4 v view uint 4 to ulong
+s = ulong 0
+for i uint 4
+s = add s ulong get v i
+end
+ret s
+end
+fn sum4_low a uint b uint c uint d uint to uint
+v = new uint 4 0
+put v 0 a
+put v 1 b
+put v 2 c
+put v 3 d
+r = uint and sum4 v 65535
+free v
+ret r
+end

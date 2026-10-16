@@ -1,0 +1,15 @@
+fn sat8 x uint to uchar
+if gt x 255
+ret 255
+end
+ret uchar x
+end
+fn sum_sat n uint k uint to uint
+s = uint 0
+i = uint 0
+while lt i n bound 100000
+s = add s uint sat8 mul i k
+i = add i 1
+end
+ret s
+end

@@ -1,0 +1,1 @@
+Write a function hamming that takes two unsigned 32-bit numbers x and y and returns in how many of the 32 bit positions they differ, which is the number of one bits of x exclusive-or y. Write and use a helper function popcnt(x) that returns how many of the 32 bits of x are 1.

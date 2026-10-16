@@ -1,0 +1,14 @@
+fn gcd a uint b uint to uint
+while ne b 0 bound 100
+t = rem a b
+a = b
+b = t
+end
+ret a
+end
+fn lcm32 a uint b uint to uint
+if or eq a 0 eq b 0
+ret 0
+end
+ret mul div a gcd a b b
+end

@@ -1,0 +1,22 @@
+fn gcd a uint b uint to uint
+while ne b 0 bound 100
+t = rem a b
+a = b
+b = t
+end
+ret a
+end
+fn digcount n uint to uint
+c = uint 1
+while ge n 10 bound 20
+c = add c 1
+n = div n 10
+end
+ret c
+end
+fn gcd_or_dc a uint b uint to uint
+if gt a b
+ret gcd a b
+end
+ret digcount b
+end

@@ -1,0 +1,1 @@
+Write a function clamp_triple that takes an unsigned 32-bit number a and returns 3 * a limited to the range 50 to 1000: below 50 gives 50, above 1000 gives 1000, otherwise the value itself. Write and use a helper function clamp(x, lo, hi) that limits an unsigned 32-bit number x to the range lo..hi. Unsigned 32-bit arithmetic wraps around modulo 2^32 (it never traps).

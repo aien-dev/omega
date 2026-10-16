@@ -1,0 +1,17 @@
+gen-receipt 1
+record abs-1ca006578c5168e0
+tool tools/gen/abstract/extract e9fdce872011a2ed37e0ec6f754eeee453b8b655206f1350a9529b01d6a4aef1
+tool tools/gen/abstract/genabs.sh a90f07483fe62ae5e7ec9ae55bdb904a106bb5402f96906e4d6cb70b080d18d7
+tool tools/gen/abstract/gabs.c 16023e76cb19000eebb4c341692a831ad3d8d12093a4ecf2ed3e5c189532bf38
+helper_ir 6904ffe66427f8048a754971611e893698d3271914bae4f531bbf2099a44ac75
+checker2 ACCEPT
+pre true
+post and and ge res 1 le res 10 eq lt n 10 eq res 1
+example 12345 -> 5
+property inputs=01d9e5c8c3c7efd306651e88bd8d3b8d45a1f19223c405d7b4f0ed2e4281d45d expected=23c04e4d3c8d5abea295504bcdab63f60f7d857852a0fe95e049676f6dfc65e4 ACCEPT n=256
+example inputs=f33ae3bc9a22cd7564990a794789954409977013966fb1a8f43c35776b833a95 expected=f0b5c2c2211c8d67ed15e75e656c7862d086e9245420892a7de62cd9ec582a06 ACCEPT n=1
+occurs digcount_nibbles digcount
+occurs ds_plus_dc digcount
+occurs even_ds_odd_dc digcount
+occurs gcd_or_dc digcount
+occurs pc_times_dc digcount

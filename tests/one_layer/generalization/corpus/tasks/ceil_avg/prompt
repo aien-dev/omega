@@ -1,0 +1,1 @@
+Write a function ceil_avg that takes two unsigned 32-bit numbers a and b and returns their average rounded up, computed without any intermediate overflow as a/2 + b/2 + (a mod 2 + b mod 2 + 1)/2.

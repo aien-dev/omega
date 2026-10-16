@@ -1,0 +1,1 @@
+Write a function popcnt_zero that takes an unsigned 32-bit number x and returns how many of its 32 bits are 0. Write and use a helper function popcnt(x) that returns how many of the 32 bits of x are 1.

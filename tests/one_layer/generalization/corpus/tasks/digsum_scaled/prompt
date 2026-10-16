@@ -1,0 +1,1 @@
+Write a function digsum_scaled that takes two unsigned 32-bit numbers n and k and returns the sum of the decimal digits of n multiplied by k. Write and use a helper function digsum(n) that returns the sum of the decimal digits of n (0 for n = 0). Unsigned 32-bit arithmetic wraps around modulo 2^32 (it never traps).

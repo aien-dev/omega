@@ -1,0 +1,38 @@
+gen-record 1
+id raw-sum4_avg
+kind raw
+split corpus
+family gs1-26858760cef06893
+entry sum4_avg
+params u32 u32 u32 u32
+ret u32
+signature fn sum4_avg a uint b uint c uint d uint to uint
+desc average of four values rounded down, with a sum4 helper over a 4-value sequence
+receipt c4278bc84050b202ce1465dd8da0d9c97da6b2284208d5f597cce79cd96131c6
+validity verified
+ancestry sum4_avg 8ac0d108c6c93fc9ca1c196e954df3f8e4a2722fea5d1dec07ea42becd64c833
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/sum4_avg/desc 2e2ce6ccfe3aab6cfd5dc6b527c380fa0e64bfc9e12819ce49d45617ad31a448
+source tests/one_layer/generalization/corpus/tasks/sum4_avg/expected c00bf2118d36c91d96f17a1b393dd0607b889ef89adeb52727cf8a19cc0dd47f
+source tests/one_layer/generalization/corpus/tasks/sum4_avg/inputs 35c26b95d92bec5100b6bce3ca976e20b521dfae47996b485052a37d7f45c05a
+source tests/one_layer/generalization/corpus/tasks/sum4_avg/requirement f30424a0e6e485494849e1b5c09e9cd63229f78d2c1390476131641a950e0f3d
+source tests/one_layer/generalization/corpus/tasks/sum4_avg/solution.omegese 8ac0d108c6c93fc9ca1c196e954df3f8e4a2722fea5d1dec07ea42becd64c833
+body
+fn sum4 v view uint 4 to ulong
+s = ulong 0
+for i uint 4
+s = add s ulong get v i
+end
+ret s
+end
+fn sum4_avg a uint b uint c uint d uint to uint
+v = new uint 4 0
+put v 0 a
+put v 1 b
+put v 2 c
+put v 3 d
+r = uint div sum4 v 4
+free v
+ret r
+end

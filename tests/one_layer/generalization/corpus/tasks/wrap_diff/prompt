@@ -1,0 +1,1 @@
+Write a function wrap_diff that takes two unsigned 32-bit numbers a and b and returns a - b wrapped around modulo 2^32, so when b is greater than a the result is 2^32 + a - b.

@@ -1,0 +1,43 @@
+gen-record 1
+id raw-even_ds_odd_dc
+kind raw
+split corpus
+family gs1-8f56ab3ea4340fe8
+entry even_ds_odd_dc
+params u32
+ret u32
+signature fn even_ds_odd_dc n uint to uint
+desc digit sum of n if n is even, else its digit count, with digsum and digcount helpers
+receipt 7c5fe81e51c48a549eda5c6a6d7713de02d1936cbd9eef7abddd294c51b659bb
+validity verified
+ancestry even_ds_odd_dc 42de107a6357661aaa7899968ddd26fd882bd111f75775f9dd8af962216637bb
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/even_ds_odd_dc/desc 37856aac3d8105708111066727da60fa3b61732b796301b51b47c605437d7cad
+source tests/one_layer/generalization/corpus/tasks/even_ds_odd_dc/expected e6ea1dca045f76d52286649f12af54b0d025323052c2720a5373021031ced244
+source tests/one_layer/generalization/corpus/tasks/even_ds_odd_dc/inputs 4075bffd7483d324d09c54a3914e147d615184cd5d85718804982d88785e7449
+source tests/one_layer/generalization/corpus/tasks/even_ds_odd_dc/requirement c38703c8fa9b4fb50d6c19485d2f815a47fd377164a7ff5a0e4eaf682e2389eb
+source tests/one_layer/generalization/corpus/tasks/even_ds_odd_dc/solution.omegese 42de107a6357661aaa7899968ddd26fd882bd111f75775f9dd8af962216637bb
+body
+fn digsum n uint to uint
+s = uint 0
+while gt n 0 bound 20
+s = add s rem n 10
+n = div n 10
+end
+ret s
+end
+fn digcount n uint to uint
+c = uint 1
+while ge n 10 bound 20
+c = add c 1
+n = div n 10
+end
+ret c
+end
+fn even_ds_odd_dc n uint to uint
+if eq rem n 2 0
+ret digsum n
+end
+ret digcount n
+end

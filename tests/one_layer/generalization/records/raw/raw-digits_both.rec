@@ -1,0 +1,32 @@
+gen-record 1
+id raw-digits_both
+kind raw
+split probe
+family gs1-0846032659bd1c21
+entry digits_both
+params u32 u32
+ret u32
+signature fn digits_both n uint m uint to uint
+desc decimal digit count of n plus that of m, with a digcount helper
+receipt 3dcf62a4e1f7e65179df3ed6d1574cbf505dd48c875bb75fdffa439dca742f5e
+validity verified
+ancestry digits_both 3503998ea3b3ee9364c5b2e3783d9353bd431dc18f4283e89d58baf93bd93d5a
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/digits_both/desc 0ab6cf9a7f8267b2ba97c2512ac6ed43fd85fb68a307b83c3c0e7cb28aba91d3
+source tests/one_layer/generalization/corpus/tasks/digits_both/expected 3dc6b3da927aedb4f6f9c9e270a3aeef85381b136679df655a780aa083cfa467
+source tests/one_layer/generalization/corpus/tasks/digits_both/inputs 10b372cfb4b71f2c040192e0c3d5b07922f6d07495d38e0c869684961e5eb4b3
+source tests/one_layer/generalization/corpus/tasks/digits_both/requirement 69babd5b2ca3c648288f53c88c73abb6cfee7b08d904f356c813236c9b80f62d
+source tests/one_layer/generalization/corpus/tasks/digits_both/solution.omegese 3503998ea3b3ee9364c5b2e3783d9353bd431dc18f4283e89d58baf93bd93d5a
+body
+fn digcount n uint to uint
+c = uint 1
+while ge n 10 bound 20
+c = add c 1
+n = div n 10
+end
+ret c
+end
+fn digits_both n uint m uint to uint
+ret add digcount n digcount m
+end

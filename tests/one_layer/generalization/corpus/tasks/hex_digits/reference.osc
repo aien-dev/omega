@@ -1,0 +1,6 @@
+fn hex_digits(n: u32) -> u32 {
+    let mut x: u32 = n;
+    let mut c: u32 = 1;
+    while x >= 16 bound 10 { c = c + 1; x = x / 16; }
+    return c;
+}

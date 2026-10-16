@@ -1,0 +1,3 @@
+fn digit_product n uint to uint
+ret digsum n
+end

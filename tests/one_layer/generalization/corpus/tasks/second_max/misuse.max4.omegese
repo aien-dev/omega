@@ -1,0 +1,10 @@
+fn second_max a uint b uint c uint d uint to uint
+v = new uint 4 0
+put v 0 a
+put v 1 b
+put v 2 c
+put v 3 d
+r = max4 v
+free v
+ret r
+end

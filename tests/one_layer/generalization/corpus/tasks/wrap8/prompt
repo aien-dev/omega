@@ -1,0 +1,1 @@
+Write a function wrap8 that takes an unsigned 32-bit number x and returns its lowest 8 bits (x mod 256) as an unsigned 8-bit number.

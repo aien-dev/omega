@@ -1,0 +1,29 @@
+gen-record 1
+id raw-gcd_only
+kind raw
+split corpus
+family gs1-ba9ca1a3efe1e1c9
+entry gcd_only
+params u32 u32
+ret u32
+signature fn gcd_only a uint b uint to uint
+desc greatest common divisor of a and b by repeated remainders
+receipt 5af76e4752ff997576533c45310e4a853fa9c9ab9002e17923485ee06a874ec2
+validity verified
+ancestry gcd_only bd5d5f682854b980e0c3b358578eb8ff7cbd9bc49402249f21c7ba32ed73482a
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/gcd_only/desc 4448a1e2657d648bbe20be55930a5d23292ad9ebd957d315fdca972af8caf4a1
+source tests/one_layer/generalization/corpus/tasks/gcd_only/expected 0547394d7844c239764c97973204d9280e56235edf830f6863f54142708486b4
+source tests/one_layer/generalization/corpus/tasks/gcd_only/inputs 7451d4e37511f11ff4a6db242b55bc6738016a903839855d9cdd15506c10f71d
+source tests/one_layer/generalization/corpus/tasks/gcd_only/requirement 861d014203b09cc57a919c117cfeb2913a8935828d56e0a9943900f1c7cef162
+source tests/one_layer/generalization/corpus/tasks/gcd_only/solution.omegese bd5d5f682854b980e0c3b358578eb8ff7cbd9bc49402249f21c7ba32ed73482a
+body
+fn gcd_only a uint b uint to uint
+while ne b 0 bound 100
+t = rem a b
+a = b
+b = t
+end
+ret a
+end

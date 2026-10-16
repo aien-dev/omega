@@ -1,0 +1,1 @@
+Write a function avg4 that takes four unsigned 32-bit numbers a, b, c, d and returns avg2(avg2(a, b), avg2(c, d)). Write and use a helper function avg2(a, b) that returns the average of a and b rounded down, computed without any intermediate overflow as a/2 + b/2 + (a mod 2 + b mod 2)/2.

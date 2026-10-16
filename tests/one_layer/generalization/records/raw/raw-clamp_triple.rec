@@ -1,0 +1,33 @@
+gen-record 1
+id raw-clamp_triple
+kind raw
+split corpus
+family gs1-4fce2bcffb708703
+entry clamp_triple
+params u32
+ret u32
+signature fn clamp_triple a uint to uint
+desc three times a limited to 50..1000 with a clamp helper
+receipt 3c0c4d67750fb0ef342ce4548df8aab4376ea16be6ac86bf327b221955907313
+validity verified
+ancestry clamp_triple 2850efbe16088dfd807e0040e7c05d8222191deddbf0514444ae03eec6d3356d
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/clamp_triple/desc dc7672e34a10457d90ab41c80a99a4d4ce1f8654a314d59524256658c7bb218e
+source tests/one_layer/generalization/corpus/tasks/clamp_triple/expected ccea712db014d58def05d37ef4e3f3a6f8bae8112ad00e70993d826139a2fccf
+source tests/one_layer/generalization/corpus/tasks/clamp_triple/inputs eaf4dd278cf42353a7d5e32abca3bf309c826a0583903e0375166a31b2b39e00
+source tests/one_layer/generalization/corpus/tasks/clamp_triple/requirement 4f120fcf6d3021bca22763ce9a2290c903a690952c3503f31e3c52242b957270
+source tests/one_layer/generalization/corpus/tasks/clamp_triple/solution.omegese 2850efbe16088dfd807e0040e7c05d8222191deddbf0514444ae03eec6d3356d
+body
+fn clamp x uint lo uint hi uint to uint
+if lt x lo
+ret lo
+end
+if gt x hi
+ret hi
+end
+ret x
+end
+fn clamp_triple a uint to uint
+ret clamp mul a 3 50 1000
+end

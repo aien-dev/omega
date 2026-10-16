@@ -1,0 +1,14 @@
+fn popcnt(x: u32) -> u32 {
+    let mut c: u32 = 0;
+    for i in 0 .. 32 { c = c + ((x >> i) & 1); }
+    return c;
+}
+fn digcount(n: u32) -> u32 {
+    let mut x: u32 = n;
+    let mut c: u32 = 1;
+    while x >= 10 bound 20 { c = c + 1; x = x / 10; }
+    return c;
+}
+fn pc_times_dc(x: u32) -> u32 {
+    return popcnt(x) * digcount(x);
+}

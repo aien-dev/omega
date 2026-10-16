@@ -1,0 +1,31 @@
+gen-record 1
+id raw-popcnt_zero
+kind raw
+split corpus
+family gs1-0f1c0e4d3df8946d
+entry popcnt_zero
+params u32
+ret u32
+signature fn popcnt_zero x uint to uint
+desc number of zero bits in a 32-bit x, with a popcnt helper
+receipt 94cf38a9ab15f8d21f0307dc99b60c511b61123047ac84ee74e1fd5e6da58e6b
+validity verified
+ancestry popcnt_zero c94d6bd7bf8ff4bf32a5ce80e5a1f17c3d9667dff6c6959c5e1d41f3179decf7
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/popcnt_zero/desc 408f6252c5e68085bd79735d11ecf6e7bf819f5b5c24faf6fb15276345910de4
+source tests/one_layer/generalization/corpus/tasks/popcnt_zero/expected f99246aeffac21602ac47db110af4e0c3ef1d07660488a0eb26533598885cad8
+source tests/one_layer/generalization/corpus/tasks/popcnt_zero/inputs 4d820cfbd3f3556cfba6bc28541bd19c2bcb19d88f70425e5772c7b26268b2ae
+source tests/one_layer/generalization/corpus/tasks/popcnt_zero/requirement c75980c728ff7d61937d35253cf166aaf1379b2dbeec42fedef2be29fd1a95da
+source tests/one_layer/generalization/corpus/tasks/popcnt_zero/solution.omegese c94d6bd7bf8ff4bf32a5ce80e5a1f17c3d9667dff6c6959c5e1d41f3179decf7
+body
+fn popcnt x uint to uint
+c = uint 0
+for i uint 32
+c = add c and shr x i 1
+end
+ret c
+end
+fn popcnt_zero x uint to uint
+ret sub 32 popcnt x
+end

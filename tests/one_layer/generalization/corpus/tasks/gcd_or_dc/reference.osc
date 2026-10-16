@@ -1,0 +1,16 @@
+fn gcd(a: u32, b: u32) -> u32 {
+    let mut x: u32 = a;
+    let mut y: u32 = b;
+    while y != 0 bound 100 { let t: u32 = x % y; x = y; y = t; }
+    return x;
+}
+fn digcount(n: u32) -> u32 {
+    let mut x: u32 = n;
+    let mut c: u32 = 1;
+    while x >= 10 bound 20 { c = c + 1; x = x / 10; }
+    return c;
+}
+fn gcd_or_dc(a: u32, b: u32) -> u32 {
+    if a > b { return gcd(a, b); }
+    return digcount(b);
+}

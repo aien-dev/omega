@@ -1,0 +1,18 @@
+fn gcd a uint b uint to uint
+while ne b 0 bound 100
+t = rem a b
+a = b
+b = t
+end
+ret a
+end
+fn popcnt x uint to uint
+c = uint 0
+for i uint 32
+c = add c and shr x i 1
+end
+ret c
+end
+fn gcd_times_pc a uint b uint to uint
+ret mul gcd a b popcnt b
+end

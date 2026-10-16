@@ -1,0 +1,30 @@
+gen-record 1
+id raw-sat_affine
+kind raw
+split probe
+family gs1-7737c5e803aa6235
+entry sat_affine
+params u32 u32 u32
+ret u8
+signature fn sat_affine a uint b uint c uint to uchar
+desc a times b plus c saturated to 8 bits, with a sat8 helper
+receipt 0bca2794f8e367f3927de26308021e316c24630dea9e07d5c4ca99236f9b60bd
+validity verified
+ancestry sat_affine 8424f3648645b0c1ffb27b7a8923ce43f530bb02166c5f3e2f47e9ffd940f211
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/sat_affine/desc 8564bf28d43c0d544a080a5b8413646a2084e840c3a4349f901a34cee4852be9
+source tests/one_layer/generalization/corpus/tasks/sat_affine/expected 231ade3a5a688fa114d0c71492c6764d05e068b1e9cac38fb325c88ffd8299b5
+source tests/one_layer/generalization/corpus/tasks/sat_affine/inputs d0d14adaf99ec06dd330a2bd68f0153b8e1a8b573382f6a8c76ce99d023fd4b8
+source tests/one_layer/generalization/corpus/tasks/sat_affine/requirement 8faf0b00811c4dddf7292d355ee7f0aba0d2f5a64380327e28a0d3c42bc5a834
+source tests/one_layer/generalization/corpus/tasks/sat_affine/solution.omegese 8424f3648645b0c1ffb27b7a8923ce43f530bb02166c5f3e2f47e9ffd940f211
+body
+fn sat8 x uint to uchar
+if gt x 255
+ret 255
+end
+ret uchar x
+end
+fn sat_affine a uint b uint c uint to uchar
+ret sat8 add mul a b c
+end

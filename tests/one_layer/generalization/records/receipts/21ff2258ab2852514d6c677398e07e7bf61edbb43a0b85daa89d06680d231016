@@ -1,0 +1,14 @@
+gen-receipt 1
+record abs-b832ac4707416b28
+tool tools/gen/abstract/extract e9fdce872011a2ed37e0ec6f754eeee453b8b655206f1350a9529b01d6a4aef1
+tool tools/gen/abstract/genabs.sh a90f07483fe62ae5e7ec9ae55bdb904a106bb5402f96906e4d6cb70b080d18d7
+tool tools/gen/abstract/gabs.c 16023e76cb19000eebb4c341692a831ad3d8d12093a4ecf2ed3e5c189532bf38
+helper_ir be19cc067aed81d4f1498dab4b1c24701c222f3d580aeb80b1dfbf7ae4ed00f1
+checker2 ACCEPT
+pre true
+post or eq add ulong res ulong b ulong a eq add ulong res ulong a ulong b
+example 3 10 -> 7
+property inputs=45c6adefc2a276e44be0cd61f7ca006a148fa5261d2852bc0bd48d9be4c10326 expected=23c04e4d3c8d5abea295504bcdab63f60f7d857852a0fe95e049676f6dfc65e4 ACCEPT n=256
+example inputs=27437c969e25c7e713214e322239b131459f0651098e0855fdd15e94464c23e0 expected=10159baf262b43a92d95db59dae1f72c645127301661e0a3ce4e38b295a97c58 ACCEPT n=1
+occurs gap_half gap
+occurs gap_inc absdiff

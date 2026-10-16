@@ -1,0 +1,14 @@
+fn digsum n uint to uint
+s = uint 0
+while gt n 0 bound 20
+s = add s rem n 10
+n = div n 10
+end
+ret s
+end
+fn ds2 n uint to uint
+ret digsum digsum n
+end
+fn ds2_double n uint to uint
+ret mul ds2 n 2
+end

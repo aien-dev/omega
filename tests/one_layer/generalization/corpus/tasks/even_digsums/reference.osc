@@ -1,0 +1,12 @@
+fn digsum(n: u32) -> u32 {
+    let mut x: u32 = n;
+    let mut s: u32 = 0;
+    while x > 0 bound 20 { s = s + x % 10; x = x / 10; }
+    return s;
+}
+fn even_digsums(n: u32) -> u32 {
+    let mut c: u32 = 0;
+    let mut i: u32 = 0;
+    while i < n bound 100000 { if digsum(i) % 2 == 0 { c = c + 1; } i = i + 1; }
+    return c;
+}

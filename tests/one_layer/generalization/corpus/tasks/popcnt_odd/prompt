@@ -1,0 +1,1 @@
+Write a function popcnt_odd that takes an unsigned 32-bit number x and returns true when an odd number of its 32 bits are 1, false otherwise. Write and use a helper function popcnt(x) that returns how many of the 32 bits of x are 1.

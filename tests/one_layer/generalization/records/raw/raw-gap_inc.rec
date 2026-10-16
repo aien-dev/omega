@@ -1,0 +1,30 @@
+gen-record 1
+id raw-gap_inc
+kind raw
+split corpus
+family gs1-4fce2bcffb708703
+entry gap_inc
+params u32 u32
+ret u32
+signature fn gap_inc a uint b uint to uint
+desc distance between a and b plus one, with an absdiff helper
+receipt 4cc9387c800415e1d0a39b8ef75eb14af34f901acda252dfc71e9273f74f873d
+validity verified
+ancestry gap_inc ce7cc557bb9c1e5613459a104d3d2b835cb4d4ff4fc2ceef402423a02274f91d
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/gap_inc/desc 9c05e82a6d824017ddd363380b7a6ec86fc0f4da9e49650c5abb7a7cfc1910eb
+source tests/one_layer/generalization/corpus/tasks/gap_inc/expected eefbd35699a03520870946e8f6f58978f27153faa82a75fd2d3136488b978bc4
+source tests/one_layer/generalization/corpus/tasks/gap_inc/inputs e350c8b8b5d5ec6f0cad3bad037dcebeb1baea3af0d3c6b18d0d042ff0644a3f
+source tests/one_layer/generalization/corpus/tasks/gap_inc/requirement 8c06b06a28c225ad9391767acca97e777ea1b2adeca9ce14c498ddacc1550766
+source tests/one_layer/generalization/corpus/tasks/gap_inc/solution.omegese ce7cc557bb9c1e5613459a104d3d2b835cb4d4ff4fc2ceef402423a02274f91d
+body
+fn absdiff a uint b uint to uint
+if gt a b
+ret sub a b
+end
+ret sub b a
+end
+fn gap_inc a uint b uint to uint
+ret add absdiff a b 1
+end

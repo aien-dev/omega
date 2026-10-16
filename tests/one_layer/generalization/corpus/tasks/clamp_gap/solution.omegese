@@ -1,0 +1,18 @@
+fn clamp x uint lo uint hi uint to uint
+if lt x lo
+ret lo
+end
+if gt x hi
+ret hi
+end
+ret x
+end
+fn absdiff a uint b uint to uint
+if gt a b
+ret sub a b
+end
+ret sub b a
+end
+fn clamp_gap a uint b uint lo uint hi uint to uint
+ret clamp absdiff a b lo hi
+end

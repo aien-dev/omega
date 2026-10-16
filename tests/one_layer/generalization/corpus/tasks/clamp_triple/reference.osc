@@ -1,0 +1,8 @@
+fn clamp(x: u32, lo: u32, hi: u32) -> u32 {
+    if x < lo { return lo; }
+    if x > hi { return hi; }
+    return x;
+}
+fn clamp_triple(a: u32) -> u32 {
+    return clamp(a * 3, 50, 1000);
+}

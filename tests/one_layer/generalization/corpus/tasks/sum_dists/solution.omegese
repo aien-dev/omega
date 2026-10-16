@@ -1,0 +1,15 @@
+fn dist a uint b uint to uint
+if lt a b
+ret sub b a
+end
+ret sub a b
+end
+fn sum_dists n uint c uint to uint
+s = uint 0
+i = uint 0
+while lt i n bound 100000
+s = add s dist i c
+i = add i 1
+end
+ret s
+end

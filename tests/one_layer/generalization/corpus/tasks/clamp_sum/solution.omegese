@@ -1,0 +1,12 @@
+fn clamp x uint lo uint hi uint to uint
+if lt x lo
+ret lo
+end
+if gt x hi
+ret hi
+end
+ret x
+end
+fn clamp_sum a uint b uint to uint
+ret clamp add a b 10 100
+end

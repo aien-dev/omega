@@ -1,0 +1,9 @@
+fn sat8 x uint to uchar
+if gt x 255
+ret 255
+end
+ret uchar x
+end
+fn sat_prod a uint b uint to uchar
+ret sat8 mul a b
+end

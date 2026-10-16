@@ -1,0 +1,29 @@
+fn second_max a uint b uint c uint d uint to uint
+v = new uint 4 0
+put v 0 a
+put v 1 b
+put v 2 c
+put v 3 d
+m = uint 0
+for i uint 4
+if gt get v i m
+m = get v i
+end
+end
+n = uint 0
+s = uint 0
+for j uint 4
+if eq get v j m
+n = add n 1
+end
+if and lt get v j m gt get v j s
+s = get v j
+end
+end
+r = s
+if ge n 2
+r = m
+end
+free v
+ret r
+end

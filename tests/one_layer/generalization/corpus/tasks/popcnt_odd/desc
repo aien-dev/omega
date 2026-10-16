@@ -1,0 +1,1 @@
+true when a 32-bit x has an odd number of one bits, with a popcnt helper

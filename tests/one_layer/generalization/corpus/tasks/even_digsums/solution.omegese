@@ -1,0 +1,19 @@
+fn digsum n uint to uint
+s = uint 0
+while gt n 0 bound 20
+s = add s rem n 10
+n = div n 10
+end
+ret s
+end
+fn even_digsums n uint to uint
+c = uint 0
+i = uint 0
+while lt i n bound 100000
+if eq rem digsum i 2 0
+c = add c 1
+end
+i = add i 1
+end
+ret c
+end

@@ -1,0 +1,24 @@
+gen-record 1
+id raw-wrap_diff
+kind raw
+split probe
+family gs1-08a1288b8a59e505
+entry wrap_diff
+params u32 u32
+ret u32
+signature fn wrap_diff a uint b uint to uint
+desc a minus b wrapped modulo 2^32
+receipt 3b0eb547bed0ccd205e0cc544af8a7a2c174437aa847ceb50c05868f65b658b6
+validity verified
+ancestry wrap_diff 9239fc23fea0d3dbc3601445837f3d4f0e26f3aea6d56925dc19850969c29232
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/wrap_diff/desc 1e13b5f962125d494ddb1f386de058ee9cab936221eb975659aeb691bd13f60c
+source tests/one_layer/generalization/corpus/tasks/wrap_diff/expected 0d5d93617b949efc08639f5339d611ef2f9ae27185a0e18a67b5f12f84b12520
+source tests/one_layer/generalization/corpus/tasks/wrap_diff/inputs d2c4a07db300a5f2e4acf67d9a7da7754c05d4cf81797a24e82cf6ab9af1e94c
+source tests/one_layer/generalization/corpus/tasks/wrap_diff/requirement c20c17b0df7ac8d33e269ccccc228ce09291d98395345846ae18b7151c2780b0
+source tests/one_layer/generalization/corpus/tasks/wrap_diff/solution.omegese 9239fc23fea0d3dbc3601445837f3d4f0e26f3aea6d56925dc19850969c29232
+body
+fn wrap_diff a uint b uint to uint
+ret sub a b
+end

@@ -1,0 +1,30 @@
+gen-record 1
+id raw-sat_prod
+kind raw
+split corpus
+family gs1-4fce2bcffb708703
+entry sat_prod
+params u32 u32
+ret u8
+signature fn sat_prod a uint b uint to uchar
+desc product of a and b saturated to 8 bits with a sat8 helper
+receipt bf6ddb77f5a05d087d31ffa2f317386376095d90aeddf351144081acf4bb30c6
+validity verified
+ancestry sat_prod ebde60561889466254fcb93a343d7f99be5901dcb2650aecf65d5b83bc33da39
+source tests/one_layer/generalization/corpus/META 179c34c50f6d843d41b10aabdbd69c425248a3107e107c64630836199e15ab0b
+source tests/one_layer/generalization/corpus/PROBES 26e6c6269103dfb9a6b12a99c0702896291211b850993e75a7d4ac90965b2f96
+source tests/one_layer/generalization/corpus/tasks/sat_prod/desc 47ae41308bb1930ce3583bf1da901cd415e479b15a22acdd9d25df8109cbd4a4
+source tests/one_layer/generalization/corpus/tasks/sat_prod/expected a4cba19b33384ee9c23f699786aba554683fbb6610e2155a196bc8d320033551
+source tests/one_layer/generalization/corpus/tasks/sat_prod/inputs 4e6dd947b18c15e30593602343ed1ed813b01764e8d87839f037ce737baba40e
+source tests/one_layer/generalization/corpus/tasks/sat_prod/requirement 40689f6480c3899343ea4cf77a6a6a757871aa25c2f45dc1d466ce7739d0e932
+source tests/one_layer/generalization/corpus/tasks/sat_prod/solution.omegese ebde60561889466254fcb93a343d7f99be5901dcb2650aecf65d5b83bc33da39
+body
+fn sat8 x uint to uchar
+if gt x 255
+ret 255
+end
+ret uchar x
+end
+fn sat_prod a uint b uint to uchar
+ret sat8 mul a b
+end

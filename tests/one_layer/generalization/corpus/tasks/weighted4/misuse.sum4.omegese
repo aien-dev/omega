@@ -1,0 +1,10 @@
+fn weighted4 a uint b uint c uint d uint to ulong
+v = new uint 4 0
+put v 0 a
+put v 1 b
+put v 2 c
+put v 3 d
+r = sum4 v
+free v
+ret r
+end

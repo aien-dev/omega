@@ -1,0 +1,1 @@
+Write a function gap_inc that takes two unsigned 32-bit numbers a and b and returns the distance between them plus one, where the distance is the larger minus the smaller (0 when they are equal). Write and use a helper function absdiff(a, b) that returns that distance. Unsigned 32-bit arithmetic wraps around modulo 2^32 (it never traps).

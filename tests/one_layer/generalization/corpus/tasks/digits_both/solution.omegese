@@ -1,0 +1,11 @@
+fn digcount n uint to uint
+c = uint 1
+while ge n 10 bound 20
+c = add c 1
+n = div n 10
+end
+ret c
+end
+fn digits_both n uint m uint to uint
+ret add digcount n digcount m
+end

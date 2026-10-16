@@ -1,0 +1,6 @@
+fn avg2 a uint b uint to uint
+ret add add div a 2 div b 2 div add rem a 2 rem b 2 2
+end
+fn avg4 a uint b uint c uint d uint to uint
+ret avg2 avg2 a b avg2 c d
+end

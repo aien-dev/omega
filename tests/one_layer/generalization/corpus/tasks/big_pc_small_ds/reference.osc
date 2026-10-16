@@ -1,0 +1,15 @@
+fn popcnt(x: u32) -> u32 {
+    let mut c: u32 = 0;
+    for i in 0 .. 32 { c = c + ((x >> i) & 1); }
+    return c;
+}
+fn digsum(n: u32) -> u32 {
+    let mut x: u32 = n;
+    let mut s: u32 = 0;
+    while x > 0 bound 20 { s = s + x % 10; x = x / 10; }
+    return s;
+}
+fn big_pc_small_ds(x: u32) -> u32 {
+    if x >= 1000 { return popcnt(x); }
+    return digsum(x);
+}

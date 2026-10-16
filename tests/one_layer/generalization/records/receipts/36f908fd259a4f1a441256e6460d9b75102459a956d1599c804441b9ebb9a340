@@ -1,0 +1,9 @@
+gen-receipt 1
+record raw-wrap8
+tool tools/gen/abstract/extract e9fdce872011a2ed37e0ec6f754eeee453b8b655206f1350a9529b01d6a4aef1
+tool tools/gen/abstract/genabs.sh a90f07483fe62ae5e7ec9ae55bdb904a106bb5402f96906e4d6cb70b080d18d7
+tool tools/gen/abstract/gabs.c 16023e76cb19000eebb4c341692a831ad3d8d12093a4ecf2ed3e5c189532bf38
+solution_ir dbc976aa3961c08537f556b9e384fe5de9039c6ea8186e0264e42d616b6f155a
+checker2 ACCEPT
+x445 check oscir OK
+tests inputs=c5bde4452274c82b5bf81d79eaf6f2feef39bab8364870fb6e979bf277b72bd6 expected=eea288c1bb140f5191e3cf99b5e72d2411dba83a31a1354e48c14ef25d9f6e4b ACCEPT n=8

@@ -1,0 +1,1 @@
+one-bit count of x if x >= 1000, else its digit sum, with popcnt and digsum helpers
