@@ -1,32 +1,24 @@
 /* omega_bw_dep.h: dependency flags between the launches of one command list (DEPFLAGS, 2026-10-16), the kernel side.
+ * The protocol (one shared done counter per command list, bank words, host check) is described in omega_gpu_dep.h.
  *
  * Why: the decode graph serialised its ~436 dependent launches per token with WAIT_FOR_IDLE + INVALIDATE_SHADER_CACHES,
  * and the launch-cost study (evidence/OWN30B-L2D-BARRIER-20261014) measured 20-28 us per dependent launch for that drain
  * and refill against ~4 us without a barrier. With flags the list runs with barrier NONE and every kernel orders itself:
- *   prologue  warp 0 polls the previous launch's done counter (LDG.E.STRONG.GPU) until counter - target < 2^31 (wrap-safe),
- *             then BAR.SYNC and CCTL.IVALL (nvcc's lowering of ld.acquire.gpu, probe in investigations/2026-10-16-DEPFLAGS/sass);
- *             a poll that never succeeds (DEP_POLL_LIMIT iterations) adds DEP_TIMEOUT_SENTINEL to this launch's own counter
+ *   prologue  warp 0 polls the shared done counter (LDG.E.STRONG.GPU) until done - target < 2^31 (wrap-safe), then
+ *             BAR.SYNC and CCTL.IVALL (nvcc's lowering of ld.acquire.gpu, probe in investigations/2026-10-16-DEPFLAGS/sass);
+ *             a poll that never succeeds (OMEGA_DEP_POLL_LIMIT iterations) adds OMEGA_DEP_TIMEOUT_SENTINEL once (lane 0) to the counter
  *             and continues, so the host sees the wrong count and nothing hangs the chip.
  *   epilogue  before every EXIT: MEMBAR.ALL.GPU; ERRBAR; CGAERRBAR (nvcc's lowering of fence + red.release.gpu), BAR.SYNC,
  *             thread 0 ATOMG.E.ADD.STRONG.GPU done, 1 (the CUDA Programming Guide reduction sample: a device-scope fence
  *             before the count increment, and a device-scope acquire load of the flag on the other side).
- *   camera    (dep bit 1) CS2R SR_GLOBALTIMERLO at entry and before EXIT; thread 0 stores {t0, t1} (16 B) at
+ *   camera    (OMEGA_DEP_CAMERA) CS2R SR_GLOBALTIMERLO at entry and before EXIT; thread 0 stores {t0, t1} (16 B) at
  *             cam_base + 16 * (slot & (OMEGA_DEP_CAM_SLOTS - 1)), slot from an atomic add on the counter line's word 1.
- * Constant bank words (every kernel kind; the cmdlist writes them): OMEGA_DEP_ARG_WAIT u64 va of the counter to wait on,
- * OMEGA_DEP_ARG_DONE u64 va of this launch's counter line, OMEGA_DEP_ARG_TARGET u32. Counter line (64 B, GPU-cached, only the
- * GPU writes it after the host's one-time init): +0 u32 done, +4 u32 camera slot allocator, +8 u64 camera base (0 = off).
- * Header-only, included by a generator AFTER its Em / emit / I0 / V / V64 / here / patch_bra definitions (all five share them). */
+ * Every data buffer the kernels touch is GPU-uncached (omega_gpu_session.h), so only L1 can hold a stale line and
+ * CCTL.IVALL drops it. Header-only, included by a generator AFTER its Em / emit / I0 / V / V64 / here / patch_bra
+ * definitions and its K_ enum (all six generators share them). */
 #ifndef OMEGA_BW_DEP_H
 #define OMEGA_BW_DEP_H
-#define OMEGA_DEP_ARG_WAIT 0x3e8u
-#define OMEGA_DEP_ARG_DONE 0x3f0u
-#define OMEGA_DEP_ARG_TARGET 0x3f8u
-#define OMEGA_DEP_FLAGS 1u
-#define OMEGA_DEP_CAMERA 2u
-#define OMEGA_DEP_LINE_BYTES 64u
-#define OMEGA_DEP_CAM_SLOTS 4096u  /* records per launch (16 B each): CTAs beyond that wrap onto the first slots */
-#define OMEGA_DEP_POLL_LIMIT (1u << 18)
-#define OMEGA_DEP_TIMEOUT_SENTINEL 0x12345678u
+#include "omega_gpu_dep.h" /* the constants and the protocol description */
 
 typedef struct { int pdone, t0; uint32_t dep; } OmegaBwDep;
 
@@ -56,23 +48,26 @@ static void dep_loop_extend(Em *e, int start, int end) {
  * its first global load. dep 0: emits nothing. */
 static void dep_prologue(Em *e, uint32_t dep, int udesc, int tid, OmegaBwDep *D) {
     memset(D, 0, sizeof *D); D->dep = dep; D->pdone = -1; D->t0 = -1;
-    if (!dep) return;
+    if (!(dep & (OMEGA_DEP_FLAGS | OMEGA_DEP_CAMERA))) return;
     D->pdone = V64(e);
     if (dep & OMEGA_DEP_CAMERA) { D->t0 = V64(e); if (e->err) return; dep_insn(e, BW_IR_CS2R_GLOBALTIMER, D->t0, -1, -1, -1, K_VAR); }
     dep_ldc64(e, D->pdone, OMEGA_DEP_ARG_DONE);
-    if (!(dep & OMEGA_DEP_FLAGS)) return;
-    int pwait = V64(e), target = V(e), v = V(e), diff = V(e), cnt = V(e), one = V(e), lim = V(e), sent = V(e), scratch = V(e), warp = V(e);
+    if (!(dep & OMEGA_DEP_FLAGS) || (dep & OMEGA_DEP_TEST_NO_PROLOGUE)) return; /* TEST bit: no wait (the sim test must catch the early read) */
+    int pwait = V64(e), target = V(e), v = V(e), diff = V(e), cnt = V(e), one = V(e), zero = V(e), lim = V(e), sent = V(e), scratch = V(e), warp = V(e);
     if (e->err) return;
     dep_shr(e, warp, tid, 5);
     dep_ldc64(e, pwait, OMEGA_DEP_ARG_WAIT); dep_ldc32(e, target, OMEGA_DEP_ARG_TARGET);
-    dep_movi(e, one, 1); dep_movi(e, lim, OMEGA_DEP_POLL_LIMIT); dep_movi(e, cnt, 0);
-    dep_isetp_ge(e, warp, one);                 /* P0: warp >= 1 -> straight to the barrier (warp 0 polls) */
+    dep_movi(e, one, 1); dep_movi(e, zero, 0); dep_movi(e, lim, OMEGA_DEP_POLL_LIMIT); dep_movi(e, cnt, 0);
+    /* Reconvergence region B0 around the poll (nvcc wraps every data-dependent loop so): lanes may leave the loop on different
+     * iterations (the sim test makes the producer land mid-warp), and a split warp must not reach the epilogue BSSY. */
+    const int at_bssy = here(e); { BlackwellIRInsn bs = I0(BW_IR_BSSY); bs.bar_reg = 0; bs.imm = 2; emit(e, bs, K_BSSY); }
+    dep_isetp_ge(e, warp, one);                 /* P0: warp >= 1 -> straight to the join (warp 0 polls) */
     const int to_join = dep_bra_p0_fwd(e);
     const int L = here(e);
     dep_insn(e, BW_IR_LDG_STRONG_GPU, v, pwait, -1, udesc, K_VAR);
     dep_imadi(e, diff, target, 0xffffffffu, v); /* v - target */
     dep_shr(e, diff, diff, 31);                 /* 0 when 0 <= v - target < 2^31 (wrap-safe) */
-    dep_isetp_ge(e, one, diff);                 /* P0: satisfied */
+    dep_isetp_ge(e, zero, diff);                /* P0: satisfied, i.e. diff == 0. (The WIP compared one >= diff, true for diff in {0, 1}: never waited.) */
     const int to_done = dep_bra_p0_fwd(e);
     dep_imadi(e, cnt, one, 1u, cnt);
     dep_isetp_ge(e, cnt, lim);                  /* P0: timed out */
@@ -80,10 +75,12 @@ static void dep_prologue(Em *e, uint32_t dep, int udesc, int tid, OmegaBwDep *D)
     dep_bra_to(e, L);
     dep_loop_extend(e, L, here(e) - 1);
     const int at_timeout = here(e);
-    dep_movi(e, sent, OMEGA_DEP_TIMEOUT_SENTINEL);
+    /* only lane 0 adds the sentinel (a warp-wide ATOMG adds once per active lane): sent = ((tid - 1) >> 31) * SENTINEL, tid < 32 here */
+    dep_imadi(e, sent, one, 0xffffffffu, tid); dep_shr(e, sent, sent, 31); dep_imadi(e, sent, sent, OMEGA_DEP_TIMEOUT_SENTINEL, -1);
     dep_insn(e, BW_IR_ATOMG_ADD_STRONG_GPU, scratch, D->pdone, sent, udesc, K_VAR); /* names this launch to the host; no hang */
     const int at_join = here(e);
     patch_bra(e, to_join, at_join); patch_bra(e, to_done, at_join); patch_bra(e, to_timeout, at_timeout);
+    { BlackwellIRInsn bsy = I0(BW_IR_BSYNC); bsy.bar_reg = 0; emit(e, bsy, K_BSYNC); } patch_bra(e, at_bssy, at_join + 1); /* BSYNC at at_join */
     dep_bar(e);
     emit(e, I0(BW_IR_CCTL_IVALL), K_FIXED);     /* acquire: no stale L1 line of a buffer the previous launch rewrote */
 }
@@ -101,7 +98,7 @@ static void dep_epilogue(Em *e, int udesc, int tid, OmegaBwDep *D) {
     dep_isetp_ge(e, tid, one);                  /* P0: not thread 0 -> skip */
     const int at_bssy = here(e); { BlackwellIRInsn i = I0(BW_IR_BSSY); i.bar_reg = 0; i.imm = 2; emit(e, i, K_BSSY); }
     const int skip = dep_bra_p0_fwd(e);
-    if (D->dep & OMEGA_DEP_FLAGS) dep_insn(e, BW_IR_ATOMG_ADD_STRONG_GPU, scratch, D->pdone, one, udesc, K_VAR);
+    if ((D->dep & OMEGA_DEP_FLAGS) && !(D->dep & OMEGA_DEP_TEST_NO_EPILOGUE)) dep_insn(e, BW_IR_ATOMG_ADD_STRONG_GPU, scratch, D->pdone, one, udesc, K_VAR); /* TEST bit: never reports */
     if (D->dep & OMEGA_DEP_CAMERA) {
         int t1 = V64(e), pslot = V64(e), slot = V(e), cam = V64(e), rec = V64(e);
         if (e->err) return;

@@ -15,6 +15,7 @@
 #include "omega_gpu_cmdlist.h"
 #include "omega_blackwell_codegen_dec.h"
 #include "omega_gpu_session.h"
+#include "omega_gpu_dep.h"
 #include "bw_warp_sim_k.h"
 #include <inttypes.h>
 #include <math.h>
@@ -137,6 +138,18 @@ static int host_only(void) {
         CHECK(gprs <= 200, "%s gprs %u within budget", cases[i].name, gprs);
         printf("codegen %s: %u insns, peak %u gprs, declared %u\n", cases[i].name, insns, gprs, omega_bw_gpr_declared(gprs));
     }
+    /* DEPFLAGS: every glue kernel also builds with the flags (dep 1) and flags + camera (dep 3) inside the register budget,
+     * and the kernels' argument words end before the dependency words the command list writes */
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++) for (uint32_t dep = 1; dep <= 3; dep += 2) {
+        OmegaDecSpec d = cases[i].s; d.dep = dep;
+        uint32_t insns = 0, gprs = 0;
+        int rc = omega_dec_prog_stats(&d, &insns, &gprs);
+        CHECK(rc == 0 && gprs <= 200, "codegen %s dep %u: rc %d, %u insns, peak %u gprs", cases[i].name, dep, rc, insns, gprs);
+        if (dep == 1) printf("codegen %s dep 1: %u insns, peak %u gprs\n", cases[i].name, insns, gprs);
+    }
+    CHECK(OMEGA_DEC_AXPY_WORDS <= OMEGA_DEP_MAX_KERNEL_ARGS && OMEGA_DEC_RES_WORDS <= OMEGA_DEP_MAX_KERNEL_ARGS && OMEGA_DEC_SW_WORDS <= OMEGA_DEP_MAX_KERNEL_ARGS && OMEGA_DEC_AM_WORDS <= OMEGA_DEP_MAX_KERNEL_ARGS,
+          "glue kernel arguments end before the dependency words (%u words max)", OMEGA_DEP_MAX_KERNEL_ARGS);
+    CHECK(0x380u + 4u * OMEGA_DEP_MAX_KERNEL_ARGS == OMEGA_DEP_ARG_WAIT && OMEGA_DEP_ARG_TARGET + 4u <= 0x380u + 4u * OMEGA_GPU_SESSION_MAX_ARGS, "dependency words sit inside the 1 KB bank after the argument window");
     OmegaDecSpec bad[] = { { OMEGA_DEC_AXPY, 0, 0, 0, 0 }, { OMEGA_DEC_AXPY, 0, 100, 0, 0 }, { OMEGA_DEC_RES, 0, 0, 0, 0 },
                            { OMEGA_DEC_RES, OMEGA_DEC_RES_ADD | OMEGA_DEC_RES_COMBINE, 0, 0, 0 }, { (OmegaDecKind)0, 0, 0, 0, 0 }, { OMEGA_DEC_RES, 8, 0, 0, 0 } };
     for (unsigned i = 0; i < sizeof bad / sizeof bad[0]; i++) CHECK(omega_dec_prog_stats(&bad[i], NULL, NULL) != 0, "refusal %u", i);
@@ -154,6 +167,7 @@ static int sim_one(Kern *k, const uint32_t *args, unsigned n_args, uint32_t gx, 
     CHECK(err == 0, "sim %s: %s (pc %d)", what, s.msg, s.err_pc);
     return err;
 }
+static int sim_dep(void);
 static int sim_mode(void) {
     if (specs_build()) { printf("FAIL: codegen\n"); return 1; }
     /* AXPY chain: 3 launches x += a over 2048 */
@@ -213,6 +227,125 @@ static int sim_mode(void) {
         else if (tie) CHECK(oi2[0] != g.am_ref, "sim argmax mutant caught (max at a j == 7 slot)");
         printf("sim argmax tie %d mutant %d: index %u value %g (ref %u)\n", tie, mut, oi2[0], ov2[0], g.am_ref);
     }
+    if (sim_dep()) return 1;
+    return g_failed ? 1 : 0;
+}
+
+/* ---- DEPFLAGS (2026-10-16): the kernel side of the dependency flags on the simulator, through a host mirror of the
+ * command list's protocol (omega_gpu_dep.h): one counter line shared by every launch, bank words OMEGA_DEP_ARG_WAIT /
+ * _DONE = its address, OMEGA_DEP_ARG_TARGET = the CTAs that must have finished before this launch may read. The
+ * simulator's poll hook plays the late producer. Negative tests: NO_PROLOGUE (reads too early), NO_EPILOGUE (never
+ * reports), an unreachable target (times out, sentinel, no hang), and the chain itself. ---- */
+static Kern K_axpy_dep, K_axpy_dep_nopro, K_axpy_dep_noepi, K_axpy_cam;
+typedef struct { uint32_t *line; uint64_t polls, fire_at; float *a; unsigned n; float late; uint32_t bump; int fired; } DepPlay;
+static void dep_hook(struct WsSim *s, uint64_t addr, void *ctx) {
+    DepPlay *p = ctx; (void)s;
+    if (addr != (uint64_t)(uintptr_t)p->line) return;
+    p->polls++;
+    if (p->fire_at && p->polls == p->fire_at) { for (unsigned i = 0; i < p->n; i++) p->a[i] = p->late; p->line[0] += p->bump; p->fired = 1; }
+}
+#define DEP_ARGS 32u /* bank words 0x380..0x3fc: the kernel's arguments, then the three dependency words at 0x3e8.. */
+static void dep_words(uint32_t *args, const uint32_t *line, uint32_t target) {
+    put64(args, OMEGA_DEP_ARG_WAIT, (uintptr_t)line); put64(args, OMEGA_DEP_ARG_DONE, (uintptr_t)line); args[(OMEGA_DEP_ARG_TARGET - 0x380) / 4] = target;
+}
+static int sim_dep_run(Kern *k, const uint32_t *args, uint32_t gx, WsRange *ranges, int nr, DepPlay *play, const char *what, double *secs) {
+    static uint8_t smem[OMEGA_DEC_SHARED_BYTES];
+    WsSim s; memset(&s, 0, sizeof s);
+    s.p = &k->prog; s.threads = OMEGA_DEC_THREADS; s.smem = smem; s.smem_bytes = sizeof smem;
+    memcpy(&s.cbank[0x380 / 4], args, DEP_ARGS * 4u);
+    s.nranges = nr; for (int i = 0; i < nr; i++) s.ranges[i] = ranges[i];
+    if (play) { s.poll_hook = dep_hook; s.poll_ctx = play; }
+    struct timespec t0, t1; clock_gettime(CLOCK_MONOTONIC, &t0);
+    int err = ws_run(&s, gx, 1);
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    if (secs) *secs = (double)(t1.tv_sec - t0.tv_sec) + (double)(t1.tv_nsec - t0.tv_nsec) / 1e9;
+    CHECK(err == 0, "sim %s: %s (pc %d)", what, s.msg, s.err_pc);
+    return err;
+}
+static int sim_dep(void) {
+    OmegaDecSpec s;
+    memset(&s, 0, sizeof s); s.kind = OMEGA_DEC_AXPY; s.stride = AXPY_STRIDE;
+    s.dep = OMEGA_DEP_FLAGS; if (kern_prog(&K_axpy_dep, &s)) { CHECK(0, "codegen axpy dep 1"); return 1; }
+    s.dep = OMEGA_DEP_FLAGS | OMEGA_DEP_TEST_NO_PROLOGUE; if (kern_prog(&K_axpy_dep_nopro, &s)) { CHECK(0, "codegen axpy dep 1 no-prologue"); return 1; }
+    s.dep = OMEGA_DEP_FLAGS | OMEGA_DEP_TEST_NO_EPILOGUE; if (kern_prog(&K_axpy_dep_noepi, &s)) { CHECK(0, "codegen axpy dep 1 no-epilogue"); return 1; }
+    s.dep = OMEGA_DEP_FLAGS | OMEGA_DEP_CAMERA; if (kern_prog(&K_axpy_cam, &s)) { CHECK(0, "codegen axpy dep 3"); return 1; }
+    const uint32_t CTAS = AXPY_STRIDE / OMEGA_DEC_THREADS; /* 8 */
+    static float x[AXPY_STRIDE], a[AXPY_STRIDE], xr[AXPY_STRIDE];
+    static uint32_t line[16] __attribute__((aligned(64)));
+    static uint64_t cam[2 * (OMEGA_DEP_CAM_SLOTS + 1)] __attribute__((aligned(16)));
+    WsRange r[4] = { { (uintptr_t)x, (uintptr_t)x + sizeof x }, { (uintptr_t)a, (uintptr_t)a + sizeof a }, { (uintptr_t)line, (uintptr_t)line + sizeof line }, { (uintptr_t)cam, (uintptr_t)cam + sizeof cam } };
+    uint32_t args[DEP_ARGS];
+#define AXPY_ARGS() do { memset(args, 0, sizeof args); put64(args, OMEGA_DEC_AXPY_X, (uintptr_t)x); put64(args, OMEGA_DEC_AXPY_A, (uintptr_t)a); args[(OMEGA_DEC_AXPY_ITERS - 0x380) / 4] = 1; } while (0)
+    /* 1. three-launch chain, every target already satisfied when the launch runs (the host mirror: target_i = CTAS * i) */
+    {
+        uint32_t seed = 11; for (unsigned i = 0; i < AXPY_STRIDE; i++) { x[i] = frand(&seed, -1, 1); a[i] = frand(&seed, -1, 1); xr[i] = x[i]; }
+        memset(line, 0, sizeof line);
+        for (uint32_t l = 0; l < 3; l++) {
+            AXPY_ARGS(); dep_words(args, line, CTAS * l);
+            DepPlay p; memset(&p, 0, sizeof p); p.line = line;
+            if (sim_dep_run(&K_axpy_dep, args, CTAS, r, 3, &p, "axpy dep chain", NULL)) return 1;
+            for (unsigned i = 0; i < AXPY_STRIDE; i++) xr[i] = xr[i] + a[i];
+            CHECK(line[0] == CTAS * (l + 1), "dep chain launch %u: counter %u (want %u)", l, line[0], CTAS * (l + 1));
+            CHECK(p.polls == (uint64_t)CTAS * 32u, "dep chain launch %u: satisfied target read once per CTA by warp 0 (%" PRIu64 " lane reads, want %u)", l, p.polls, CTAS * 32u);
+        }
+        CHECK(memcmp(x, xr, sizeof x) == 0, "dep chain: x bit-identical to the host chain");
+        printf("dep chain: 3 launches x %u CTAs, counter %u, x %s\n", CTAS, line[0], memcmp(x, xr, sizeof x) == 0 ? "identical" : "DIFFERS");
+    }
+    /* 2. late producer: the counter is below the target when the launch starts; after fire_at lane reads the "previous
+     *    launch" rewrites a[] and finishes (counter += CTAS). A kernel that waits sees the late a[]; one that does not
+     *    (OMEGA_DEP_TEST_NO_PROLOGUE, or a broken poll compare) computes with the old a[] and is caught by parity. */
+    for (int variant = 0; variant < 2; variant++) {
+        uint32_t seed = 23; for (unsigned i = 0; i < AXPY_STRIDE; i++) { x[i] = frand(&seed, -1, 1); a[i] = 1.0f; xr[i] = x[i] + 2.0f; }
+        memset(line, 0, sizeof line);
+        AXPY_ARGS(); dep_words(args, line, CTAS); /* target CTAS: one earlier launch of CTAS CTAs has not finished yet */
+        DepPlay p; memset(&p, 0, sizeof p); p.line = line; p.fire_at = 1024; p.a = a; p.n = AXPY_STRIDE; p.late = 2.0f; p.bump = CTAS; /* 1024 = whole warps: the bump lands between iterations */
+        if (sim_dep_run(variant ? &K_axpy_dep_nopro : &K_axpy_dep, args, CTAS, r, 3, &p, variant ? "late producer no-prologue" : "late producer", NULL)) return 1;
+        const int parity = memcmp(x, xr, sizeof x) == 0;
+        if (!variant) {
+            CHECK(parity && p.fired && p.polls >= 1024, "late producer: the kernel waited (%" PRIu64 " lane reads, fired %d) and read the late a[]: x %s", p.polls, p.fired, parity ? "identical" : "DIFFERS");
+            CHECK(line[0] == 2 * CTAS, "late producer: counter %u = producer %u + this launch %u", line[0], CTAS, CTAS);
+        } else {
+            CHECK(!parity && !p.fired && p.polls == 0, "late producer NO_PROLOGUE: no wait (%" PRIu64 " reads), stale a[] used: x %s (caught)", p.polls, parity ? "identical: NOT CAUGHT" : "differs");
+        }
+        printf("late producer%s: %" PRIu64 " lane reads, fired %d, counter %u, x %s\n", variant ? " NO_PROLOGUE" : "", p.polls, p.fired, line[0], parity ? "identical" : "DIFFERS");
+    }
+    /* 3. NO_EPILOGUE: the counter stays short by this launch's CTAs; the host's count check is what catches it */
+    {
+        uint32_t seed = 31; for (unsigned i = 0; i < AXPY_STRIDE; i++) { x[i] = frand(&seed, -1, 1); a[i] = frand(&seed, -1, 1); xr[i] = x[i] + a[i]; }
+        memset(line, 0, sizeof line);
+        AXPY_ARGS(); dep_words(args, line, 0);
+        if (sim_dep_run(&K_axpy_dep_noepi, args, CTAS, r, 3, NULL, "no-epilogue", NULL)) return 1;
+        CHECK(memcmp(x, xr, sizeof x) == 0 && line[0] == 0 && line[0] != CTAS, "NO_EPILOGUE: x right but counter %u (host expects %u): caught by the count check", line[0], CTAS);
+    }
+    /* 4. timeout: an unreachable target; every CTA gives up after OMEGA_DEP_POLL_LIMIT reads, adds the sentinel, continues */
+    {
+        uint32_t seed = 37; for (unsigned i = 0; i < AXPY_STRIDE; i++) { x[i] = frand(&seed, -1, 1); a[i] = frand(&seed, -1, 1); xr[i] = x[i] + a[i]; }
+        memset(line, 0, sizeof line);
+        AXPY_ARGS(); dep_words(args, line, 125u * CTAS);
+        DepPlay p; memset(&p, 0, sizeof p); p.line = line;
+        double secs = 0;
+        if (sim_dep_run(&K_axpy_dep, args, CTAS, r, 3, &p, "timeout", &secs)) return 1;
+        /* CTAs run one after another here: CTA 0 gives up and adds the sentinel, which satisfies the other 7 at their first read.
+         * (On the chip the CTAs run together, so between 1 and CTAS sentinels land; the host only needs counter != expected.) */
+        const uint32_t want = OMEGA_DEP_TIMEOUT_SENTINEL + CTAS;
+        CHECK(line[0] == want, "timeout: counter %08x = sentinel + %u CTAs = %08x: the host sees the stage, nothing hangs", line[0], CTAS, want);
+        CHECK(p.polls == (uint64_t)OMEGA_DEP_POLL_LIMIT * 32u + (uint64_t)(CTAS - 1) * 32u, "timeout: POLL_LIMIT reads by the first CTA, one by each later CTA (%" PRIu64 " lane reads)", p.polls);
+        CHECK(memcmp(x, xr, sizeof x) == 0, "timeout: the kernel still ran to completion");
+        printf("timeout: 2^18 polls by CTA 0 then %u pass-throughs in %.2f s of simulator time, counter %08x\n", CTAS - 1, secs, line[0]);
+    }
+    /* 5. camera (dep 3): line + 8 holds the camera base; every CTA's thread 0 stores {t0, t1} at the slot it allocates at line + 4 */
+    {
+        uint32_t seed = 41; for (unsigned i = 0; i < AXPY_STRIDE; i++) { x[i] = frand(&seed, -1, 1); a[i] = frand(&seed, -1, 1); xr[i] = x[i] + a[i]; }
+        memset(line, 0, sizeof line); memset(cam, 0, sizeof cam);
+        uint64_t base = (uintptr_t)cam; memcpy(&line[2], &base, 8);
+        AXPY_ARGS(); dep_words(args, line, 0);
+        if (sim_dep_run(&K_axpy_cam, args, CTAS, r, 4, NULL, "camera", NULL)) return 1;
+        int ok = 1; for (uint32_t c = 0; c < CTAS; c++) if (!(cam[2 * c + 1] > cam[2 * c])) ok = 0;
+        CHECK(memcmp(x, xr, sizeof x) == 0 && line[0] == CTAS && line[1] == CTAS, "camera: x right, done %u, slots allocated %u (want %u)", line[0], line[1], CTAS);
+        CHECK(ok && cam[2 * CTAS] == 0 && cam[2 * CTAS + 1] == 0, "camera: %u records with t1 > t0 and none past the CTA count", CTAS);
+        printf("camera: %u records, first {%" PRIu64 ", %" PRIu64 "}, last {%" PRIu64 ", %" PRIu64 "} (simulator ticks)\n", CTAS, cam[0], cam[1], cam[2 * CTAS - 2], cam[2 * CTAS - 1]);
+    }
+#undef AXPY_ARGS
     return g_failed ? 1 : 0;
 }
 
