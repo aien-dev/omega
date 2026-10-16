@@ -1,0 +1,54 @@
+// entry: dot fill_sum scale_ref ret_arr widen_sum
+// OSC-4 Slice A: fixed arrays of f64 and f32. Cells hold the bit pattern;
+// alloc(x) fills every cell. dot(seed) = sum_{i<8} ((seed+i)*0.5) * 1.5.
+// expect-run: dot 0 -> 0x4035000000000000
+// expect-run: dot 4 -> 0x4046800000000000
+// expect-run: fill_sum 0x3dcccccd -> 0x3ecccccd
+// expect-run: fill_sum 0x7fc00000 -> 0x7fc00000
+// expect-run: scale_ref 0x4000000000000000 -> 0x4034000000000000
+// expect-run: ret_arr 3 -> 0x4008000000000000
+// expect-run: widen_sum 0x3dcccccd -> 0x3fd99999a0000000
+fn dot(seed: u32) -> f64 {
+    let a: own [f64; 8] = alloc(0.0);
+    let b: own [f64; 8] = alloc(1.5);
+    for i in 0 .. 8 { a[i] = ((seed as i64) + i) as f64 * 0.5; }
+    let mut s: f64 = 0.0;
+    for i in 0 .. 8 { s = s + a[i] * b[i]; }
+    return s;
+}
+
+fn fill_sum(x: f32) -> f32 {
+    let a: own [f32; 4] = alloc(x);
+    let mut s: f32 = 0.0;
+    for i in 0 .. 4 { s = s + a[i]; }
+    return s;
+}
+
+fn scale(a: &mut [f64; 5], k: f64) {
+    for i in 0 .. 5 { a[i] = a[i] * k; }
+}
+
+fn scale_ref(x: f64) -> f64 {
+    let a: own [f64; 5] = alloc(x);
+    scale(&mut a, 5.0);
+    let r: &[f64; 5] = &a;
+    return r[4] * 2.0;
+}
+
+fn mk(a: &mut [f64; 2], v: f64) {
+    a[0] = v;
+    a[1] = a[0] + 1.0;
+}
+
+fn ret_arr(k: u8) -> f64 {
+    let a: own [f64; 2] = alloc(0.0);
+    mk(&mut a, k as f64 - 1.0);
+    return a[1];
+}
+
+fn widen_sum(x: f32) -> f64 {
+    let a: own [f32; 4] = alloc(x);
+    let mut s: f64 = 0.0;
+    for i in 0 .. 4 { s = s + a[i] as f64; }
+    return s;
+}

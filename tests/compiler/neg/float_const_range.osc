@@ -1,0 +1,6 @@
+// expect: FLOAT_CONST_RANGE object=y line=4
+// a literal that rounds to inf in its type is refused at compile time.
+fn f() -> f32 {
+    let y: f32 = 1.0e39;
+    return y;
+}

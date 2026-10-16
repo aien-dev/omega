@@ -54,7 +54,7 @@ typedef enum {
     ON_BORROW,      /* tok = name; mut */
     ON_BIN,         /* op = OscTokKind of the operator (incl. && ||); a, b */
     ON_UN,          /* op = OT_MINUS / OT_TILDE / OT_BANG; a */
-    ON_CAST,        /* a; ty = target scalar */
+    ON_CAST,        /* a; ty = target scalar; flag = 1 for `as T bits` (OSC-4 bit cast) */
     /* OSC-2 structs (docs/osc/OSC-2-DESIGN.md section 2). A struct literal is an
      * ON_LET_ALLOC whose ty is a struct ref (ty.sid != 0) and whose a is the
      * first ON_FINIT (linked by next, source order). */
@@ -82,8 +82,12 @@ typedef enum {
     ON_PFREE,       /* tok = pool name; a = handle expr ("p.free(h);") */
     ON_HLOAD,       /* checker rewrite of ON_INDEX on a pool: tok = pool; a = handle;
                      * sym = pool symbol, sym2 = handle symbol */
-    ON_HSTORE       /* checker rewrite of ON_STORE on a pool: tok = pool; a = handle;
+    ON_HSTORE,      /* checker rewrite of ON_STORE on a pool: tok = pool; a = handle;
                      * b = value; sym = pool symbol, sym2 = handle symbol */
+    /* OSC-4 Slice A floats (docs/osc/OSC-4-DESIGN.md 1.2), appended */
+    ON_FLOAT,       /* tok = FLOAT literal token (spelling); ival = suffix 0 none / 1 f32 / 2 f64;
+                     * checker: cval = IEEE bits (is_const = 1) */
+    ON_INTRIN       /* op = OT_SQRT / OT_ABS / OT_MIN / OT_MAX; a, b (b = -1 for the unary two) */
 } OscNodeKind;
 
 typedef struct {

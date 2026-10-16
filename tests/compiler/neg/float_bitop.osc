@@ -1,0 +1,6 @@
+// expect: FLOAT_BITOP object=y line=4
+// `%` has no float form (no FMOD, no rounding intrinsics).
+fn f(a: f32, b: f32) -> f32 {
+    let y: f32 = a % b;
+    return y;
+}

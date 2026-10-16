@@ -162,6 +162,18 @@ static int bop(int tok)
     default: return 0;
     }
 }
+/* OSC-4: float arithmetic sub-ops (the checker refused everything else) */
+static int fbop(int tok)
+{
+    switch (tok) {
+    case OT_PLUS: return OSC_FB_ADD;
+    case OT_MINUS: return OSC_FB_SUB;
+    case OT_STAR: return OSC_FB_MUL;
+    case OT_SLASH: return OSC_FB_DIV;
+    default: return 0;
+    }
+}
+
 static int cop(int tok)
 {
     switch (tok) {
@@ -260,8 +272,16 @@ static int expr(L *l, int i)
     case ON_CALL: return call(l, i, 1);
     case ON_CAST: {
         int a = expr(l, n->a);
-        int r = newvs(l, n->ty.s, n->line);
-        OscInsn *x = emit(l, OSC_I_CAST, n->line);
+        OscScalar from = NODE(n->a)->ty.s, to = n->ty.s;
+        int r = newvs(l, to, n->line);
+        /* OSC-4 Slice A: one IR op per conversion kind (design 1.5 item 2) */
+        uint8_t op = OSC_I_CAST, sub = 0;
+        if (n->flag) op = OSC_I_FBITS;                                  /* `as T bits` */
+        else if (osc_scalar_is_float(from) && osc_scalar_is_float(to)) op = from == to ? OSC_I_MOV : OSC_I_FCVT;
+        else if (osc_scalar_is_float(to)) { op = OSC_I_ITOF; sub = osc_scalar_signed(from) ? OSC_FI_SIGNED : OSC_FI_UNSIGNED; }
+        else if (osc_scalar_is_float(from)) { op = OSC_I_FTOI; sub = osc_scalar_signed(to) ? OSC_FI_SIGNED : OSC_FI_UNSIGNED; }
+        OscInsn *x = emit(l, op, n->line);
+        x->sub = sub;
         x->dst = (int16_t)r;
         x->a = (int16_t)a;
         return r;
@@ -269,10 +289,28 @@ static int expr(L *l, int i)
     case ON_UN: {
         int a = expr(l, n->a);
         int r = newvs(l, n->ty.s, n->line);
+        if (osc_scalar_is_float(n->ty.s)) { /* OSC-4: the checker allows only '-' here */
+            OscInsn *x = emit(l, OSC_I_FUN, n->line);
+            x->sub = OSC_FU_NEG;
+            x->dst = (int16_t)r;
+            x->a = (int16_t)a;
+            return r;
+        }
         OscInsn *x = emit(l, OSC_I_UN, n->line);
         x->sub = n->op == OT_MINUS ? OSC_U_NEG : n->op == OT_TILDE ? OSC_U_BNOT : OSC_U_LNOT;
         x->dst = (int16_t)r;
         x->a = (int16_t)a;
+        return r;
+    }
+    case ON_INTRIN: { /* OSC-4: sqrt / abs -> FUN, min / max -> FBIN */
+        int a = expr(l, n->a);
+        int b = n->b >= 0 ? expr(l, n->b) : -1;
+        int r = newvs(l, n->ty.s, n->line);
+        OscInsn *x = emit(l, n->b >= 0 ? OSC_I_FBIN : OSC_I_FUN, n->line);
+        x->sub = (uint8_t)(n->op == OT_SQRT ? OSC_FU_SQRT : n->op == OT_ABS ? OSC_FU_ABS : n->op == OT_MIN ? OSC_FB_MIN : OSC_FB_MAX);
+        x->dst = (int16_t)r;
+        x->a = (int16_t)a;
+        x->b = (int16_t)b;
         return r;
     }
     case ON_BIN: {
@@ -298,8 +336,10 @@ static int expr(L *l, int i)
         int b = expr(l, n->b);
         int r = newvs(l, n->ty.s, n->line);
         int cc = cop(n->op);
-        OscInsn *x = emit(l, cc ? OSC_I_CMP : OSC_I_BIN, n->line);
-        x->sub = (uint8_t)(cc ? cc : bop(n->op));
+        /* OSC-4: float operands take the float ops (compare operand type is in n->flag) */
+        bool fl = osc_scalar_is_float(cc ? (OscScalar)n->flag : n->ty.s);
+        OscInsn *x = emit(l, cc ? (fl ? OSC_I_FCMP : OSC_I_CMP) : (fl ? OSC_I_FBIN : OSC_I_BIN), n->line);
+        x->sub = (uint8_t)(cc ? cc : fl ? fbop(n->op) : bop(n->op));
         x->dst = (int16_t)r;
         x->a = (int16_t)a;
         x->b = (int16_t)b;

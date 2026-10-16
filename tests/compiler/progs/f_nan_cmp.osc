@@ -1,0 +1,78 @@
+// entry: cmp64 cmp32 prop neg_abs minmax sqrt64 bits_rt
+// OSC-4 Slice A: comparisons read false on NaN except !=; NaN payloads
+// propagate as the hardware does (first signalling NaN quieted, else first
+// quiet NaN); min/max follow FMINNM/FMAXNM (one quiet NaN: the other operand).
+// cmp* return a mask: bit0 ==, bit1 !=, bit2 <, bit3 <=, bit4 >, bit5 >=.
+// expect-run: cmp64 0x3ff0000000000000 0x4000000000000000 -> 14
+// expect-run: cmp64 0x4000000000000000 0x4000000000000000 -> 41
+// expect-run: cmp64 0x4000000000000000 0x3ff0000000000000 -> 50
+// expect-run: cmp64 0x7ff8000000000000 0x3ff0000000000000 -> 2
+// expect-run: cmp64 0x3ff0000000000000 0x7ff0000000000001 -> 2
+// expect-run: cmp64 0x7ff8000000000000 0x7ff8000000000000 -> 2
+// expect-run: cmp64 0x8000000000000000 0 -> 41
+// expect-run: cmp32 0x7fc00000 0x7fc00000 -> 2
+// expect-run: cmp32 0x80000000 0 -> 41
+// expect-run: cmp32 0xff800000 0x7f800000 -> 14
+// expect-run: prop 0x7ff0000000000001 0x3ff0000000000000 -> 0x7ff8000000000001
+// expect-run: prop 0x3ff0000000000000 0x7ff0000000000001 -> 0x7ff8000000000001
+// expect-run: prop 0x7ff80000000000ab 0x4000000000000000 -> 0x7ff80000000000ab
+// expect-run: prop 0x7ff0000000000000 0x7ff0000000000000 -> 0x7ff8000000000000
+// expect-run: prop 0x7ff0000000000001 0x7ff80000000000ab -> 0x7ff8000000000001
+// expect-run: prop 0x7ff80000000000ab 0x7ff0000000000001 -> 0x7ff8000000000001
+// expect-run: neg_abs 0x7ff80000000000ab -> 0x7ff80000000000ab
+// expect-run: neg_abs 0xfff80000000000ab -> 0x7ff80000000000ab
+// expect-run: neg_abs 0x3ff0000000000000 -> 0x3ff0000000000000
+// expect-run: minmax 0x7ff0000000000001 0x3ff0000000000000 0 -> 0x7ff8000000000001
+// expect-run: minmax 0x7ff8000000000000 0x3ff0000000000000 0 -> 0x3ff0000000000000
+// expect-run: minmax 0x3ff0000000000000 0x7ff8000000000000 1 -> 0x3ff0000000000000
+// expect-run: minmax 0x7ff80000000000ab 0x7ff8000000000000 1 -> 0x7ff80000000000ab
+// expect-run: minmax 0x7ff8000000000000 0x7ff0000000000001 1 -> 0x7ff8000000000001
+// expect-run: minmax 0x8000000000000000 0 0 -> 0x8000000000000000
+// expect-run: minmax 0 0x8000000000000000 0 -> 0x8000000000000000
+// expect-run: minmax 0x8000000000000000 0 1 -> 0
+// expect-run: minmax 0 0x8000000000000000 1 -> 0
+// expect-run: minmax 0x3ff0000000000000 0x4000000000000000 0 -> 0x3ff0000000000000
+// expect-run: minmax 0x3ff0000000000000 0x4000000000000000 1 -> 0x4000000000000000
+// expect-run: sqrt64 0xbff0000000000000 -> 0x7ff8000000000000
+// expect-run: sqrt64 0x4000000000000000 -> 0x3ff6a09e667f3bcd
+// expect-run: bits_rt 0x7ff0000000000001 -> 0x7ff0000000000001
+// expect-run: bits_rt 0x8000000000000000 -> 0x8000000000000000
+fn cmp64(a: f64, b: f64) -> u32 {
+    let mut r: u32 = 0;
+    if a == b { r = r | 1; }
+    if a != b { r = r | 2; }
+    if a < b { r = r | 4; }
+    if a <= b { r = r | 8; }
+    if a > b { r = r | 16; }
+    if a >= b { r = r | 32; }
+    return r;
+}
+
+fn cmp32(a: f32, b: f32) -> u32 {
+    let mut r: u32 = 0;
+    if a == b { r = r | 1; }
+    if a != b { r = r | 2; }
+    if a < b { r = r | 4; }
+    if a <= b { r = r | 8; }
+    if a > b { r = r | 16; }
+    if a >= b { r = r | 32; }
+    return r;
+}
+
+fn prop(a: f64, b: f64) -> f64 { return a - b; }
+
+fn neg_abs(a: f64) -> f64 { return abs(-a); }
+
+fn minmax(a: f64, b: f64, which: u32) -> f64 {
+    if which == 0 { return min(a, b); }
+    return max(a, b);
+}
+
+fn sqrt64(a: f64) -> f64 { return sqrt(a); }
+
+// a bit cast round trip keeps a signalling NaN signalling (no arithmetic happens)
+fn bits_rt(a: f64) -> u64 {
+    let u: u64 = a as u64 bits;
+    let f: f64 = u as f64 bits;
+    return f as u64 bits;
+}

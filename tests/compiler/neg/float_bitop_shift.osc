@@ -1,0 +1,5 @@
+// expect: FLOAT_BITOP object=return line=4
+// shifts and bit operators are refused on floats; use `as u64 bits` first.
+fn f(a: f64) -> f64 {
+    return a << 1;
+}

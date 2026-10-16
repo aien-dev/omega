@@ -1,0 +1,7 @@
+// expect: FLOAT_INDEX object=for line=5
+// a float is never a loop bound or range end.
+fn f() -> u32 {
+    let mut s: u32 = 0;
+    for i in 0 .. 2.5 { s = s + 1; }
+    return s;
+}

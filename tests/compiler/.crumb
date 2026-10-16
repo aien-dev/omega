@@ -17,27 +17,27 @@
     "generated": {
       "children": [
         {
-          "digest": "52f60db8cad897bd1ad36a41cff28e90ad3ccd0e734555a8325701f1a9e9ba7b",
-          "last_commit": "eb8dedf7",
+          "digest": "7544331758567b00eef6404ec6694a271941193a664f062f80c7b5c3b1e1d947",
+          "last_commit": "848cfd99",
           "name": "neg",
           "purpose": "Directory tests/compiler/neg. Purpose not yet described by a human."
         },
         {
-          "digest": "44128e1034bd4f570667a4a57f5d058b09b127f6e203e2173e2b07c533c45b57",
-          "last_commit": "334117d1",
+          "digest": "548842e38f88f2fcee6d1e3694f5a50ae56c0cc9ffca989659ca3415ae0745eb",
+          "last_commit": "848cfd99",
           "name": "progs",
           "purpose": "Directory tests/compiler/progs. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:8e71869afa3e9efae551dc468dfd9fae972bd9a404fc7f2cbdabc1684e98fb8e",
-      "compiled_at": "2026-10-14T17:37:01Z",
+      "children_root": "sha256:7e157ab353bfb6a3995754e5ad807308e2eab3c58a395c01eee13691e95d1c99",
+      "compiled_at": "2026-10-16T20:35:19Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:f041b7daf38c51e8db72834bb764cef7741637981223039d89731a30aa91e224",
+      "digest": "sha256:6b96f09ec01f52e6fed8218382bb3413ec2dc0e6b3e23a5abb866b0f98d8f84d",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 206,
-      "generated_at_commit": "e9943ed23f0712a7dd1f7248a7d6bb00eabf5ea5",
-      "source_tree": "sha256:8d2b44ba348917da5af698886fa1226e8562684fbb069d7af91a0d64d158067b"
+      "files": 235,
+      "generated_at_commit": "cde3c1d51cc2106f965ed34c6ae82d311d1b490a",
+      "source_tree": "sha256:71dd58ee057d2549c7204c984e9358d15bf2e14a37946a7b72759366e0794694"
     },
     "owner_lane": "",
     "provenance": {

@@ -1,0 +1,42 @@
+// entry: adam32 adam64 lerp sumsq
+// OSC-4 Slice A: one Adam optimizer step in f32 and f64, a lerp, and a
+// running sum of squares. Arguments and results are IEEE bit patterns.
+// Expected values come from a C oracle built with -O2 -ffp-contract=off
+// -fno-fast-math -fno-math-errno (volatile intermediates, one round per op).
+// expect-run: adam32 0x3f800000 0x3f000000 0 0 -> 0x3f7fbe77
+// expect-run: adam32 0xc0200000 0x3dcccccd 0x3e4ccccd 0x3e99999a -> 0xc02001cc
+// expect-run: adam64 0x3ff0000000000000 0x3fe0000000000000 0 0 -> 0x3feff7ced91946db
+// expect-run: adam64 0xc004000000000000 0x3fb999999999999a 0x3fc999999999999a 0x3fd3333333333333 -> 0xc00400398a57dec7
+// expect-run: lerp 0x3f800000 0x40400000 0x3e800000 -> 0x3fc00000
+// expect-run: sumsq 0x3dcccccd -> 0x3d23d70b
+fn adam32(p: f32, g: f32, m: f32, v: f32) -> f32 {
+    let b1: f32 = 0.9;
+    let b2: f32 = 0.999;
+    let lr: f32 = 0.001;
+    let eps: f32 = 1.0e-8;
+    let m1: f32 = b1 * m + (1.0 - b1) * g;
+    let v1: f32 = b2 * v + (1.0 - b2) * (g * g);
+    let mh: f32 = m1 / (1.0 - b1);
+    let vh: f32 = v1 / (1.0 - b2);
+    return p - lr * mh / (sqrt(vh) + eps);
+}
+
+fn adam64(p: f64, g: f64, m: f64, v: f64) -> f64 {
+    let b1: f64 = 0.9;
+    let b2: f64 = 0.999;
+    let lr: f64 = 0.001;
+    let eps: f64 = 1.0e-8;
+    let m1: f64 = b1 * m + (1.0 - b1) * g;
+    let v1: f64 = b2 * v + (1.0 - b2) * (g * g);
+    let mh: f64 = m1 / (1.0 - b1);
+    let vh: f64 = v1 / (1.0 - b2);
+    return p - lr * mh / (sqrt(vh) + eps);
+}
+
+fn lerp(a: f32, b: f32, t: f32) -> f32 { return a + (b - a) * t; }
+
+fn sumsq(x: f32) -> f32 {
+    let mut s: f32 = 0.0;
+    for i in 0 .. 4 { s = s + x * x; }
+    return s;
+}

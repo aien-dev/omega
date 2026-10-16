@@ -1,0 +1,6 @@
+// expect: FLOAT_MIXED object=c line=4
+// comparing f64 with f32 is refused like arithmetic.
+fn f(a: f64, b: f32) -> bool {
+    let c: bool = a < b;
+    return c;
+}

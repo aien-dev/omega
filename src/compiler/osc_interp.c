@@ -8,6 +8,7 @@
  */
 #include "osc_interp.h"
 
+#include <math.h>
 #include <string.h>
 
 typedef struct {
@@ -106,6 +107,144 @@ static uint64_t do_cast(Ctx *c, OscScalar to, OscScalar from, uint64_t a) {
     return (uint64_t)v;
 }
 
+/* ---- OSC-4 Slice A floats (docs/osc/OSC-4-DESIGN.md 1.3) ----------------
+ * Plain C float / double on volatile locals, one C expression per IR op, built
+ * with -ffp-contract=off -fno-fast-math -fno-math-errno (mk/compiler.mk), so
+ * every op is one hardware instruction with one RNE rounding, the same the
+ * native code performs. f32 values live in the low 32 bits of a cell. */
+static float f32_of(uint64_t x) { uint32_t w = (uint32_t)x; float f; memcpy(&f, &w, 4); return f; }
+static double f64_of(uint64_t x) { double d; memcpy(&d, &x, 8); return d; }
+static uint64_t bits_f32(float f) { uint32_t w; memcpy(&w, &f, 4); return w; }
+static uint64_t bits_f64(double d) { uint64_t w; memcpy(&w, &d, 8); return w; }
+
+static bool fnan(bool dbl, uint64_t a) {
+    return dbl ? (a & 0x7fffffffffffffffull) > 0x7ff0000000000000ull : (a & 0x7fffffffu) > 0x7f800000u;
+}
+static bool fsnan(bool dbl, uint64_t a) {
+    return fnan(dbl, a) && !(a & (dbl ? 0x0008000000000000ull : 0x00400000ull));
+}
+static uint64_t fquiet(bool dbl, uint64_t a) { return a | (dbl ? 0x0008000000000000ull : 0x00400000ull); }
+static bool fsign(bool dbl, uint64_t a) { return (a >> (dbl ? 63 : 31)) & 1; }
+
+/* FMINNM / FMAXNM (IEEE minNum / maxNum, design 1.1 item 6 and 1.3 item 11): a
+ * signalling NaN propagates quieted (first operand first), one quiet NaN yields
+ * the other operand, two quiet NaNs yield the first, and -0.0 orders below +0.0.
+ * C fmin / fmax are never called. */
+static uint64_t do_fminmax(bool dbl, bool is_max, uint64_t a, uint64_t b) {
+    bool an = fnan(dbl, a), bn = fnan(dbl, b);
+    if (an || bn) {
+        if (fsnan(dbl, a)) return fquiet(dbl, a);
+        if (fsnan(dbl, b)) return fquiet(dbl, b);
+        if (an && bn) return a;
+        return an ? b : a;
+    }
+    bool lt, eq;
+    if (dbl) { volatile double x = f64_of(a), y = f64_of(b); lt = x < y; eq = x == y; }
+    else { volatile float x = f32_of(a), y = f32_of(b); lt = x < y; eq = x == y; }
+    if (eq) { /* equal values: only the zeros can differ in bits, by sign */
+        bool neg_a = fsign(dbl, a);
+        return is_max ? (neg_a ? b : a) : (neg_a ? a : b);
+    }
+    return is_max ? (lt ? b : a) : (lt ? a : b);
+}
+
+static uint64_t do_fbin(Ctx *c, unsigned sub, bool dbl, uint64_t a, uint64_t b) {
+    if (sub == OSC_FB_MIN || sub == OSC_FB_MAX) return do_fminmax(dbl, sub == OSC_FB_MAX, a, b);
+    if (dbl) {
+        volatile double x = f64_of(a), y = f64_of(b), r;
+        switch (sub) {
+        case OSC_FB_ADD: r = x + y; break;
+        case OSC_FB_SUB: r = x - y; break;
+        case OSC_FB_MUL: r = x * y; break;
+        case OSC_FB_DIV: r = x / y; break;
+        default: trap(c, OSC_TRAP_RUNTIME); return 0;
+        }
+        return bits_f64(r);
+    }
+    volatile float x = f32_of(a), y = f32_of(b), r;
+    switch (sub) {
+    case OSC_FB_ADD: r = x + y; break;
+    case OSC_FB_SUB: r = x - y; break;
+    case OSC_FB_MUL: r = x * y; break;
+    case OSC_FB_DIV: r = x / y; break;
+    default: trap(c, OSC_TRAP_RUNTIME); return 0;
+    }
+    return bits_f32(r);
+}
+
+/* NEG is `-x` (FNEG: sign flip, so -(+0.0) is -0.0), ABS clears the sign, SQRT
+ * is the correctly rounded sqrt / sqrtf (the only libm calls, inlined to FSQRT). */
+static uint64_t do_fun(Ctx *c, unsigned sub, bool dbl, uint64_t a) {
+    if (dbl) {
+        volatile double x = f64_of(a), r;
+        switch (sub) {
+        case OSC_FU_NEG: r = -x; break;
+        case OSC_FU_ABS: return a & 0x7fffffffffffffffull;
+        case OSC_FU_SQRT: r = sqrt(x); break;
+        default: trap(c, OSC_TRAP_RUNTIME); return 0;
+        }
+        return bits_f64(r);
+    }
+    volatile float x = f32_of(a), r;
+    switch (sub) {
+    case OSC_FU_NEG: r = -x; break;
+    case OSC_FU_ABS: return a & 0x7fffffffu;
+    case OSC_FU_SQRT: r = sqrtf(x); break;
+    default: trap(c, OSC_TRAP_RUNTIME); return 0;
+    }
+    return bits_f32(r);
+}
+
+/* C comparison operators: every ordered relation and == read false on NaN, != true (FCMP + cond) */
+static uint64_t do_fcmp(unsigned cc, bool dbl, uint64_t a, uint64_t b) {
+    bool lt, eq, gt;
+    if (dbl) { volatile double x = f64_of(a), y = f64_of(b); lt = x < y; eq = x == y; gt = x > y; }
+    else { volatile float x = f32_of(a), y = f32_of(b); lt = x < y; eq = x == y; gt = x > y; }
+    switch (cc) {
+    case OSC_C_EQ: return eq;
+    case OSC_C_NE: return !eq;
+    case OSC_C_LT: return lt;
+    case OSC_C_LE: return lt || eq;
+    case OSC_C_GT: return gt;
+    case OSC_C_GE: return gt || eq;
+    default: return 0;
+    }
+}
+
+static uint64_t do_fcvt(bool to_dbl, uint64_t a) {
+    if (to_dbl) { volatile float x = f32_of(a); volatile double r = (double)x; return bits_f64(r); }
+    volatile double x = f64_of(a); volatile float r = (float)x; return bits_f32(r);
+}
+
+static uint64_t do_itof(unsigned sub, bool dbl, uint64_t a) {
+    if (dbl) {
+        volatile double r = sub == OSC_FI_SIGNED ? (double)(int64_t)a : (double)a;
+        return bits_f64(r);
+    }
+    volatile float r = sub == OSC_FI_SIGNED ? (float)(int64_t)a : (float)a;
+    return bits_f32(r);
+}
+
+/* FCVTZS / FCVTZU semantics spelled out: truncate toward zero, saturate at the
+ * destination's range, NaN -> 0. C's out-of-range conversion is undefined, so
+ * the range test happens first, in double (an f32 widens to double exactly). */
+static uint64_t do_ftoi(bool dbl, uint64_t a, OscScalar to) {
+    if (fnan(dbl, a)) return 0;
+    volatile double x = dbl ? f64_of(a) : (double)f32_of(a);
+    unsigned w = osc_scalar_width(to);
+    double half = (double)(1ULL << (w - 1)); /* 2^(w-1), exact */
+    if (osc_scalar_signed(to)) {
+        if (x >= half) return canon(to, (uint64_t)smax(w));
+        if (x <= -half) return canon(to, (uint64_t)smin(w));
+        volatile int64_t v = (int64_t)x;
+        return canon(to, (uint64_t)v);
+    }
+    if (x <= 0.0) return 0; /* also every negative value and -0.0 */
+    if (x >= half * 2.0) return w >= 64 ? UINT64_MAX : (1ULL << w) - 1;
+    volatile uint64_t v = (uint64_t)x;
+    return v;
+}
+
 /* element pointer with the bounds rule of section 5 */
 static uint64_t *elem(Ctx *c, const OscType *rt_, uint64_t base, OscScalar ti, uint64_t idx) {
     if (osc_scalar_signed(ti) && (int64_t)idx < 0) trap(c, OSC_TRAP_BOUNDS);
@@ -166,6 +305,14 @@ static uint64_t run_func(Ctx *c, int fi, const uint64_t *args) {
             case OSC_I_UN: v[in->dst] = do_un(c, in->sub, T[in->a].s, v[in->a]); break;
             case OSC_I_CMP: v[in->dst] = do_cmp(in->sub, T[in->a].s, v[in->a], v[in->b]); break;
             case OSC_I_CAST: v[in->dst] = do_cast(c, T[in->dst].s, T[in->a].s, v[in->a]); break;
+            /* OSC-4 Slice A */
+            case OSC_I_FBIN: v[in->dst] = do_fbin(c, in->sub, T[in->a].s == OSC_T_F64, v[in->a], v[in->b]); break;
+            case OSC_I_FUN: v[in->dst] = do_fun(c, in->sub, T[in->a].s == OSC_T_F64, v[in->a]); break;
+            case OSC_I_FCMP: v[in->dst] = do_fcmp(in->sub, T[in->a].s == OSC_T_F64, v[in->a], v[in->b]); break;
+            case OSC_I_FCVT: v[in->dst] = do_fcvt(T[in->dst].s == OSC_T_F64, v[in->a]); break;
+            case OSC_I_ITOF: v[in->dst] = do_itof(in->sub, T[in->dst].s == OSC_T_F64, v[in->a]); break;
+            case OSC_I_FTOI: v[in->dst] = do_ftoi(T[in->a].s == OSC_T_F64, v[in->a], T[in->dst].s); break;
+            case OSC_I_FBITS: v[in->dst] = canon(T[in->dst].s, v[in->a]); break;
             case OSC_I_ALLOC: v[in->dst] = osc_rt_alloc(c->rt, T[in->dst].len, v[in->a]); break;
             case OSC_I_RELEASE: osc_rt_release(c->rt, v[in->a], T[in->a].len); break;
             case OSC_I_AOPEN: v[in->dst] = osc_rt_arena_open(c->rt, in->imm); break;

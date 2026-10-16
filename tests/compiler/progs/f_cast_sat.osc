@@ -1,0 +1,41 @@
+// entry: f2i32 f2u32 f2i64 f2u64 i2f u2d d2f f2d i2f_small
+// OSC-4 Slice A: float <-> int conversions. Float to int truncates toward
+// zero and saturates (FCVTZS/FCVTZU), NaN gives 0, never a CAST trap.
+// Int to float rounds to nearest even (SCVTF/UCVTF); f64 -> f32 is FCVT (RNE),
+// overflow gives inf without a trap. Oracle: C with the Slice A flags.
+// expect-run: f2i32 0x4f000000 -> 2147483647
+// expect-run: f2i32 0xcf000001 -> -2147483648
+// expect-run: f2i32 0xc0490fd0 -> -3
+// expect-run: f2i32 0x7fc00000 -> 0
+// expect-run: f2i32 0xff800000 -> -2147483648
+// expect-run: f2u32 0xbf800000 -> 0
+// expect-run: f2u32 0x4f000000 -> 2147483648
+// expect-run: f2u32 0x7f800000 -> 4294967295
+// expect-run: f2u32 0x40490fd0 -> 3
+// expect-run: f2i64 0x7ff0000000000000 -> 9223372036854775807
+// expect-run: f2i64 0xfff0000000000000 -> -9223372036854775808
+// expect-run: f2i64 0xc004000000000000 -> -2
+// expect-run: f2i64 0x7ff8000000000000 -> 0
+// expect-run: f2u64 0x43f0000000000000 -> 18446744073709551615
+// expect-run: f2u64 0xbff8000000000000 -> 0
+// expect-run: f2u64 0x40f0000000000000 -> 65536
+// expect-run: i2f 16777217 -> 0x4b800000
+// expect-run: i2f 16777219 -> 0x4b800002
+// expect-run: i2f -1 -> 0xbf800000
+// expect-run: u2d 18446744073709551615 -> 0x43f0000000000000
+// expect-run: u2d 9007199254740993 -> 0x4340000000000000
+// expect-run: d2f 0x3ff0000010000000 -> 0x3f800000
+// expect-run: d2f 0x7e37e43c8800759c -> 0x7f800000
+// expect-run: d2f 0xbff8000000000000 -> 0xbfc00000
+// expect-run: f2d 0x3f800000 -> 0x3ff0000000000000
+// expect-run: f2d 0xffc00000 -> 0xfff8000000000000
+// expect-run: i2f_small 200 -> 0x43480000
+fn f2i32(x: f32) -> i32 { return x as i32; }
+fn f2u32(x: f32) -> u32 { return x as u32; }
+fn f2i64(x: f64) -> i64 { return x as i64; }
+fn f2u64(x: f64) -> u64 { return x as u64; }
+fn i2f(x: i64) -> f32 { return x as f32; }
+fn u2d(x: u64) -> f64 { return x as f64; }
+fn d2f(x: f64) -> f32 { return x as f32; }
+fn f2d(x: f32) -> f64 { return x as f64; }
+fn i2f_small(x: u8) -> f32 { return x as f32; }

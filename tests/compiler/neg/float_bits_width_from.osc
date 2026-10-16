@@ -1,0 +1,2 @@
+// expect: FLOAT_BITS_WIDTH object=return line=2
+fn f(x: u64) -> f32 { return x as f32 bits; }

@@ -59,8 +59,9 @@ static int write_tmp(const char *pre, int i, const void *p, size_t n, const char
     return (fclose(f) != 0 || bad) ? -1 : 0;
 }
 
-/* 1..9 scalars, 11 bytes, 12 cells (OSC_UNIT_ARTIFACT.md section 6.1); 0 and 10 are refused. */
-static int kind_ok(unsigned k) { return (k >= 1 && k <= 9) || k == 11 || k == 12; }
+/* 1..9 scalars, 11 bytes, 12 cells, 13 f32, 14 f64 (OSC-4 Slice A; OSC_UNIT_ARTIFACT.md section 6.1);
+ * 0 and 10 are refused. Float values travel as IEEE bit patterns. */
+static int kind_ok(unsigned k) { return (k >= 1 && k <= 9) || k == 11 || k == 12 || k == 13 || k == 14; }
 
 /* 0 written; 1 refused (message in err); -1 cannot write. */
 static int emit_files(const char *pre, const OscUnit *u, const OscCode *code, char *err, size_t errn)

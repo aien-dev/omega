@@ -591,28 +591,52 @@ static int is_arith(int op)
 }
 static int is_cmpop(int op) { return op == OT_EQ || op == OT_NE || op == OT_LT || op == OT_LE || op == OT_GT || op == OT_GE; }
 
+/* OSC-4: the expression contains a float literal (its leaves decide the fold path) */
+static int has_float(C *c, int i)
+{
+    const OscNode *n = NODE(i);
+    switch (n->kind) {
+    case ON_FLOAT: return 1;
+    case ON_UN: return has_float(c, n->a);
+    case ON_BIN: return has_float(c, n->a) || has_float(c, n->b);
+    case ON_INTRIN: return has_float(c, n->a) || (n->b >= 0 && has_float(c, n->b));
+    default: return 0;
+    }
+}
+
 /* type comes only from context */
 static int ctxfree(C *c, int i)
 {
     const OscNode *n = NODE(i);
     switch (n->kind) {
     case ON_INT: return 1;
+    case ON_FLOAT: return n->ival == 0; /* OSC-4: a suffixed literal carries its own type */
     case ON_UN: return n->op != OT_BANG && ctxfree(c, n->a);
     case ON_BIN:
         if (is_shift(n->op)) return ctxfree(c, n->a);
         if (is_arith(n->op)) return ctxfree(c, n->a) && ctxfree(c, n->b);
         return 0;
+    case ON_INTRIN: return ctxfree(c, n->a) && (n->b < 0 || ctxfree(c, n->b));
     default: return 0;
     }
 }
-/* all leaves literal */
+/* all leaves literal. OSC-4: float constants fold only as a literal or its
+ * negation (sign flip, the FNEG bit pattern); float arithmetic on literals is
+ * emitted as run-time IR so the interpreter and the native code share one
+ * implementation of every rounding step. */
 static int constexpr_(C *c, int i)
 {
     const OscNode *n = NODE(i);
     switch (n->kind) {
     case ON_INT: return 1;
-    case ON_UN: return n->op != OT_BANG && constexpr_(c, n->a);
-    case ON_BIN: return (is_shift(n->op) || is_arith(n->op)) && constexpr_(c, n->a) && constexpr_(c, n->b);
+    case ON_FLOAT: return 1;
+    case ON_UN:
+        if (n->op == OT_BANG) return 0;
+        if (n->op == OT_TILDE && has_float(c, n->a)) return 0;
+        return constexpr_(c, n->a);
+    case ON_BIN:
+        if (has_float(c, i)) return 0;
+        return (is_shift(n->op) || is_arith(n->op)) && constexpr_(c, n->a) && constexpr_(c, n->b);
     default: return 0;
     }
 }
@@ -713,6 +737,9 @@ static int fold(C *c, int i, OscScalar t, i128 *out)
             v = wrapu(t, v);
         }
         break;
+    case ON_FLOAT:
+        snprintf(msg, sizeof msg, "float literal where %s is required", tname(t));
+        return tmismatch(c, n, tname(t), msg);
     default:
         return tmismatch(c, n, NULL, "not a constant");
     }
@@ -720,6 +747,82 @@ static int fold(C *c, int i, OscScalar t, i128 *out)
     n->is_const = 1;
     n->cval = canon(t, v);
     *out = v;
+    return 0;
+}
+
+/* OSC-4 Slice A: fold a float constant (a literal or its negation) at float
+ * type t; *bits is the IEEE pattern (f32 in the low 32 bits, upper 32 zero).
+ * f32 spellings go through strtof and f64 through strtod (design 1.3 item 12,
+ * never strtod then a cast: that would round twice). A literal that rounds to
+ * inf is FLOAT_CONST_RANGE; one that underflows to zero or a subnormal is a
+ * value. Negation flips the sign bit, which is exactly what FNEG does. */
+static int ffold(C *c, int i, OscScalar t, uint64_t *bits)
+{
+    OscNode *n = NODE(i);
+    char msg[320];
+    if (!osc_scalar_is_float(t)) {
+        snprintf(msg, sizeof msg, "float literal where %s is required", tname(t));
+        return tmismatch(c, n, tname(t), msg);
+    }
+    uint64_t v;
+    switch (n->kind) {
+    case ON_FLOAT: {
+        OscScalar lit = n->ival == 1 ? OSC_T_F32 : n->ival == 2 ? OSC_T_F64 : t;
+        if (lit != t) {
+            snprintf(msg, sizeof msg, "%s literal where %s is required", tname(lit), tname(t));
+            return tmismatch(c, n, tname(lit), msg);
+        }
+        const OscToken *tk = &c->ast->toks[n->tok];
+        char buf[OSC_LEX_NAME_MAX + 1];
+        if (tk->len > OSC_LEX_NAME_MAX) { /* the lexer refuses these first; never parse a cut spelling */
+            osc_tok_text(c->ast->src, tk, buf, sizeof buf);
+            osc_diag_set(c->d, OSC_DIAG_CAPACITY, n->line, n->col, buf, 0, NULL, "float literal length",
+                         "float literal longer than %d characters", OSC_LEX_NAME_MAX);
+            return -1;
+        }
+        osc_tok_text(c->ast->src, tk, buf, sizeof buf);
+        size_t len = strlen(buf);
+        if (n->ival && len > 3) buf[len - 3] = 0; /* drop the f32 / f64 suffix */
+        if (t == OSC_T_F32) {
+            float f = strtof(buf, NULL);
+            uint32_t w;
+            memcpy(&w, &f, 4);
+            v = w;
+            if ((w & 0x7f800000u) == 0x7f800000u) {
+                osc_diag_set(c->d, OSC_DIAG_FLOAT_CONST_RANGE, n->line, n->col, c->sobj, 0, NULL,
+                             "literal rounds to inf", "float literal '%s' does not round to a finite f32", buf);
+                return -1;
+            }
+        } else {
+            double d = strtod(buf, NULL);
+            memcpy(&v, &d, 8);
+            if ((v & 0x7ff0000000000000ull) == 0x7ff0000000000000ull) {
+                osc_diag_set(c->d, OSC_DIAG_FLOAT_CONST_RANGE, n->line, n->col, c->sobj, 0, NULL,
+                             "literal rounds to inf", "float literal '%s' does not round to a finite f64", buf);
+                return -1;
+            }
+        }
+        break;
+    }
+    case ON_UN:
+        if (n->op == OT_TILDE) {
+            osc_diag_set(c->d, OSC_DIAG_FLOAT_BITOP, n->line, n->col, c->sobj, 0, NULL, "bit operator on a float",
+                         "'~' is a bit operator and has no %s form (use 'as ... bits' first)", tname(t));
+            return -1;
+        }
+        if (ffold(c, n->a, t, &v)) return -1;
+        v ^= t == OSC_T_F32 ? 0x80000000ull : 0x8000000000000000ull;
+        break;
+    case ON_INT:
+        snprintf(msg, sizeof msg, "integer literal where %s is required (write it with a '.')", tname(t));
+        return tmismatch(c, n, tname(t), msg);
+    default:
+        return tmismatch(c, n, NULL, "not a constant");
+    }
+    n->ty.s = t;
+    n->is_const = 1;
+    n->cval = v;
+    *bits = v;
     return 0;
 }
 
@@ -769,6 +872,7 @@ static int ceval(C *c, int i, const CEnv *env, uint64_t *out)
         if (n->sym >= 0 && n->sym == env->res_sym && env->res_known) { *out = env->res_val; return 1; }
         return 0;
     case ON_UN: {
+        if (osc_scalar_is_float(n->ty.s)) return 0; /* OSC-4: float clauses are decided at run time */
         if (!ceval(c, n->a, env, &a)) return 0;
         OscScalar t = n->ty.s;
         if (n->op == OT_BANG) { *out = a ^ 1; return 1; }
@@ -783,8 +887,9 @@ static int ceval(C *c, int i, const CEnv *env, uint64_t *out)
         return 1;
     }
     case ON_CAST: {
-        if (!ceval(c, n->a, env, &a)) return 0;
         OscScalar from = NODE(n->a)->ty.s, to = n->ty.s;
+        if (osc_scalar_is_float(from) || osc_scalar_is_float(to)) return 0; /* OSC-4 */
+        if (!ceval(c, n->a, env, &a)) return 0;
         i128 v = osc_scalar_signed(from) ? (i128)(int64_t)a : (i128)a;
         unsigned w = osc_scalar_width(to);
         i128 lo = osc_scalar_signed(to) ? -((i128)1 << (w - 1)) : 0;
@@ -803,6 +908,7 @@ static int ceval(C *c, int i, const CEnv *env, uint64_t *out)
             *out = b;
             return 1;
         }
+        if (osc_scalar_is_float(n->ty.s) || (is_cmpop(op) && osc_scalar_is_float((OscScalar)n->flag))) return 0; /* OSC-4 */
         if (!ceval(c, n->a, env, &a) || !ceval(c, n->b, env, &b)) return 0;
         if (is_cmpop(op)) {
             OscScalar T = (OscScalar)n->flag;
@@ -914,6 +1020,16 @@ static int want_ok(C *c, const OscNode *n, OscScalar got, OscScalar want)
 {
     if (want && got != want) {
         char msg[320];
+        /* OSC-4: a float meeting a different float or an integer is FLOAT_MIXED (design 1.4);
+         * there is no implicit widening, the program writes the `as`. */
+        if ((osc_scalar_is_float(got) || osc_scalar_is_float(want)) &&
+            (osc_scalar_is_float(got) || osc_scalar_is_int(got)) &&
+            (osc_scalar_is_float(want) || osc_scalar_is_int(want))) {
+            osc_diag_set(c->d, OSC_DIAG_FLOAT_MIXED, n->line, n->col, c->sobj, 0, tname(got), "mixed float types",
+                         "%s used where %s is required; floats never mix with another type without 'as'",
+                         tname(got), tname(want));
+            return -1;
+        }
         snprintf(msg, sizeof msg, "expression of type %s where %s is required", tname(got), tname(want));
         return tmismatch(c, n, tname(got), msg);
     }
@@ -1108,6 +1224,15 @@ static const char *rty(C *c, const OscType *t, char *buf, size_t cap)
 
 static int chk_index_len(C *c, const char *name, uint32_t dline, unsigned len, int ix, const OscNode *at);
 
+/* OSC-4 Slice A, design 1.4: a float is never an index (object = the array or slice name) */
+static int float_index(C *c, const char *name, int ix)
+{
+    const OscNode *x = NODE(ix);
+    osc_diag_set(c->d, OSC_DIAG_FLOAT_INDEX, x->line, x->col, name, 0, NULL, "float as index",
+                 "the index of '%s' is a float; an index is an integer (convert with 'as')", name);
+    return -1;
+}
+
 /* index expression + static bounds; arr symbol s */
 static int chk_index(C *c, int s, int ix, const OscNode *at)
 {
@@ -1117,9 +1242,11 @@ static int chk_index(C *c, int s, int ix, const OscNode *at)
 static int chk_index_len(C *c, const char *name, uint32_t dline, unsigned len, int ix, const OscNode *at)
 {
     OscScalar it;
+    if (has_float(c, ix)) return float_index(c, name, ix); /* OSC-4: a float literal is never an index */
     if (ctxfree(c, ix)) it = (OscScalar)chk(c, ix, OSC_T_I64);
     else it = (OscScalar)chk(c, ix, 0);
     if ((int)it < 0) return -1;
+    if (osc_scalar_is_float(it)) return float_index(c, name, ix);
     if (!osc_scalar_is_int(it)) return tmismatch(c, NODE(ix), tname(it), "array index must be an integer");
     const OscNode *x = NODE(ix);
     if (x->is_const) {
@@ -1194,6 +1321,11 @@ static int chk(C *c, int i, OscScalar want)
         return -1;
     }
     if (want && constexpr_(c, i)) {
+        if (osc_scalar_is_float(want) || has_float(c, i)) { /* OSC-4 */
+            uint64_t bits;
+            if (ffold(c, i, want, &bits)) return -1;
+            return (int)want;
+        }
         i128 v;
         if (fold(c, i, want, &v)) return -1;
         return (int)want;
@@ -1201,6 +1333,36 @@ static int chk(C *c, int i, OscScalar want)
     OscScalar t;
     switch (n->kind) {
     case ON_INT: { i128 v; if (fold(c, i, want, &v)) return -1; return (int)want; } /* unreachable: constexpr */
+    case ON_FLOAT: { /* OSC-4: reached only without context, so the literal carries a suffix */
+        uint64_t bits;
+        t = n->ival == 2 ? OSC_T_F64 : OSC_T_F32;
+        if (ffold(c, i, t, &bits)) return -1;
+        break;
+    }
+    case ON_INTRIN: { /* OSC-4: sqrt(x) abs(x) min(a, b) max(a, b) on one float type */
+        OscScalar T;
+        if (n->b < 0) {
+            int r = chk(c, n->a, ctxfree(c, n->a) ? want : 0);
+            if (r < 0) return -1;
+            T = (OscScalar)r;
+        } else if (ctxfree(c, n->a)) {
+            int r = chk(c, n->b, ctxfree(c, n->b) ? want : 0);
+            if (r < 0) return -1;
+            T = (OscScalar)r;
+            if (chk(c, n->a, T) < 0) return -1;
+        } else {
+            int r = chk(c, n->a, 0);
+            if (r < 0) return -1;
+            T = (OscScalar)r;
+            if (chk(c, n->b, T) < 0) return -1;
+        }
+        if (!osc_scalar_is_float(T)) {
+            snprintf(msg, sizeof msg, "'%s' takes one float type (f32 or f64), not %s", osc_tok_kind_name(n->op), tname(T));
+            return tmismatch(c, n, tname(T), msg);
+        }
+        t = T;
+        break;
+    }
     case ON_BOOL:
         t = OSC_T_BOOL;
         break;
@@ -1244,8 +1406,10 @@ static int chk(C *c, int i, OscScalar want)
                              "cells read in ensures", "an ensures clause may not read the written slice '%s'", c->sym[s].name);
                 return -1;
             }
+            if (has_float(c, n->a)) return float_index(c, c->sym[s].name, n->a); /* OSC-4 */
             int r = chk(c, n->a, ctxfree(c, n->a) ? OSC_T_I64 : 0);
             if (r < 0) return -1;
+            if (osc_scalar_is_float((OscScalar)r)) return float_index(c, c->sym[s].name, n->a);
             if (!osc_scalar_is_int((OscScalar)r)) return tmismatch(c, NODE(n->a), tname((OscScalar)r), "slice index must be an integer");
             t = OSC_T_U64;
             break;
@@ -1318,6 +1482,14 @@ static int chk(C *c, int i, OscScalar want)
         int r = chk(c, n->a, ctxfree(c, n->a) ? want : 0);
         if (r < 0) return -1;
         t = (OscScalar)r;
+        if (osc_scalar_is_float(t)) { /* OSC-4: '-' is FNEG; '~' has no float form */
+            if (n->op == OT_TILDE) {
+                osc_diag_set(c->d, OSC_DIAG_FLOAT_BITOP, n->line, n->col, c->sobj, 0, NULL, "bit operator on a float",
+                             "'~' is a bit operator and has no %s form (use 'as ... bits' first)", tname(t));
+                return -1;
+            }
+            break;
+        }
         if (!osc_scalar_is_int(t)) return tmismatch(c, n, tname(t), "'-' and '~' need an integer operand");
         break;
     }
@@ -1329,12 +1501,33 @@ static int chk(C *c, int i, OscScalar want)
         }
         int r = chk(c, n->a, 0);
         if (r < 0) return -1;
-        if (!osc_scalar_is_int((OscScalar)r) || !osc_scalar_is_int(n->ty.s)) {
-            snprintf(msg, sizeof msg, "'as' converts between integer types only (%s as %s)", tname((OscScalar)r),
-                     tname(n->ty.s));
-            return tmismatch(c, n, tname((OscScalar)r), msg);
+        OscScalar from = (OscScalar)r, to = n->ty.s;
+        if (n->flag) { /* OSC-4: `as T bits` reinterprets; exactly one float side, equal widths */
+            int nf = (int)osc_scalar_is_float(from) + (int)osc_scalar_is_float(to);
+            int ok = nf == 1 && (osc_scalar_is_float(from) ? osc_scalar_is_int(to) : osc_scalar_is_int(from)) &&
+                     osc_scalar_width(from) == osc_scalar_width(to);
+            if (!ok) {
+                osc_diag_set(c->d, OSC_DIAG_FLOAT_BITS_WIDTH, n->line, n->col, c->sobj, 0, tname(from), "bit cast shape",
+                             "'%s as %s bits' is not a bit cast: 'bits' needs one float side and one integer side of the "
+                             "same width (f32 with u32/i32, f64 with u64/i64)", tname(from), tname(to));
+                return -1;
+            }
+            t = to;
+            break;
         }
-        t = n->ty.s;
+        if (osc_scalar_is_float(from) || osc_scalar_is_float(to)) { /* OSC-4: int <-> float, float <-> float */
+            if (!(osc_scalar_is_float(from) || osc_scalar_is_int(from)) || !(osc_scalar_is_float(to) || osc_scalar_is_int(to))) {
+                snprintf(msg, sizeof msg, "'as' converts between integer and float types only (%s as %s)", tname(from), tname(to));
+                return tmismatch(c, n, tname(from), msg);
+            }
+            t = to;
+            break;
+        }
+        if (!osc_scalar_is_int(from) || !osc_scalar_is_int(to)) {
+            snprintf(msg, sizeof msg, "'as' converts between integer types only (%s as %s)", tname(from), tname(to));
+            return tmismatch(c, n, tname(from), msg);
+        }
+        t = to;
         break;
     }
     case ON_BIN: {
@@ -1373,6 +1566,11 @@ static int chk(C *c, int i, OscScalar want)
             int r = chk(c, n->a, ctxfree(c, n->a) ? want : 0);
             if (r < 0) return -1;
             OscScalar T = (OscScalar)r;
+            if (osc_scalar_is_float(T)) { /* OSC-4 */
+                osc_diag_set(c->d, OSC_DIAG_FLOAT_BITOP, n->line, n->col, c->sobj, 0, NULL, "bit operator on a float",
+                             "shifts have no %s form (use 'as ... bits' first)", tname(T));
+                return -1;
+            }
             if (!osc_scalar_is_int(T)) return tmismatch(c, n, tname(T), "shift of a non-integer");
             int ra;
             if (ctxfree(c, n->b)) ra = chk(c, n->b, T);
@@ -1411,6 +1609,16 @@ static int chk(C *c, int i, OscScalar want)
             T = (OscScalar)r;
             if (T == OSC_T_BOOL) return tmismatch(c, NODE(n->a), "bool", "arithmetic on bool");
             if (chk(c, n->b, T) < 0) return -1;
+        }
+        if (osc_scalar_is_float(T)) { /* OSC-4: + - * / only; x / 0.0 is inf, a value, not a trap */
+            if (op != OT_PLUS && op != OT_MINUS && op != OT_STAR && op != OT_SLASH) {
+                osc_diag_set(c->d, OSC_DIAG_FLOAT_BITOP, n->line, n->col, c->sobj, 0, NULL, "bit operator on a float",
+                             "'%s' has no %s form (floats have + - * / only; use 'as ... bits' for bit work)",
+                             osc_tok_kind_name(op), tname(T));
+                return -1;
+            }
+            t = T;
+            break;
         }
         if (!osc_scalar_is_int(T)) return tmismatch(c, n, tname(T), "arithmetic needs integer operands");
         if ((op == OT_SLASH || op == OT_PERCENT) && NODE(n->b)->is_const && NODE(n->b)->cval == 0)
@@ -2084,8 +2292,10 @@ static int chk_stmt(C *c, int i)
                 return slice_diag(c, n, OSC_DIAG_SLICE_WRITE, y, "write to a bytes slice",
                                   "a 'bytes' slice is read-only: there is no way to write an element of it");
             if (slice_noescape(c, n->b)) return -1;
+            if (has_float(c, n->a)) return float_index(c, y->name, n->a); /* OSC-4 */
             int r = chk(c, n->a, ctxfree(c, n->a) ? OSC_T_I64 : 0);
             if (r < 0) return -1;
+            if (osc_scalar_is_float((OscScalar)r)) return float_index(c, y->name, n->a);
             if (!osc_scalar_is_int((OscScalar)r)) return tmismatch(c, NODE(n->a), tname((OscScalar)r), "slice index must be an integer");
             return chk(c, n->b, OSC_T_U64) < 0 ? -1 : 0;
         }

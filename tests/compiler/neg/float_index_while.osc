@@ -1,0 +1,6 @@
+// expect: FLOAT_INDEX object=bound line=4
+fn f() -> u32 {
+    let mut s: u32 = 0;
+    while s < 10 bound 4.0 { s = s + 1; }
+    return s;
+}

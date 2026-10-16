@@ -1,0 +1,6 @@
+// expect: TYPE_MISMATCH object=y line=4
+// a float literal where an integer is required.
+fn f() -> u32 {
+    let y: u32 = 3.0;
+    return y;
+}

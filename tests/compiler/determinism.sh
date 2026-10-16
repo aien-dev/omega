@@ -23,9 +23,9 @@ else
         esac
     done
     # shellcheck disable=SC2086
-    nice cc -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -O2 \
+    nice cc -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -O2 -ffp-contract=off -fno-fast-math -fno-math-errno \
         -I"$root/src" -I"$root/src/compiler" -I"$root/src/compiler/model" \
-        -o "$oscc" "$root/src/compiler/oscc_main.c" $srcs "$root/src/sha256.c" || {
+        -o "$oscc" "$root/src/compiler/oscc_main.c" $srcs "$root/src/sha256.c" -lm || {
         echo "OSC1_DETERMINISM_FAIL build"
         exit 1
     }

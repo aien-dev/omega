@@ -140,8 +140,35 @@ static uint64_t canon(OscScalar t, uint64_t v)
     if (osc_scalar_signed(t) && (v >> (w - 1))) v |= ~m;
     return v;
 }
+/* OSC-4 Slice A: f32/f64 argument patterns travel as bit patterns (design 1.7).
+ * Edges: +-0, +-1, +-inf, quiet NaN, signalling NaN with payload, subnormals,
+ * max finite, 2^24+1 (RNE), 2^31 / 2^63 (saturation edges), plus random bits. */
+static uint64_t gen_arg_float(OscScalar t, uint64_t r)
+{
+    static const uint64_t p32[] = {0, 0x80000000u, 0x3f800000u, 0xbf800000u, 0x7f800000u, 0xff800000u, 0x7fc00000u,
+                                   0x7f800001u, 0x7fc00123u, 0xffc00000u, 0x00000001u, 0x007fffffu, 0x7f7fffffu,
+                                   0x3f000000u, 0x4b800001u, 0x4f000000u, 0xcf000000u, 0x5f000000u, 0x3dcccccdu};
+    static const uint64_t p64[] = {0, 0x8000000000000000ull, 0x3ff0000000000000ull, 0xbff0000000000000ull,
+                                   0x7ff0000000000000ull, 0xfff0000000000000ull, 0x7ff8000000000000ull,
+                                   0x7ff0000000000001ull, 0x7ff80000000000abull, 0xfff8000000000000ull, 1,
+                                   0x000fffffffffffffull, 0x7fefffffffffffffull, 0x3fe0000000000000ull,
+                                   0x4340000000000001ull, 0x43e0000000000000ull, 0xc3e0000000000000ull,
+                                   0x43f0000000000000ull, 0x3fb999999999999aull};
+    int d = t == OSC_T_F64;
+    switch (r % 4) {
+    case 0: case 1: return d ? p64[(r >> 8) % 19] : p32[(r >> 8) % 19];
+    case 2: { /* a small value with a short binary expansion: k/8 for k in -1000..1000 */
+        int64_t k = (int64_t)((r >> 8) % 2001) - 1000;
+        if (d) { double v = (double)k / 8.0; uint64_t u; memcpy(&u, &v, 8); return u; }
+        float v = (float)k / 8.0f; uint32_t u; memcpy(&u, &v, 4); return u;
+    }
+    default: return canon(t, sm());
+    }
+}
+
 static uint64_t gen_arg(OscScalar t)
 {
+    if (t == OSC_T_F32 || t == OSC_T_F64) return gen_arg_float(t, sm());
     unsigned w = osc_scalar_width(t);
     int sg = osc_scalar_signed(t);
     uint64_t r = sm();
@@ -480,6 +507,7 @@ static const char *trap_names[OSC_TRAP_MAX + 1] = {"none", "OVERFLOW", "DIV0", "
 static uint64_t parse_val(const char *s)
 {
     if (*s == '-') return (uint64_t)strtoll(s, NULL, 10);
+    if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) return strtoull(s, NULL, 16); /* float bit patterns (OSC-4) */
     return strtoull(s, NULL, 10);
 }
 
@@ -1783,6 +1811,146 @@ typedef struct {
     unsigned nargs;                /* source arguments */
 } SliceCase;
 
+/* ------------------------------------------------------------ OSC-4 Slice A: float fuzz */
+/* Random f32 / f64 expression trees over three parameters, constants, the four
+ * operators, unary minus, the intrinsics, float<->float and float<->int casts and
+ * bit casts; the entry returns one of several views selected by k so every result
+ * (bits of x, bits of y, the six comparisons, a saturating f->int, a float<->float
+ * conversion) is compared bit for bit between the interpreter and native code.
+ * Arguments come from gen_arg_float: NaNs with payloads, infinities, -0.0,
+ * subnormals. Design: docs/osc/OSC-4-DESIGN.md 1.3 and 1.8 item 3. */
+static unsigned long ff_units, ff_runs, ff_mismatch, ff_nan, ff_inf, ff_finite;
+
+/* typed = 1: the result must carry its own type (it is the source of an 'as'), so the
+ * leaf on the type-determining path is a parameter, never a bare literal (design 1.1 item 2) */
+static void ff_expr(char *dst, size_t cap, int depth, int dbl, int typed)
+{
+    uint64_t r = sm();
+    const char *T = dbl ? "f64" : "f32", *U = dbl ? "u64" : "u32";
+    if (depth <= 0 || r % 7 == 0) {
+        static const char *lits[] = {"0.0", "1.0", "0.5", "2.0", "3.0e2", "1.0e-3", "0.1", "1.0e38", "1.0e-40", "-0.0", "-2.5"};
+        switch ((r >> 8) % 6) {
+        case 0: cf_cat(dst, cap, "a"); return;
+        case 1: cf_cat(dst, cap, "b"); return;
+        case 2: cf_cat(dst, cap, "c"); return;
+        case 3: cf_cat(dst, cap, "%s", typed ? "b" : lits[(r >> 16) % 11]); return;
+        case 4: cf_cat(dst, cap, "(%s)", typed ? "c" : lits[(r >> 16) % 11]); return;
+        default: cf_cat(dst, cap, "-a"); return;
+        }
+    }
+    static const char *ops[] = {"+", "-", "*", "/"};
+    switch ((r >> 8) % 14) {
+    case 0: case 1: case 2: case 3: case 4: case 5: /* the left operand fixes the type; the right may be a literal */
+        cf_cat(dst, cap, "(");
+        ff_expr(dst, cap, depth - 1, dbl, typed);
+        cf_cat(dst, cap, " %s ", ops[(r >> 16) % 4]);
+        ff_expr(dst, cap, depth - 1, dbl, 0);
+        cf_cat(dst, cap, ")");
+        return;
+    case 6: cf_cat(dst, cap, "sqrt("); ff_expr(dst, cap, depth - 1, dbl, typed); cf_cat(dst, cap, ")"); return;
+    case 7: cf_cat(dst, cap, "abs("); ff_expr(dst, cap, depth - 1, dbl, typed); cf_cat(dst, cap, ")"); return;
+    case 8: case 9:
+        cf_cat(dst, cap, (r >> 16) & 1 ? "min(" : "max(");
+        ff_expr(dst, cap, depth - 1, dbl, typed);
+        cf_cat(dst, cap, ", ");
+        ff_expr(dst, cap, depth - 1, dbl, 0);
+        cf_cat(dst, cap, ")");
+        return;
+    case 10: cf_cat(dst, cap, "-("); ff_expr(dst, cap, depth - 1, dbl, typed); cf_cat(dst, cap, ")"); return;
+    /* every 'as' source below is typed: a bare literal there is AMBIGUOUS_WIDTH by design */
+    case 11: /* through the other float type and back (FCVT both ways) */
+        cf_cat(dst, cap, "(("); ff_expr(dst, cap, depth - 1, dbl, 1); cf_cat(dst, cap, ") as %s) as %s", dbl ? "f32" : "f64", T);
+        return;
+    case 12: { /* through an integer type (saturating FTOI, then ITOF) */
+        static const char *ints[] = {"i64", "u64", "i32", "u32", "i8", "u16"};
+        cf_cat(dst, cap, "(("); ff_expr(dst, cap, depth - 1, dbl, 1); cf_cat(dst, cap, ") as %s) as %s", ints[(r >> 16) % 6], T);
+        return;
+    }
+    default: /* bit cast round trip (payload preserving) */
+        cf_cat(dst, cap, "(("); ff_expr(dst, cap, depth - 1, dbl, 1); cf_cat(dst, cap, ") as %s bits) as %s bits", U, T);
+        return;
+    }
+}
+
+static void float_fuzz(unsigned n)
+{
+    static char src[16384], ex[4096], ey[4096];
+    sm_state = 0x0F10A7E4Aull;
+    for (unsigned u = 0; u < n; u++) {
+        int dbl = (int)(u & 1);
+        const char *T = dbl ? "f64" : "f32", *U = dbl ? "u64" : "u32", *O = dbl ? "f32" : "f64", *OU = dbl ? "u32" : "u64";
+        ex[0] = ey[0] = src[0] = 0;
+        ff_expr(ex, sizeof ex, 2 + (int)(sm() % 3), dbl, 0);
+        ff_expr(ey, sizeof ey, 2 + (int)(sm() % 3), dbl, 0);
+        cf_cat(src, sizeof src,
+               "fn entry(a: %s, b: %s, c: %s, k: u32) -> u64 {\n"
+               "    let x: %s = %s;\n"
+               "    let y: %s = %s;\n"
+               "    let mut m: u64 = 0;\n"
+               "    if x == y { m = m | 1; }\n"
+               "    if x != y { m = m | 2; }\n"
+               "    if x < y { m = m | 4; }\n"
+               "    if x <= y { m = m | 8; }\n"
+               "    if x > y { m = m | 16; }\n"
+               "    if x >= y { m = m | 32; }\n"
+               "    if k == 0 { return (x as %s bits) as u64; }\n"
+               "    if k == 1 { return (y as %s bits) as u64; }\n"
+               "    if k == 2 { return m; }\n"
+               "    if k == 3 { return x as u64; }\n"
+               "    if k == 4 { return ((x as %s) as %s bits) as u64; }\n"
+               "    return (((x as i64) as f64) as u64 bits) ^ ((min(x, y) as %s bits) as u64);\n"
+               "}\n",
+               T, T, T, T, ex, T, ey, U, U, O, OU, U);
+        ff_units++;
+        OscDiag d;
+        int rc = osc_compile(src, strlen(src), U1, &d, NULL);
+        CHECK(rc == 0, "float fuzz unit %u refused %s line %u object=%s: %s\n%s", u, osc_diag_kind_name(d.kind), d.line,
+              d.object, d.message, src);
+        if (rc) continue;
+        OscCode c;
+        char err[160];
+        memset(&c, 0, sizeof c);
+        int cg = osc_cg_compile(U1, &c, err, sizeof err);
+        CHECK(cg == 0, "float fuzz unit %u codegen refused: %s", u, err);
+        if (cg) continue;
+        OscNative nm2;
+        int mr = osc_native_map(&nm2, c.code, c.len);
+        CHECK(mr == 0, "float fuzz unit %u native map failed (%d)", u, mr);
+        if (mr) { osc_cg_free(&c); continue; }
+        int fi = U1->nfuncs - 1;
+        void *entry = osc_native_at(&nm2, c.entry[fi]);
+        OscScalar ft = dbl ? OSC_T_F64 : OSC_T_F32;
+        for (unsigned it = 0; it < 36; it++) {
+            uint64_t args[OSC_MAX_PARAMS] = {0}, ri = 0, rn = 0;
+            args[0] = gen_arg(ft);
+            args[1] = gen_arg(ft);
+            args[2] = gen_arg(ft);
+            args[3] = it % 6;
+            osc_rt_reset(RI);
+            osc_rt_reset(RN);
+            int t1 = osc_interp_run_prevalidated(U1, fi, args, 4, RI, &ri);
+            int t2 = osc_rt_call_native(RN, entry, args, 4, &rn);
+            ff_runs++;
+            diff_runs++;
+            int same = t1 == t2 && t1 >= 0 && (t1 != 0 || ri == rn) && osc_rt_same_outcome(RI, RN);
+            CHECK(same, "float fuzz unit %u args %#llx %#llx %#llx k=%llu: interp trap %d ret %#llx vs native trap %d ret %#llx\n%s",
+                  u, (unsigned long long)args[0], (unsigned long long)args[1], (unsigned long long)args[2],
+                  (unsigned long long)args[3], t1, (unsigned long long)ri, t2, (unsigned long long)rn, src);
+            if (!same) { ff_mismatch++; break; }
+            CHECK(t1 == 0, "float fuzz unit %u trapped (%d): floats never trap\n%s", u, t1, src);
+            if (t1 == 0 && args[3] == 0) { /* classify the x result */
+                uint64_t e = dbl ? (ri >> 52) & 0x7ff : (ri >> 23) & 0xff, mant = dbl ? ri & 0xfffffffffffffull : ri & 0x7fffffu;
+                if (e == (dbl ? 0x7ffu : 0xffu)) { if (mant) ff_nan++; else ff_inf++; } else ff_finite++;
+            }
+        }
+        osc_native_unmap(&nm2);
+        osc_cg_free(&c);
+    }
+    printf("float fuzz: units=%lu runs=%lu x_finite=%lu x_inf=%lu x_nan=%lu mismatches=%lu\n", ff_units, ff_runs, ff_finite,
+           ff_inf, ff_nan, ff_mismatch);
+    CHECK(ff_nan > 0 && ff_inf > 0 && ff_finite > 0, "float fuzz never produced a NaN, an inf and a finite result");
+}
+
 static unsigned long slice_ok, slice_runs, slice_expect, slice_fuzz_runs, slice_neg_overlap;
 
 static void slice_free(SliceCase *s)
@@ -2095,8 +2263,16 @@ static void slice_host_checks(void)
     const char *plain = "fn g(a: u64) -> u64 { return a + 1; }\n";
     CHECK(osc_compile(plain, strlen(plain), u, &d, NULL) == 0, "plain unit refused");
     CHECK(osc_ir_encode(u, enc, sizeof enc, &el) == 0 && osc_ir_encoding_version(enc, el) == 1, "plain unit not version 1");
+    /* OSC-4 Slice A: 6 is the float version (OSC_IR_VERSION_MAX), so the first unknown one is 7 */
     enc[7] = 6;
-    CHECK(osc_ir_encoding_version(enc, el) == -1, "unknown version 6 accepted");
+    CHECK(osc_ir_encoding_version(enc, el) == 6, "version 6 (floats) not recognised");
+    enc[7] = OSC_IR_VERSION_MAX + 1;
+    CHECK(osc_ir_encoding_version(enc, el) == -1, "unknown version 7 accepted");
+    const char *fl = "fn h(a: f32) -> f32 { return a * 2.0; }\n";
+    CHECK(osc_compile(fl, strlen(fl), u, &d, NULL) == 0, "float unit refused");
+    CHECK(osc_ir_encode(u, enc, sizeof enc, &el) == 0 && osc_ir_encoding_version(enc, el) == 6, "float unit not version 6");
+    CHECK(osc_compile(plain, strlen(plain), u, &d, NULL) == 0 && osc_ir_encode(u, enc, sizeof enc, &el) == 0,
+          "plain unit refused (second time)");
     enc[7] = 0;
     CHECK(osc_ir_encoding_version(enc, el) == -1, "version 0 accepted");
     enc[7] = 1;
@@ -2143,6 +2319,12 @@ int main(int argc, char **argv)
     handle_fuzz(fuzz / 8 ? fuzz / 8 : 16);
     df_dtor_order(pdir);
     dropflags_fuzz(fuzz / 8 ? fuzz / 8 : 16);
+    {   /* OSC_FLOAT_FUZZ_UNITS=N runs the float dual run alone at N units (receipt evidence,
+         * docs/osc/OSC-4-DESIGN.md 1.8 item 3) without scaling every other sweep with it */
+        const char *ffu = getenv("OSC_FLOAT_FUZZ_UNITS");
+        unsigned nf = ffu ? (unsigned)strtoul(ffu, NULL, 10) : 0;
+        float_fuzz(nf ? nf : (fuzz / 4 ? fuzz / 4 : 30));
+    }
     {
         char sdir[512];
         char **sv;

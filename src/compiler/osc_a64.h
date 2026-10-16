@@ -60,6 +60,22 @@ typedef enum {
     OSC_A64_BRK,
     /* external byte slices: rd = Rt (zero-extended byte), rn = base (SP kind), rm = index (LDRB Wt, [Xn, Xm]) */
     OSC_A64_LDRB_REG,
+    /* OSC-4 Slice A scalar floating point (docs/osc/OSC-4-DESIGN.md 1.6; goldens in
+     * tests/compiler/aarch64_fp_golden.h). A V operand is numbered 0..31 and never
+     * takes XZR / SP. imm2 is the type: 0 = S (f32), 1 = D (f64); the GP <-> V moves
+     * and the f32 <-> f64 converts have one fixed form and require imm2 = 0.
+     * No fused multiply-add, no FMIN/FMAX (non-NM), no FCMPE, no FCMP #0.0. */
+    OSC_A64_FMOV_RR,                               /* vd = vn */
+    OSC_A64_FMOV_XD, OSC_A64_FMOV_DX,              /* dd = xn (rd V, rn X/ZR) ; xd = dn (rd X/ZR, rn V) */
+    OSC_A64_FMOV_WS, OSC_A64_FMOV_SW,              /* sd = wn ; wd = sn (zero-extends into Xd) */
+    OSC_A64_FADD, OSC_A64_FSUB, OSC_A64_FMUL, OSC_A64_FDIV, OSC_A64_FMAXNM, OSC_A64_FMINNM, /* vd vn vm */
+    OSC_A64_FSQRT, OSC_A64_FNEG, OSC_A64_FABS,     /* vd vn */
+    OSC_A64_FCMP,                                  /* vn vm (rd unused) */
+    OSC_A64_FCVT_SD, OSC_A64_FCVT_DS,              /* sd = dn ; dd = sn */
+    OSC_A64_SCVTF_X, OSC_A64_UCVTF_X,              /* vd = xn (rd V, rn X/ZR) */
+    OSC_A64_FCVTZS_X, OSC_A64_FCVTZU_X,            /* xd = vn (rd X/ZR, rn V): truncate, saturate, NaN -> 0 */
+    OSC_A64_LDR_F_UOFF, OSC_A64_STR_F_UOFF,        /* rd = Vt, rn = base (SP kind), imm = byte offset, multiple of 4 (S) / 8 (D) */
+    OSC_A64_LDR_F_REG, OSC_A64_STR_F_REG,          /* rd = Vt, rn = base (SP kind), rm = index (ZR kind), LSL #2 (S) / #3 (D) */
     OSC_A64_NOPS
 } OscA64Op;
 
@@ -105,5 +121,11 @@ OscA64Insn osc_a64_bcond(OscA64Cond c, int64_t off);
 OscA64Insn osc_a64_cb(OscA64Op op, int rt, int64_t off);
 OscA64Insn osc_a64_breg(OscA64Op op, int rn);
 OscA64Insn osc_a64_brk(int64_t imm16);
+/* OSC-4 floats: dbl = 0 for S (f32), 1 for D (f64); anything else is refused by the encoder */
+OscA64Insn osc_a64_f3(OscA64Op op, int vd, int vn, int vm, int dbl);
+OscA64Insn osc_a64_f2(OscA64Op op, int rd, int rn, int dbl);
+OscA64Insn osc_a64_fcmp(int vn, int vm, int dbl);
+OscA64Insn osc_a64_fmem(OscA64Op op, int vt, int rn, int64_t off, int dbl);
+OscA64Insn osc_a64_fmem_reg(OscA64Op op, int vt, int rn, int rm, int dbl);
 
 #endif /* OSC_A64_H */

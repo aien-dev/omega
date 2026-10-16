@@ -15,6 +15,8 @@ static const struct { const char *w; int k; } keywords[] = {
     {"i64", OT_I64}, {"bool", OT_BOOL}, {"struct", OT_STRUCT}, {"arena", OT_ARENA},
     {"pool", OT_POOL}, {"handle", OT_HANDLE}, {"import", OT_IMPORT},
     {"bytes", OT_BYTES}, {"cells", OT_CELLS},
+    {"f32", OT_F32}, {"f64", OT_F64}, {"sqrt", OT_SQRT}, {"abs", OT_ABS}, {"min", OT_MIN}, {"max", OT_MAX},
+    {"bits", OT_BITS},
 };
 
 /* Reserved: destruction words (destruction has no surface syntax, III.8) and
@@ -34,6 +36,7 @@ static const char *const kind_names[OT__COUNT] = {
     "+", "-", "*", "/", "%", "&", "|", "^", "~", "!", "&&", "||", "<<", ">>", "==", "!=", "<", "<=", ">", ">=",
     "struct", ".", "arena", "pool", "handle", "import",
     "bytes", "cells",
+    "f32", "f64", "sqrt", "abs", "min", "max", "bits", "FLOAT",
 };
 
 const char *osc_tok_kind_name(int kind)
@@ -121,6 +124,51 @@ int osc_lex(const char *src, size_t len, OscToken *toks, uint32_t cap, uint32_t 
             continue;
         }
         if (is_digit(c)) {
+            /* OSC-4 float literal: digits "." digits [("e"|"E") ["+"|"-"] digits] ["f32"|"f64"].
+             * Only when a digit precedes the dot and a digit follows it, so `..` ranges and a
+             * future `a.b` member syntax stay free. The value is parsed by the checker
+             * (strtof for f32, strtod for f64: never strtod then cast). */
+            size_t j = i;
+            while (j < len && is_digit(src[j])) j++;
+            if (j + 1 < len && src[j] == '.' && is_digit(src[j + 1])) {
+                size_t s = i;
+                while (i < len && is_digit(src[i])) ADV();
+                ADV(); /* '.' */
+                while (i < len && is_digit(src[i])) ADV();
+                if (i < len && (src[i] == 'e' || src[i] == 'E')) {
+                    size_t k = i + 1;
+                    if (k < len && (src[k] == '+' || src[k] == '-')) k++;
+                    if (k < len && is_digit(src[k])) {
+                        while (i < k) ADV();
+                        while (i < len && is_digit(src[i])) ADV();
+                    }
+                }
+                uint64_t suffix = 0;
+                if (i + 3 <= len && src[i] == 'f' && src[i + 1] == '3' && src[i + 2] == '2') suffix = 1;
+                if (i + 3 <= len && src[i] == 'f' && src[i + 1] == '6' && src[i + 2] == '4') suffix = 2;
+                if (suffix) { ADV(); ADV(); ADV(); }
+                t->len = (uint32_t)(i - s);
+                if (i < len && (is_alpha(src[i]) || is_digit(src[i]) || src[i] == '.')) {
+                    char buf[64];
+                    while (i < len && (is_alpha(src[i]) || is_digit(src[i]) || src[i] == '.')) ADV();
+                    t->len = (uint32_t)(i - s);
+                    osc_tok_text(src, t, buf, sizeof buf);
+                    osc_diag_set(d, OSC_DIAG_SYNTAX, t->line, t->col, buf, 0, NULL, "malformed literal",
+                                 "malformed float literal '%s'", buf);
+                    return -1;
+                }
+                if (t->len > OSC_LEX_NAME_MAX) { /* refused, never truncated: a cut literal would parse to another value */
+                    char lb[OSC_LEX_NAME_MAX + 1];
+                    osc_tok_text(src, t, lb, sizeof lb);
+                    osc_diag_set(d, OSC_DIAG_CAPACITY, t->line, t->col, lb, 0, NULL, "float literal length",
+                                 "float literal longer than %d characters", OSC_LEX_NAME_MAX);
+                    return -1;
+                }
+                t->kind = OT_FLOAT;
+                t->ival = suffix;
+                n++;
+                continue;
+            }
             size_t s = i;
             unsigned base = 10;
             if (c == '0' && i + 1 < len && (src[i + 1] == 'x' || src[i + 1] == 'b')) {

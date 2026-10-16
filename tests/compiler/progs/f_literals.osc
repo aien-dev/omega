@@ -1,0 +1,13 @@
+// entry: tiny63 tiny_e tiny32 one_e
+// OSC-4 Slice A: float literal spellings. A literal may be up to OSC_LEX_NAME_MAX (63)
+// characters; tiny63 is exactly 63 and parses with strtod to 1e-61. Longer spellings are
+// refused (CAPACITY, tests/compiler/neg/float_literal_too_long.osc), never truncated.
+// Oracle: strtod / strtof in C with the Slice A flags.
+// expect-run: tiny63 -> 0x3344919d5556eb52
+// expect-run: tiny_e -> 0x1e81fee341fc585d
+// expect-run: tiny32 -> 0xc01ceb3
+// expect-run: one_e -> 0x3ff0000000000000
+fn tiny63() -> f64 { return 0.0000000000000000000000000000000000000000000000000000000000001; }
+fn tiny_e() -> f64 { return 1.0e-161; }
+fn tiny32() -> f32 { return 0.0000000000000000000000000000001; }
+fn one_e() -> f64 { return 10.0e-1; }

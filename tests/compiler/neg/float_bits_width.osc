@@ -1,0 +1,3 @@
+// expect: FLOAT_BITS_WIDTH object=return line=3
+// bit casts keep the width: f32 only to/from u32/i32, f64 only to/from u64/i64.
+fn f(x: f32) -> u64 { return x as u64 bits; }

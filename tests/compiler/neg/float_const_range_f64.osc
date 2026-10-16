@@ -1,0 +1,2 @@
+// expect: FLOAT_CONST_RANGE object=return line=2
+fn f() -> f64 { return 1.0e400; }

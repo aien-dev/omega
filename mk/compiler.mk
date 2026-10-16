@@ -19,7 +19,8 @@ ifndef COMPILER_MK
 COMPILER_MK := 1
 .PHONY: test-compiler test-compiler-full test-compiler-quick oscc compiler-receipt osc0b-model-receipt osc2-receipt osc3-receipt
 OSC_DIR = $(OUT_DIR)/compiler
-OSC_CFLAGS = -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -O2 -Isrc -Isrc/compiler -Isrc/compiler/model
+OSC_CFLAGS = -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -O2 -ffp-contract=off -fno-fast-math -fno-math-errno -Isrc -Isrc/compiler -Isrc/compiler/model
+OSC_LDLIBS = -lm
 OSC_ASAN = -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all
 OSC_LIB = $(filter-out src/compiler/oscc_main.c,$(wildcard src/compiler/*.c)) src/sha256.c
 OSC_MODEL = src/compiler/model/osc_model.c
@@ -36,31 +37,31 @@ $(OSC_DIR)/test_osc_model_asan: tests/compiler/test_osc_model.c $(OSC_MODEL) $(O
 
 $(OSC_DIR)/test_osc_backend: tests/compiler/test_osc_backend.c $(OSC_LIB) $(OSC_HDRS)
 	@mkdir -p $(OSC_DIR)
-	$(CC) $(OSC_CFLAGS) -o $@ tests/compiler/test_osc_backend.c $(OSC_LIB)
+	$(CC) $(OSC_CFLAGS) -o $@ tests/compiler/test_osc_backend.c $(OSC_LIB) $(OSC_LDLIBS)
 
 $(OSC_DIR)/test_osc_backend_asan: tests/compiler/test_osc_backend.c $(OSC_LIB) $(OSC_HDRS)
 	@mkdir -p $(OSC_DIR)
-	$(CC) $(OSC_CFLAGS) $(OSC_ASAN) -o $@ tests/compiler/test_osc_backend.c $(OSC_LIB)
+	$(CC) $(OSC_CFLAGS) $(OSC_ASAN) -o $@ tests/compiler/test_osc_backend.c $(OSC_LIB) $(OSC_LDLIBS)
 
 $(OSC_DIR)/test_osc_alloc: tests/compiler/test_osc_alloc.c $(OSC_LIB) $(OSC_HDRS)
 	@mkdir -p $(OSC_DIR)
-	$(CC) $(OSC_CFLAGS) -o $@ tests/compiler/test_osc_alloc.c $(OSC_LIB)
+	$(CC) $(OSC_CFLAGS) -o $@ tests/compiler/test_osc_alloc.c $(OSC_LIB) $(OSC_LDLIBS)
 
 $(OSC_DIR)/test_osc_alloc_asan: tests/compiler/test_osc_alloc.c $(OSC_LIB) $(OSC_HDRS)
 	@mkdir -p $(OSC_DIR)
-	$(CC) $(OSC_CFLAGS) $(OSC_ASAN) -o $@ tests/compiler/test_osc_alloc.c $(OSC_LIB)
+	$(CC) $(OSC_CFLAGS) $(OSC_ASAN) -o $@ tests/compiler/test_osc_alloc.c $(OSC_LIB) $(OSC_LDLIBS)
 
 $(OSC_DIR)/test_osc_compiler: tests/compiler/test_osc_compiler.c $(OSC_LIB) $(OSC_MODEL) $(OSC_HDRS)
 	@mkdir -p $(OSC_DIR)
-	$(CC) $(OSC_CFLAGS) -o $@ tests/compiler/test_osc_compiler.c $(OSC_LIB) $(OSC_MODEL)
+	$(CC) $(OSC_CFLAGS) -o $@ tests/compiler/test_osc_compiler.c $(OSC_LIB) $(OSC_MODEL) $(OSC_LDLIBS)
 
 $(OSC_DIR)/test_osc_compiler_asan: tests/compiler/test_osc_compiler.c $(OSC_LIB) $(OSC_MODEL) $(OSC_HDRS)
 	@mkdir -p $(OSC_DIR)
-	$(CC) $(OSC_CFLAGS) $(OSC_ASAN) -o $@ tests/compiler/test_osc_compiler.c $(OSC_LIB) $(OSC_MODEL)
+	$(CC) $(OSC_CFLAGS) $(OSC_ASAN) -o $@ tests/compiler/test_osc_compiler.c $(OSC_LIB) $(OSC_MODEL) $(OSC_LDLIBS)
 
 $(OSC_DIR)/oscc: src/compiler/oscc_main.c $(OSC_LIB) $(OSC_HDRS)
 	@mkdir -p $(OSC_DIR)
-	$(CC) $(OSC_CFLAGS) -o $@ src/compiler/oscc_main.c $(OSC_LIB)
+	$(CC) $(OSC_CFLAGS) -o $@ src/compiler/oscc_main.c $(OSC_LIB) $(OSC_LDLIBS)
 
 oscc: $(OSC_DIR)/oscc
 
@@ -90,15 +91,15 @@ OSC_DEC_ASAN_ENV = ASAN_OPTIONS=detect_stack_use_after_return=0
 
 $(OSC_DIR)/test_osc_ir_decode: tests/compiler/test_osc_ir_decode.c $(OSC_LIB) $(OSC_HDRS)
 	@mkdir -p $(OSC_DIR)
-	$(CC) $(OSC_CFLAGS) -o $@ tests/compiler/test_osc_ir_decode.c $(OSC_LIB)
+	$(CC) $(OSC_CFLAGS) -o $@ tests/compiler/test_osc_ir_decode.c $(OSC_LIB) $(OSC_LDLIBS)
 
 $(OSC_DIR)/test_osc_ir_decode_asan: tests/compiler/test_osc_ir_decode.c $(OSC_LIB) $(OSC_HDRS)
 	@mkdir -p $(OSC_DIR)
-	$(CC) $(OSC_CFLAGS) $(OSC_ASAN) -o $@ tests/compiler/test_osc_ir_decode.c $(OSC_LIB)
+	$(CC) $(OSC_CFLAGS) $(OSC_ASAN) -o $@ tests/compiler/test_osc_ir_decode.c $(OSC_LIB) $(OSC_LDLIBS)
 
 $(OSC_DIR)/test_osc_ir_decode_mutant%: tests/compiler/test_osc_ir_decode.c $(OSC_LIB) $(OSC_HDRS)
 	@mkdir -p $(OSC_DIR)
-	$(CC) $(OSC_CFLAGS) -DOSC_IR_DECODE_MUTANT=$* -o $@ tests/compiler/test_osc_ir_decode.c $(OSC_LIB)
+	$(CC) $(OSC_CFLAGS) -DOSC_IR_DECODE_MUTANT=$* -o $@ tests/compiler/test_osc_ir_decode.c $(OSC_LIB) $(OSC_LDLIBS)
 
 test-osc-ir-decode-mutants: $(foreach k,$(OSC_DEC_MUTANTS),$(OSC_DIR)/test_osc_ir_decode_mutant$(k))
 	@for k in $(OSC_DEC_MUTANTS); do \
@@ -158,6 +159,8 @@ test-compiler: $(OSC_DIR)/test_osc_model $(OSC_DIR)/test_osc_model_asan \
 	@grep "^struct fuzz: .* mismatches=0$$" $(OSC_DIR)/compiler_asan.out
 	@grep "^arena fuzz: .* mismatches=0$$" $(OSC_DIR)/compiler.out
 	@grep "^arena fuzz: .* mismatches=0$$" $(OSC_DIR)/compiler_asan.out
+	@grep "^float fuzz: .* mismatches=0$$" $(OSC_DIR)/compiler.out
+	@grep "^float fuzz: .* mismatches=0$$" $(OSC_DIR)/compiler_asan.out
 	@grep "^arena destruction order: " $(OSC_DIR)/compiler.out
 	@grep "^runtime model replay: .* rejected=0$$" $(OSC_DIR)/compiler.out
 	@grep "^runtime model replay: .* rejected=0$$" $(OSC_DIR)/compiler_asan.out
@@ -215,6 +218,27 @@ test-compiler-quick: $(OSC_DIR)/test_osc_model $(OSC_DIR)/test_osc_backend $(OSC
 	sh tests/compiler/legacy_a64_callers.sh --selftest > $(OSC_QDIR)/legacy_callers.out
 	@tail -1 $(OSC_QDIR)/legacy_callers.out; grep -q '^OSC2_LEGACY_CALLERS_PASS ' $(OSC_QDIR)/legacy_callers.out
 	@echo "test-compiler-quick: PASS (smoke counts; not receipt evidence; full = make test-compiler-full. OSC-3 slice; not a general Omega compiler; no self-hosting.)"
+
+# OSC-4 Slice A evidence targets (docs/osc/OSC-4-DESIGN.md 1.8). test-compiler runs the float dual run at
+# 250 units; the 100k receipt run and the C oracle check are reached by name.
+$(OSC_DIR)/float_oracle: tests/compiler/float_oracle.c
+	@mkdir -p $(OSC_DIR)
+	$(CC) $(OSC_CFLAGS) -o $@ tests/compiler/float_oracle.c $(OSC_LDLIBS)
+
+# Rebuild every expect-run value of tests/compiler/progs/f_*.osc with the C oracle and diff.
+test-compiler-float-oracle: $(OSC_DIR)/float_oracle
+	$(abspath $(OSC_DIR)/float_oracle) | sort > $(OSC_DIR)/float_oracle.out
+	grep -h '^// expect-run: ' tests/compiler/progs/f_*.osc | sed 's#^// expect-run: ##' | sort > $(OSC_DIR)/float_expect.out
+	diff -u $(OSC_DIR)/float_expect.out $(OSC_DIR)/float_oracle.out
+	@echo "test-compiler-float-oracle: PASS ($$(wc -l < $(OSC_DIR)/float_oracle.out) expect-run values reproduced by the C oracle)"
+
+# The 100k-unit interpreter-vs-native float dual run (receipt evidence; test-compiler runs 250 units).
+OSC_FLOAT_FUZZ_FULL ?= 100000
+test-compiler-float-fuzz-full: $(OSC_DIR)/test_osc_compiler
+	OSC_FLOAT_FUZZ_UNITS=$(OSC_FLOAT_FUZZ_FULL) $(abspath $(OSC_DIR)/test_osc_compiler) > $(OSC_DIR)/float_fuzz_full.out
+	@tail -1 $(OSC_DIR)/float_fuzz_full.out; grep -Eq '^OSC1_COMPILER_PASS( |$$)' $(OSC_DIR)/float_fuzz_full.out
+	@grep "^float fuzz: units=$(OSC_FLOAT_FUZZ_FULL) .* mismatches=0$$" $(OSC_DIR)/float_fuzz_full.out
+	@echo "test-compiler-float-fuzz-full: PASS"
 
 osc0b-model-receipt:
 	sh tests/compiler/osc0b_model_receipt.sh
