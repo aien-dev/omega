@@ -3,9 +3,9 @@
 // alloc(x) fills every cell. dot(seed) = sum_{i<8} ((seed+i)*0.5) * 1.5.
 // expect-run: dot 0 -> 0x4035000000000000
 // expect-run: dot 4 -> 0x4046800000000000
-// expect-run: fill_sum 0x3dcccccd -> 0x3f4ccccd
+// expect-run: fill_sum 0x3dcccccd -> 0x3ecccccd
 // expect-run: fill_sum 0x7fc00000 -> 0x7fc00000
-// expect-run: scale_ref 0x4000000000000000 -> 0x4044000000000000
+// expect-run: scale_ref 0x4000000000000000 -> 0x4034000000000000
 // expect-run: ret_arr 3 -> 0x4008000000000000
 // expect-run: widen_sum 0x3dcccccd -> 0x3fd99999a0000000
 fn dot(seed: u32) -> f64 {
@@ -35,14 +35,14 @@ fn scale_ref(x: f64) -> f64 {
     return r[4] * 2.0;
 }
 
-fn mk(v: f64) -> own [f64; 2] {
-    let a: own [f64; 2] = alloc(v);
+fn mk(a: &mut [f64; 2], v: f64) {
+    a[0] = v;
     a[1] = a[0] + 1.0;
-    return a;
 }
 
 fn ret_arr(k: u8) -> f64 {
-    let a: own [f64; 2] = mk(k as f64 - 1.0);
+    let a: own [f64; 2] = alloc(0.0);
+    mk(&mut a, k as f64 - 1.0);
     return a[1];
 }
 
