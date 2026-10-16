@@ -197,7 +197,7 @@ static void ws_lane_exec(WsSim *s, WsLane *l, const BlackwellIRInsn *in, int pc,
     case BW_IR_STG_STRONG_SYS: { uint64_t ad = ws_rd64(l, in->src1_vreg, p); if (!ws_mem_ok(s, ad, 4, pc)) return; memcpy((void *)(uintptr_t)ad, &b, 4); break; }
     case BW_IR_ATOMG_ADD_STRONG_SYS: { uint64_t ad = ws_rd64(l, in->src1_vreg, p); if (!ws_mem_ok(s, ad, 4, pc)) return; uint32_t old; memcpy(&old, (const void *)(uintptr_t)ad, 4); uint32_t nw = old + b; memcpy((void *)(uintptr_t)ad, &nw, 4); ws_wrs(l, in->dst_vreg, in->dst_subreg, old, p); break; }
     /* f32 atomic add, flush-to-zero on both inputs and the result (PTX add.rn.ftz.f32); returns the old word */
-    case BW_IR_ATOMG_ADD_F32_STRONG_SYS: { uint64_t ad = ws_rd64(l, in->src1_vreg, p); if (!ws_mem_ok(s, ad, 4, pc)) return; uint32_t old; memcpy(&old, (const void *)(uintptr_t)ad, 4); uint32_t nw = ws_f2u(ws_mufu_ftz(ws_mufu_ftz(ws_u2f(old)) + ws_mufu_ftz(ws_u2f(b)))); memcpy((void *)(uintptr_t)ad, &nw, 4); ws_wrs(l, in->dst_vreg, in->dst_subreg, old, p); break; }
+    case BW_IR_ATOMG_ADD_F32_STRONG_SYS: case BW_IR_ATOMG_ADD_F32_STRONG_GPU: { uint64_t ad = ws_rd64(l, in->src1_vreg, p); if (!ws_mem_ok(s, ad, 4, pc)) return; uint32_t old; memcpy(&old, (const void *)(uintptr_t)ad, 4); uint32_t nw = ws_f2u(ws_mufu_ftz(ws_mufu_ftz(ws_u2f(old)) + ws_mufu_ftz(ws_u2f(b)))); memcpy((void *)(uintptr_t)ad, &nw, 4); ws_wrs(l, in->dst_vreg, in->dst_subreg, old, p); break; }
     case BW_IR_MEMBAR_ALL_SYS: break;
     default: ws_fail(s, WS_E_OP, pc, "opcode not modelled"); return;
     }

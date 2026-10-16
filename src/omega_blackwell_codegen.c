@@ -530,11 +530,13 @@ static int encode_single_insn(const BlackwellIRInsn *insn, const OmegaRegAlloc *
             break;
 
         case BW_IR_ATOMG_ADD_F32_STRONG_SYS:
-            /* ATOMG.E.ADD.F32.FTZ.RN.STRONG.SYS PT, Rd, desc[UR][Ra.64], Rb (omega_blackwell_verify_codegen_fixtures_atomf32).
-             * Float opcode 0x9a3; w2 bit 26 selects the desc[] form, type 9 (w2 bits 9..13) is F32.FTZ.RN. */
-            w[0] = 0x79a3 | ((uint32_t)(dst & 0xff) << 16) | ((uint32_t)(src1 & 0xff) << 24);
+        case BW_IR_ATOMG_ADD_F32_STRONG_GPU:
+            /* ATOMG.E.ADD.F32.FTZ.RN.STRONG.{SYS,GPU} PT, Rd|RZ, desc[UR][Ra.64], Rb (omega_blackwell_verify_codegen_fixtures_atomf32).
+             * Float opcode 0x9a3; w2 bit 26 selects the desc[] form, type 9 (w2 bits 9..12) is F32.FTZ.RN, order (w2 bits
+             * 13..16) 0xa = SYS, 0x7 = GPU. No destination vreg encodes RZ (the generic default 0 would clobber R0). */
+            w[0] = 0x79a3 | ((uint32_t)(insn->dst_vreg < 0 ? 0xff : (dst & 0xff)) << 16) | ((uint32_t)(src1 & 0xff) << 24);
             w[1] = (uint32_t)(src2 & 0xff) | 0x80000000u;
-            w[2] = 0x0c1f5300 | (uint32_t)(ureg & 0xff);
+            w[2] = (insn->op == BW_IR_ATOMG_ADD_F32_STRONG_GPU ? 0x0c1ef300u : 0x0c1f5300u) | (uint32_t)(ureg & 0xff);
             w[3] = insn->control ? insn->control : 0x00321e00;
             break;
 
