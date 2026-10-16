@@ -318,6 +318,133 @@ static void gen_cast(Cg *g, const OscFunc *f, const OscInsn *in) {
     st(g, 9, in->dst);
 }
 
+/* ---- OSC-4 Slice A floats (docs/osc/OSC-4-DESIGN.md 1.6) -----------------
+ * Scratch V registers d16..d20 mirror x9..x13. An f64 fills its 8-byte slot; an
+ * f32 sits in the low 4 bytes with the upper 4 always zero: it is loaded with
+ * LDR S from the slot and stored through FMOV Wd, Sn (zero-extends) + STR X,
+ * so the slot never carries a dirty upper half. */
+static bool is_dbl(const OscFunc *f, int v) { return f->vtype[v].s == OSC_T_F64; }
+
+static void fld(Cg *g, int vr, int v, bool dbl) { E(g, osc_a64_fmem(OSC_A64_LDR_F_UOFF, vr, SP, slot(v), dbl)); }
+static void fst(Cg *g, int vr, int v, bool dbl) {
+    if (dbl) { E(g, osc_a64_fmem(OSC_A64_STR_F_UOFF, vr, SP, slot(v), 1)); return; }
+    E(g, osc_a64_f2(OSC_A64_FMOV_SW, 9, vr, 0));
+    st(g, 9, v);
+}
+
+/* forward conditional branch over a short in-line sequence: emit placeholder, land later */
+static size_t skip_if(Cg *g) { size_t at = here(g); put(g, 0); return at; }
+static void skip_land(Cg *g, size_t at, OscA64Cond c) { patch(g, at, osc_a64_bcond(c, 0), here(g)); }
+
+static void gen_fbin(Cg *g, const OscFunc *f, const OscInsn *in) {
+    bool dbl = is_dbl(f, in->a);
+    OscA64Op op;
+    switch (in->sub) {
+    case OSC_FB_ADD: op = OSC_A64_FADD; break;
+    case OSC_FB_SUB: op = OSC_A64_FSUB; break;
+    case OSC_FB_MUL: op = OSC_A64_FMUL; break;
+    case OSC_FB_DIV: op = OSC_A64_FDIV; break;
+    case OSC_FB_MIN: op = OSC_A64_FMINNM; break;
+    case OSC_FB_MAX: op = OSC_A64_FMAXNM; break;
+    default: cg_fail(g, "bad FBIN sub-op"); return;
+    }
+    fld(g, 16, in->a, dbl);
+    fld(g, 17, in->b, dbl);
+    E(g, osc_a64_f3(op, 16, 16, 17, dbl));
+    fst(g, 16, in->dst, dbl);
+}
+
+static void gen_fun(Cg *g, const OscFunc *f, const OscInsn *in) {
+    bool dbl = is_dbl(f, in->a);
+    OscA64Op op;
+    switch (in->sub) {
+    case OSC_FU_NEG: op = OSC_A64_FNEG; break;
+    case OSC_FU_ABS: op = OSC_A64_FABS; break;
+    case OSC_FU_SQRT: op = OSC_A64_FSQRT; break;
+    default: cg_fail(g, "bad FUN sub-op"); return;
+    }
+    fld(g, 16, in->a, dbl);
+    E(g, osc_a64_f2(op, 16, 16, dbl));
+    fst(g, 16, in->dst, dbl);
+}
+
+/* FCMP then CSET: LT -> MI, LE -> LS, GT, GE, EQ, NE read false on an unordered compare (NZCV 0011) */
+static void gen_fcmp(Cg *g, const OscFunc *f, const OscInsn *in) {
+    bool dbl = is_dbl(f, in->a);
+    OscA64Cond c;
+    switch (in->sub) {
+    case OSC_C_EQ: c = OSC_A64_EQ; break;
+    case OSC_C_NE: c = OSC_A64_NE; break;
+    case OSC_C_LT: c = OSC_A64_MI; break;
+    case OSC_C_LE: c = OSC_A64_LS; break;
+    case OSC_C_GT: c = OSC_A64_GT; break;
+    case OSC_C_GE: c = OSC_A64_GE; break;
+    default: cg_fail(g, "bad FCMP sub-op"); return;
+    }
+    fld(g, 16, in->a, dbl);
+    fld(g, 17, in->b, dbl);
+    E(g, osc_a64_fcmp(16, 17, dbl));
+    E(g, osc_a64_csinc(11, ZR, ZR, (OscA64Cond)(c ^ 1))); /* cset x11, c */
+    st(g, 11, in->dst);
+}
+
+static void gen_fcvt(Cg *g, const OscFunc *f, const OscInsn *in) {
+    bool to_dbl = is_dbl(f, in->dst);
+    fld(g, 16, in->a, !to_dbl);
+    E(g, osc_a64_f2(to_dbl ? OSC_A64_FCVT_DS : OSC_A64_FCVT_SD, 16, 16, 0));
+    fst(g, 16, in->dst, to_dbl);
+}
+
+/* the integer slot is already canonical (sign- or zero-extended to 64 bits), so the X-form convert is exact */
+static void gen_itof(Cg *g, const OscFunc *f, const OscInsn *in) {
+    bool dbl = is_dbl(f, in->dst);
+    ld(g, 9, in->a);
+    E(g, osc_a64_f2(in->sub == OSC_FI_SIGNED ? OSC_A64_SCVTF_X : OSC_A64_UCVTF_X, 16, 9, dbl));
+    fst(g, 16, in->dst, dbl);
+}
+
+/* FCVTZS / FCVTZU to X saturate at 64 bits and give 0 for NaN; a narrower
+ * destination is clamped to its own range afterwards (compare + skip + move). */
+static void gen_ftoi(Cg *g, const OscFunc *f, const OscInsn *in) {
+    bool dbl = is_dbl(f, in->a);
+    OscScalar to = f->vtype[in->dst].s;
+    unsigned wt = osc_scalar_width(to);
+    bool s = osc_scalar_signed(to);
+    fld(g, 16, in->a, dbl);
+    E(g, osc_a64_f2(s ? OSC_A64_FCVTZS_X : OSC_A64_FCVTZU_X, 9, 16, dbl));
+    if (wt < 64) {
+        if (s) {
+            mat(g, 10, (uint64_t)((1LL << (wt - 1)) - 1));
+            cmp_rr(g, 9, 10);
+            size_t at = skip_if(g);
+            E(g, osc_a64_r3s(OSC_A64_ORR_REG, 9, ZR, 10, OSC_A64_LSL, 0));
+            skip_land(g, at, OSC_A64_LE);
+            mat(g, 10, (uint64_t)(-(1LL << (wt - 1))));
+            cmp_rr(g, 9, 10);
+            at = skip_if(g);
+            E(g, osc_a64_r3s(OSC_A64_ORR_REG, 9, ZR, 10, OSC_A64_LSL, 0));
+            skip_land(g, at, OSC_A64_GE);
+        } else {
+            mat(g, 10, (1ULL << wt) - 1);
+            cmp_rr(g, 9, 10);
+            size_t at = skip_if(g);
+            E(g, osc_a64_r3s(OSC_A64_ORR_REG, 9, ZR, 10, OSC_A64_LSL, 0));
+            skip_land(g, at, OSC_A64_LS);
+        }
+    }
+    st(g, 9, in->dst);
+}
+
+/* bit cast: the cell already holds the pattern; only the 32-bit forms need the
+ * destination's canonical upper half (sign-extended for i32, zero for u32 / f32) */
+static void gen_fbits(Cg *g, const OscFunc *f, const OscInsn *in) {
+    OscScalar to = f->vtype[in->dst].s;
+    ld(g, 9, in->a);
+    if (to == OSC_T_I32) E(g, osc_a64_bfm(OSC_A64_SBFM, 9, 9, 0, 31));
+    else if (osc_scalar_width(to) == 32) zext(g, 9, 32);
+    st(g, 9, in->dst);
+}
+
 static void epilogue(Cg *g) {
     E(g, osc_a64_ri(OSC_A64_ADD_IMM, SP, SP, g->frame, 0));
     E(g, osc_a64_pair(OSC_A64_LDP_POST, 29, 30, SP, 16));
@@ -362,6 +489,14 @@ static void gen_func(Cg *g, const OscUnit *u, int fi) {
                 break;
             }
             case OSC_I_CAST: gen_cast(g, f, in); break;
+            /* OSC-4 Slice A */
+            case OSC_I_FBIN: gen_fbin(g, f, in); break;
+            case OSC_I_FUN: gen_fun(g, f, in); break;
+            case OSC_I_FCMP: gen_fcmp(g, f, in); break;
+            case OSC_I_FCVT: gen_fcvt(g, f, in); break;
+            case OSC_I_ITOF: gen_itof(g, f, in); break;
+            case OSC_I_FTOI: gen_ftoi(g, f, in); break;
+            case OSC_I_FBITS: gen_fbits(g, f, in); break;
             case OSC_I_ALLOC:
                 load_rt(g, 0);
                 mat(g, 1, T[in->dst].len);
