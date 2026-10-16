@@ -1,0 +1,26 @@
+gen-record 1
+id abs-39d7d9c2cebcb70f
+kind abstraction
+split corpus
+family gs1-1d8f2039a00f1d80 gs1-694814cd4e1fcd67
+entry sat_sub_old
+params u32 u32
+ret u32
+signature fn sat_sub_old a uint b uint to uint
+desc Withdrawn helper: saturating subtraction that was later found wrong (validity unverified).
+receipt 1b2cf80953bd33e4f40a2e73c01bd43fcc12960c9c12af8e0721ae8e92c5085a
+validity unverified
+ancestry fx_sat_sub_old_a 6951f9485582ef2c65564276ebfd191f668ddca81aaf15a18a1fef306b503e53
+ancestry fx_sat_sub_old_b 14853d840c4fc302a18067f0716acfdee4dc0d806583de9459d8dd3d4cbca8c6
+source tools/gen/retrieval/fixtures/SOURCE 0004a6e1b859001383839e0ef39bed2c4550782dfb5b57c97c220a23a6a36a2b
+pre STATED+TESTED true
+post STATED+TESTED le res a
+example 7 9 -> 0
+limit Synthetic fixture helper; its claims were never tested.
+fingerprint 39d7d9c2cebcb70f740fb276c39f511f99a094570f9bdcf4b104239f953569af
+differs fx_sat_sub_old_a 8638e909a10fffe4fbd1a64641952123458531a828c35bf0d47647cf464e39a9
+differs fx_sat_sub_old_b 42ba470294028588e8391c98e48ec285206ea562cb7d3349114a506fe305b564
+body
+fn sat_sub_old a uint b uint to uint
+ret sub a b
+end

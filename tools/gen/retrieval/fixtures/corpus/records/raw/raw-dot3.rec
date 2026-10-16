@@ -1,0 +1,36 @@
+gen-record 1
+id raw-dot3
+kind raw
+split corpus
+family gs1-842b17498cc8752f
+entry dot3
+params i16 i16 i16 i16 i16 i16
+ret i64
+signature fn dot3 a short b short c short x short y short z short to long
+desc Dot product of two 3-vectors of signed 16-bit numbers, widened to 64 bits.
+receipt d7c8c8943598bbbfdfc9b9fb9528e1f2a5f51a2eeb9b8cc34b73494e51817780
+validity verified
+ancestry dot3 3c7a365f4bb6ea6447778ef880fe3143355ac5488711bd7bbb432d50373c86ba
+source tools/gen/retrieval/fixtures/SOURCE 0004a6e1b859001383839e0ef39bed2c4550782dfb5b57c97c220a23a6a36a2b
+body
+fn dot u view long 3 w view long 3 to long
+s = long 0
+for i uint 3
+s = add s mul get u i get w i
+end
+ret s
+end
+fn dot3 a short b short c short x short y short z short to long
+u = new long 3 0
+w = new long 3 0
+put u 0 long a
+put u 1 long b
+put u 2 long c
+put w 0 long x
+put w 1 long y
+put w 2 long z
+s = dot view u view w
+free u
+free w
+ret s
+end

@@ -1,0 +1,18 @@
+gen-record 1
+id raw-unverified_clamp
+kind raw
+split corpus
+family gs1-1d8f2039a00f1d80
+entry clamp_sub
+params u32 u32
+ret u32
+signature fn clamp_sub a uint b uint to uint
+desc Unverified record: matches clamp queries but its producing tool did not claim verified.
+receipt 0c64dbd68b5934cf6e98dbf20932b25a9405171b0067a30d13aea722336814d8
+validity unverified
+ancestry unverified_clamp 315be5f6f5207dff2d91537faf59b8a72e8a54651aa3e481a7dad59a309f4297
+source tools/gen/retrieval/fixtures/SOURCE 0004a6e1b859001383839e0ef39bed2c4550782dfb5b57c97c220a23a6a36a2b
+body
+fn clamp_sub a uint b uint to uint
+ret sub a b
+end

@@ -1,0 +1,30 @@
+gen-record 1
+id abs-f08e5428811ec2ba
+kind abstraction
+split corpus
+family gs1-03088c393ad0a9dc gs1-842b17498cc8752f
+entry dot
+params view i64 3 view i64 3
+ret i64
+signature fn dot u view long 3 w view long 3 to long
+desc Helper: dot product of two 3-element long views.
+receipt ec0fbea744a2b107a27c09bddc3992b1b24dcf3abefbb276c63ec3b4b198853b
+validity verified
+ancestry fx_dot_a a8f032950c20583a7ebfd92547a7ecb2d879e010c1155d285cf596865a286d4e
+ancestry fx_dot_b c36b6bd7749e5d41fff4533ab14c5de7b87af77adefbfa625f9209033b330d13
+source tools/gen/retrieval/fixtures/SOURCE 0004a6e1b859001383839e0ef39bed2c4550782dfb5b57c97c220a23a6a36a2b
+pre STATED+TESTED true
+post STATED+TESTED true
+example 1 2 3 4 5 6 -> 32
+limit Synthetic fixture helper; its claims were never tested.
+fingerprint f08e5428811ec2baca15cd0b5b8ea1ea50c267f39464b1d98488ba9022efd32e
+differs fx_dot_a dec98199392c0d7231b4267ceec1d23a9895330043a36998d8daee7968408515
+differs fx_dot_b 9776b219fda8652b0fba25c33ab859acb5301283cc1860a423085003008d79da
+body
+fn dot u view long 3 w view long 3 to long
+s = long 0
+for i uint 3
+s = add s mul get u i get w i
+end
+ret s
+end

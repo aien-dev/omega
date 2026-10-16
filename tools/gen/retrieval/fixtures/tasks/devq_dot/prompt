@@ -1,0 +1,1 @@
+Write a function dot_pair returning the dot product of the vectors (a, b, c) and (x, y, z), each a signed 16-bit number, computed in 64 bits.

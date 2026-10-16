@@ -1,0 +1,23 @@
+gen-record 1
+id raw-count_digits
+kind raw
+split corpus
+family gs1-694814cd4e1fcd67
+entry count_digits
+params u64
+ret u8
+signature fn count_digits n ulong to uchar
+desc Counts the decimal digits of n; 0 has one digit.
+receipt 45ca4fe3e7b024a32c8ecd67325dbb4e78fdc4c902e1893177a752ba571449c5
+validity verified
+ancestry count_digits a1acf051bcd61fc6955aea2b524a71fc4ff20f948df70ba42bbca5c1763d6055
+source tools/gen/retrieval/fixtures/SOURCE 0004a6e1b859001383839e0ef39bed2c4550782dfb5b57c97c220a23a6a36a2b
+body
+fn count_digits n ulong to uchar
+k = uchar 1
+while ge n 10 bound 20
+n = div n 10
+k = add k 1
+end
+ret k
+end

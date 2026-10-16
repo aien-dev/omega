@@ -1,0 +1,3 @@
+fn dot_pair zqxcanary uint to uint
+ret zqxcanary
+end

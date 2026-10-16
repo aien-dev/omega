@@ -1,0 +1,31 @@
+gen-record 1
+id abs-0054ea1b5f8a9efb
+kind abstraction
+split corpus
+family gs1-1d8f2039a00f1d80 gs1-694814cd4e1fcd67
+entry ndigits
+params u64
+ret u8
+signature fn ndigits n ulong to uchar
+desc Helper: number of decimal digits of n (at least 1), a bounded divide-by-10 loop.
+receipt d0df7994f1820c00a75717db8dbec6f0a479a22e97edc0f80d63e6db16bc26b9
+validity verified
+ancestry fx_ndigits_a 447910b52089b719b1b5955d1b24b0976d2eaa6e8ca03f65bbdbe2f82de125a1
+ancestry fx_ndigits_b 2fee469a2e054d5f1d10a0d5f43d959dc3967698a03a4b397953e44125b2c8e7
+source tools/gen/retrieval/fixtures/SOURCE 0004a6e1b859001383839e0ef39bed2c4550782dfb5b57c97c220a23a6a36a2b
+pre STATED+TESTED true
+post STATED+TESTED ge res 1
+example 1234 -> 4
+limit Synthetic fixture helper; its claims were never tested.
+fingerprint 0054ea1b5f8a9efb0c9293cab97865497fc23e58bcfcfc83fb0b20ec4e362e2e
+differs fx_ndigits_a d81c9c19bbade526223d6426bbd330db4c6f028c7957ad06fc81656a961c0640
+differs fx_ndigits_b 974921718b3d2ffbaf18f97c5a8c4e06389b2ba772958c47cac996fd9625453d
+body
+fn ndigits n ulong to uchar
+k = uchar 1
+while ge n 10 bound 20
+n = div n 10
+k = add k 1
+end
+ret k
+end

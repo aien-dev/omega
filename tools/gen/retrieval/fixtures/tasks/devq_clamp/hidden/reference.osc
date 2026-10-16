@@ -1,0 +1,3 @@
+fn sat_diff zqxcanary uint to uint
+ret zqxcanary
+end

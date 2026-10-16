@@ -1,0 +1,18 @@
+gen-record 1
+id raw-tie_a
+kind raw
+split corpus
+family gs1-7fb078d1fc54e09d
+entry twin_pick
+params u8
+ret u8
+signature fn twin_pick x uchar to uchar
+desc Twin record used for the tie-break test: returns its argument doubled.
+receipt 82fe1c4c0cd63906605ec81d49aee187853b78c7dd8cd851658d1501fe7024b1
+validity verified
+ancestry tie_a 8702a9018d680a9e922e13039066d8632046a691afd06722b1421797fe053385
+source tools/gen/retrieval/fixtures/SOURCE 0004a6e1b859001383839e0ef39bed2c4550782dfb5b57c97c220a23a6a36a2b
+body
+fn twin_pick x uchar to uchar
+ret add x x
+end
