@@ -88,7 +88,7 @@
         },
         {
           "digest": "6bdfbc843114954144a288eb6bc0f8c84a3be256547a8db98b2bd3ee949e95be",
-          "last_commit": "06d994df",
+          "last_commit": "f37bf0fd",
           "name": "osc",
           "purpose": "Directory docs/osc. Purpose not yet described by a human."
         },
@@ -124,14 +124,14 @@
         }
       ],
       "children_root": "sha256:ac7f7ea4b00d4620a993c6dd88a0267f2d49008d415162976e45fa4341e43407",
-      "compiled_at": "2026-10-16T01:32:55Z",
+      "compiled_at": "2026-10-16T07:33:43Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:e965b8e2076c58547b444a429bc01746ebf7b9ec0e5c878bf99bd95d1efa6e3e",
+      "digest": "sha256:4a4929da75074bcd6cdfcba39fe98d69e8deacc07b919c777477a70ad3dbcc41",
       "evidence_files": 34,
       "evidence_root": "sha256:589d8b3706e6d7a202ab20b278dac5fc5bafc973f1c2a867b2668aa7210b65cc",
       "files": 126,
-      "generated_at_commit": "06d994df9cb00eb5267a6c613552c70109a2aaa4",
-      "source_tree": "sha256:a9ce06854d390ffa772f9ad82d412098d88d97321aed96ac4c6828c19850758e"
+      "generated_at_commit": "1d481ab853a14d3c11eff926ce1e25993085f76a",
+      "source_tree": "sha256:75b919c410e00df7882ddbdcf0ad3b46e172bf2f2874a2dc7074054428539ca5"
     },
     "owner_lane": "",
     "provenance": {
