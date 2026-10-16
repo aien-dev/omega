@@ -1,0 +1,61 @@
+commit 29ef3cb6a7256390af5af34568565cf3f0d70a1c  physics 6d7cf0d  driver 580.173.02  2026-10-16T02:26:57Z
+== run 1
+kernel: 12 instructions, 10 registers
+sim add 1 x 64: ran, word 64, 0 faults
+sim add -0.25 x 64: ran, word -16, 0 faults
+sim add 1 x 512: ran, word 512, 0 faults
+sim add -0.25 x 512: ran, word -128, 0 faults
+chip add 1.0 x 131072: word 131072.00 (want 131072.00), 0 faults, 64350.7 us (2.0 M atomic adds/s to one word)
+chip add -0.25 x 131072: word -32768.00 (want -32768.00), 0 faults, 64809.6 us (2.0 M atomic adds/s to one word)
+chip add 2^-140 (subnormal) x 32: word bits 0x00000000 (FTZ wants 0x00000000, no-FTZ would be 0x00004000), 0 faults, 116.7 us
+chip CONTROL integer ATOMG.ADD of 1.0f bits x 131072: word 0.00 (want 131072.00), 131054 faults, 63884.8 us (2.1 M atomic adds/s to one word)
+  control ok: the check caught the wrong arithmetic
+GPU_ATOMF32_PROBE: PASS
+== run 2
+kernel: 12 instructions, 10 registers
+sim add 1 x 64: ran, word 64, 0 faults
+sim add -0.25 x 64: ran, word -16, 0 faults
+sim add 1 x 512: ran, word 512, 0 faults
+sim add -0.25 x 512: ran, word -128, 0 faults
+chip add 1.0 x 131072: word 131072.00 (want 131072.00), 0 faults, 65115.9 us (2.0 M atomic adds/s to one word)
+chip add -0.25 x 131072: word -32768.00 (want -32768.00), 0 faults, 65852.4 us (2.0 M atomic adds/s to one word)
+chip add 2^-140 (subnormal) x 32: word bits 0x00000000 (FTZ wants 0x00000000, no-FTZ would be 0x00004000), 0 faults, 105.5 us
+chip CONTROL integer ATOMG.ADD of 1.0f bits x 131072: word 0.00 (want 131072.00), 131054 faults, 51261.8 us (2.6 M atomic adds/s to one word)
+  control ok: the check caught the wrong arithmetic
+GPU_ATOMF32_PROBE: PASS
+== run 3
+kernel: 12 instructions, 10 registers
+sim add 1 x 64: ran, word 64, 0 faults
+sim add -0.25 x 64: ran, word -16, 0 faults
+sim add 1 x 512: ran, word 512, 0 faults
+sim add -0.25 x 512: ran, word -128, 0 faults
+chip add 1.0 x 131072: word 131072.00 (want 131072.00), 0 faults, 65349.0 us (2.0 M atomic adds/s to one word)
+chip add -0.25 x 131072: word -32768.00 (want -32768.00), 0 faults, 62346.4 us (2.1 M atomic adds/s to one word)
+chip add 2^-140 (subnormal) x 32: word bits 0x00000000 (FTZ wants 0x00000000, no-FTZ would be 0x00004000), 0 faults, 105.8 us
+chip CONTROL integer ATOMG.ADD of 1.0f bits x 131072: word 0.00 (want 131072.00), 131054 faults, 65183.8 us (2.0 M atomic adds/s to one word)
+  control ok: the check caught the wrong arithmetic
+GPU_ATOMF32_PROBE: PASS
+== run 4
+kernel: 12 instructions, 10 registers
+sim add 1 x 64: ran, word 64, 0 faults
+sim add -0.25 x 64: ran, word -16, 0 faults
+sim add 1 x 512: ran, word 512, 0 faults
+sim add -0.25 x 512: ran, word -128, 0 faults
+chip add 1.0 x 131072: word 131072.00 (want 131072.00), 0 faults, 63000.7 us (2.1 M atomic adds/s to one word)
+chip add -0.25 x 131072: word -32768.00 (want -32768.00), 0 faults, 65895.3 us (2.0 M atomic adds/s to one word)
+chip add 2^-140 (subnormal) x 32: word bits 0x00000000 (FTZ wants 0x00000000, no-FTZ would be 0x00004000), 0 faults, 119.5 us
+chip CONTROL integer ATOMG.ADD of 1.0f bits x 131072: word 0.00 (want 131072.00), 131054 faults, 49733.8 us (2.6 M atomic adds/s to one word)
+  control ok: the check caught the wrong arithmetic
+GPU_ATOMF32_PROBE: PASS
+== run 5
+kernel: 12 instructions, 10 registers
+sim add 1 x 64: ran, word 64, 0 faults
+sim add -0.25 x 64: ran, word -16, 0 faults
+sim add 1 x 512: ran, word 512, 0 faults
+sim add -0.25 x 512: ran, word -128, 0 faults
+chip add 1.0 x 131072: word 131072.00 (want 131072.00), 0 faults, 62630.9 us (2.1 M atomic adds/s to one word)
+chip add -0.25 x 131072: word -32768.00 (want -32768.00), 0 faults, 63296.0 us (2.1 M atomic adds/s to one word)
+chip add 2^-140 (subnormal) x 32: word bits 0x00000000 (FTZ wants 0x00000000, no-FTZ would be 0x00004000), 0 faults, 117.3 us
+chip CONTROL integer ATOMG.ADD of 1.0f bits x 131072: word 0.00 (want 131072.00), 131054 faults, 62399.4 us (2.1 M atomic adds/s to one word)
+  control ok: the check caught the wrong arithmetic
+GPU_ATOMF32_PROBE: PASS
