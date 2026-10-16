@@ -963,6 +963,50 @@ int omega_blackwell_verify_codegen_fixtures_reconv(void) {
     return 0;
 }
 
+
+/* Training R5 (2026-10-15): golden words for SHFL.BFLY and F2FP.BF16.F32.PACK_AB, the two instructions the prefill
+ * kernels emitted as placeholders patched after encoding until R5. Oracle: nvcc 13.0.88 -arch=sm_121, cuobjdump -sass,
+ * sealed in evidence/OWN30B-T3-TC-PEAK-BW-5faa0f70-20261013T2236Z/fa_ops.{cu,sass} (low 64-bit word, then high; the top
+ * 23 bits of the high word are the control word and are not compared):
+ *   SHFL.BFLY PT, R5, R0, 0x1, 0x1f ;      0x0c201f0000057f89 0x004e2800000e0000
+ *   SHFL.BFLY PT, R7, R8, 0x1, 0x1f ;      0x0c201f0008077f89 0x008e6200000e0000
+ *   SHFL.BFLY PT, R4, R9, 0x2, 0x1f ;      0x0c401f0009047f89 0x000e2800000e0000
+ *   SHFL.BFLY PT, R6, R11, 0x2, 0x1f ;     0x0c401f000b067f89 0x000e6200000e0000
+ *   F2FP.BF16.F32.PACK_AB R9, R3, R0 ;     0x000000000309723e 0x000fe200000010ff
+ *   F2FP.BF16.F32.PACK_AB R13, R13, R10 ;  0x0000000a0d0d723e 0x000fe400000010ff
+ * SHFL.BFLY is SHFL.DOWN (oracle words in omega_numeric.c, lanes 16 .. 1) with bit 58 set (mode .DOWN 1 -> .BFLY 3, the
+ * same lane field 53..57); the lane check below covers every lane 0 .. 31 against that rule. 0 = all good. */
+int omega_blackwell_verify_codegen_fixtures_bfly_f2fp(void) {
+    static const struct {
+        BlackwellIROpcode op; int d, a, b; uint32_t imm; uint32_t w0, w1, w2; const char *text;
+    } fx[] = {
+        { BW_IR_SHFL_BFLY, 5, 0, -1, 1, 0x00057f89U, 0x0c201f00U, 0x000e0000U, "SHFL.BFLY PT, R5, R0, 0x1, 0x1f" },
+        { BW_IR_SHFL_BFLY, 7, 8, -1, 1, 0x08077f89U, 0x0c201f00U, 0x000e0000U, "SHFL.BFLY PT, R7, R8, 0x1, 0x1f" },
+        { BW_IR_SHFL_BFLY, 4, 9, -1, 2, 0x09047f89U, 0x0c401f00U, 0x000e0000U, "SHFL.BFLY PT, R4, R9, 0x2, 0x1f" },
+        { BW_IR_SHFL_BFLY, 6, 11, -1, 2, 0x0b067f89U, 0x0c401f00U, 0x000e0000U, "SHFL.BFLY PT, R6, R11, 0x2, 0x1f" },
+        { BW_IR_F2FP_BF16_PACK, 9, 3, 0, 0, 0x0309723eU, 0x00000000U, 0x000010ffU, "F2FP.BF16.F32.PACK_AB R9, R3, R0" },
+        { BW_IR_F2FP_BF16_PACK, 13, 13, 10, 0, 0x0d0d723eU, 0x0000000aU, 0x000010ffU, "F2FP.BF16.F32.PACK_AB R13, R13, R10" },
+    };
+    uint32_t w[4];
+    for (int i = 0; i < (int)(sizeof fx / sizeof fx[0]); i++) {
+        BlackwellIRInsn in;
+        memset(&in, 0, sizeof in);
+        in.op = fx[i].op; in.dst_vreg = fx[i].d; in.src1_vreg = fx[i].a; in.src2_vreg = fx[i].b;
+        in.src3_vreg = -1; in.ureg = -1; in.imm = fx[i].imm;
+        if (omega_blackwell_encode_one(&in, w) != 0) return -(2 * i + 1);
+        if (w[0] != fx[i].w0 || w[1] != fx[i].w1 || w[2] != fx[i].w2) return -(2 * i + 2);
+    }
+    for (uint32_t lane = 0; lane < 32; lane++) {
+        BlackwellIRInsn in; uint32_t d[4];
+        memset(&in, 0, sizeof in);
+        in.op = BW_IR_SHFL_DOWN; in.dst_vreg = 9; in.src1_vreg = 2; in.src2_vreg = in.src3_vreg = in.ureg = -1; in.imm = lane;
+        if (omega_blackwell_encode_one(&in, d) != 0) return -100;
+        in.op = BW_IR_SHFL_BFLY;
+        if (omega_blackwell_encode_one(&in, w) != 0) return -101;
+        if (w[0] != d[0] || w[1] != (d[1] | 0x04000000U) || w[2] != d[2] || w[3] != d[3]) return -102;
+    }
+    return 0;
+}
 /* FB-1 cut 4: word-level fixtures for the four additive ops (checked against the
  * nvdisasm decodes recorded in docs/numeric/FB1_CUT4_ELEMENTWISE.md). 0 = all good. */
 int omega_blackwell_verify_codegen_fixtures_fb1cut4(void) {

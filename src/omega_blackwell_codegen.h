@@ -100,7 +100,11 @@ typedef enum {
     BW_IR_LDG_E_128,    /* LDG.E.128 Rd..Rd+3, desc[URd][Ra.64+imm] */
     /* Batched attention loads (2026-10-12). Words matched against nvcc 13.0.88 -arch=sm_121
      * (omega_blackwell_verify_codegen_fixtures_fragmm). imm = unsigned byte offset < 2^23; dst an aligned quad. */
-    BW_IR_LDS128        /* LDS.128 Rd..Rd+3, [Ra+imm] */
+    BW_IR_LDS128,       /* LDS.128 Rd..Rd+3, [Ra+imm] */
+    /* Training R5 (2026-10-15), additive: native entries for the two instructions the prefill kernels used to emit as
+     * placeholders patched after encoding. Words: omega_blackwell_verify_codegen_fixtures_bfly_f2fp. */
+    BW_IR_SHFL_BFLY,    /* SHFL.BFLY PT, Rd, Ra, imm & 31, 0x1f: Rd = Ra of lane (lane ^ imm) */
+    BW_IR_F2FP_BF16_PACK /* F2FP.BF16.F32.PACK_AB Rd, Ra, Rb: Rd = bf16_rn(Ra) << 16 | bf16_rn(Rb) (fixed latency) */
 } BlackwellIROpcode;
 
 /* Barrier (reconvergence) registers: the sm_121 BSSY/BSYNC words carry a 4-bit barrier id
@@ -319,6 +323,10 @@ int omega_blackwell_verify_codegen_fixtures_fragmm(void);
 /* omega #308: golden words for BSSY / BSYNC (nvcc 13.0.88 sm_121 oracle), plus the
  * encoder's refusals (negative delta, barrier id > 15). 0 = pass. */
 int omega_blackwell_verify_codegen_fixtures_reconv(void);
+
+/* Training R5: golden words for SHFL.BFLY and F2FP.BF16.F32.PACK_AB (nvcc 13.0.88 sm_121 oracle sealed in
+ * evidence/OWN30B-T3-TC-PEAK-BW-5faa0f70-20261013T2236Z), plus SHFL.BFLY = SHFL.DOWN with bit 58 for every lane. 0 = pass. */
+int omega_blackwell_verify_codegen_fixtures_bfly_f2fp(void);
 
 /* omega #308: encodes one instruction with a given physical register map of
  * identity (vreg n -> Rn) so offline tools can disassemble single words. 0 = ok. */
