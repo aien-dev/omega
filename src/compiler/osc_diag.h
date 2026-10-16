@@ -53,6 +53,12 @@ typedef enum {
     OSC_DIAG_SLICE_WRITE,          /* an assignment to an element of a bytes slice */
     OSC_DIAG_SLICE_PARAMS,         /* slice parameters need more than six registers (a slice counts two) */
     OSC_DIAG_SLICE_ALIAS,          /* one cells slice is passed twice in one call (the callee would see two aliasing params) */
+    /* OSC-4 Slice A floats (docs/osc/OSC-4-DESIGN.md 1.4), appended */
+    OSC_DIAG_FLOAT_MIXED,          /* arithmetic or compare between f32 and f64, or float and int, without `as` */
+    OSC_DIAG_FLOAT_BITOP,          /* % & | ^ << >> or ~ applied to a float */
+    OSC_DIAG_FLOAT_INDEX,          /* float used as an array index, loop bound or `bound` */
+    OSC_DIAG_FLOAT_BITS_WIDTH,     /* `as ... bits` between sizes that differ, or without exactly one float side */
+    OSC_DIAG_FLOAT_CONST_RANGE,    /* float literal that does not round to a finite value of its type */
     OSC_DIAG__COUNT
 } OscDiagKind;
 

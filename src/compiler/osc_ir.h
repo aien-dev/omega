@@ -50,7 +50,11 @@ typedef enum {
     /* external byte slices (docs/osc/OSC-EXT-BYTES-DESIGN.md): the type of the POINTER
      * register of a slice parameter; its length is the next register (u64) */
     OSC_T_BYTES,                                   /* read-only borrowed bytes */
-    OSC_T_CELLS                                    /* caller-supplied writable u64 cells */
+    OSC_T_CELLS,                                   /* caller-supplied writable u64 cells */
+    /* appended for OSC-4 Slice A (docs/osc/OSC-4-DESIGN.md section 1): IEEE-754 binary32 /
+     * binary64 held as bit patterns; f32 occupies the low 32 bits, upper 32 zero */
+    OSC_T_F32,
+    OSC_T_F64
 } OscScalar;
 
 typedef enum {
@@ -123,8 +127,27 @@ typedef enum {
     OSC_I_SLOAD,     /* dst(u64) = a[b] ; a is a slice pointer vreg (BYTES: u8 zero-  */
                      /*   extended; CELLS: u64), its length is vreg a+1 (u64); b any   */
                      /*   integer type; unsigned b >= len: TRAP_BOUNDS (len 0 always)  */
-    OSC_I_SSTORE     /* a[b] = c(u64) ; same bounds rule; a is a CELLS pointer vreg   */
+    OSC_I_SSTORE,    /* a[b] = c(u64) ; same bounds rule; a is a CELLS pointer vreg   */
+    /* appended for OSC-4 Slice A floats (docs/osc/OSC-4-DESIGN.md 1.5). None of these
+     * traps: inf and NaN are values. Rounding is round-to-nearest-even throughout. */
+    OSC_I_FBIN,      /* dst = a <fop sub> b ; a, b, dst the same float type (OscFBin)   */
+    OSC_I_FUN,       /* dst = <fuop sub> a ; same float type (OscFUn)                  */
+    OSC_I_FCMP,      /* dst(bool) = a <cc sub> b ; same float type; NaN: only NE true  */
+    OSC_I_FCVT,      /* dst(float) = (T)a ; a the other float type (FCVT, RNE)         */
+    OSC_I_ITOF,      /* dst(float) = a ; a an integer; sub 1 signed, 2 unsigned (RNE)  */
+    OSC_I_FTOI,      /* dst(int) = a ; a a float; sub 1 signed, 2 unsigned: truncate   */
+                     /*   toward zero, saturate to dst width, NaN -> 0 (FCVTZS/FCVTZU) */
+    OSC_I_FBITS      /* dst = same bits as a ; float <-> integer of the same width     */
 } OscOp;
+
+/* OSC-4 float binary / unary sub-operations */
+typedef enum {
+    OSC_FB_ADD = 1, OSC_FB_SUB, OSC_FB_MUL, OSC_FB_DIV,
+    OSC_FB_MIN,      /* FMINNM: IEEE minNum (one quiet NaN -> the other operand), -0.0 < +0.0 */
+    OSC_FB_MAX       /* FMAXNM: IEEE maxNum                                                  */
+} OscFBin;
+typedef enum { OSC_FU_NEG = 1, OSC_FU_ABS, OSC_FU_SQRT } OscFUn;
+typedef enum { OSC_FI_SIGNED = 1, OSC_FI_UNSIGNED } OscFInt; /* ITOF / FTOI sub */
 
 typedef enum {
     OSC_B_ADD = 1, OSC_B_SUB, OSC_B_MUL,
@@ -254,7 +277,7 @@ int osc_ir_digest(const OscUnit *u, uint8_t out[32]);
  * if the magic is wrong or the version is unknown (never reinterpreted).
  * Version 5 = the unit uses external byte slices; units without slices keep
  * versions 1..4 and their bytes. */
-#define OSC_IR_VERSION_MAX 5
+#define OSC_IR_VERSION_MAX 6 /* 6: OSC-4 Slice A floats */
 int osc_ir_encoding_version(const uint8_t *buf, size_t len);
 
 /* Strict decoder (omega#444; format and refusal classes: spec/one-layer-format.md).
@@ -305,6 +328,7 @@ int osc_ir_slice_args_ok(const OscFunc *f, const uint64_t *args, unsigned nargs)
 unsigned osc_scalar_width(OscScalar s);
 bool osc_scalar_signed(OscScalar s);
 bool osc_scalar_is_int(OscScalar s);
+bool osc_scalar_is_float(OscScalar s); /* OSC-4: F32 or F64 */
 const char *osc_scalar_name(OscScalar s);
 
 #endif /* OSC_IR_H */

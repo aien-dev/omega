@@ -19,14 +19,17 @@ unsigned osc_scalar_width(OscScalar s) {
     case OSC_T_U16: case OSC_T_I16: return 16;
     case OSC_T_U32: case OSC_T_I32: return 32;
     case OSC_T_U64: case OSC_T_I64: return 64;
+    case OSC_T_F32: return 32;  /* OSC-4: bit pattern in the low 32 bits, upper 32 zero */
+    case OSC_T_F64: return 64;
     default: return 0;
     }
 }
 bool osc_scalar_signed(OscScalar s) { return s >= OSC_T_I8 && s <= OSC_T_I64; }
 bool osc_scalar_is_int(OscScalar s) { return s >= OSC_T_U8 && s <= OSC_T_I64; }
+bool osc_scalar_is_float(OscScalar s) { return s == OSC_T_F32 || s == OSC_T_F64; }
 const char *osc_scalar_name(OscScalar s) {
-    static const char *n[] = {"void", "bool", "u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64", "ref", "bytes", "cells"};
-    return ((unsigned)s <= OSC_T_CELLS) ? n[s] : "?";
+    static const char *n[] = {"void", "bool", "u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64", "ref", "bytes", "cells", "f32", "f64"};
+    return ((unsigned)s <= OSC_T_F64) ? n[s] : "?";
 }
 
 /* ---- validation ------------------------------------------------------- */
@@ -40,7 +43,7 @@ static int vfail(char *err, size_t n, const char *fmt, ...) {
     return -1;
 }
 
-static bool is_value_scalar(OscScalar s) { return s >= OSC_T_BOOL && s <= OSC_T_I64; }
+static bool is_value_scalar(OscScalar s) { return (s >= OSC_T_BOOL && s <= OSC_T_I64) || osc_scalar_is_float(s); }
 
 static bool type_is_scalar(const OscType *t) {
     return is_value_scalar(t->s) && t->ref == OSC_REF_NONE && t->elem == OSC_T_VOID && t->len == 0 && t->sid == 0;
@@ -101,6 +104,8 @@ static int insn_uses(const OscInsn *in, int16_t *u) {
     case OSC_I_HFREE: case OSC_I_HLOAD: u[k++] = in->a; u[k++] = in->b; u[k++] = in->c; break;
     case OSC_I_HSTORE: u[k++] = in->a; u[k++] = in->b; u[k++] = in->c; u[k++] = in->args[0]; break;
     case OSC_I_BIN: case OSC_I_CMP: case OSC_I_LOAD: u[k++] = in->a; u[k++] = in->b; break;
+    case OSC_I_FBIN: case OSC_I_FCMP: u[k++] = in->a; u[k++] = in->b; break;
+    case OSC_I_FUN: case OSC_I_FCVT: case OSC_I_ITOF: case OSC_I_FTOI: case OSC_I_FBITS: u[k++] = in->a; break;
     case OSC_I_STORE: u[k++] = in->a; u[k++] = in->b; u[k++] = in->c; break;
     case OSC_I_SLOAD: u[k++] = in->a; u[k++] = in->a + 1; u[k++] = in->b; break;
     case OSC_I_SSTORE: u[k++] = in->a; u[k++] = in->a + 1; u[k++] = in->b; u[k++] = in->c; break;
@@ -118,6 +123,7 @@ static int insn_def(const OscInsn *in) {
     case OSC_I_CAST: case OSC_I_ALLOC: case OSC_I_LOAD: case OSC_I_FLOAD: case OSC_I_SLOAD: return in->dst;
     case OSC_I_AOPEN: case OSC_I_AALLOC: return in->dst;
     case OSC_I_POPEN: case OSC_I_HALLOC: case OSC_I_HGEN: case OSC_I_HLOAD: return in->dst;
+    case OSC_I_FBIN: case OSC_I_FUN: case OSC_I_FCMP: case OSC_I_FCVT: case OSC_I_ITOF: case OSC_I_FTOI: case OSC_I_FBITS: return in->dst;
     case OSC_I_CALL: return in->dst;  /* may be -1 */
     default: return -1;
     }
@@ -149,6 +155,7 @@ static int validate_insn(const OscUnit *u, int fi, const OscFunc *f, uint32_t ii
         NEED(in->sub >= OSC_B_ADD && in->sub <= OSC_B_SHR, "BIN bad sub-op %u", fi, ii, in->sub);
         const OscType *d = &T[in->dst], *a = &T[in->a], *b = &T[in->b];
         NEED(type_is_scalar(d) && type_eq(d, a), "BIN dst/a type mismatch", fi, ii);
+        NEED(!osc_scalar_is_float(a->s), "BIN on a float (use FBIN)", fi, ii);
         if (in->sub == OSC_B_SHL || in->sub == OSC_B_SHR) {
             NEED(osc_scalar_is_int(a->s), "shift of non-integer", fi, ii);
             NEED(type_is_scalar(b) && osc_scalar_is_int(b->s), "shift amount not integer", fi, ii);
@@ -173,6 +180,7 @@ static int validate_insn(const OscUnit *u, int fi, const OscFunc *f, uint32_t ii
         NEED(in->sub >= OSC_C_EQ && in->sub <= OSC_C_GE, "CMP bad cc %u", fi, ii, in->sub);
         NEED(type_is_scalar(&T[in->dst]) && T[in->dst].s == OSC_T_BOOL, "CMP dst not bool", fi, ii);
         NEED(type_is_scalar(&T[in->a]) && type_eq(&T[in->a], &T[in->b]), "CMP operand type mismatch", fi, ii);
+        NEED(!osc_scalar_is_float(T[in->a].s), "CMP on a float (use FCMP)", fi, ii);
         break;
     case OSC_I_CAST:
         NEED(VR(in->dst) && VR(in->a), "CAST bad vreg", fi, ii);
@@ -249,6 +257,56 @@ static int validate_insn(const OscUnit *u, int fi, const OscFunc *f, uint32_t ii
         NEED(type_is_scalar(&T[in->b]) && osc_scalar_is_int(T[in->b].s), "STORE index not integer", fi, ii);
         NEED(type_is_scalar(&T[in->c]) && T[in->c].s == T[in->a].elem, "STORE value type != elem", fi, ii);
         break;
+    /* OSC-4 Slice A floats (docs/osc/OSC-4-DESIGN.md 1.5 item 3) */
+    case OSC_I_FBIN: {
+        NEED(VR(in->dst) && VR(in->a) && VR(in->b), "FBIN bad vreg", fi, ii);
+        NEED(in->sub >= OSC_FB_ADD && in->sub <= OSC_FB_MAX, "FBIN bad sub-op %u", fi, ii, in->sub);
+        const OscType *d = &T[in->dst], *a = &T[in->a], *b = &T[in->b];
+        NEED(type_is_scalar(d) && osc_scalar_is_float(d->s) && type_eq(d, a) && type_eq(a, b),
+             "FBIN needs identical float types", fi, ii);
+        break;
+    }
+    case OSC_I_FUN: {
+        NEED(VR(in->dst) && VR(in->a), "FUN bad vreg", fi, ii);
+        NEED(in->sub >= OSC_FU_NEG && in->sub <= OSC_FU_SQRT, "FUN bad sub-op %u", fi, ii, in->sub);
+        const OscType *d = &T[in->dst], *a = &T[in->a];
+        NEED(type_is_scalar(d) && osc_scalar_is_float(d->s) && type_eq(d, a), "FUN needs one float type", fi, ii);
+        break;
+    }
+    case OSC_I_FCMP:
+        NEED(VR(in->dst) && VR(in->a) && VR(in->b), "FCMP bad vreg", fi, ii);
+        NEED(in->sub >= OSC_C_EQ && in->sub <= OSC_C_GE, "FCMP bad cc %u", fi, ii, in->sub);
+        NEED(type_is_scalar(&T[in->dst]) && T[in->dst].s == OSC_T_BOOL, "FCMP dst not bool", fi, ii);
+        NEED(type_is_scalar(&T[in->a]) && osc_scalar_is_float(T[in->a].s) && type_eq(&T[in->a], &T[in->b]),
+             "FCMP needs identical float types", fi, ii);
+        break;
+    case OSC_I_FCVT:
+        NEED(VR(in->dst) && VR(in->a), "FCVT bad vreg", fi, ii);
+        NEED(type_is_scalar(&T[in->dst]) && osc_scalar_is_float(T[in->dst].s) && type_is_scalar(&T[in->a]) &&
+             osc_scalar_is_float(T[in->a].s) && T[in->dst].s != T[in->a].s, "FCVT needs two distinct float types", fi, ii);
+        NEED(in->sub == 0, "FCVT sub must be 0", fi, ii);
+        break;
+    case OSC_I_ITOF:
+        NEED(VR(in->dst) && VR(in->a), "ITOF bad vreg", fi, ii);
+        NEED(type_is_scalar(&T[in->dst]) && osc_scalar_is_float(T[in->dst].s) && type_is_scalar(&T[in->a]) &&
+             osc_scalar_is_int(T[in->a].s), "ITOF needs int -> float", fi, ii);
+        NEED(in->sub == (osc_scalar_signed(T[in->a].s) ? OSC_FI_SIGNED : OSC_FI_UNSIGNED), "ITOF sub does not match source signedness", fi, ii);
+        break;
+    case OSC_I_FTOI:
+        NEED(VR(in->dst) && VR(in->a), "FTOI bad vreg", fi, ii);
+        NEED(type_is_scalar(&T[in->dst]) && osc_scalar_is_int(T[in->dst].s) && type_is_scalar(&T[in->a]) &&
+             osc_scalar_is_float(T[in->a].s), "FTOI needs float -> int", fi, ii);
+        NEED(in->sub == (osc_scalar_signed(T[in->dst].s) ? OSC_FI_SIGNED : OSC_FI_UNSIGNED), "FTOI sub does not match destination signedness", fi, ii);
+        break;
+    case OSC_I_FBITS: {
+        NEED(VR(in->dst) && VR(in->a), "FBITS bad vreg", fi, ii);
+        const OscType *d = &T[in->dst], *a = &T[in->a];
+        NEED(type_is_scalar(d) && type_is_scalar(a) && (osc_scalar_is_float(d->s) != osc_scalar_is_float(a->s)) &&
+             (osc_scalar_is_int(d->s) || osc_scalar_is_int(a->s)) && osc_scalar_width(d->s) == osc_scalar_width(a->s),
+             "FBITS needs a float and an integer of the same width", fi, ii);
+        NEED(in->sub == 0, "FBITS sub must be 0", fi, ii);
+        break;
+    }
     case OSC_I_SLOAD:
     case OSC_I_SSTORE: {
         bool ld = in->op == OSC_I_SLOAD;
@@ -606,10 +664,30 @@ static bool unit_has_slice(const OscUnit *u) {
     return false;
 }
 
+/* 1 if any function uses a float type or a float instruction (OSC-4 Slice A) */
+static bool unit_has_float(const OscUnit *u) {
+    for (int fi = 0; fi < u->nfuncs; fi++) {
+        const OscFunc *f = &u->funcs[fi];
+        if (osc_scalar_is_float(f->ret.s) || osc_scalar_is_float(f->ret.elem)) return true;
+        for (int v = 0; v < f->nvregs; v++)
+            if (osc_scalar_is_float(f->vtype[v].s) || osc_scalar_is_float(f->vtype[v].elem)) return true;
+        for (uint32_t i = 0; i < f->ninsns; i++) {
+            uint8_t op = f->insns[i].op;
+            if (op >= OSC_I_FBIN && op <= OSC_I_FBITS) return true;
+            if (op == OSC_I_POPEN && osc_scalar_is_float((OscScalar)f->insns[i].sub)) return true;
+        }
+    }
+    for (int s = 0; s < u->nstructs; s++)
+        for (int k = 0; k < u->structs[s].nfields; k++)
+            if (osc_scalar_is_float(u->structs[s].fields[k].s)) return true;
+    return false;
+}
+
 /* The format version a unit encodes as: the highest feature it uses decides.
- * 5 = external byte slices, 4 = pools (OSC-3 item 2), 3 = arenas, 2 = structs,
- * 1 = none of these. Versions 2..5 share one layout (struct table after the magic). */
+ * 6 = floats (OSC-4 Slice A), 5 = external byte slices, 4 = pools (OSC-3 item 2), 3 = arenas, 2 = structs,
+ * 1 = none of these. Versions 2..6 share one layout (struct table after the magic). */
 static uint8_t unit_version(const OscUnit *u) {
+    if (unit_has_float(u)) return 6;
     if (unit_has_slice(u)) return 5;
     if (unit_has_pool(u)) return 4;
     if (unit_has_arena(u)) return 3;
@@ -675,6 +753,9 @@ static void encode_unit(const OscUnit *u, W *w) {
             case OSC_I_STORE: wvr(w, in->a); wvr(w, in->b); wvr(w, in->c); break;
             case OSC_I_SLOAD: wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); break;
             case OSC_I_SSTORE: wvr(w, in->a); wvr(w, in->b); wvr(w, in->c); break;
+            case OSC_I_FBIN: case OSC_I_FCMP: w8(w, in->sub); wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); break;
+            case OSC_I_FUN: case OSC_I_ITOF: case OSC_I_FTOI: w8(w, in->sub); wvr(w, in->dst); wvr(w, in->a); break;
+            case OSC_I_FCVT: case OSC_I_FBITS: wvr(w, in->dst); wvr(w, in->a); break;
             case OSC_I_FLOAD: wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); w8(w, in->imm); break;
             case OSC_I_FSTORE: wvr(w, in->a); wvr(w, in->b); wvr(w, in->c); w8(w, in->imm); break;
             case OSC_I_CALL:
@@ -785,7 +866,7 @@ static int16_t rvr(R *r) {
 }
 static OscScalar rscalar(R *r) {
     uint64_t v = rle(r, 1);
-    if (!r->rc && v > OSC_T_CELLS) rfail(r, OSC_IR_REFUSE_RANGE);
+    if (!r->rc && v > OSC_T_F64) rfail(r, OSC_IR_REFUSE_RANGE);
     return r->rc ? OSC_T_VOID : (OscScalar)v;
 }
 /* text of at most max bytes into dst (dst has room for max + 1); a NUL inside is ambiguous */
@@ -830,6 +911,9 @@ static void decode_insn(R *r, OscInsn *in) {
     case OSC_I_HSTORE: in->a = rvr(r); in->b = rvr(r); in->c = rvr(r); in->args[0] = rvr(r); in->nargs = 1; break;
     case OSC_I_LOAD: case OSC_I_SLOAD: in->dst = rvr(r); in->a = rvr(r); in->b = rvr(r); break;
     case OSC_I_STORE: case OSC_I_SSTORE: in->a = rvr(r); in->b = rvr(r); in->c = rvr(r); break;
+    case OSC_I_FBIN: case OSC_I_FCMP: in->sub = (uint8_t)rle(r, 1); in->dst = rvr(r); in->a = rvr(r); in->b = rvr(r); break;
+    case OSC_I_FUN: case OSC_I_ITOF: case OSC_I_FTOI: in->sub = (uint8_t)rle(r, 1); in->dst = rvr(r); in->a = rvr(r); break;
+    case OSC_I_FCVT: case OSC_I_FBITS: in->dst = rvr(r); in->a = rvr(r); break;
     case OSC_I_FLOAD: in->dst = rvr(r); in->a = rvr(r); in->b = rvr(r); in->imm = rle(r, 1); break;
     case OSC_I_FSTORE: in->a = rvr(r); in->b = rvr(r); in->c = rvr(r); in->imm = rle(r, 1); break;
     case OSC_I_CALL:
