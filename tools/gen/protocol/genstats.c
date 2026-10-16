@@ -10,7 +10,10 @@
  *                                               "theta lo hi": Newcombe (1998, Stat Med 17:2635) paired
  *                                               interval for p1 - p2, method 10 (default) or 8; a = both,
  *                                               b = first only, c = second only, d = neither
- *   genstats verdict <valid 0|1> <A> <B> <C> <D>  the full decision from four 0/1 strings (one char per task)
+ *   genstats verdict <valid 0|1> <A> <B> <C> <D>  the full decision from four 0/1 strings (one char per task);
+ *                                               order INVALID > floor/ceiling INCONCLUSIVE > PASS > FAIL > INCONCLUSIVE
+ *   genstats lenmatch <target>:<suffix>...      length-matched ablation classes (section 10): per task gap,
+ *                                               tolerance, matched|unmatched; then matched count and status
  *   genstats vectors                            print the whole stats_vectors.tsv
  *   genstats selftest                           check Newcombe methods 8 and 10 against every row of the
  *                                               paper's Table III (4 decimals), and internal identities
@@ -95,6 +98,7 @@ typedef struct {
     int lift_ok[3], p_ok[3];
     double lo95, hi95, lo90, hi90;   /* Newcombe method 10, D - C */
     int a_minus_b;
+    int floor, ceiling;
     const char *verdict;
     char reasons[256];
 } Decision;
@@ -127,16 +131,23 @@ static int decide(int valid, char *const v[4], Decision *r, char *err, size_t er
     newcombe(r->both[2], r->donly[2], r->xonly[2], r->neither[2], Z95, 10, &th, &r->lo95, &r->hi95);
     newcombe(r->both[2], r->donly[2], r->xonly[2], r->neither[2], Z90, 10, &th, &r->lo90, &r->hi90);
     r->a_minus_b = r->s[0] - r->s[1];
+    int mx = r->s[0], mn = r->s[0];
+    for (int x = 1; x < 4; x++) { if (r->s[x] > mx) mx = r->s[x]; if (r->s[x] < mn) mn = r->s[x]; }
+    r->floor = mx <= 3;                /* max successes over A..D <= 3 */
+    r->ceiling = mn >= r->n - 3;       /* min successes over A..D >= n - 3 (57 at n = 60) */
     int pass = 1;
     for (int x = 0; x < 3; x++) pass &= r->lift_ok[x] && r->p_ok[x];
     if (!valid || r->a_minus_b > 2) {
         r->verdict = "INVALID";
         snprintf(r->reasons, sizeof r->reasons, "%s%s%s", !valid ? "validity_failure" : "", !valid && r->a_minus_b > 2 ? "," : "",
                  r->a_minus_b > 2 ? "sanity_a_minus_b_gt_2" : "");
+    } else if (r->floor || r->ceiling) {
+        r->verdict = "INCONCLUSIVE";   /* the tasks were too hard or too easy to compare conditions */
+        snprintf(r->reasons, sizeof r->reasons, "%s%s%s", r->floor ? "floor" : "", r->floor && r->ceiling ? "," : "", r->ceiling ? "ceiling" : "");
     } else if (pass) {
         r->verdict = "PASS";
         snprintf(r->reasons, sizeof r->reasons, "all_controls_lift_and_p");
-    } else if (r->hi95 < 0.10) {
+    } else if (r->hi95 < 0.10) {   /* the full double, never the 6-decimal receipt value */
         r->verdict = "FAIL";
         snprintf(r->reasons, sizeof r->reasons, "newcombe95_hi_D-C_below_delta");
     } else {
@@ -167,11 +178,16 @@ static const VCase vcases[] = {
     {"v09_boundary_lift5", 1, "1111:20 0001:5 0000:35", "lift 5/60 < 10pp vs every control"},
     {"v10_boundary_8_2", 1, "1111:20 0001:8 1110:2 0000:30", "d_only 8, x_only 2: lift 10pp, p = 56/1024 = 0.0547 (not < 0.05)"},
     {"v11_boundary_7_1", 1, "1111:20 0001:7 1110:1 0000:32", "d_only 7, x_only 1: lift 10pp, p = 9/256"},
-    {"v12_all_fail", 1, "0000:60", "nothing succeeds: D - C = 0 with a narrow interval"},
-    {"v13_all_pass", 1, "1111:60", "everything succeeds"},
+    {"v12_all_fail", 1, "0000:60", "nothing succeeds: INCONCLUSIVE floor (was FAIL before the floor rule)"},
+    {"v13_all_pass", 1, "1111:60", "everything succeeds: INCONCLUSIVE ceiling"},
     {"v14_d_worse", 1, "1111:20 1110:8 0001:1 0000:31", "D behind every control"},
     {"v15_dev_size", 1, "1111:3 0001:4 0000:3", "n = 10 (dev size)"},
     {"v16_pass_vs_ab_not_c", 1, "1111:10 0011:12 0001:4 0000:34", "D ahead of A and B, tied-ish with C"},
+    {"v17_floor_boundary", 1, "0001:3 0000:57", "max successes = 3 (D): INCONCLUSIVE floor"},
+    {"v18_floor_above", 1, "0001:4 0000:56", "max successes = 4: not floor (INCONCLUSIVE on lift and p)"},
+    {"v19_ceiling_boundary", 1, "1111:57 1110:3", "min successes = 57 (D): INCONCLUSIVE ceiling"},
+    {"v20_ceiling_below", 1, "1111:56 1110:4", "min successes = 56: not ceiling"},
+    {"v21_floor_overrides_fail", 1, "1111:2 0000:58", "everything at 2 successes: floor, not FAIL"},
 };
 
 static int build(const char *groups, char *v[4])
@@ -223,13 +239,33 @@ static const double table3[][8] = {
 };
 #define NT3 (sizeof table3 / sizeof table3[0])
 
+/* ---- length-matched ablation (GEN_PROTOCOL_V1 section 10; dev-only diagnostic, never in the verdict) ----
+ * gap = padded C suffix_bytes - target_bytes (D's suffix_bytes), signed (genret length_gap).
+ * A task is matched iff |gap| <= max(256 bytes, 15% of target), exactly: 100 |gap| <= max(25600, 15 target).
+ * A set is AVAILABLE iff at least half its tasks are matched (2 matched >= tasks), else UNAVAILABLE. */
+static int lm_matched(long target, long suffix, long *gap)
+{
+    *gap = suffix - target;
+    long ag = *gap < 0 ? -*gap : *gap, lim = 15 * target > 25600 ? 15 * target : 25600;
+    return 100 * ag <= lim;
+}
+static const char *lm_status(int matched, int tasks) { return 2 * matched >= tasks ? "AVAILABLE" : "UNAVAILABLE"; }
+/* tolerance in hundredths of a byte: max(25600, 15 target) */
+static void lm_tol(long target, char *out, size_t n)
+{
+    long t = 15 * target > 25600 ? 15 * target : 25600;
+    snprintf(out, n, "%ld.%02ld", t / 100, t % 100);
+}
+
 static int vectors(void)
 {
-    printf("# GEN decision statistics test vectors v1 (aien-spark/omega#476). Generated by tools/gen/protocol/genstats.c\n");
-    printf("# (`genstats vectors`); never edit by hand. Rules: docs/one_layer/GEN_PROTOCOL_V1.md section 9.\n");
+    printf("# GEN decision statistics test vectors v2 (aien-spark/omega#476). Generated by tools/gen/protocol/genstats.c\n");
+    printf("# (`genstats vectors`); never edit by hand. Rules: docs/one_layer/GEN_PROTOCOL_V1.md sections 9 and 10.\n");
     printf("# z95 = %.15f (z 0.975), z90 = %.15f (z 0.95). Reals printed %%.10f; a reader must agree within 1e-9,\n", Z95, Z90);
     printf("# and its 6-decimal receipt values must equal these rounded to 6 decimals. Counts, p_num, p_den, yes/no and verdicts exactly.\n");
     printf("# One record per line, TAB-separated; field 1 names the record kind; each kind has a #cols line.\n");
+    printf("# Verdict order: INVALID (validity, A - B > 2) > INCONCLUSIVE floor (max succ <= 3) / ceiling (min succ >= n - 3) > PASS > FAIL\n");
+    printf("# (D-C newcombe95_hi < 0.10, compared on the full double) > INCONCLUSIVE. v2 = v1 + the floor/ceiling rule and the length-match records (review of PR #486).\n");
     printf("#cols\twilson\tid\tk\tn\tconf\tp\tlo\thi\n");
     static const int wk[][2] = {{0, 60}, {1, 60}, {6, 60}, {20, 60}, {30, 60}, {48, 60}, {59, 60}, {60, 60}, {3, 10}, {0, 10}, {10, 10}};
     for (size_t i = 0; i < sizeof wk / sizeof wk[0]; i++)
@@ -263,6 +299,20 @@ static int vectors(void)
             newcombe(gc[i][0], gc[i][1], gc[i][2], gc[i][3], zof(conf), 10, &th, &lo, &hi);
             printf("newcombe\tn%02d\t%d\t%d\t%d\t%d\t%d\t10\t%.10f\t%.10f\t%.10f\tgen\n", ++id, gc[i][0], gc[i][1], gc[i][2], gc[i][3], conf, th, lo, hi);
         }
+    printf("#cols\tlenmatch\tid\ttarget_bytes\tsuffix_bytes\tlength_gap\ttolerance_bytes\tclass\n");
+    static const long lmv[][2] = {{295, 945}, {300, 738}, {300, 556}, {300, 557}, {300, 44}, {300, 43},
+                                  {2000, 2300}, {2000, 2301}, {2000, 1700}, {2000, 1699}, {1000, 1000}, {1706, 1962}};
+    for (size_t i = 0; i < sizeof lmv / sizeof lmv[0]; i++) {
+        long gap;
+        char tol[32];
+        int m = lm_matched(lmv[i][0], lmv[i][1], &gap);
+        lm_tol(lmv[i][0], tol, sizeof tol);
+        printf("lenmatch\tl%02zu\t%ld\t%ld\t%ld\t%s\t%s\n", i + 1, lmv[i][0], lmv[i][1], gap, tol, m ? "matched" : "unmatched");
+    }
+    printf("#cols\tlenset\tid\ttasks\tmatched\tunmatched\tstatus\n");
+    static const int lsv[][2] = {{10, 10}, {10, 5}, {10, 4}, {10, 0}, {9, 5}, {9, 4}, {1, 1}};
+    for (size_t i = 0; i < sizeof lsv / sizeof lsv[0]; i++)
+        printf("lenset\ts%02zu\t%d\t%d\t%d\t%s\n", i + 1, lsv[i][0], lsv[i][1], lsv[i][0] - lsv[i][1], lm_status(lsv[i][1], lsv[i][0]));
     printf("#cols\tverdict\tid\tvalid\tvec_A\tvec_B\tvec_C\tvec_D\tsucc_A\tsucc_B\tsucc_C\tsucc_D");
     for (int x = 0; x < 3; x++)
         printf("\tD-%c.both\tD-%c.d_only\tD-%c.x_only\tD-%c.neither\tD-%c.p_num\tD-%c.p_den\tD-%c.p\tD-%c.lift_ok\tD-%c.p_ok", "ABC"[x], "ABC"[x], "ABC"[x], "ABC"[x], "ABC"[x], "ABC"[x], "ABC"[x], "ABC"[x], "ABC"[x]);
@@ -371,8 +421,24 @@ int main(int argc, char **argv)
         putchar('\n');
         return 0;
     }
+    if (argc >= 3 && !strcmp(argv[1], "lenmatch")) {
+        int matched = 0;
+        for (int i = 2; i < argc; i++) {
+            char *colon = strchr(argv[i], ':');
+            if (!colon) { fprintf(stderr, "genstats: lenmatch takes <target_bytes>:<suffix_bytes> pairs\n"); return 2; }
+            *colon = 0;
+            long t = num(argv[i], 1, 1000000), s = num(colon + 1, 0, 1000000), gap;
+            char tol[32];
+            int m = lm_matched(t, s, &gap);
+            lm_tol(t, tol, sizeof tol);
+            printf("task %d target_bytes=%ld suffix_bytes=%ld length_gap=%ld tolerance_bytes=%s class=%s\n", i - 1, t, s, gap, tol, m ? "matched" : "unmatched");
+            matched += m;
+        }
+        printf("tasks=%d matched=%d unmatched=%d status=%s\n", argc - 2, matched, argc - 2 - matched, lm_status(matched, argc - 2));
+        return 0;
+    }
     if (argc == 2 && !strcmp(argv[1], "vectors")) return vectors();
     if (argc == 2 && !strcmp(argv[1], "selftest")) return selftest();
-    fprintf(stderr, "usage: genstats wilson <k> <n> <95|90> | mcnemar1 <b> <c> | newcombe <a> <b> <c> <d> <95|90> [8|10] | verdict <valid> <A> <B> <C> <D> | vectors | selftest\n");
+    fprintf(stderr, "usage: genstats wilson <k> <n> <95|90> | mcnemar1 <b> <c> | newcombe <a> <b> <c> <d> <95|90> [8|10] | verdict <valid> <A> <B> <C> <D> | lenmatch <target>:<suffix>... | vectors | selftest\n");
     return 2;
 }

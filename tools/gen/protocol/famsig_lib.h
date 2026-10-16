@@ -170,6 +170,66 @@ static int fs_edges(const FsShape *sh, char out[][16], int max)
     return ne;
 }
 
+/* ---- coarse form (rule R6) and coarse edges (rule R7) ----------------------------------------- *
+ * Coarse form of a shape: (1) `nested` is read as `arith`; (2) seq is flattened as in the canonical form;
+ * (3) every child list is sorted and duplicate siblings are collapsed to one; a seq left with one child is
+ * that child; (4) a top-level seq whose children are exactly one container plus only leaves is replaced by
+ * that container. Coarse signature = "gc1:" + coarse form. */
+static char *fs_coarse_node(const FsShape *sh, int v)
+{
+    const FsNode *n = &sh->node[v];
+    if (fs_is_leaf(n->kind)) return strdup(n->kind == 5 ? "arith" : fs_prim[n->kind]);
+    int kids[FS_MAXNODES], nk = 0;
+    fs_flat(sh, v, kids, &nk);
+    char *ks[FS_MAXNODES];
+    for (int j = 0; j < nk; j++) ks[j] = fs_coarse_node(sh, kids[j]);
+    qsort(ks, (size_t)nk, sizeof ks[0], fs_cmpstr);
+    int u = 0;
+    for (int j = 0; j < nk; j++) { if (u && !strcmp(ks[j], ks[u - 1])) free(ks[j]); else ks[u++] = ks[j]; }
+    if (n->kind == FS_SEQ && u == 1) return ks[0];
+    if (n->kind == FS_SEQ && v == sh->root) {
+        int nc = 0, ci = -1;
+        for (int j = 0; j < u; j++) if (strchr(ks[j], '(')) { nc++; ci = j; }
+        if (nc == 1) {
+            char *r = ks[ci];
+            for (int j = 0; j < u; j++) if (j != ci) free(ks[j]);
+            return r;
+        }
+    }
+    size_t len = strlen(fs_prim[n->kind]) + 3;
+    for (int j = 0; j < u; j++) len += strlen(ks[j]) + 1;
+    char *r = malloc(len);
+    if (!r) { perror("famsig"); exit(2); }
+    strcpy(r, fs_prim[n->kind]);
+    strcat(r, "(");
+    for (int j = 0; j < u; j++) { if (j) strcat(r, ","); strcat(r, ks[j]); free(ks[j]); }
+    strcat(r, ")");
+    return r;
+}
+
+/* "gc1:<coarse form>" into out (FS_SIGMAX + 4 bytes) */
+static void fs_coarse(const FsShape *sh, char *out)
+{
+    char *c = fs_coarse_node(sh, sh->root);
+    snprintf(out, FS_SIGMAX + 4, "gc1:%s", c);
+    free(c);
+}
+
+/* coarse composition edges: as fs_edges with `nested` read as `arith`; unique, sorted */
+static int fs_cedges(const FsShape *sh, char out[][16], int max)
+{
+    int ne = fs_edges(sh, out, max);
+    for (int q = 0; q < ne; q++) {
+        char *gt = strchr(out[q], '>');
+        if (gt && !strcmp(gt + 1, "nested")) strcpy(gt + 1, "arith");
+    }
+    int u = 0;
+    for (int a = 1; a < ne; a++)
+        for (int b = a; b > 0 && strcmp(out[b - 1], out[b]) > 0; b--) { char t[16]; strcpy(t, out[b]); strcpy(out[b], out[b - 1]); strcpy(out[b - 1], t); }
+    for (int q = 0; q < ne; q++) if (!u || strcmp(out[q], out[u - 1])) { if (u != q) strcpy(out[u], out[q]); u++; }
+    return u;
+}
+
 /* ---- metadata lines ---------------------------------------------------------------------------- */
 
 enum { FS_CORPUS, FS_DEV, FS_HELDOUT, FS_NSPLIT };
@@ -181,7 +241,8 @@ typedef struct {
     int count[FS_NPRIM];
     char shape[FS_MAXLEN + 1];
     char sig[FS_SIGMAX + 4];      /* "gs1:" + canonical */
-    int distinct;                 /* distinct primitives in the shape */
+    char coarse[FS_SIGMAX + 4];   /* "gc1:" + coarse form (R6) */
+    int distinct;                /* distinct primitives in the shape */
     char src[256];                /* file:line, for messages */
 } FsMeta;
 
@@ -237,6 +298,7 @@ static int fs_meta_line(const char *line, FsMeta *m, char *err, size_t errn)
         if (sh.count[k] != m->count[k]) { snprintf(err, errn, "declared %s=%d but the shape has %d", fs_prim[k], m->count[k], sh.count[k]); return -1; }
     strcpy(m->shape, f[8]);
     snprintf(m->sig, sizeof m->sig, "gs1:%s", sh.canon);
+    fs_coarse(&sh, m->coarse);
     for (int k = 0; k < FS_NPRIM; k++) if (m->count[k]) m->distinct++;
     return 0;
 }
@@ -389,6 +451,17 @@ static int fs_cmpmeta_sig(const void *a, const void *b)
 
 /* The disjointness rule (FAMSIG_V1.md section 4) over every line read. Prints a report to out
  * (heldout family signatures only when show_heldout); returns the number of rule failures. */
+/* composition edges of one shape that are absent from the corpus edge list */
+static int fs_novel(const char *shape, char cedge[][16], int nce)
+{
+    FsShape sh;
+    if (fs_shape(shape, &sh)) return 0;
+    char e[64][16];
+    int ne = fs_cedges(&sh, e, 64), novel = 0;
+    for (int q = 0; q < ne; q++) { int seen = 0; for (int r = 0; r < nce; r++) if (!strcmp(cedge[r], e[q])) seen = 1; novel += !seen; }
+    return novel;
+}
+
 static int fs_rule(FsSet *set, FILE *out, int show_heldout)
 {
     int fails = 0;
@@ -405,6 +478,15 @@ static int fs_rule(FsSet *set, FILE *out, int show_heldout)
                 int ho = m[i].split == FS_HELDOUT || m[j].split == FS_HELDOUT;
                 fprintf(out, "FAIL R3 family shared by %s and %s: %s %s and %s\n", fs_split[m[i].split], fs_split[m[j].split],
                         ho && !show_heldout ? "(heldout signature hidden)" : m[i].sig, m[i].id, m[j].id);
+                fails++;
+            }
+    /* R6 coarse signatures are pairwise disjoint across splits */
+    for (int i = 0; i < n; i++)
+        for (int j = i + 1; j < n; j++)
+            if (m[i].split != m[j].split && !strcmp(m[i].coarse, m[j].coarse) && strcmp(m[i].sig, m[j].sig)) {
+                int ho = m[i].split == FS_HELDOUT || m[j].split == FS_HELDOUT;
+                fprintf(out, "FAIL R6 coarse family shared by %s and %s: %s %s and %s\n", fs_split[m[i].split], fs_split[m[j].split],
+                        ho && !show_heldout ? "(heldout signature hidden)" : m[i].coarse, m[i].id, m[j].id);
                 fails++;
             }
     /* R4 every heldout primitive appears in some corpus task; R5 heldout shapes use >= 2 distinct primitives */
@@ -424,12 +506,17 @@ static int fs_rule(FsSet *set, FILE *out, int show_heldout)
         FsShape sh;
         if (fs_shape(m[i].shape, &sh)) continue;
         char e[64][16];
-        int ne = fs_edges(&sh, e, 64);
+        int ne = fs_cedges(&sh, e, 64);
         for (int q = 0; q < ne; q++) {
             int dup = 0;
             for (int r = 0; r < nce; r++) if (!strcmp(cedge[r], e[q])) dup = 1;
             if (!dup && nce < 256) strcpy(cedge[nce++], e[q]);
         }
+    }
+    /* R7 every heldout shape has at least one coarse composition edge that no corpus shape has */
+    for (int i = 0; i < n; i++) {
+        if (m[i].split != FS_HELDOUT) continue;
+        if (fs_novel(m[i].shape, cedge, nce) < 1) { fprintf(out, "FAIL R7 heldout task %s has no composition edge absent from the corpus (novel_edges=0)\n", m[i].id); fails++; }
     }
     /* report: per split counts, then families in signature order */
     FsMeta *s = malloc((size_t)(n ? n : 1) * sizeof *s);
@@ -447,13 +534,7 @@ static int fs_rule(FsSet *set, FILE *out, int show_heldout)
         if (s[i].split != FS_HELDOUT || show_heldout) {
             fprintf(out, "family %s %s tasks=%d", fs_split[s[i].split], s[i].sig, j - i);
             if (s[i].split == FS_HELDOUT) {
-                FsShape sh;
-                int novel = 0;
-                if (!fs_shape(s[i].shape, &sh)) {
-                    char e[64][16];
-                    int ne = fs_edges(&sh, e, 64);
-                    for (int q = 0; q < ne; q++) { int seen = 0; for (int r = 0; r < nce; r++) if (!strcmp(cedge[r], e[q])) seen = 1; novel += !seen; }
-                }
+                int novel = fs_novel(s[i].shape, cedge, nce);
                 fprintf(out, " novel_edges=%d", novel);
             }
             fputc('\n', out);

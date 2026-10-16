@@ -1,8 +1,8 @@
 # GEN-1: pre-registered generalization protocol tools (aien-spark/omega#476, docs/one_layer/GEN_PROTOCOL_V1.md).
 # Picked up by `-include mk/*.mk`; not part of `all` or `test`. CPU only.
 #
-# gen-protocol-tools   build/gen_protocol/{famsig,gencheck,genstats}
-# test-gen-protocol    genstats selftest + byte-identical stats_vectors.tsv, famsig known answers and mutants,
+# gen-protocol-tools   build/gen_protocol/{famsig,gencheck,genstats,genjac}
+# test-gen-protocol    genstats selftest, genjac known answers + byte-identical stats_vectors.tsv, famsig known answers and mutants,
 #                      gencheck on tests/one_layer/generalization/protocol.json and its mutants (manifest,
 #                      tree, synthetic held-out split), dev pack reproducibility + oracle negative control.
 #                      GEN_TASKS_CHECK=1 also runs ola.sh tasks-check on the dev pack (clean tree needed).
@@ -25,7 +25,11 @@ $(GENP_DIR)/genstats: $(GENP_SRC)/genstats.c
 	@mkdir -p $(GENP_DIR)
 	$(CC) $(GENP_CFLAGS) -o $@ $(GENP_SRC)/genstats.c -lm
 
-gen-protocol-tools: $(GENP_DIR)/famsig $(GENP_DIR)/gencheck $(GENP_DIR)/genstats
+$(GENP_DIR)/genjac: $(GENP_SRC)/genjac.c
+	@mkdir -p $(GENP_DIR)
+	$(CC) $(GENP_CFLAGS) -o $@ $(GENP_SRC)/genjac.c
+
+gen-protocol-tools: $(GENP_DIR)/famsig $(GENP_DIR)/gencheck $(GENP_DIR)/genstats $(GENP_DIR)/genjac
 
 test-gen-protocol:
 	CC="$(CC)" bash $(GENP_SRC)/test_gen_protocol.sh $(abspath $(GENP_DIR))/test

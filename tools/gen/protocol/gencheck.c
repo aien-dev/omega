@@ -8,12 +8,23 @@
  *       Parse the manifest with a strict JSON reader (ASCII only; duplicate keys, unknown keys, missing keys
  *       and wrong types are refused), check every frozen v1 constant, re-hash every pinned file under <root>,
  *       check the dev split (task list = META ids = case directories, families = META signatures) and, once
- *       the corpus META is frozen, apply the disjointness rule R1..R5 over dev + corpus.
+ *       the corpus META is frozen, apply the disjointness rule R1..R7 over dev + corpus.
+ *       Record-set manifests (C and D) are re-hashed once their paths and digests are set.
+ *   gencheck run-ready <protocol.json> <root>
+ *       Everything `manifest` checks with nothing pending: any null field, any interface file missing from
+ *       <root>, or no `interfaces` entry named by retrieval.contract (genret-cli-v3) refuses. Required before
+ *       the seal is opened and before the run; there is no "pending merge" continue.
+ *   gencheck open <protocol.json> <root> <OPEN>
+ *       The seal-open check (custodian, in a clean checkout of the OPEN commit; reducer, on protocol.json taken
+ *       from that commit): everything `manifest` checks with nothing pending (every interface file present,
+ *       corpus META, prefix, both record sets, HELDOUT.pub and tasks digests set), and the OPEN receipt
+ *       ("gen-open 1", omega_commit, protocol_sha256, tasks_sha256, heldout_pub_sha256) matches protocol.json.
  *   gencheck split <protocol.json> <root> <SPLIT> <HELDOUT.pub>
  *       Everything `manifest` checks, then (reviewer, after the seal): SPLIT parses (gen-split 1), HELDOUT.pub
  *       parses (gen-heldout-pub 1) and matches SPLIT (split_sha256, famlist_sha256, task ids, counts), the
- *       held-out count and minimum family count of the manifest hold, and R1..R5 pass over dev + corpus +
- *       SPLIT. Held-out signatures are never printed.
+ *       held-out count and minimum family count of the manifest hold, and R1..R7 pass over dev + corpus +
+ *       SPLIT. Fails closed when splits.heldout.pub_sha256 or tasks_sha256 is null in the manifest. Held-out
+ *       signatures are never printed.
  * Output: "ok ..." lines on stdout, then "GENCHECK PASS" (exit 0). A refusal prints "gencheck: FAIL <reason>"
  * on stderr and "GENCHECK FAIL" on stdout (exit 1). Usage errors exit 2.
  */
@@ -201,7 +212,8 @@ static const Key schema[] = {
     {"conditions[].prefix_examples", "i"}, {"conditions[].retrieval", "s"},
     {"retrieval", "o"}, {"retrieval.contract", "s"}, {"retrieval.record_schema", "s"}, {"retrieval.k", "i"},
     {"retrieval.cap_bytes", "i"}, {"retrieval.mode", "s"}, {"retrieval.query", "s"},
-    {"retrieval.c_pool_excludes_prefix", "b"},
+    {"retrieval.c_pool_excludes_prefix", "b"}, {"retrieval.length_match_abs_bytes", "i"},
+    {"retrieval.length_match_frac", "n"}, {"retrieval.length_match_min_matched_frac", "n"},
     {"generation", "o"}, {"generation.primary", "s"}, {"generation.max_tokens", "i"},
     {"generation.max_rounds", "i"}, {"generation.attempts", "i"}, {"generation.attempt1_temperature", "i"},
     {"generation.sampled_temperature", "n"}, {"generation.sampled_top_p", "n"}, {"generation.seed_base", "i"},
@@ -210,11 +222,12 @@ static const Key schema[] = {
     {"gates", "o"}, {"gates.greedy", "o"}, {"gates.greedy.tasks", "s"}, {"gates.greedy.condition", "s"},
     {"gates.greedy.repeats", "i"}, {"gates.g0", "o"}, {"gates.g0.script", "s"}, {"gates.g0.task", "s"},
     {"gates.g0.condition", "s"}, {"gates.g0.seeds", "i"}, {"gates.g0.repeat", "i"}, {"gates.g0.otherwise", "s"},
+    {"gates.g0.seed_values", "a"}, {"gates.g0.seed_values[]", "i"}, {"generation.in_flight", "i"},
     {"decision", "o"}, {"decision.schema", "s"}, {"decision.primary", "s"}, {"decision.controls", "a"},
     {"decision.controls[]", "s"}, {"decision.delta", "n"}, {"decision.alpha", "n"}, {"decision.test", "s"},
     {"decision.ci", "s"}, {"decision.z95", "n"}, {"decision.z90", "n"}, {"decision.fail_control", "s"},
     {"decision.sanity_ab_max", "i"}, {"decision.verdicts", "a"}, {"decision.verdicts[]", "s"},
-    {"decision.vectors", "s"},
+    {"decision.vectors", "s"}, {"decision.floor_max", "i"}, {"decision.ceiling_min", "i"},
     {"splits", "o"},
     {"splits.dev", "o"}, {"splits.dev.count", "i"}, {"splits.dev.meta", "s"}, {"splits.dev.meta_sha256", "s"},
     {"splits.dev.cases", "s"}, {"splits.dev.pack_sha256", "s"}, {"splits.dev.tasks", "a"},
@@ -223,9 +236,11 @@ static const Key schema[] = {
     {"splits.corpus.meta_sha256", "sz"},
     {"splits.heldout", "o"}, {"splits.heldout.count", "i"}, {"splits.heldout.min_families", "i"},
     {"splits.heldout.pub_sha256", "sz"}, {"splits.heldout.tasks_sha256", "sz"},
+    {"splits.heldout.near_dup_threshold", "n"},
     {"record_sets", "o"}, {"record_sets.prefix_ids", "az"}, {"record_sets.prefix_ids[]", "s"},
     {"record_sets.prefix_sha256", "sz"}, {"record_sets.raw_manifest_sha256", "sz"},
-    {"record_sets.abstraction_manifest_sha256", "sz"},
+    {"record_sets.abstraction_manifest_sha256", "sz"}, {"record_sets.raw_manifest", "sz"},
+    {"record_sets.abstraction_manifest", "sz"},
     {"pins", "a"}, {"pins[]", "o"}, {"pins[].path", "s"}, {"pins[].sha256", "s"},
     {"interfaces", "a"}, {"interfaces[]", "o"}, {"interfaces[].name", "s"}, {"interfaces[].path", "s"},
     {"interfaces[].commit", "s"}, {"interfaces[].sha256", "s"},
@@ -245,7 +260,8 @@ static const Fixed fixed[] = {
     {"conditions[3].name", "D"}, {"conditions[3].prefix_examples", "14"}, {"conditions[3].retrieval", "abstraction"},
     {"retrieval.contract", "genret-cli-v3"}, {"retrieval.record_schema", "gen-record-1"}, {"retrieval.k", "3"},
     {"retrieval.cap_bytes", "4096"}, {"retrieval.mode", "normal"}, {"retrieval.query", "requirement+prompt"},
-    {"retrieval.c_pool_excludes_prefix", "true"},
+    {"retrieval.c_pool_excludes_prefix", "true"}, {"retrieval.length_match_abs_bytes", "256"},
+    {"retrieval.length_match_frac", "0.15"}, {"retrieval.length_match_min_matched_frac", "0.5"}, {"generation.in_flight", "1"},
     {"generation.primary", "attempt1_round1_functional"}, {"generation.max_tokens", "3072"},
     {"generation.max_rounds", "2"}, {"generation.attempts", "3"}, {"generation.attempt1_temperature", "0"},
     {"generation.sampled_temperature", "0.7"}, {"generation.sampled_top_p", "0.8"},
@@ -255,6 +271,9 @@ static const Fixed fixed[] = {
     {"gates.greedy.tasks", "dev"}, {"gates.greedy.condition", "B"}, {"gates.greedy.repeats", "2"},
     {"gates.g0.script", "tools/exp445/sampling-gate.sh"}, {"gates.g0.task", "devgen01"}, {"gates.g0.condition", "B"},
     {"gates.g0.seeds", "8"}, {"gates.g0.repeat", "1"}, {"gates.g0.otherwise", "UNAVAILABLE"},
+    {"gates.g0.seed_values[0]", "476901"}, {"gates.g0.seed_values[1]", "476902"}, {"gates.g0.seed_values[2]", "476903"},
+    {"gates.g0.seed_values[3]", "476904"}, {"gates.g0.seed_values[4]", "476905"}, {"gates.g0.seed_values[5]", "476906"},
+    {"gates.g0.seed_values[6]", "476907"}, {"gates.g0.seed_values[7]", "476908"},
     {"decision.schema", "omega.gen.decision.v1"}, {"decision.primary", "attempt1_round1_functional"},
     {"decision.controls[0]", "A"}, {"decision.controls[1]", "B"}, {"decision.controls[2]", "C"},
     {"decision.delta", "0.10"}, {"decision.alpha", "0.05"}, {"decision.test", "mcnemar_exact_one_sided"},
@@ -262,17 +281,19 @@ static const Fixed fixed[] = {
     {"decision.fail_control", "C"}, {"decision.sanity_ab_max", "2"},
     {"decision.verdicts[0]", "INVALID"}, {"decision.verdicts[1]", "PASS"}, {"decision.verdicts[2]", "FAIL"},
     {"decision.verdicts[3]", "INCONCLUSIVE"},
-    {"decision.vectors", "tests/one_layer/generalization/stats_vectors.tsv"},
+    {"decision.vectors", "tests/one_layer/generalization/stats_vectors.tsv"}, {"decision.floor_max", "3"},
+    {"decision.ceiling_min", "57"},
     {"splits.dev.count", "10"}, {"splits.dev.meta", "tests/one_layer/generalization/dev/META"},
     {"splits.dev.cases", "tests/one_layer/generalization/dev/tasks/cases"},
     {"splits.corpus.count_target", "48"}, {"splits.corpus.meta", "tests/one_layer/generalization/corpus/META"},
-    {"splits.heldout.count", "60"}, {"splits.heldout.min_families", "6"},
+    {"splits.heldout.count", "60"}, {"splits.heldout.min_families", "6"}, {"splits.heldout.near_dup_threshold", "0.5"},
 };
 #define NFIXED ((int)(sizeof fixed / sizeof fixed[0]))
 
 /* exact array lengths */
 static const struct { const char *path; int len; } fixed_len[] = {
     {"conditions", 4}, {"generation.sets", 2}, {"decision.controls", 3}, {"decision.verdicts", 4},
+    {"gates.g0.seed_values", 8},
 };
 
 /* files that must be pinned (protocol section 13); more may be pinned */
@@ -294,6 +315,7 @@ static const char *const must_pin[] = {
     "tools/gen/protocol/famsig.c",
     "tools/gen/protocol/famsig_lib.h",
     "tools/gen/protocol/gencheck.c",
+    "tools/gen/protocol/genjac.c",
     "tools/gen/protocol/genstats.c",
 };
 
@@ -346,6 +368,7 @@ static int safe_rel(const char *p)
 }
 
 static const char *root;
+static int strict;   /* run-ready and open modes: nothing may be pending */
 
 static int file_sha(const char *rel, char out[65])
 {
@@ -483,7 +506,11 @@ static void check_manifest(const char *json_path)
         snprintf(k, sizeof k, "interfaces[%d].sha256", i);
         const char *want = str(k);
         if (!hex64(want)) gc_fail("%s: not 64 lowercase hex", k);
-        if (file_sha(path, sha)) { printf("ok interface %s: %s not in this tree (pending merge), pinned %.16s...\n", name, path, want); continue; }
+        if (file_sha(path, sha)) {
+            if (strict) gc_fail("interface %s: %s is not in this tree (every interface must be present at seal-open)", name, path);
+            printf("ok interface %s: %s not in this tree (pending merge), pinned %.16s...\n", name, path, want);
+            continue;
+        }
         if (strcmp(sha, want)) gc_fail("digest drift: interface %s file %s is %s, pinned %s", name, path, sha, want);
         printf("ok interface %s: %s matches\n", name, path);
     }
@@ -567,8 +594,9 @@ static void check_manifest(const char *json_path)
     Ent *cm = get("splits.corpus.meta_sha256");
     if (cm->type == 'z') {
         corpus_frozen = 0;
-        const char *pre[] = {"record_sets.prefix_ids", "record_sets.prefix_sha256", "record_sets.raw_manifest_sha256", "record_sets.abstraction_manifest_sha256"};
-        for (int i = 0; i < 4; i++)
+        const char *pre[] = {"record_sets.prefix_ids", "record_sets.prefix_sha256", "record_sets.raw_manifest_sha256",
+                             "record_sets.abstraction_manifest_sha256", "record_sets.raw_manifest", "record_sets.abstraction_manifest"};
+        for (int i = 0; i < 6; i++)
             if (get(pre[i])->type != 'z') gc_fail("%s is set while the corpus META is not frozen", pre[i]);
         FsSet both = {0};
         char err[512];
@@ -589,8 +617,8 @@ static void check_manifest(const char *json_path)
         if (fs_read(full, &both, err, sizeof err)) gc_fail("%s", err);
         snprintf(full, sizeof full, "%s/%s", root, cmeta);
         if (fs_read(full, &both, err, sizeof err)) gc_fail("%s", err);
-        if (fs_rule(&both, stdout, 0)) gc_fail("disjointness rule (R1..R5) fails on dev + corpus");
-        printf("ok corpus split: %d tasks, dev + corpus pass R1..R5\n", corpus.n);
+        if (fs_rule(&both, stdout, 0)) gc_fail("disjointness rule (R1..R7) fails on dev + corpus");
+        printf("ok corpus split: %d tasks, dev + corpus pass R1..R7\n", corpus.n);
         Ent *pi = get("record_sets.prefix_ids");
         if (pi->type == 'a') {
             int n = count_elems("record_sets.prefix_ids");
@@ -616,6 +644,18 @@ static void check_manifest(const char *json_path)
         Ent *e = get(opt[i]);
         if (e->type == 's' && !hex64(e->raw)) gc_fail("%s: not 64 lowercase hex", opt[i]);
     }
+    /* C and D record-set manifests: path and digest both null (not frozen) or both set and re-hashed */
+    static const char *const rs[2][2] = {{"record_sets.raw_manifest", "record_sets.raw_manifest_sha256"},
+                                         {"record_sets.abstraction_manifest", "record_sets.abstraction_manifest_sha256"}};
+    for (int i = 0; i < 2; i++) {
+        Ent *p = get(rs[i][0]), *h = get(rs[i][1]);
+        if ((p->type == 'z') != (h->type == 'z')) gc_fail("%s and %s must both be null or both be set", rs[i][0], rs[i][1]);
+        if (p->type == 'z') continue;
+        if (!safe_rel(p->raw)) gc_fail("%s: unsafe path", rs[i][0]);
+        if (file_sha(p->raw, sha)) gc_fail("record-set manifest missing: %s", p->raw);
+        if (strcmp(sha, h->raw)) gc_fail("digest drift: record-set manifest %s is %s, %s %s", p->raw, sha, rs[i][1], h->raw);
+        printf("ok record set %s re-hashed\n", p->raw);
+    }
 }
 
 /* ---------- split (reviewer, after the seal) ---------- */
@@ -623,6 +663,8 @@ static void check_manifest(const char *json_path)
 static void check_split(const char *split_path, const char *pub_path)
 {
     if (!corpus_frozen) gc_fail("split check needs the frozen corpus META (splits.corpus.meta_sha256 is null)");
+    if (get("splits.heldout.pub_sha256")->type != 's' || get("splits.heldout.tasks_sha256")->type != 's')
+        gc_fail("split check needs splits.heldout.pub_sha256 and tasks_sha256 anchored in protocol.json (fail closed on null)");
     FsSet hs = {0};
     char err[512];
     if (fs_read(split_path, &hs, err, sizeof err)) gc_fail("%s", err);
@@ -686,9 +728,9 @@ static void check_split(const char *split_path, const char *pub_path)
     if (hs.n != want_n) gc_fail("held-out split has %d tasks, protocol requires %d", hs.n, want_n);
     if (nfam < want_f) gc_fail("held-out split has %d families, protocol requires at least %d", nfam, want_f);
     Ent *e = get("splits.heldout.pub_sha256");
-    if (e->type == 's' && strcmp(e->raw, pubsha)) gc_fail("digest drift: HELDOUT.pub is %s, splits.heldout.pub_sha256 %s", pubsha, e->raw);
+    if (strcmp(e->raw, pubsha)) gc_fail("digest drift: HELDOUT.pub is %s, splits.heldout.pub_sha256 %s", pubsha, e->raw);
     e = get("splits.heldout.tasks_sha256");
-    if (e->type == 's' && strcmp(e->raw, p_tasks)) gc_fail("tasks_sha256 mismatch: HELDOUT.pub %s, protocol %s", p_tasks, e->raw);
+    if (strcmp(e->raw, p_tasks)) gc_fail("tasks_sha256 mismatch: HELDOUT.pub %s, protocol %s", p_tasks, e->raw);
     printf("ok HELDOUT.pub matches SPLIT: %d tasks, %d families, split and famlist digests\n", hs.n, nfam);
 
     FsSet all = {0};
@@ -698,8 +740,68 @@ static void check_split(const char *split_path, const char *pub_path)
     snprintf(full, sizeof full, "%s/%s", root, str("splits.corpus.meta"));
     if (fs_read(full, &all, err, sizeof err)) gc_fail("%s", err);
     if (fs_read(split_path, &all, err, sizeof err)) gc_fail("%s", err);
-    if (fs_rule(&all, stdout, 0)) gc_fail("disjointness rule (R1..R5) fails on dev + corpus + SPLIT");
-    printf("ok dev + corpus + SPLIT pass R1..R5\n");
+    if (fs_rule(&all, stdout, 0)) gc_fail("disjointness rule (R1..R7) fails on dev + corpus + SPLIT");
+    printf("ok dev + corpus + SPLIT pass R1..R7\n");
+}
+
+
+/* ---------- open (custodian, seal-open step; reducer, before reducing) ---------- */
+
+static void check_frozen(void)
+{
+    for (int i = 0; i < nent; i++)
+        if (ent[i].type == 'z') gc_fail("not run-ready: %s is null", ent[i].path);
+    int found = 0, ni = count_elems("interfaces");
+    for (int i = 0; i < ni; i++) {
+        char k[64];
+        snprintf(k, sizeof k, "interfaces[%d].name", i);
+        found |= !strcmp(str(k), str("retrieval.contract"));
+    }
+    if (!found) gc_fail("interfaces: the retrieval contract %s is not pinned", str("retrieval.contract"));
+
+    printf("ok run-ready: no null field, every interface present and matching, %s pinned\n", str("retrieval.contract"));
+}
+
+static void check_open(const char *json_path, const char *open_path)
+{
+    size_t jl;
+    char *jb = fs_slurp(json_path, &jl);
+    if (!jb) gc_fail("cannot read %s", json_path);
+    unsigned char d[32];
+    char jsha[65];
+    sha256_hash((const unsigned char *)jb, jl, d);
+    fs_hex(d, jsha);
+    free(jb);
+
+    size_t len;
+    char *b = fs_slurp(open_path, &len);
+    if (!b) gc_fail("cannot read %s", open_path);
+    if (strlen(b) != len || len == 0 || b[len - 1] != '\n') gc_fail("OPEN: must be text ending in a newline");
+    char *ln[8];
+    int nl = 0;
+    for (char *s = b; *s;) {
+        char *e = strchr(s, '\n');
+        *e = 0;
+        if (nl == 8) gc_fail("OPEN: more than 5 lines");
+        ln[nl++] = s;
+        s = e + 1;
+    }
+    if (nl != 5 || strcmp(ln[0], "gen-open 1")) gc_fail("OPEN: must be exactly 5 lines starting \"gen-open 1\"");
+    static const char *const key[4] = {"omega_commit ", "protocol_sha256 ", "tasks_sha256 ", "heldout_pub_sha256 "};
+    const char *val[4];
+    for (int i = 0; i < 4; i++) {
+        size_t kl = strlen(key[i]);
+        if (strncmp(ln[1 + i], key[i], kl)) gc_fail("OPEN: line %d must start \"%s\"", 2 + i, key[i]);
+        val[i] = ln[1 + i] + kl;
+    }
+    if (strlen(val[0]) != 40 || strspn(val[0], "0123456789abcdef") != 40) gc_fail("OPEN: omega_commit must be 40 lowercase hex");
+    for (int i = 1; i < 4; i++)
+        if (!hex64(val[i])) gc_fail("OPEN: %smust be 64 lowercase hex", key[i]);
+    if (strcmp(val[1], jsha)) gc_fail("OPEN: protocol_sha256 %s, protocol.json is %s", val[1], jsha);
+    if (strcmp(val[2], get("splits.heldout.tasks_sha256")->raw)) gc_fail("OPEN: tasks_sha256 differs from splits.heldout.tasks_sha256");
+    if (strcmp(val[3], get("splits.heldout.pub_sha256")->raw)) gc_fail("OPEN: heldout_pub_sha256 differs from splits.heldout.pub_sha256");
+    printf("ok OPEN matches protocol.json %.16s...\n", jsha);
+    free(b);
 }
 
 int main(int argc, char **argv)
@@ -707,12 +809,23 @@ int main(int argc, char **argv)
     if (argc == 4 && !strcmp(argv[1], "manifest")) {
         root = argv[3];
         check_manifest(argv[2]);
+    } else if (argc == 4 && !strcmp(argv[1], "run-ready")) {
+        root = argv[3];
+        strict = 1;
+        check_manifest(argv[2]);
+        check_frozen();
+    } else if (argc == 5 && !strcmp(argv[1], "open")) {
+        root = argv[3];
+        strict = 1;
+        check_manifest(argv[2]);
+        check_frozen();
+        check_open(argv[2], argv[4]);
     } else if (argc == 6 && !strcmp(argv[1], "split")) {
         root = argv[3];
         check_manifest(argv[2]);
         check_split(argv[4], argv[5]);
     } else {
-        fprintf(stderr, "usage: gencheck manifest <protocol.json> <root> | split <protocol.json> <root> <SPLIT> <HELDOUT.pub>\n");
+        fprintf(stderr, "usage: gencheck manifest <protocol.json> <root> | run-ready <protocol.json> <root> | open <protocol.json> <root> <OPEN> | split <protocol.json> <root> <SPLIT> <HELDOUT.pub>\n");
         return 2;
     }
     printf("GENCHECK PASS\n");

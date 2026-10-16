@@ -2,8 +2,8 @@
 
 Issue: aien-spark/omega#476 (GEN-1), program aien-spark/omega#475. This contract is frozen BEFORE the
 custodian authors any held-out task. Its only implementation is `tools/gen/protocol/famsig_lib.h`
-(tools `famsig` and `gencheck`). A change needs a new version (`FAMSIG_V2.md`, signature prefix
-`gs2:`); v1 stays valid and unchanged. `docs/one_layer/GEN_PROTOCOL_V1.md` pins this file by sha256.
+(tools `famsig` and `gencheck`). A change to the signature or token definition needs a new version (`FAMSIG_V2.md`, signature prefix
+`gs2:`). Additive amendments made before any held-out task exists (the token, the coarse form, rules R6 and R7, `famsig compare`) are dated in place. After the custodian seals, nothing changes. `docs/one_layer/GEN_PROTOCOL_V1.md` pins this file by sha256.
 
 ## 1. What a family is
 
@@ -55,7 +55,17 @@ task carries the token of the family of the task it was written for. (Added 2026
 consumer used v1: additive, no rule changed.)
 
 **Composition edges** of a shape: `P>C` for every container P and every child C of P after flattening,
-where C is the child's head primitive (`famsig edges <shape>`). Used only in the report (section 4).
+where C is the child's head primitive (`famsig edges <shape>`). **Coarse edges**: the same with a child
+`nested` read as `arith`, duplicates removed. Coarse edges gate through R7 (section 4).
+
+**Coarse form** (rule R6; added 2026-10-15 at review of PR #486, before any held-out task existed): (1)
+`nested` is read as `arith`; (2) `seq` is flattened as in the canonical form; (3) every child list is
+sorted and duplicate siblings are collapsed to one, and a `seq` left with one child is that child; (4) a
+top-level `seq` whose children are exactly one container plus only leaves is replaced by that container.
+**Coarse signature** = `gc1:` + coarse form; `famsig coarse <shape>` prints it. Examples:
+`loop(branch(nested))`, `loop(branch(arith,arith))` and `seq(arith,loop(branch(arith)))` all have
+`gc1:loop(branch(arith))`; `loop(branch(arith),arith)` has `gc1:loop(arith,branch(arith))` (a leaf added
+inside a container is a different coarse family; R7 decides whether it adds an edge the corpus lacks).
 
 ## 4. Metadata lines and the disjointness rule
 
@@ -74,13 +84,32 @@ One line per task, fields separated by exactly one space:
   appears in two splits.
 - **R4** every primitive used by a held-out task is used by at least one corpus task.
 - **R5** every held-out shape uses at least two distinct primitives (a held-out family is a combination).
+- **R6** coarse signatures (section 3) are pairwise disjoint across corpus, dev and held-out: two tasks
+  of different splits with different signatures never share a coarse signature (equal signatures are R3).
+  This refuses a held-out family that is a corpus or dev family with a duplicated sibling, a `nested`
+  for an `arith`, or a top-level `seq` wrapper around it plus leaves.
+- **R7** every held-out shape has at least one coarse composition edge (section 3) that no corpus shape
+  has (`novel_edges >= 1`). Wrapping a corpus shape in `seq(...)` or relabelling a leaf adds no edge, so
+  it fails R7.
+  (R6 and R7 added 2026-10-15 at review of PR #486, before any held-out task existed.)
 
-`famsig rule <file>...` applies R1..R5 over every task of every file given, prints per split
+Known limit: R6 and R7 are syntactic. `loop(branch(arith),arith)` next to a corpus `loop(branch(arith))`
+passes R6 (different coarse form) and passes R7 only if no corpus shape has the edge `loop>arith`. What
+the shape cannot show (the same algorithm declared under a different shape) is the job of the reviewer's
+blind re-declaration and the near-duplicate check (GEN_PROTOCOL_V1 section 2).
+
+`famsig rule <file>...` applies R1..R7 over every task of every file given, prints per split
 `split <s> tasks=<n> families=<m>`, then one `family <split> <signature> tasks=<k>` line per family
-(held-out families only with `--show-heldout`, adding `novel_edges=<e>`: edges no corpus shape has),
-and ends `RULE PASS` (exit 0) or `FAIL R<k> ...` lines and `RULE FAIL` (exit 1). `novel_edges` is for
-the reviewer's semantic-overlap audit; it does not gate. Counts (60 held-out tasks, at least 6
-held-out families, 10 dev tasks) are checked by `gencheck` against `protocol.json`, not by `famsig`.
+(held-out families only with `--show-heldout`, adding `novel_edges=<e>`: coarse edges no corpus shape
+has), and ends `RULE PASS` (exit 0) or `FAIL R<k> ...` lines and `RULE FAIL` (exit 1). A failure that
+involves a held-out task hides the held-out signature unless `--show-heldout` is given. Counts (60
+held-out tasks, at least 6 held-out families, 10 dev tasks) are checked by `gencheck` against
+`protocol.json`, not by `famsig`.
+
+`famsig compare <SPLIT> <REDECLARED>` (blind re-declaration, GEN_PROTOCOL_V1 section 2): both files are in
+the `gen-split 1` format of section 6 (any salt; the reviewer draws its own); it prints only `tasks=<n> mismatches=<k>`, where a mismatch
+is a task whose signature differs between the two files, and exits 1 when k > 0 or the two files do not
+name exactly the same task ids. It never prints a signature.
 
 ## 5. Where metadata lives
 
@@ -115,7 +144,7 @@ are exactly the case directories of the sealed `tasks.tar`.
 - `famsig split SPLIT` checks the format and prints `split_sha256=`, `famlist_sha256=`, `tasks=`,
   `families=` (nothing else); `famsig famlist SPLIT` prints FAMLIST.
 
-Before sealing, the custodian runs (as `gencust`) `famsig rule dev/META corpus/META SPLIT` and seals
+Before sealing, the custodian runs (as `gencust`) `famsig rule dev/META corpus/META SPLIT` (R1..R7) and seals
 only on `RULE PASS`. It must use the corpus META at the commit the run pins.
 
 ## 7. The public commitment (`HELDOUT.pub`, published by the custodian before any held-out generation)
@@ -133,7 +162,7 @@ task <task_id>                            (one per task, strictly ascending, n l
 Exactly these lines in this order, single spaces, final `\n`. Nothing about any family is published
 except `families <m>` and the two salted digests. After the run (or for the independent review, after
 the seal), anyone holding SPLIT verifies with `gencheck split` that SPLIT matches HELDOUT.pub
-(digests, ids, counts) and that R1..R5 pass against the pinned dev and corpus META.
+(digests, ids, counts) and that R1..R7 pass against the pinned dev and corpus META.
 
 ## 8. Reserved dev families (v1): signature and token
 
@@ -145,4 +174,13 @@ gs1:branch(loop(arith),nested)              gs1-e05d1c5dffd08b06
 gs1:loop(call(nested))                      gs1-bd9c105e5ae45397
 gs1:loop(loop(branch(arith)))               gs1-f63e09ec03a454ee
 gs1:seq(array,loop(array,branch(arith)))    gs1-30938c5c7504ef0e
+```
+
+Their coarse signatures (R6: no corpus or held-out task may have these either):
+
+```
+gc1:branch(arith,loop(arith))
+gc1:loop(call(arith))
+gc1:loop(loop(branch(arith)))
+gc1:loop(array,branch(arith))
 ```
