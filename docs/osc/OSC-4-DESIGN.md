@@ -241,7 +241,8 @@ F64 keeps all 64 bits, so the argument check at osc_interp.c:221 refuses only di
 3. Fuzz: the dual-run generator gains float ops and constants, and `gen_arg`
    (tests/compiler/test_osc_compiler.c:143) emits f32/f64 argument patterns including quiet and
    signalling NaN, both infinities, -0.0 and subnormals; `mismatches=0` over 100k programs plus
-   the ASan/UBSan leg (mk/compiler.mk:23).
+   the ASan/UBSan leg (mk/compiler.mk:23). `make test-compiler` runs 250 units; the 100k run is
+   `make test-compiler-float-fuzz-full` and the oracle check is `make test-compiler-float-oracle`.
 4. Backend: 25 `enc_expect` goldens, round trips, mutants. determinism.sh passes on version 6 units.
 
 ### 1.9 Limits
@@ -308,6 +309,15 @@ the one that keeps the interpreter and the native code bit-identical. The code i
     are RANGE. No other existing test changed.
 13. **Build flags.** `-ffp-contract=off -fno-fast-math -fno-math-errno` are on OSC_CFLAGS for every
     compiler-path C file and on the determinism.sh fallback build; `-lm` is linked for `sqrt`.
+14. **Float literal length.** A float literal is at most OSC_LEX_NAME_MAX (63) characters, the
+    identifier limit; a longer spelling is CAPACITY in the lexer (and, as a belt, in the checker),
+    never truncated: a cut spelling would parse to a different value (review of PR 489 found a
+    163-character 1e-161 compiling to 0.0 through a 128-byte buffer). Every other fixed-size text
+    buffer on the float path only shapes a diagnostic message or object name, never a value.
+15. **Evidence targets.** `make test-compiler` runs the float dual run at 250 units (smoke);
+    `make test-compiler-float-fuzz-full` runs 100,000 (receipt); `make test-compiler-float-oracle`
+    rebuilds every expect-run value of the f_*.osc goldens with tests/compiler/float_oracle.c and
+    diffs them.
 
 ## 2. Slice B: large buffers and typed slices
 
@@ -574,6 +584,8 @@ For aien-dev-ba (GPU engine and compiler dispatcher):
 For the advisor:
 1. Accept "floats as bit patterns in X registers" for the OSC-internal ABI (no V-register ABI until a real need)?
 2. Accept no float traps (inf/NaN flow) as a permanent language rule or only for OSC-4?
+   SETTLED 2026-10-16: permanent (1.3 items 7 and 13; the dated note under decision 6 of
+   docs/adr/OMEGA-SYSTEMS-CORE-0000.md). Not open.
 3. Gate `extern` and `syscall` behind oscc flags now, or wait for OSC-3 item 4 capabilities?
 4. Is a host-specific code SHA-256 for units with externs acceptable, given the IR SHA-256 stays reproducible?
 5. Should Slice B's `&[T]` replace `bytes`/`cells` names outright instead of aliasing them?
