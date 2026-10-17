@@ -67,7 +67,7 @@ prepare() {
   commit="$(git rev-parse HEAD)"
   [ "$clean" = 1 ] || commit="$commit-dirty"
   make -s PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 one-layer-acceptance-tools >&2
-  bin="$ROOT/build/one_layer"
+  bin="$ROOT/${OUT_DIR:-build}/one_layer"   # mk/one-layer-acceptance.mk: OLA_DIR = $(OUT_DIR)/one_layer
   rules_sha="$(sha "$HERE/RULES")"
   harness="$(harness_sha)"
   # 2. private directory (never inside the repo, never visible to a candidate)
@@ -164,7 +164,7 @@ tasks_public() {
   mkdir -p "$3"; out="$(realpath -e "$3")"
   [ -z "$(ls -A "$out")" ] || die "$out is not empty"
   make -s PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 one-layer-acceptance-tools >&2
-  "$ROOT/build/one_layer/ola" untar "$tar" "$sealed" "$out" public
+  "$ROOT/${OUT_DIR:-build}/one_layer/ola" untar "$tar" "$sealed" "$out" public
 }
 
 # check_sets <candidates_dir> <tasks/cases dir>: the whole run is refused unless every path is

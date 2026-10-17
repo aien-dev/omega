@@ -106,7 +106,7 @@ check "recorded M19R receipt digest reproduced" '[ "$(jq "del(.receipt_digest)" 
 check "recorded M19R receipt pretty form reproduced" '"$JSON_CANON" --pretty < "$rec" | cmp -s - "$rec"'
 
 echo "evidence retention across runs (stubbed qualification, no hardware)"
-check "make clean removes only the build directory" '[ "$(make --no-print-directory -C "$HERE" -n clean | tr -d "\n")" = "rm -rf build" ]'
+check "make clean removes only the build directory" '[ "$(make --no-print-directory -C "$HERE" -n clean | tr -d "\n")" = "rm -rf ${OUT_DIR:-build}" ]'
 fake=$TMP/fakeomega
 mkdir -p "$fake/tools" "$fake/build"
 ln -s "$HERE/src" "$fake/src"; cp "$HERE/tools/json_canon.c" "$fake/tools/"
