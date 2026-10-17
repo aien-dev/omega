@@ -321,11 +321,68 @@ static int validate_insn(const OscUnit *u, int fi, const OscFunc *f, uint32_t ii
 
 static bool str_ok(const char *s, size_t cap) { return memchr(s, 0, cap) != NULL; }
 
+/* omega#451: a structured requirement object (OscCterm list, spec/one-layer-format.md
+ * section 10.4) is a postfix program over a typed value stack that leaves exactly one
+ * bool (an empty list: no clause). Typing follows the IR's BIN/UN/CMP/CAST rules over
+ * value scalars; every field a term does not use is 0, so one object has one form. */
+static bool contract_ok(const OscFunc *f, const OscCterm *t, unsigned n, bool ens) {
+    OscScalar st[OSC_CONTRACT_MAX];
+    unsigned d = 0;
+    if (n > OSC_CONTRACT_MAX) return false;
+    for (unsigned i = 0; i < n; i++) {
+        const OscCterm *c = &t[i];
+        OscScalar a = d >= 2 ? st[d - 2] : OSC_T_VOID, b = d >= 1 ? st[d - 1] : OSC_T_VOID;
+        bool sub_only = c->arg == 0 && c->imm == 0;  /* operator and cast terms carry only `sub` */
+        switch (c->kind) {
+        case OSC_CT_PARAM:
+            if (c->sub || c->imm || c->arg >= f->nparams || !type_is_scalar(&f->vtype[c->arg])) return false;
+            st[d++] = f->vtype[c->arg].s;
+            break;
+        case OSC_CT_RESULT:
+            if (c->sub || c->arg || c->imm || !ens || !type_is_scalar(&f->ret)) return false;
+            st[d++] = f->ret.s;
+            break;
+        case OSC_CT_CONST:
+            if (c->arg || !is_value_scalar((OscScalar)c->sub) || !canonical_for((OscScalar)c->sub, c->imm)) return false;
+            st[d++] = (OscScalar)c->sub;
+            break;
+        case OSC_CT_BIN:
+            if (!sub_only || d < 2 || c->sub < OSC_B_ADD || c->sub > OSC_B_SHR) return false;
+            if (c->sub == OSC_B_SHL || c->sub == OSC_B_SHR) {
+                if (!osc_scalar_is_int(a) || !osc_scalar_is_int(b)) return false;
+            } else if (c->sub == OSC_B_AND || c->sub == OSC_B_OR || c->sub == OSC_B_XOR) {
+                if (a != b) return false;
+            } else if (!osc_scalar_is_int(a) || a != b) return false;
+            d--;  /* the result has a's type, now on top */
+            break;
+        case OSC_CT_UN:
+            if (!sub_only || d < 1) return false;
+            if (c->sub == OSC_U_LNOT) { if (b != OSC_T_BOOL) return false; }
+            else if ((c->sub != OSC_U_NEG && c->sub != OSC_U_BNOT) || !osc_scalar_is_int(b)) return false;
+            break;
+        case OSC_CT_CMP:
+            if (!sub_only || d < 2 || c->sub < OSC_C_EQ || c->sub > OSC_C_GE || a != b) return false;
+            st[--d - 1] = OSC_T_BOOL;
+            break;
+        case OSC_CT_CAST:
+            if (!sub_only || d < 1 || !osc_scalar_is_int(b) || !osc_scalar_is_int((OscScalar)c->sub)) return false;
+            st[d - 1] = (OscScalar)c->sub;
+            break;
+        default: return false;
+        }
+    }
+    return n == 0 || (d == 1 && st[0] == OSC_T_BOOL);
+}
+static bool func_contracts_ok(const OscFunc *f) {
+    return contract_ok(f, f->req, f->nreq, false) && contract_ok(f, f->ens, f->nens, true);
+}
+
 static int validate_func(const OscAlloc *a, const OscUnit *u, int fi, char *err, size_t n) {
     const OscFunc *f = &u->funcs[fi];
     if (!str_ok(f->name, sizeof f->name)) return vfail(err, n, "func %d: name not terminated", fi);
     if (!str_ok(f->requires_text, sizeof f->requires_text) || !str_ok(f->ensures_text, sizeof f->ensures_text))
         return vfail(err, n, "func %d: contract text not terminated", fi);
+    if (!func_contracts_ok(f)) return vfail(err, n, "func %d: malformed requires/ensures object", fi);
     if (f->nparams > OSC_MAX_PARAMS) return vfail(err, n, "func %d: %u params > %d", fi, f->nparams, OSC_MAX_PARAMS);
     if (f->nvregs > OSC_MAX_VREGS || f->nparams > f->nvregs) return vfail(err, n, "func %d: bad nvregs", fi);
     if (!(f->ret.s == OSC_T_VOID && f->ret.ref == OSC_REF_NONE && f->ret.elem == OSC_T_VOID && f->ret.len == 0 && f->ret.sid == 0) &&
@@ -493,22 +550,24 @@ static int validate_func(const OscAlloc *a, const OscUnit *u, int fi, char *err,
     return rc;
 }
 
-/* struct table: names terminated and unique, fields well-typed, offsets are
- * the prefix sums of the field cell counts (no padding), 1..64 cells. */
+/* struct table: names terminated, and unique where present (an empty name is an
+ * unnamed struct or field: version 6 keeps names in an optional table; versions
+ * 1..5 require every name, legacy_ok), fields well-typed, offsets are the prefix
+ * sums of the field cell counts (no padding), 1..64 cells. */
 static int validate_structs(const OscUnit *u, char *err, size_t n) {
     if (u->nstructs > OSC_MAX_STRUCTS) return vfail(err, n, "too many structs");
     for (int k = 0; k < u->nstructs; k++) {
         const OscStruct *s = &u->structs[k];
-        if (!str_ok(s->name, sizeof s->name) || !s->name[0]) return vfail(err, n, "struct %d: bad name", k);
+        if (!str_ok(s->name, sizeof s->name)) return vfail(err, n, "struct %d: bad name", k);
         for (int j = 0; j < k; j++)
-            if (!strcmp(u->structs[j].name, s->name)) return vfail(err, n, "struct %d: duplicate name", k);
+            if (s->name[0] && !strcmp(u->structs[j].name, s->name)) return vfail(err, n, "struct %d: duplicate name", k);
         if (s->nfields < 1 || s->nfields > OSC_MAX_FIELDS) return vfail(err, n, "struct %d: bad field count", k);
         unsigned off = 0;
         for (int f = 0; f < s->nfields; f++) {
             const OscField *fd = &s->fields[f];
-            if (!str_ok(fd->name, sizeof fd->name) || !fd->name[0]) return vfail(err, n, "struct %d field %d: bad name", k, f);
+            if (!str_ok(fd->name, sizeof fd->name)) return vfail(err, n, "struct %d field %d: bad name", k, f);
             for (int g = 0; g < f; g++)
-                if (!strcmp(s->fields[g].name, fd->name)) return vfail(err, n, "struct %d field %d: duplicate", k, f);
+                if (fd->name[0] && !strcmp(s->fields[g].name, fd->name)) return vfail(err, n, "struct %d field %d: duplicate", k, f);
             if (!is_value_scalar(fd->s) || fd->alen > OSC_MAX_ARRAY_LEN)
                 return vfail(err, n, "struct %d field %d: bad type", k, f);
             if (fd->off != off) return vfail(err, n, "struct %d field %d: offset %u != %u", k, f, fd->off, off);
@@ -534,6 +593,15 @@ int osc_ir_validate_a(const OscAlloc *a, const OscUnit *u, char *err, size_t n) 
 }
 
 int osc_ir_validate(const OscUnit *u, char *err, size_t n) { return osc_ir_validate_a(osc_alloc_libc(), u, err, n); }
+
+/* Negative controls: tests/compiler builds this file with OSC_IR_DECODE_MUTANT = k
+ * (k >= 1) to switch off exactly one refusal (14: the version-6 identity rule); the
+ * decoder tests must then fail.
+ * The default build has no mutant and every check is live. */
+#ifndef OSC_IR_DECODE_MUTANT
+#define OSC_IR_DECODE_MUTANT 0
+#endif
+#define MUTANT(k) (OSC_IR_DECODE_MUTANT == (k))
 
 /* ---- canonical encoding ------------------------------------------------ */
 typedef struct {
@@ -617,6 +685,55 @@ static uint8_t unit_version(const OscUnit *u) {
     return 1;
 }
 
+/* the function fields every version writes the same way, in this order: nparams, return
+ * type, register types, blocks, instructions (spec/one-layer-format.md 3.3 and 10.3) */
+static void wbody(W *w, const OscFunc *f) {
+    w8(w, f->nparams);
+    wtype(w, &f->ret);
+    w16(w, f->nvregs);
+    for (int v = 0; v < f->nvregs; v++) wtype(w, &f->vtype[v]);
+    w16(w, f->nblocks);
+    for (int b = 0; b < f->nblocks; b++) { w32(w, f->blocks[b].first); w32(w, f->blocks[b].count); }
+    w32(w, f->ninsns);
+    for (uint32_t i = 0; i < f->ninsns; i++) {
+        const OscInsn *in = &f->insns[i];
+        w8(w, in->op);
+        switch (in->op) {
+        case OSC_I_CONST: wvr(w, in->dst); w64(w, in->imm); break;
+        case OSC_I_MOV: case OSC_I_CAST: case OSC_I_ALLOC: wvr(w, in->dst); wvr(w, in->a); break;
+        case OSC_I_BIN: case OSC_I_CMP: w8(w, in->sub); wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); break;
+        case OSC_I_UN: w8(w, in->sub); wvr(w, in->dst); wvr(w, in->a); break;
+        case OSC_I_RELEASE: wvr(w, in->a); break;
+        case OSC_I_AOPEN: wvr(w, in->dst); w8(w, in->imm); break;
+        case OSC_I_AALLOC: wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); break;
+        case OSC_I_ADESTROY: wvr(w, in->a); break;
+        case OSC_I_POPEN: wvr(w, in->dst); w8(w, in->sub); w8(w, in->nargs); w64(w, in->imm); break;
+        case OSC_I_PCLOSE: wvr(w, in->a); break;
+        case OSC_I_HALLOC: case OSC_I_HGEN: wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); break;
+        case OSC_I_HFREE: wvr(w, in->a); wvr(w, in->b); wvr(w, in->c); break;
+        case OSC_I_HLOAD: wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); wvr(w, in->c); break;
+        case OSC_I_HSTORE: wvr(w, in->a); wvr(w, in->b); wvr(w, in->c); wvr(w, in->args[0]); break;
+        case OSC_I_LOAD: wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); break;
+        case OSC_I_STORE: wvr(w, in->a); wvr(w, in->b); wvr(w, in->c); break;
+        case OSC_I_SLOAD: wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); break;
+        case OSC_I_SSTORE: wvr(w, in->a); wvr(w, in->b); wvr(w, in->c); break;
+        case OSC_I_FLOAD: wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); w8(w, in->imm); break;
+        case OSC_I_FSTORE: wvr(w, in->a); wvr(w, in->b); wvr(w, in->c); w8(w, in->imm); break;
+        case OSC_I_CALL:
+            wvr(w, in->dst); w16(w, (uint16_t)in->callee); w8(w, in->nargs);
+            for (int k = 0; k < in->nargs; k++) wvr(w, in->args[k]);
+            break;
+        case OSC_I_TRAP: w8(w, in->imm); break;
+        case OSC_I_BR: w16(w, (uint16_t)in->blk_t); break;
+        case OSC_I_CBR: wvr(w, in->a); w16(w, (uint16_t)in->blk_t); w16(w, (uint16_t)in->blk_f); break;
+        case OSC_I_RET: wvr(w, in->a); break;
+        default: break; /* unreachable after validation */
+        }
+        /* `line` is debug information and deliberately not encoded: source
+         * spelling and layout never reach the identity (DESIGN s.4). */
+    }
+}
+
 static void encode_unit(const OscUnit *u, W *w) {
     /* format version 1 (OSC-1, no structs) / 2 (OSC-2 structs: struct table
      * after the magic) / 3 (OSC-2 arenas: AOPEN/AALLOC/ADESTROY present; the
@@ -646,58 +763,91 @@ static void encode_unit(const OscUnit *u, W *w) {
         size_t nl = strnlen(f->name, sizeof f->name);
         w8(w, nl);
         wbytes(w, f->name, nl);
-        w8(w, f->nparams);
-        wtype(w, &f->ret);
-        w16(w, f->nvregs);
-        for (int v = 0; v < f->nvregs; v++) wtype(w, &f->vtype[v]);
-        w16(w, f->nblocks);
-        for (int b = 0; b < f->nblocks; b++) { w32(w, f->blocks[b].first); w32(w, f->blocks[b].count); }
-        w32(w, f->ninsns);
-        for (uint32_t i = 0; i < f->ninsns; i++) {
-            const OscInsn *in = &f->insns[i];
-            w8(w, in->op);
-            switch (in->op) {
-            case OSC_I_CONST: wvr(w, in->dst); w64(w, in->imm); break;
-            case OSC_I_MOV: case OSC_I_CAST: case OSC_I_ALLOC: wvr(w, in->dst); wvr(w, in->a); break;
-            case OSC_I_BIN: case OSC_I_CMP: w8(w, in->sub); wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); break;
-            case OSC_I_UN: w8(w, in->sub); wvr(w, in->dst); wvr(w, in->a); break;
-            case OSC_I_RELEASE: wvr(w, in->a); break;
-            case OSC_I_AOPEN: wvr(w, in->dst); w8(w, in->imm); break;
-            case OSC_I_AALLOC: wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); break;
-            case OSC_I_ADESTROY: wvr(w, in->a); break;
-            case OSC_I_POPEN: wvr(w, in->dst); w8(w, in->sub); w8(w, in->nargs); w64(w, in->imm); break;
-            case OSC_I_PCLOSE: wvr(w, in->a); break;
-            case OSC_I_HALLOC: case OSC_I_HGEN: wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); break;
-            case OSC_I_HFREE: wvr(w, in->a); wvr(w, in->b); wvr(w, in->c); break;
-            case OSC_I_HLOAD: wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); wvr(w, in->c); break;
-            case OSC_I_HSTORE: wvr(w, in->a); wvr(w, in->b); wvr(w, in->c); wvr(w, in->args[0]); break;
-            case OSC_I_LOAD: wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); break;
-            case OSC_I_STORE: wvr(w, in->a); wvr(w, in->b); wvr(w, in->c); break;
-            case OSC_I_SLOAD: wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); break;
-            case OSC_I_SSTORE: wvr(w, in->a); wvr(w, in->b); wvr(w, in->c); break;
-            case OSC_I_FLOAD: wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); w8(w, in->imm); break;
-            case OSC_I_FSTORE: wvr(w, in->a); wvr(w, in->b); wvr(w, in->c); w8(w, in->imm); break;
-            case OSC_I_CALL:
-                wvr(w, in->dst); w16(w, (uint16_t)in->callee); w8(w, in->nargs);
-                for (int k = 0; k < in->nargs; k++) wvr(w, in->args[k]);
-                break;
-            case OSC_I_TRAP: w8(w, in->imm); break;
-            case OSC_I_BR: w16(w, (uint16_t)in->blk_t); break;
-            case OSC_I_CBR: wvr(w, in->a); w16(w, (uint16_t)in->blk_t); w16(w, (uint16_t)in->blk_f); break;
-            case OSC_I_RET: wvr(w, in->a); break;
-            default: break; /* unreachable after validation */
-            }
-            /* `line` is debug information and deliberately not encoded: source
-             * spelling and layout never reach the identity (DESIGN s.4). */
-        }
+        wbody(w, f);
         wtext(w, f->requires_text, sizeof f->requires_text);
         wtext(w, f->ensures_text, sizeof f->ensures_text);
     }
 }
 
+/* Versions 1..5 carry every struct and field name and no requirement objects; a unit
+ * outside that has only a version-6 form (osc_ir_encode refuses it). */
+static bool legacy_ok(const OscUnit *u) {
+    for (int fi = 0; fi < u->nfuncs; fi++)
+        if (u->funcs[fi].nreq || u->funcs[fi].nens) return false;
+    for (int k = 0; k < u->nstructs; k++) {
+        if (!u->structs[k].name[0]) return false;
+        for (int f = 0; f < u->structs[k].nfields; f++)
+            if (!u->structs[k].fields[f].name[0]) return false;
+    }
+    return true;
+}
+
+/* ---- format version 6 (omega#451, spec/one-layer-format.md section 10) ---- */
+static void wterm(W *w, const OscCterm *t) {
+    w8(w, t->kind);
+    switch (t->kind) {
+    case OSC_CT_PARAM: w8(w, t->arg); break;
+    case OSC_CT_RESULT: break;
+    case OSC_CT_CONST: w8(w, t->sub); w64(w, t->imm); break;
+    default: w8(w, t->sub); break;  /* BIN, UN, CMP, CAST (validated: no other kind) */
+    }
+}
+static void wterms(W *w, const OscCterm *t, uint8_t n) {
+    w8(w, n);
+    for (unsigned i = 0; i < n; i++) wterm(w, &t[i]);
+}
+/* one name-table entry; an empty text is absent and writes nothing */
+static void wname(W *w, unsigned kind, unsigned index, unsigned sub, const char *s, size_t cap) {
+    size_t k = strnlen(s, cap);
+    if (!k) return;
+    w8(w, kind); w8(w, index); w8(w, sub); w16(w, k); wbytes(w, s, k);
+}
+/* Calls fn(w, kind, index, sub, text, cap) for every possible entry in canonical order:
+ * ascending (kind, index, sub). Shared by the counting and the writing pass. */
+static void each_name(const OscUnit *u, W *w, void (*fn)(W *, unsigned, unsigned, unsigned, const char *, size_t)) {
+    for (int fi = 0; fi < u->nfuncs; fi++) fn(w, OSC_IR_NAME_FUNC, fi, 0, u->funcs[fi].name, OSC_NAME_MAX);
+    for (int k = 0; k < u->nstructs; k++) fn(w, OSC_IR_NAME_STRUCT, k, 0, u->structs[k].name, OSC_NAME_MAX);
+    for (int k = 0; k < u->nstructs; k++)
+        for (int f = 0; f < u->structs[k].nfields; f++) fn(w, OSC_IR_NAME_FIELD, k, f, u->structs[k].fields[f].name, OSC_NAME_MAX);
+    for (int fi = 0; fi < u->nfuncs; fi++) fn(w, OSC_IR_NAME_REQUIRES, fi, 0, u->funcs[fi].requires_text, OSC_CLAUSE_MAX);
+    for (int fi = 0; fi < u->nfuncs; fi++) fn(w, OSC_IR_NAME_ENSURES, fi, 0, u->funcs[fi].ensures_text, OSC_CLAUSE_MAX);
+}
+static unsigned g_name_count;
+static void count_name(W *w, unsigned kind, unsigned index, unsigned sub, const char *s, size_t cap) {
+    (void)w; (void)kind; (void)index; (void)sub;
+    if (strnlen(s, cap)) g_name_count++;
+}
+
+static void encode_unit_v6(const OscUnit *u, W *w) {
+    static const uint8_t magic[8] = {'O', 'S', 'C', '1', 'I', 'R', 0, OSC_IR_VERSION_V6};
+    wbytes(w, magic, sizeof magic);
+    wbytes(w, OSC_IR_V6_TAG, OSC_IR_V6_TAG_LEN);  /* the string and its NUL */
+    w8(w, u->nstructs);  /* struct table: layout only; names are in the name table */
+    for (int k = 0; k < u->nstructs; k++) {
+        const OscStruct *s = &u->structs[k];
+        w8(w, s->nfields); w16(w, s->ncells);
+        for (int f = 0; f < s->nfields; f++) { w8(w, (uint8_t)s->fields[f].s); w16(w, s->fields[f].alen); w16(w, s->fields[f].off); }
+    }
+    w16(w, u->nfuncs);
+    for (int fi = 0; fi < u->nfuncs; fi++) {
+        const OscFunc *f = &u->funcs[fi];
+        wbody(w, f);
+        wterms(w, f->req, f->nreq);
+        wterms(w, f->ens, f->nens);
+    }
+    /* identity = header and core: the name table never reaches it (mutant 14 hashes it too) */
+    if (!MUTANT(14)) w->sha = NULL;
+    g_name_count = 0;
+    each_name(u, w, count_name);
+    w16(w, g_name_count);
+    each_name(u, w, wname);
+}
+
 int osc_ir_encoding_version(const uint8_t *buf, size_t len) {
     static const uint8_t magic[7] = {'O', 'S', 'C', '1', 'I', 'R', 0};
     if (!buf || len < 8 || memcmp(buf, magic, sizeof magic) != 0) return -1;
+    if (buf[7] == OSC_IR_VERSION_V6)  /* version 6 only with its exact domain tag */
+        return len >= 8 + OSC_IR_V6_TAG_LEN && !memcmp(buf + 8, OSC_IR_V6_TAG, OSC_IR_V6_TAG_LEN) ? OSC_IR_VERSION_V6 : -1;
     return (buf[7] >= 1 && buf[7] <= OSC_IR_VERSION_MAX) ? buf[7] : -1;
 }
 
@@ -719,7 +869,7 @@ int osc_ir_slice_args_ok(const OscFunc *f, const uint64_t *args, unsigned nargs)
 }
 
 int osc_ir_encode(const OscUnit *u, uint8_t *buf, size_t cap, size_t *len) {
-    if (osc_ir_validate(u, NULL, 0)) return -1;
+    if (osc_ir_validate(u, NULL, 0) || !legacy_ok(u)) return -1;
     W w = {buf, buf ? cap : 0, 0, NULL, NULL, 0, false};
     encode_unit(u, &w);
     if (len) *len = w.len;
@@ -728,7 +878,7 @@ int osc_ir_encode(const OscUnit *u, uint8_t *buf, size_t cap, size_t *len) {
 }
 
 int osc_ir_digest(const OscUnit *u, uint8_t out[32]) {
-    if (osc_ir_validate(u, NULL, 0)) return -1;
+    if (osc_ir_validate(u, NULL, 0) || !legacy_ok(u)) return -1;
     sha256_ctx c;
     sha256_init(&c);
     W w = {NULL, 0, 0, &c, NULL, 0, false};
@@ -737,14 +887,26 @@ int osc_ir_digest(const OscUnit *u, uint8_t out[32]) {
     return 0;
 }
 
+int osc_ir_encode_v6(const OscUnit *u, uint8_t *buf, size_t cap, size_t *len) {
+    if (osc_ir_validate(u, NULL, 0)) return -1;
+    W w = {buf, buf ? cap : 0, 0, NULL, NULL, 0, false};
+    encode_unit_v6(u, &w);
+    if (len) *len = w.len;
+    if (buf && w.len > cap) return -1;
+    return 0;
+}
+
+int osc_ir_digest_v6(const OscUnit *u, uint8_t out[32]) {
+    if (osc_ir_validate(u, NULL, 0)) return -1;
+    sha256_ctx c;
+    sha256_init(&c);
+    W w = {NULL, 0, 0, &c, NULL, 0, false};
+    encode_unit_v6(u, &w);
+    sha256_final(&c, out);
+    return 0;
+}
+
 /* ---- strict decoder (omega#444, spec/one-layer-format.md) -------------- */
-/* Negative controls: tests/compiler builds this file with OSC_IR_DECODE_MUTANT = k
- * (k >= 1) to switch off exactly one refusal; the decoder tests must then fail.
- * The default build has no mutant and every check is live. */
-#ifndef OSC_IR_DECODE_MUTANT
-#define OSC_IR_DECODE_MUTANT 0
-#endif
-#define MUTANT(k) (OSC_IR_DECODE_MUTANT == (k))
 
 typedef struct {
     const uint8_t *p;
@@ -789,13 +951,16 @@ static OscScalar rscalar(R *r) {
     return r->rc ? OSC_T_VOID : (OscScalar)v;
 }
 /* text of at most max bytes into dst (dst has room for max + 1); a NUL inside is ambiguous */
-static void rtext(R *r, unsigned lenbytes, size_t max, char *dst) {
-    size_t k = (size_t)rcount(r, lenbytes, max);
+static void rtext_n(R *r, size_t k, char *dst) {
     if (!rneed(r, k)) return;
     if (memchr(r->p + r->pos, 0, k) && !MUTANT(5)) { rfail(r, OSC_IR_REFUSE_TEXT); return; }
     memcpy(dst, r->p + r->pos, k);
     dst[k] = 0;
     r->pos += k;
+}
+static void rtext(R *r, unsigned lenbytes, size_t max, char *dst) {
+    size_t k = (size_t)rcount(r, lenbytes, max);
+    rtext_n(r, k, dst);
 }
 static void rtype(R *r, OscType *t) {
     t->s = rscalar(r);
@@ -845,8 +1010,8 @@ static void decode_insn(R *r, OscInsn *in) {
     }
 }
 
-static void decode_func(R *r, OscFunc *f) {
-    rtext(r, 1, OSC_NAME_MAX - 1, f->name);
+/* nparams .. instructions: the fields wbody writes */
+static void decode_body(R *r, OscFunc *f) {
     f->nparams = (uint8_t)rle(r, 1);
     rtype(r, &f->ret);
     f->nvregs = (uint16_t)rcount(r, 2, OSC_MAX_VREGS);
@@ -858,19 +1023,127 @@ static void decode_func(R *r, OscFunc *f) {
     }
     f->ninsns = (uint32_t)rcount(r, 4, OSC_MAX_INSNS);
     for (uint32_t i = 0; i < f->ninsns && !r->rc; i++) decode_insn(r, &f->insns[i]);
+}
+static void decode_func(R *r, OscFunc *f) {
+    rtext(r, 1, OSC_NAME_MAX - 1, f->name);
+    decode_body(r, f);
     rtext(r, 2, OSC_CLAUSE_MAX - 1, f->requires_text);
     rtext(r, 2, OSC_CLAUSE_MAX - 1, f->ensures_text);
 }
 
+/* version 6: a requirement object, count then terms (unknown term kind: size unknown, RANGE) */
+static uint8_t rterms(R *r, OscCterm *t) {
+    uint8_t n = (uint8_t)rcount(r, 1, OSC_CONTRACT_MAX);
+    for (unsigned i = 0; i < n && !r->rc; i++) {
+        OscCterm *c = &t[i];
+        c->kind = (uint8_t)rle(r, 1);
+        if (r->rc) break;
+        switch (c->kind) {
+        case OSC_CT_PARAM: c->arg = (uint8_t)rle(r, 1); break;
+        case OSC_CT_RESULT: break;
+        case OSC_CT_CONST: c->sub = (uint8_t)rle(r, 1); c->imm = rle(r, 8); break;
+        case OSC_CT_BIN: case OSC_CT_UN: case OSC_CT_CMP: case OSC_CT_CAST: c->sub = (uint8_t)rle(r, 1); break;
+        default: rfail(r, OSC_IR_REFUSE_RANGE); break;
+        }
+    }
+    return r->rc ? 0 : n;
+}
+/* version 6: the name table. Per entry, in this order: kind (RANGE), target (IDENT),
+ * order and field number (ORDER), length (OVERSIZED; 0 is ORDER), text (TRUNCATED, TEXT). */
+static void decode_names(R *r, OscUnit *u) {
+    static char scratch[OSC_CLAUSE_MAX];  /* mutant 10 only: text of a dangling entry */
+    unsigned nn = (unsigned)rcount(r, 2, OSC_IR_V6_NAMES_MAX);
+    uint32_t prev = 0;
+    for (unsigned i = 0; i < nn && !r->rc; i++) {
+        unsigned kind = (unsigned)rle(r, 1), idx = (unsigned)rle(r, 1), sub = (unsigned)rle(r, 1);
+        if (r->rc) return;
+        if (kind < OSC_IR_NAME_FUNC || kind > OSC_IR_NAME_ENSURES) { rfail(r, OSC_IR_REFUSE_RANGE); return; }
+        bool of_func = kind == OSC_IR_NAME_FUNC || kind == OSC_IR_NAME_REQUIRES || kind == OSC_IR_NAME_ENSURES;
+        bool target = of_func ? idx < u->nfuncs
+                              : idx < u->nstructs && (kind != OSC_IR_NAME_FIELD || sub < u->structs[idx].nfields);
+        if (!target && !MUTANT(10)) { rfail(r, OSC_IR_REFUSE_IDENT); return; }
+        uint32_t key = (uint32_t)kind << 16 | (uint32_t)idx << 8 | sub;
+        if (((kind != OSC_IR_NAME_FIELD && sub) || key <= prev) && !MUTANT(11)) { rfail(r, OSC_IR_REFUSE_ORDER); return; }
+        prev = key;
+        size_t max = kind >= OSC_IR_NAME_REQUIRES ? OSC_CLAUSE_MAX - 1 : OSC_NAME_MAX - 1;
+        size_t k = (size_t)rcount(r, 2, max);
+        if (r->rc) return;
+        if (k == 0 && !MUTANT(11)) { rfail(r, OSC_IR_REFUSE_ORDER); return; }  /* absent names are omitted */
+        char *dst = scratch;
+        if (target) {
+            if (kind == OSC_IR_NAME_FUNC) dst = u->funcs[idx].name;
+            else if (kind == OSC_IR_NAME_REQUIRES) dst = u->funcs[idx].requires_text;
+            else if (kind == OSC_IR_NAME_ENSURES) dst = u->funcs[idx].ensures_text;
+            else if (kind == OSC_IR_NAME_STRUCT) dst = u->structs[idx].name;
+            else dst = u->structs[idx].fields[sub].name;
+        }
+        rtext_n(r, k, dst);
+    }
+}
+/* version 6: every numeric identifier in the core names an object: callees below nfuncs,
+ * struct ids at most nstructs (FLOAD/FSTORE field numbers stay with osc_ir_validate) */
+static bool core_ids_ok(const OscUnit *u) {
+    for (int fi = 0; fi < u->nfuncs; fi++) {
+        const OscFunc *f = &u->funcs[fi];
+        if (f->ret.sid > u->nstructs) return false;
+        for (int v = 0; v < f->nvregs; v++)
+            if (f->vtype[v].sid > u->nstructs) return false;
+        for (uint32_t i = 0; i < f->ninsns; i++)
+            if (f->insns[i].op == OSC_I_CALL && f->insns[i].callee >= u->nfuncs) return false;
+    }
+    return true;
+}
+static int decode_v6(R *r, OscUnit *u) {
+    if (!rneed(r, OSC_IR_V6_TAG_LEN)) return r->rc;
+    if (memcmp(r->p + r->pos, OSC_IR_V6_TAG, OSC_IR_V6_TAG_LEN) && !MUTANT(9)) return OSC_IR_REFUSE_DOMAIN;
+    r->pos += OSC_IR_V6_TAG_LEN;
+    u->nstructs = (uint8_t)rcount(r, 1, OSC_MAX_STRUCTS);
+    for (int k = 0; k < u->nstructs && !r->rc; k++) {
+        OscStruct *s = &u->structs[k];
+        s->nfields = (uint8_t)rcount(r, 1, OSC_MAX_FIELDS);
+        s->ncells = (uint16_t)rle(r, 2);
+        for (int f = 0; f < s->nfields && !r->rc; f++) {
+            OscField *fd = &s->fields[f];
+            fd->s = rscalar(r);
+            fd->alen = (uint16_t)rle(r, 2);
+            fd->off = (uint16_t)rle(r, 2);
+        }
+    }
+    u->nfuncs = (uint16_t)rcount(r, 2, OSC_MAX_FUNCS);
+    for (int fi = 0; fi < u->nfuncs && !r->rc; fi++) {
+        OscFunc *f = &u->funcs[fi];
+        decode_body(r, f);
+        f->nreq = rterms(r, f->req);
+        f->nens = rterms(r, f->ens);
+    }
+    decode_names(r, u);
+    if (r->rc) return r->rc;
+    if (r->pos != r->n && !MUTANT(1)) return OSC_IR_REFUSE_TRAILING;
+    if (!MUTANT(13) && !core_ids_ok(u)) return OSC_IR_REFUSE_IDENT;
+    if (!MUTANT(12))
+        for (int fi = 0; fi < u->nfuncs; fi++)
+            if (!func_contracts_ok(&u->funcs[fi])) return OSC_IR_REFUSE_CONTRACT;
+    if (!MUTANT(4) && osc_ir_validate(u, NULL, 0) != 0) return OSC_IR_REFUSE_INVALID;
+    /* backstop, as for versions 1..5 */
+    W w = {NULL, 0, 0, NULL, r->p, r->n, false};
+    encode_unit_v6(u, &w);
+    if (w.differs || w.len != r->n) return OSC_IR_REFUSE_NONCANONICAL;
+    return OSC_IR_OK;
+}
+
+_Static_assert(OSC_IR_V6_ENCODED_MAX >= OSC_IR_ENCODED_MAX, "the first size check uses the larger bound");
+
 static int decode_unit(const uint8_t *buf, size_t len, OscUnit *u) {
     static const uint8_t magic[7] = {'O', 'S', 'C', '1', 'I', 'R', 0};
-    if (len > OSC_IR_ENCODED_MAX && !MUTANT(7)) return OSC_IR_REFUSE_OVERSIZED;
+    if (len > OSC_IR_V6_ENCODED_MAX && !MUTANT(7)) return OSC_IR_REFUSE_OVERSIZED;
     R r = {buf, len, 0, 0};
     if (len < sizeof magic) return memcmp(buf, magic, len) ? OSC_IR_REFUSE_MAGIC : OSC_IR_REFUSE_TRUNCATED;
     if (memcmp(buf, magic, sizeof magic)) return OSC_IR_REFUSE_MAGIC;
     r.pos = sizeof magic;
     uint64_t version = rle(&r, 1);
     if (r.rc) return r.rc;
+    if (version == OSC_IR_VERSION_V6) return decode_v6(&r, u);
+    if (len > OSC_IR_ENCODED_MAX && !MUTANT(7)) return OSC_IR_REFUSE_OVERSIZED;  /* versions 1..5: their own bound */
     if (version < 1 || version > OSC_IR_VERSION_MAX) return OSC_IR_REFUSE_UNKNOWN_VERSION;
     if (version >= 2) {
         u->nstructs = (uint8_t)rcount(&r, 1, OSC_MAX_STRUCTS);
@@ -892,7 +1165,8 @@ static int decode_unit(const uint8_t *buf, size_t len, OscUnit *u) {
     for (int fi = 0; fi < u->nfuncs && !r.rc; fi++) decode_func(&r, &u->funcs[fi]);
     if (r.rc) return r.rc;
     if (r.pos != len && !MUTANT(1)) return OSC_IR_REFUSE_TRAILING;
-    if (!MUTANT(4) && osc_ir_validate(u, NULL, 0) != 0) return OSC_IR_REFUSE_INVALID;
+    /* versions 1..5 name every struct and field (validation alone now admits unnamed ones, for version 6) */
+    if (!MUTANT(4) && (osc_ir_validate(u, NULL, 0) != 0 || !legacy_ok(u))) return OSC_IR_REFUSE_INVALID;
     if (!MUTANT(2) && unit_version(u) != version) return OSC_IR_REFUSE_VERSION_MISMATCH;
     /* backstop: the bytes must be exactly what the encoder writes for this unit */
     W w = {NULL, 0, 0, NULL, buf, len, false};
@@ -924,6 +1198,10 @@ const char *osc_ir_refusal_name(int rc) {
     case OSC_IR_REFUSE_INVALID: return "INVALID";
     case OSC_IR_REFUSE_VERSION_MISMATCH: return "VERSION_MISMATCH";
     case OSC_IR_REFUSE_NONCANONICAL: return "NONCANONICAL";
+    case OSC_IR_REFUSE_DOMAIN: return "DOMAIN";
+    case OSC_IR_REFUSE_IDENT: return "IDENT";
+    case OSC_IR_REFUSE_ORDER: return "ORDER";
+    case OSC_IR_REFUSE_CONTRACT: return "CONTRACT";
     default: return "?";
     }
 }

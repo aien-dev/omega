@@ -194,6 +194,33 @@ typedef struct {
     uint32_t count;      /* last insn is the terminator */
 } OscBlock;
 
+/* Structured requirement object (omega#451, format version 6; spec/one-layer-format.md
+ * section 10.4): a requires / ensures clause as a postfix term list over a typed value
+ * stack, so the contract travels with the unit as data a checker can read, not only as
+ * source text. Operators reuse the IR's sub-op codes and typing rules (BIN/UN/CMP/CAST).
+ * The list must leave exactly one bool; an empty list means "no clause". The lowered
+ * checks in the instruction stream stay the executable enforcement; the object states
+ * the requirement. Only version 6 carries objects: osc_ir_encode refuses a unit that
+ * has any (versions 1..5 have no place for them). */
+typedef enum {
+    OSC_CT_PARAM = 1,  /* push parameter vreg `arg` (< nparams; bool or integer type)     */
+    OSC_CT_RESULT,     /* push the return value (ensures of a non-void function only)     */
+    OSC_CT_CONST,      /* push `imm`, canonical for value scalar `sub` (bool or integer)   */
+    OSC_CT_BIN,        /* pop b, a; push a <sub> b (OscBinOp; BIN typing rules)           */
+    OSC_CT_UN,         /* pop a; push <sub> a (OscUnOp; UN typing rules)                  */
+    OSC_CT_CMP,        /* pop b, a; push bool a <sub> b (OscCmp; same scalar type)         */
+    OSC_CT_CAST        /* pop a (integer); push it converted to integer scalar `sub`      */
+} OscCtermKind;
+#define OSC_CT_KIND_MAX OSC_CT_CAST
+#define OSC_CONTRACT_MAX 64   /* terms per clause */
+
+typedef struct {
+    uint8_t kind;      /* OscCtermKind */
+    uint8_t sub;       /* operator (BIN/UN/CMP) or scalar tag (CONST/CAST); else 0 */
+    uint8_t arg;       /* PARAM: parameter index; else 0 */
+    uint64_t imm;      /* CONST: value; else 0 */
+} OscCterm;
+
 typedef struct {
     char name[OSC_NAME_MAX];
     uint8_t nparams;     /* params are vregs 0..nparams-1 */
@@ -206,6 +233,10 @@ typedef struct {
     uint16_t nblocks;    /* block 0 is the entry */
     char requires_text[OSC_CLAUSE_MAX];  /* source text; checks are lowered into the CFG (OSC-2) */
     char ensures_text[OSC_CLAUSE_MAX];
+    OscCterm req[OSC_CONTRACT_MAX];      /* version 6: structured requires (nreq terms) */
+    uint8_t nreq;
+    OscCterm ens[OSC_CONTRACT_MAX];      /* version 6: structured ensures (nens terms) */
+    uint8_t nens;
 } OscFunc;
 
 /* OSC-2 structs: fixed layout, no padding. Field k occupies cells
@@ -250,12 +281,41 @@ int osc_ir_validate(const OscUnit *u, char *err, size_t n);
 int osc_ir_encode(const OscUnit *u, uint8_t *buf, size_t cap, size_t *len);
 int osc_ir_digest(const OscUnit *u, uint8_t out[32]);
 
-/* Encoding format version (byte 7 of the magic) of an encoded unit: 1..5, or -1
- * if the magic is wrong or the version is unknown (never reinterpreted).
- * Version 5 = the unit uses external byte slices; units without slices keep
- * versions 1..4 and their bytes. */
+/* Encoding format version (byte 7 of the magic) of an encoded unit: 1..5, 6 when
+ * the version-6 domain tag follows (below), or -1 if the magic is wrong or the
+ * version is unknown (never reinterpreted). Version 5 = the unit uses external byte
+ * slices; units without slices keep versions 1..4 and their bytes.
+ * OSC_IR_VERSION_MAX is the highest version osc_ir_encode chooses from content. */
 #define OSC_IR_VERSION_MAX 5
 int osc_ir_encoding_version(const uint8_t *buf, size_t len);
+
+/* Format version 6 (omega#451; spec/one-layer-format.md section 10). A second
+ * canonical form, chosen by the producer, never by content: osc_ir_encode keeps writing
+ * versions 1..5 exactly as before (no existing identity changes). Version 6 carries
+ *  - a domain tag: the 16 bytes "omega.osc.ir.v6\0" right after the version byte;
+ *  - numeric identifiers only in the core: functions, structs and fields are their
+ *    indices; function / struct / field names and the requires / ensures source texts
+ *    move to an optional name table after the core (absent = empty string in OscUnit);
+ *  - the structured requirement objects OscFunc.req / .ens (OscCterm lists).
+ * osc_ir_encode_v6 refuses (-1) a unit that fails osc_ir_validate. osc_ir_digest_v6 is
+ * the version-6 identity: SHA-256 of the header and core, name table excluded, so
+ * names and source text never change it (as spec/program-identity.md section 2.2);
+ * structured contracts are in the core and do change it. osc_ir_encode refuses a unit
+ * with structured contracts or an unnamed struct or field (versions 1..5 cannot carry
+ * either); such a unit has only a version-6 form. */
+#define OSC_IR_VERSION_V6 6
+#define OSC_IR_V6_TAG "omega.osc.ir.v6"  /* written with its NUL: 16 bytes */
+#define OSC_IR_V6_TAG_LEN 16u
+enum {                                   /* name table entry kinds (byte 0 of an entry)   */
+    OSC_IR_NAME_FUNC = 1,                /* index = function; text = function name         */
+    OSC_IR_NAME_STRUCT = 2,              /* index = struct; text = struct name             */
+    OSC_IR_NAME_FIELD = 3,               /* index = struct, sub = field; text = field name */
+    OSC_IR_NAME_REQUIRES = 4,            /* index = function; text = requires source text  */
+    OSC_IR_NAME_ENSURES = 5              /* index = function; text = ensures source text   */
+};
+#define OSC_IR_V6_NAMES_MAX (OSC_MAX_FUNCS * 3u + OSC_MAX_STRUCTS * (1u + OSC_MAX_FIELDS))
+int osc_ir_encode_v6(const OscUnit *u, uint8_t *buf, size_t cap, size_t *len);
+int osc_ir_digest_v6(const OscUnit *u, uint8_t out[32]);
 
 /* Strict decoder (omega#444; format and refusal classes: spec/one-layer-format.md).
  * Admits a byte string exactly when it is osc_ir_encode of a unit that passes
@@ -263,8 +323,9 @@ int osc_ir_encoding_version(const uint8_t *buf, size_t len);
  * does not carry gets the value the front end's emitter gives it (line 0; unused
  * vreg/block/callee fields -1; everything else 0). Every other input is refused
  * with one named class and *out zeroed; nothing is repaired or skipped. Reads
- * every historical version 1..OSC_IR_VERSION_MAX. Single-threaded, as
- * osc_ir_validate is. Returns OSC_IR_OK (0) or a negative OscIrRefusal. */
+ * every historical version 1..OSC_IR_VERSION_MAX, and version 6 exactly when it is
+ * osc_ir_encode_v6 of a valid unit. Single-threaded, as osc_ir_validate is.
+ * Returns OSC_IR_OK (0) or a negative OscIrRefusal. */
 typedef enum {
     OSC_IR_OK = 0,
     OSC_IR_REFUSE_ARG = -1,             /* NULL input or output pointer                      */
@@ -278,16 +339,32 @@ typedef enum {
     OSC_IR_REFUSE_TEXT = -8,            /* a NUL byte inside a name or contract text         */
     OSC_IR_REFUSE_INVALID = -9,         /* well-formed, but the unit fails osc_ir_validate   */
     OSC_IR_REFUSE_VERSION_MISMATCH = -10, /* version byte is not the one the content requires */
-    OSC_IR_REFUSE_NONCANONICAL = -11    /* valid unit whose encoding differs from the input  */
+    OSC_IR_REFUSE_NONCANONICAL = -11,   /* valid unit whose encoding differs from the input  */
+    /* appended for format version 6 (omega#451); existing codes are never renumbered */
+    OSC_IR_REFUSE_DOMAIN = -12,         /* version 6 without the exact domain tag            */
+    OSC_IR_REFUSE_IDENT = -13,          /* version 6: a numeric identifier (callee, struct   */
+                                        /*   id, name-table target) that names no object     */
+    OSC_IR_REFUSE_ORDER = -14,          /* version 6 name table not canonical: entries not   */
+                                        /*   strictly ascending, an empty entry, or a field  */
+                                        /*   number on a non-field entry                     */
+    OSC_IR_REFUSE_CONTRACT = -15        /* version 6: a malformed requirement object         */
 } OscIrRefusal;
-#define OSC_IR_REFUSAL_COUNT 11
+#define OSC_IR_REFUSAL_COUNT 15
 
-/* Upper bound on any canonical encoding (every count at its maximum, every
- * instruction at its widest, CALL with 6 args = 18 bytes). Longer input is OVERSIZED. */
+/* Upper bound on any canonical encoding of versions 1..5 (every count at its maximum,
+ * every instruction at its widest, CALL with 6 args = 18 bytes). Longer input is OVERSIZED. */
 #define OSC_IR_ENCODED_MAX                                                                   \
     (8u + 1u + OSC_MAX_STRUCTS * (1u + 63u + 1u + 2u + OSC_MAX_FIELDS * (1u + 63u + 1u + 2u + 2u)) + 2u + \
      OSC_MAX_FUNCS * (1u + 63u + 1u + 6u + 2u + OSC_MAX_VREGS * 6u + 2u + OSC_MAX_BLOCKS * 8u + 4u +  \
                       OSC_MAX_INSNS * 18u + 2u * (2u + (OSC_CLAUSE_MAX - 1u))))
+/* The same bound for version 6: header with tag, core (no names; contract terms at
+ * their widest, CONST = 10 bytes), and a full name table (every entry 5 bytes + text). */
+#define OSC_IR_V6_ENCODED_MAX                                                                \
+    (8u + OSC_IR_V6_TAG_LEN + 1u + OSC_MAX_STRUCTS * (1u + 2u + OSC_MAX_FIELDS * (1u + 2u + 2u)) + 2u + \
+     OSC_MAX_FUNCS * (1u + 6u + 2u + OSC_MAX_VREGS * 6u + 2u + OSC_MAX_BLOCKS * 8u + 4u +         \
+                      OSC_MAX_INSNS * 18u + 2u * (1u + OSC_CONTRACT_MAX * 10u)) +                  \
+     2u + (OSC_MAX_FUNCS + OSC_MAX_STRUCTS * (1u + OSC_MAX_FIELDS)) * (5u + 63u) +                \
+     OSC_MAX_FUNCS * 2u * (5u + (OSC_CLAUSE_MAX - 1u)))
 
 int osc_ir_decode(const uint8_t *buf, size_t len, OscUnit *out);
 /* Stable upper-case name of a refusal class ("TRUNCATED", ...); "OK" for 0; "?" otherwise. */
