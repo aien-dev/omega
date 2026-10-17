@@ -175,21 +175,21 @@
           "purpose": "Directory src/turing. Purpose not yet described by a human."
         },
         {
-          "digest": "daf5e5e90c1ccb4c089220a6545844dbe4078a233f1777e8145b74f1bf5dd5fe",
-          "last_commit": "40d1ea37",
+          "digest": "11575b0cfcbad20d6128d1b5c18a4bd691877ad970fba9f03b0df5665e3fb75f",
+          "last_commit": "3aaa2d87",
           "name": "visor",
           "purpose": "Directory src/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:15012a017b26a269feb256b64875ece2912f5f82c57804baafa3777c4fcb80b9",
-      "compiled_at": "2026-10-16T07:33:43Z",
+      "children_root": "sha256:459a64f0de44cf81c971f79b917135b3979209dff1dc93842a816d413291ba41",
+      "compiled_at": "2026-10-17T00:22:30Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:dfa36de2ac8649f66f80587abea51a7f166285ee0b92e0e09774c98689055250",
+      "digest": "sha256:4d1619bd07e6fdafe11d48112d97d0be335f8ea0763840d0bf45b8f160089cd1",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 537,
-      "generated_at_commit": "1d481ab853a14d3c11eff926ce1e25993085f76a",
-      "source_tree": "sha256:200c9243151691313acb5f86d3e9cb3058f1a1b92ece2a255b3340b691dfb894"
+      "generated_at_commit": "3aaa2d879f6592bdd6fa31823820879a4fed48f0",
+      "source_tree": "sha256:5c72e774499a3fa7045f479f6a6c2f634c34029c547b45d7d42b33342bbe7e5e"
     },
     "owner_lane": "",
     "provenance": {
