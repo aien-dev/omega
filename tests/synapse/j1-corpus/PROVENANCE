@@ -4,7 +4,7 @@ corpus.bin: the J1 cross-check corpus sealed by the Rust codec of aien-dev/synap
   copy of: synapse evidence/j1-codec-corpus/corpus.bin
   sha256:  b2aba356b7dd58b48b6cd7139fdeaa059ee5ab8f496d3ba03f6e4a5aa94db50b (also pinned in j1_corpus.rs)
   format:  synapse docs/J1_OMEGA_CODEC.md; the last 32 bytes are the SHA-256 of everything before them
-  content: 34 bases (16 fixture records, 7 edge records, 3 revision records, 6 hand-made refusals,
-           2 checkpoint contents) and 55,656 cases (every A1 mutation of every mutated base: each
+  content: 48 bases (16 fixture records, 7 edge records, 3 revision records, 20 hand-made refusals,
+           2 checkpoint contents) and 55,670 cases (every A1 mutation of every mutated base: each
            truncation, each bit flip, a false u32 length at each offset) with the Rust outcome of each.
 Do not edit: a change comes from the Rust side and is copied here byte for byte.

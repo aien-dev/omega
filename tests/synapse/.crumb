@@ -1,0 +1,19 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-17T05:30:53Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:a02f1c007fba434449917c405fb9b7d420acb68c72f78fc9bb3aba0e7291aae3",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 3,
+      "generated_at_commit": "661176bd36cf65d63246400802d26b279e9eff0d",
+      "source_tree": "sha256:cc7d02731d4591d1cf6ffce983d30a6ca74fa8b38627d8145651a82b544f5d13"
+    }
+  },
+  "name": "synapse-tests",
+  "purpose": "J1 parity driver for syn_codec.osc against the sealed Rust A1 corpus (aien-dev/synapse j1-codec-corpus), interp and native",
+  "schema_version": "1.0.0"
+}

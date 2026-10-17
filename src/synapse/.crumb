@@ -1,0 +1,19 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-17T05:30:53Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:bd9077d5af7bac2da2b883ae85abcee074eeb23d5551c298928005369dbd81d7",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 5,
+      "generated_at_commit": "661176bd36cf65d63246400802d26b279e9eff0d",
+      "source_tree": "sha256:e4981b0622aaef0c68b5a74da843d5b37fdf06236526acb66dada562299e0c37"
+    }
+  },
+  "name": "synapse",
+  "purpose": "Synapse ADR 0003 J1 binary codec port: layout list, generator, syn_codec.osc (A1 WAL records + checkpoints, strict decode, typed refusals)",
+  "schema_version": "1.0.0"
+}
