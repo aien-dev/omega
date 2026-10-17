@@ -1,0 +1,28 @@
+# RED for review notes 1-3 (omega #531): the driver and generator at a094a9d7 (before the fix) against the same guards.
+# Driver: build/synapse/test_syn_codec_asan built from a094a9d7, saved before editing. Case section offset 93949 (from the fixed driver's line on the real corpus).
+$ sh tests/synapse/corpus_guard.sh <a094a9d7 ASan driver> src/synapse/syn_codec.osc tests/synapse/j1-corpus/corpus.bin 93949 <dir>
+G1: WRONG exit 1, want CORPUS_FINGERPRINT; got:  SUMMARY: AddressSanitizer: 105597 byte(s) leaked in 30 allocation(s). 
+G2: WRONG exit 0, want CORPUS_PIN; got: checks 766356, failures 0 SYN_J1_PASS 
+G3: WRONG exit 1, want CORPUS_RANGE; got:   Right alloca redzone:    cb ==3179430==ABORTING 
+G4: WRONG exit 1, want CORPUS_RANGE; got: checks 916, failures 10 SYN_J1_FAIL 
+corpus guard: FAIL (4 wrong)
+guard exit=1
+## G1 old driver output (last lines, ASan report trimmed to its first line)
+Direct leak of 30213 byte(s) in 1 object(s) allocated from:
+Direct leak of 8832 byte(s) in 1 object(s) allocated from:
+Indirect leak of 66552 byte(s) in 28 object(s) allocated from:
+## G2 old driver output (last lines, ASan report trimmed to its first line)
+calls: interp 97527, native 97527, interp==native compares 97527, traps 0
+checks 766356, failures 0
+SYN_J1_PASS
+## G3 old driver output (last lines, ASan report trimmed to its first line)
+==3179430==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x5140000011f2 at pc 0xf8cf7c625270 bp 0xffffcaa8a730 sp 0xffffcaa89f10
+READ of size 4294967280 at 0x5140000011f2 thread T0
+allocated by thread T0 here:
+## G4 old driver output (last lines, ASan report trimmed to its first line)
+calls: interp 107, native 107, interp==native compares 107, traps 0
+checks 916, failures 10
+SYN_J1_FAIL
+## PACK20: generator at a094a9d7 on a layout with INPUT_MAX 1048576
+old generator exit=0 (0 = accepted a layout whose positions overflow the 20-bit packing)
+generated unit lines using 1048576: 2

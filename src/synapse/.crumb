@@ -3,14 +3,14 @@
     "generated": {
       "children": [],
       "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "compiled_at": "2026-10-17T05:30:53Z",
+      "compiled_at": "2026-10-17T06:18:48Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:bd9077d5af7bac2da2b883ae85abcee074eeb23d5551c298928005369dbd81d7",
+      "digest": "sha256:b82288db7e732d10f954e921ac98c60e19579a3e58118cc12c49230587929ea2",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 5,
-      "generated_at_commit": "661176bd36cf65d63246400802d26b279e9eff0d",
-      "source_tree": "sha256:e4981b0622aaef0c68b5a74da843d5b37fdf06236526acb66dada562299e0c37"
+      "generated_at_commit": "a094a9d7d340b7481796310ebd164cb5f5b85465",
+      "source_tree": "sha256:0f0adc8312b4c982b85d523de4984a5c3517c8ce2ea8a79f4dc68b0999fe6b70"
     }
   },
   "name": "synapse",

@@ -133,4 +133,4 @@ H_COUNT 267                   # T_COUNT | 1 << 8
 KF_REVKIND 3844                # R_TAG | F_REVKIND << 8
 EMB_CORE 0                    # emb_open: the inner content length of an envelope v2 (synapse-core rules)
 EMB_REV 255                   # emb_open: a checkpoint revision record (WAL byte run, offsets restart at 0)
-MASK20 1048575                # 20-bit field of an emb_open save word
+MASK20 1048575                # 20-bit field of an emb_open save word; syn_gen.sh refuses INPUT_MAX > MASK20

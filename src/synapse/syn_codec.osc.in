@@ -28,6 +28,19 @@
 // (W_CORE = 1) every failure is EnvelopeMalformed, except a revision content version other than 2
 // (EnvelopeVersionUnsupported); fail() turns it into EmbeddedMalformed at the embedding's length prefix.
 // The first refusal wins: every primitive is a no-op once W_ERR is set.
+//
+// LIMITS (read before adding a record kind):
+// - Functions: an OSC unit holds at most 32 functions (OSC_MAX_FUNCS, src/compiler/osc_ir.h), and this unit
+//   uses all 32 (the driver prints "unit: N of 32 functions"). Record kinds 9, 10 and 11
+//   (reserved by open synapse PRs) must land as `if k == N` arms inside record() built from the existing
+//   helpers (fint, ftag, fcount, frun, ids, emb_open/emb_close, ...); a new helper function does not fit
+//   until one is merged away or the unit is split.
+// - Input: inputs above INPUT_MAX (1,000,000) bytes, encode logical forms above INPUT_MAX cells, LF regions
+//   above 4 x INPUT_MAX cells and output regions above INPUT_MAX cells are refused LIMIT (loop bound LOOP_MAX).
+// - Packing: emb_open keeps a region's end, base and prefix offset in one word, 20 bits each, so every
+//   position must stay below 2^20 = 1,048,576. syn_gen.sh refuses a layout with INPUT_MAX > MASK20, and
+//   syn_codec() also refuses LIMIT for an input or output region above MASK20.
+// - Scope: the record layer only. Frame headers, CRCs, the SHA-256 chain and checkpoint roots are not here.
 
 fn fail(w: cells, kf: u64, at: u64, x: u64) {
     if w[@W_ERR@] != 0 { return; }
@@ -901,7 +914,9 @@ fn syn_codec(inp: bytes, w: cells) -> u64 {
         w[@W_ERR@] = @R_ABI@;
         return @R_ABI@;
     }
-    if inp.len > @INPUT_MAX@ || lc > @INPUT_MAX@ * 4 || oc > @INPUT_MAX@ {
+    // The second line keeps every packed position (emb_open) inside 20 bits even if INPUT_MAX grows.
+    if inp.len > @INPUT_MAX@ || lc > @INPUT_MAX@ * 4 || oc > @INPUT_MAX@ ||
+       inp.len > @MASK20@ || oc > @MASK20@ {
         w[@W_ERR@] = @R_LIMIT@;
         return @R_LIMIT@;
     }

@@ -6,7 +6,9 @@
  *
  * Every call runs the unit twice, in the OSC interpreter and as native AArch64, on exact-size copies of the
  * input and an exact-size workspace, and requires the same status, refusal cells and output from both.
- *   1. corpus integrity: SHA-256 trailer, header, Rust layout sizes == syn_layout.lst, name tables.
+ *   1. corpus integrity: SHA-256 trailer, then the pinned SHA-256 (SYN_CORPUS_PIN), header, Rust layout sizes ==
+ *      syn_layout.lst, name tables. Every case position is range-checked before its input is built. A corpus
+ *      that fails any of these is refused with one typed line (corpus_refuse) and exit 3.
  *   2. bases (Rust -> Omega): decoding each accepted base gives its Rust logical form exactly.
  *   3. bases (Omega -> Rust): encoding each Rust logical form gives the Rust bytes exactly (exact-size output;
  *      one byte less is OUT_FULL).
@@ -50,6 +52,29 @@ static void check(int cond, const char *fmt, ...)
         fprintf(stderr, "\n");
         va_end(ap);
     }
+}
+
+/* The corpus this driver accepts: SHA-256 of the whole corpus.bin (trailer included), the value in
+ * tests/synapse/j1-corpus/PROVENANCE and synapse j1_corpus.rs CORPUS_SHA256 (`sha256sum corpus.bin`). */
+#define SYN_CORPUS_PIN "b2aba356b7dd58b48b6cd7139fdeaa059ee5ab8f496d3ba03f6e4a5aa94db50b"
+_Static_assert(sizeof SYN_CORPUS_PIN == 65, "SYN_CORPUS_PIN is 64 hex digits");
+/* emb_open packs positions into 20-bit fields; syn_gen.sh refuses this too, the build refuses it here. */
+_Static_assert(SYN_MASK20 == (1ULL << 20) - 1, "MASK20 is the 20-bit field mask");
+_Static_assert(SYN_INPUT_MAX <= SYN_MASK20, "INPUT_MAX must fit the 20-bit packing in emb_open");
+
+/* A corpus the driver will not run: one typed line on stdout, SYN_J1_FAIL, exit 3. Codes: CORPUS_SHORT,
+ * CORPUS_FINGERPRINT (trailer != content hash), CORPUS_PIN (file hash != SYN_CORPUS_PIN), CORPUS_PARSE
+ * (a length runs past the end), CORPUS_RANGE (a base index, op, position or outcome field out of range). */
+static void corpus_refuse(const char *code, const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    printf("corpus refused: %s: ", code);
+    vprintf(fmt, ap);
+    printf("\nSYN_J1_FAIL\n");
+    va_end(ap);
+    fflush(stdout);
+    exit(3);
 }
 
 static void *xmalloc(size_t n)
@@ -247,6 +272,7 @@ static void gname(char *dst, size_t cap)
 {
     size_t n = g16();
     const uint8_t *q = take(n);
+    if (bad_parse) { dst[0] = 0; return; }
     size_t k = n < cap - 1 ? n : cap - 1;
     memcpy(dst, q, k);
     dst[k] = 0;
@@ -442,11 +468,25 @@ int main(int argc, char **argv)
     uint8_t *corp = slurp(argv[2], &cl);
     if (!src || !corp) { fprintf(stderr, "cannot read %s or %s\n", argv[1], argv[2]); return 2; }
 
-    /* 1. corpus integrity */
-    check(cl > 32, "corpus too short");
+    /* 1. corpus integrity: length, internal fingerprint, then the pinned fingerprint */
+    if (cl <= 32) corpus_refuse("CORPUS_SHORT", "%zu bytes, below the 32-byte fingerprint trailer", cl);
     uint8_t dig[32];
     sha256_hash(corp, cl - 32, dig);
-    check(memcmp(dig, corp + cl - 32, 32) == 0, "corpus SHA-256 trailer does not match");
+    char hex[65];
+    for (int i = 0; i < 32; i++) snprintf(hex + 2 * i, 3, "%02x", dig[i]);
+    if (memcmp(dig, corp + cl - 32, 32) != 0)
+        corpus_refuse("CORPUS_FINGERPRINT", "SHA-256 trailer does not match the content (content hashes to %s)", hex);
+    const char *pin = SYN_CORPUS_PIN;
+    const char *po = getenv("SYN_CORPUS_PIN_OVERRIDE");
+    if (po && *po) {
+        printf("corpus pin OVERRIDDEN by SYN_CORPUS_PIN_OVERRIDE (guard tests only): %s\n", po);
+        pin = po;
+    }
+    uint8_t whole[32];
+    sha256_hash(corp, cl, whole);
+    char wh[65];
+    for (int i = 0; i < 32; i++) snprintf(wh + 2 * i, 3, "%02x", whole[i]);
+    if (strcmp(wh, pin) != 0) corpus_refuse("CORPUS_PIN", "file sha256 %s, pinned %s", wh, pin);
     P = corp;
     PE = corp + cl - 32;
     check(memcmp(take(8), "SYNJ1COD", 8) == 0, "corpus magic");
@@ -479,8 +519,9 @@ int main(int argc, char **argv)
     }
     size_t ncase = g32();
     const uint8_t *cases = P;
-    check(!bad_parse, "corpus parse ran past the end");
+    if (bad_parse) corpus_refuse("CORPUS_PARSE", "a base or its logical form runs past the end of the corpus");
     if (bad_parse || n_fail) { printf("SYN_J1_FAIL\n"); return 1; }
+    printf("corpus: %zu bases, %zu cases, case section at byte %zu, pin %s\n", nb, ncase, (size_t)(cases - corp), pin);
 
     /* compile the unit */
     U = calloc(1, sizeof *U);
@@ -506,7 +547,7 @@ int main(int argc, char **argv)
     if (nmr) { printf("SYN_J1_FAIL\n"); return 1; }
     osc_rt_init(RI);
     osc_rt_init(RN);
-    printf("unit: %d functions, %zu bytes of AArch64\n", U->nfuncs, (size_t)CODE.len);
+    printf("unit: %d of %d functions, %zu bytes of AArch64\n", U->nfuncs, OSC_MAX_FUNCS, (size_t)CODE.len);
 
     /* 2 + 3. bases, both directions */
     for (size_t i = 0; i < nb; i++) {
@@ -552,7 +593,24 @@ int main(int argc, char **argv)
             y = g32();
             fld = g8();
         }
-        if (bi >= nb || op > 3) { bad_parse = 1; break; }
+        if (bad_parse) corpus_refuse("CORPUS_PARSE", "case %zu runs past the end of the corpus", c);
+        /* Positions come from the file: range-check before building the input from them. */
+        if (bi >= nb) corpus_refuse("CORPUS_RANGE", "case %zu: base index %zu, corpus has %zu bases", c, bi, nb);
+        if (op > 3) corpus_refuse("CORPUS_RANGE", "case %zu: op %u above 3", c, op);
+        if ((op == 0) != (B[bi].lf == NULL))
+            corpus_refuse("CORPUS_RANGE", "case %zu: op %u on a base %s a logical form", c, op,
+                          B[bi].lf ? "with" : "without");
+        size_t bn = B[bi].n;
+        int pos_ok = op == 0 ? pos == 0
+                   : op == 1 ? pos < bn
+                   : op == 2 ? pos / 8 < bn
+                             : bn >= 4 && pos <= bn - 4;
+        if (!pos_ok)
+            corpus_refuse("CORPUS_RANGE", "case %zu: op %u position %zu outside base %zu (%zu bytes)", c, op, pos, bi,
+                          bn);
+        if (k > 9 || fld > 15)
+            corpus_refuse("CORPUS_RANGE", "case %zu: refusal kind %llu or field %llu out of range", c,
+                          (unsigned long long)k, (unsigned long long)fld);
         Base *b = &B[bi];
         size_t n = b->n;
         uint8_t *m = xmalloc(n);
@@ -589,7 +647,7 @@ int main(int argc, char **argv)
         res_free(&r);
         free(m);
     }
-    check(!bad_parse && P == PE, "case section does not end at the trailer");
+    if (P != PE) corpus_refuse("CORPUS_PARSE", "%zu bytes after the last case, before the trailer", (size_t)(PE - P));
 
     /* 5. encode refusals on hand-broken logical forms */
     {
@@ -696,6 +754,14 @@ int main(int argc, char **argv)
         n_abi++;
         res_free(&r);
         free(bb);
+        /* 2^20 bytes: the first size the 20-bit packing in emb_open could not hold */
+        size_t p20 = (size_t)SYN_MASK20 + 1;
+        uint8_t *bp = calloc(p20, 1);
+        call2(1, (int)SYN_MODE_DECODE, CAP, 0, bp, p20, NULL, 0, 24, 0, NULL, 0, &r, "input of 2^20 bytes");
+        check(r.err == SYN_R_LIMIT, "input of 2^20 bytes gave %llu", (unsigned long long)r.err);
+        n_abi++;
+        res_free(&r);
+        free(bp);
     }
 
     /* 6. fuzz */
@@ -786,7 +852,7 @@ int main(int argc, char **argv)
         bench(B, nb, 2, (int)SYN_MODE_ENCODE, breps);
     }
 
-    printf("corpus: %zu bases, %zu cases, sha256 trailer OK\n", nb, ncase);
+    printf("corpus: %zu bases, %zu cases, sha256 trailer and pin OK\n", nb, ncase);
     printf("bases: %lu of %lu decode to the Rust logical form, %lu of %lu encode to the Rust bytes (record kinds:",
            n_base_dec_ok, n_base_dec, n_base_enc_ok, n_base_enc);
     for (int k = 1; k < 16; k++)

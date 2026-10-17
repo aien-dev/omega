@@ -157,8 +157,8 @@
           "purpose": "Directory src/searchtrace. Purpose not yet described by a human."
         },
         {
-          "digest": "bd9077d5af7bac2da2b883ae85abcee074eeb23d5551c298928005369dbd81d7",
-          "last_commit": "661176bd",
+          "digest": "b82288db7e732d10f954e921ac98c60e19579a3e58118cc12c49230587929ea2",
+          "last_commit": "0ff07d87",
           "name": "synapse",
           "purpose": "Synapse ADR 0003 J1 binary codec port: layout list, generator, syn_codec.osc (A1 WAL records + c"
         },
@@ -187,15 +187,15 @@
           "purpose": "Directory src/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:7e7c88e6f6e56ba3911d4d0833da491c197b310ae0219277c92484c2bf8b0761",
-      "compiled_at": "2026-10-17T05:30:53Z",
+      "children_root": "sha256:1bf63592ce460e1def7be49a367f3f56b08d53c8870841fb5a314b7c4b327c25",
+      "compiled_at": "2026-10-17T06:18:48Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:3898225ec63e355c88a53fc92a4388336367ac73cb354f5b6468d0d73f81b143",
+      "digest": "sha256:5d9e2113c44f88de1f934e9cec8fad42b3b5cd86162c015177446ad2b33b299b",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 542,
-      "generated_at_commit": "661176bd36cf65d63246400802d26b279e9eff0d",
-      "source_tree": "sha256:224c2410eb8d0d4cd381f73c27c4dc95dfacb96ff52bf010b9bb8bb27be1fdf1"
+      "generated_at_commit": "a094a9d7d340b7481796310ebd164cb5f5b85465",
+      "source_tree": "sha256:724381bf25bef31ea4a601b0244c2b6cc63522f398f78b962200af0751465f49"
     },
     "owner_lane": "",
     "provenance": {
