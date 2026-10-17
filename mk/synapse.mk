@@ -7,11 +7,14 @@
 #   make syn-gen-check        regenerating gives byte-identical files
 #   make test-synapse-codec   check + cross-check driver, plain and ASan/UBSan (exact-size buffers);
 #                             SYN_FUZZ=N (default 20000), SYN_FUZZ_SEED=S
+#   make bench-synapse-codec  native decode/encode timing of the accepted bases (plain build, fuzz off);
+#                             SYN_BENCH_REPS=N calls per base per round (default 2000), 7 rounds
 ifndef SYNAPSE_MK
 SYNAPSE_MK := 1
-.PHONY: syn-gen syn-gen-check test-synapse-codec
+.PHONY: syn-gen syn-gen-check test-synapse-codec bench-synapse-codec
 SYN_DIR = $(OUT_DIR)/synapse
 SYN_FUZZ ?= 20000
+SYN_BENCH_REPS ?= 2000
 SYN_GEN = src/synapse/syn_gen.sh
 SYN_GEN_ARGS = src/synapse/syn_layout.lst src/synapse/syn_codec.osc.in src/synapse/syn_codec.osc src/synapse/syn_layout.h
 SYN_SRCS = tests/synapse/test_syn_codec.c $(OSC_LIB)
@@ -32,6 +35,10 @@ $(SYN_DIR)/test_syn_codec: $(SYN_SRCS) $(SYN_HDRS)
 $(SYN_DIR)/test_syn_codec_asan: $(SYN_SRCS) $(SYN_HDRS)
 	@mkdir -p $(SYN_DIR)
 	$(CC) $(SYN_FLAGS) $(OSC_ASAN) -o $@ $(SYN_SRCS)
+
+bench-synapse-codec: syn-gen-check $(SYN_DIR)/test_syn_codec
+	SYN_BENCH_REPS=$(SYN_BENCH_REPS) $(abspath $(SYN_DIR)/test_syn_codec) src/synapse/syn_codec.osc $(SYN_CORPUS) 0 > $(SYN_DIR)/bench.out
+	@grep "^bench\|^SYN_J1" $(SYN_DIR)/bench.out; tail -1 $(SYN_DIR)/bench.out | grep -q "^SYN_J1_PASS$$"
 
 test-synapse-codec: syn-gen-check $(SYN_DIR)/test_syn_codec $(SYN_DIR)/test_syn_codec_asan
 	$(abspath $(SYN_DIR)/test_syn_codec) src/synapse/syn_codec.osc $(SYN_CORPUS) $(SYN_FUZZ) > $(SYN_DIR)/codec.out

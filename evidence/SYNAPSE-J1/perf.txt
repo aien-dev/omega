@@ -1,0 +1,13 @@
+# PERF: make bench-synapse-codec (SYN_BENCH_REPS=2000, 7 rounds, native AArch64 only, nice -n 19, host load avg 2.88 before / 2.58 after); 2026-10-17T05:39:00Z
+# unit sha256 7532f29337b697f7623828ff09c7a4d3aef2d13dd73b23a89a3675266689e863; driver sha256 dd52add275d4d8163d767a57d7613e31faff7c0e17aa6a57b81fd1351cbbf37b
+bench decode records: 26 bases, 6316 bytes, 2000 calls per base per round, 7 rounds: median 0.0434 GB/s (min 0.0432, max 0.0435), median 5.593e-06 s per call
+bench decode checkpoints: 2 bases, 2744 bytes, 2000 calls per base per round, 7 rounds: median 0.0426 GB/s (min 0.0425, max 0.0427), median 3.218e-05 s per call
+bench encode records: 26 bases, 6316 bytes, 2000 calls per base per round, 7 rounds: median 0.0269 GB/s (min 0.0268, max 0.0269), median 9.041e-06 s per call
+bench encode checkpoints: 2 bases, 2744 bytes, 2000 calls per base per round, 7 rounds: median 0.0268 GB/s (min 0.0268, max 0.0269), median 5.111e-05 s per call
+SYN_J1_PASS
+# Bound (synapse ADR 0003 section 6.2, "bytes moved once at memory bandwidth"): 273 GB/s, the DGX Spark
+# memory specification used by synapse docs/A0_HOST_BOUNDS.md. One core, one call at a time.
+# Fraction of bound: decode 0.0434 / 273 = 1.59e-4 (calc:2ef7b34c); encode 0.0269 / 273 = 9.85e-5 (calc:a0366c9f).
+# Decode of a record: 23.0 ns per byte (calc:1c31099c). The unit reads one byte per bounds-checked index and
+# writes one u64 logical-form cell per payload byte; this is the first measurement (no earlier Omega codec to
+# compare against). The Rust codec's own speed on these bases was not measured here.

@@ -3,14 +3,14 @@
     "generated": {
       "children": [],
       "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "compiled_at": "2026-10-17T05:30:53Z",
+      "compiled_at": "2026-10-17T05:39:07Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:a02f1c007fba434449917c405fb9b7d420acb68c72f78fc9bb3aba0e7291aae3",
+      "digest": "sha256:25060a5ab77168ace6b99323d4a901205a791b9622375ede83398a0bd0ca07b9",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 3,
-      "generated_at_commit": "661176bd36cf65d63246400802d26b279e9eff0d",
-      "source_tree": "sha256:cc7d02731d4591d1cf6ffce983d30a6ca74fa8b38627d8145651a82b544f5d13"
+      "generated_at_commit": "0ff07d87e9889b9a1f18679e5a75d8225b490dcf",
+      "source_tree": "sha256:f38977ba0b1645757ef579d0a9ebf0e6f6651e22cfda93fa765c444b51bcb8bb"
     }
   },
   "name": "synapse-tests",

@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "osc_cg.h"
 #include "osc_front.h"
@@ -298,6 +299,116 @@ static uint64_t rng_next(uint64_t *s)
 
 /* The record kind of a logical form (first token is the kind tag). */
 static uint64_t lf_kind(const uint64_t *lf, size_t n) { return n >= 2 ? lf[1] : 0; }
+
+static double now_s(void)
+{
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return (double)t.tv_sec + (double)t.tv_nsec * 1e-9;
+}
+
+/* Timing (SYN_BENCH_REPS=N, off by default): native syn_codec only, on the accepted bases of one entry
+ * kind, N calls per base per round, ROUNDS rounds. Buffers are built once; each call rewrites the
+ * W_HDR header cells (part of the timed work) and runs the unit. Reports bytes per second and seconds
+ * per call per round; the bound (synapse ADR 0003 section 6.2) is applied outside this program. */
+#define SYN_BENCH_ROUNDS 7
+static int cmp_d(const void *a, const void *b)
+{
+    double x = *(const double *)a, y = *(const double *)b;
+    return x < y ? -1 : x > y;
+}
+
+static void bench(const Base *B, size_t nb, int entry, int mode, unsigned long reps)
+{
+    size_t m = 0, bytes = 0;
+    for (size_t i = 0; i < nb; i++) m += B[i].lf && B[i].entry == entry;
+    if (!m) return;
+    uint64_t **W = calloc(m, sizeof *W), **H = calloc(m, sizeof *H), (*A)[4] = calloc(m, sizeof *A);
+    uint8_t **I = calloc(m, sizeof *I);
+    const Base **S = calloc(m, sizeof *S);
+    size_t k = 0;
+    for (size_t i = 0; i < nb; i++) {
+        const Base *b = &B[i];
+        if (!b->lf || b->entry != entry) continue;
+        int dec = mode == (int)SYN_MODE_DECODE;
+        size_t lfcap = dec ? lfcap_for(b->n) : b->lfn, outcap = dec ? 0 : b->n, wn = SYN_W_HDR + lfcap + outcap;
+        W[k] = calloc(wn, 8);
+        H[k] = calloc(SYN_W_HDR + (dec ? 0 : b->lfn), 8);
+        uint64_t *h = H[k];
+        h[SYN_W_MAGIC] = SYN_ABI_MAGIC;
+        h[SYN_W_VERSION] = SYN_ABI_VERSION;
+        h[SYN_W_CELLS] = wn;
+        h[SYN_W_ENTRY] = (uint64_t)entry;
+        h[SYN_W_MODE] = (uint64_t)mode;
+        h[SYN_W_CAP] = b->cap;
+        h[SYN_W_CKSEQ] = b->ckseq;
+        h[SYN_W_LF_BASE] = SYN_W_HDR;
+        h[SYN_W_LF_CAP] = lfcap;
+        h[SYN_W_OUT_BASE] = SYN_W_HDR + lfcap;
+        h[SYN_W_OUT_CAP] = outcap;
+        if (!dec) {
+            h[SYN_W_LF_N] = b->lfn;
+            memcpy(h + SYN_W_HDR, b->lf, b->lfn * 8);
+        }
+        memcpy(W[k], h, (SYN_W_HDR + (dec ? 0 : b->lfn)) * 8);
+        I[k] = xmalloc(b->n ? b->n : 1);
+        memcpy(I[k], b->bytes, b->n);
+        A[k][0] = dec ? (uint64_t)(uintptr_t)I[k] : 0;
+        A[k][1] = dec ? b->n : 0;
+        A[k][2] = (uint64_t)(uintptr_t)W[k];
+        A[k][3] = wn;
+        bytes += b->n;
+        S[k] = b;
+        k++;
+    }
+    double gbs[SYN_BENCH_ROUNDS], per[SYN_BENCH_ROUNDS];
+    unsigned long bad = 0;
+    osc_rt_reset(RN);
+    for (int r = 0; r < SYN_BENCH_ROUNDS; r++) {
+        double t0 = now_s();
+        for (size_t j = 0; j < m; j++) {
+            for (unsigned long q = 0; q < reps; q++) {
+                uint64_t ret = 1;
+                memcpy(W[j], H[j], SYN_W_HDR * 8);
+                int tr = osc_native_call(U, FI, &NM, CODE.entry[FI], RN, A[j], 4, &ret);
+                bad += tr != 0 || ret != 0;
+            }
+        }
+        double dt = now_s() - t0;
+        gbs[r] = (double)bytes * (double)reps / dt / 1e9;
+        per[r] = dt / ((double)m * (double)reps);
+    }
+    check(bad == 0, "bench: %lu calls trapped or refused", bad);
+    for (size_t j = 0; j < m; j++) {
+        /* the last timed call's output is still the Rust answer */
+        const Base *b = S[j];
+        const uint64_t *w = W[j];
+        int ok = w[SYN_W_ERR] == 0;
+        if (mode == (int)SYN_MODE_DECODE) {
+            ok &= w[SYN_W_LF_N] == b->lfn && memcmp(w + SYN_W_HDR, b->lf, b->lfn * 8) == 0;
+        } else {
+            ok &= w[SYN_W_OUT] == b->n;
+            for (size_t i = 0; ok && i < b->n; i++) ok &= w[w[SYN_W_OUT_BASE] + i] == b->bytes[i];
+        }
+        check(ok, "bench %s: output after the timed calls differs from Rust", b->label);
+    }
+    qsort(gbs, SYN_BENCH_ROUNDS, sizeof gbs[0], cmp_d);
+    qsort(per, SYN_BENCH_ROUNDS, sizeof per[0], cmp_d);
+    printf("bench %s %s: %zu bases, %zu bytes, %lu calls per base per round, %d rounds: median %.4f GB/s "
+           "(min %.4f, max %.4f), median %.3e s per call\n",
+           mode == (int)SYN_MODE_DECODE ? "decode" : "encode", entry == 1 ? "records" : "checkpoints", m, bytes, reps,
+           SYN_BENCH_ROUNDS, gbs[SYN_BENCH_ROUNDS / 2], gbs[0], gbs[SYN_BENCH_ROUNDS - 1], per[SYN_BENCH_ROUNDS / 2]);
+    for (size_t j = 0; j < m; j++) {
+        free(W[j]);
+        free(H[j]);
+        free(I[j]);
+    }
+    free(W);
+    free(H);
+    free(A);
+    free(I);
+    free(S);
+}
 
 static void expect_enc_ref(int entry, const uint64_t *lf, size_t lfn, size_t outcap, uint64_t want, const char *what)
 {
@@ -664,6 +775,15 @@ int main(int argc, char **argv)
             res_free(&r);
             free(m);
         }
+    }
+
+    const char *bn = getenv("SYN_BENCH_REPS");
+    unsigned long breps = bn && *bn ? strtoul(bn, NULL, 10) : 0;
+    if (breps) {
+        bench(B, nb, 1, (int)SYN_MODE_DECODE, breps);
+        bench(B, nb, 2, (int)SYN_MODE_DECODE, breps);
+        bench(B, nb, 1, (int)SYN_MODE_ENCODE, breps);
+        bench(B, nb, 2, (int)SYN_MODE_ENCODE, breps);
     }
 
     printf("corpus: %zu bases, %zu cases, sha256 trailer OK\n", nb, ncase);

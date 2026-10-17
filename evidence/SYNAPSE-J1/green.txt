@@ -1,6 +1,6 @@
 # GREEN: make test-synapse-codec with the codec unit (default SYN_FUZZ=20000, seed 0x53594e4a31636f64)
-# red commit 661176bd; corpus sha256 b2aba356b7dd58b48b6cd7139fdeaa059ee5ab8f496d3ba03f6e4a5aa94db50b; unit sha256 7532f29337b697f7623828ff09c7a4d3aef2d13dd73b23a89a3675266689e863
-# host aarch64, cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+# red commit 661176bd; corpus sha256 b2aba356b7dd58b48b6cd7139fdeaa059ee5ab8f496d3ba03f6e4a5aa94db50b; unit sha256 7532f29337b697f7623828ff09c7a4d3aef2d13dd73b23a89a3675266689e863; driver sha256 dd52add275d4d8163d767a57d7613e31faff7c0e17aa6a57b81fd1351cbbf37b
+# host aarch64, cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0; 2026-10-17T05:37:13Z
 sh src/synapse/syn_gen.sh check src/synapse/syn_layout.lst src/synapse/syn_codec.osc.in src/synapse/syn_codec.osc src/synapse/syn_layout.h
 syn_gen: check OK (generated files match the layout list)
 /home/drakestapleton/workspace/omega-53/build/synapse/test_syn_codec src/synapse/syn_codec.osc tests/synapse/j1-corpus/corpus.bin 20000 > build/synapse/codec.out
@@ -21,9 +21,8 @@ calls: interp 125417, native 125417, interp==native compares 125417, traps 0
 checks 967366, failures 0
 SYN_J1_PASS
 test-synapse-codec: PASS (Rust corpus both directions + A1 malformed corpus + encode refusals + fuzz; interp + native; plain and ASan/UBSan)
-# make wall 97.57 s (plain + ASan/UBSan builds and runs)
-make exit=0
-# full plain output (build/synapse/codec.out):
+# make exit=0
+# full plain driver output:
 unit: 32 functions, 52868 bytes of AArch64
 fuzz seed: 0x53594e4a31636f64 (override with SYN_FUZZ_SEED)
 corpus: 48 bases, 55670 cases, sha256 trailer OK
@@ -36,3 +35,4 @@ fuzz: 10000 LF edits (4241 encoded, 0 of those decoder-only refusals), 10000 byt
 calls: interp 125417, native 125417, interp==native compares 125417, traps 0
 checks 967366, failures 0
 SYN_J1_PASS
+# make wall 98.224830332 s (plain + ASan/UBSan builds and runs)
