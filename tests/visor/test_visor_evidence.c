@@ -1,7 +1,10 @@
 /* Lane 4: visor_evidence tests (fixtures + read-only pass over the real evidence/ tree).
  * Run from the repo root. Prints "PASS n/n" on success. */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "omega_canonical.h"
 #include "visor_evidence.h"
@@ -13,6 +16,36 @@ static int g_total, g_pass;
 
 static VisorEvidenceView v, v2;
 static char txt_a[65536], txt_b[65536], js[65536];
+
+/* omega#404: a tree larger than the old 1024-file walk cap. 1500 non-JSON files plus one parseable receipt named to
+ * sort last: every file must be scanned, the receipt must be found, and nothing is truncated, whatever order the
+ * filesystem returns. The old walk stopped at 1024 files in readdir order (red: scanned 1024, truncated). */
+static void check_large_tree(void) {
+    char root[] = "/tmp/visor_evidence_large_XXXXXX";
+    if (!mkdtemp(root)) { CHECK(0, "large tree: mkdtemp"); return; }
+    char p[512];
+    enum { NFILES = 1500 };
+    int made = 0;
+    for (int i = 0; i < NFILES; ++i) {
+        snprintf(p, sizeof p, "%s/f%04d.txt", root, i);
+        FILE *f = fopen(p, "w");
+        if (f) { fputs("not a receipt\n", f); fclose(f); made++; }
+    }
+    static char buf[65536];
+    size_t n = 0;
+    FILE *src = fopen(FIX "/HOST/host_run_receipt.json", "rb");
+    if (src) { n = fread(buf, 1, sizeof buf, src); fclose(src); }
+    snprintf(p, sizeof p, "%s/zzz_last_receipt.json", root);
+    FILE *dst = fopen(p, "wb");
+    if (dst) { fwrite(buf, 1, n, dst); fclose(dst); }
+    CHECK(made == NFILES && n > 0 && dst, "large tree built (1500 files + 1 receipt)");
+    CHECK(visor_evidence_scan(root, &v) == 0 && v.scanned == NFILES + 1 && v.matched == 1 && v.count == 1 &&
+          v.unparsed == NFILES && !v.truncated, "large tree: every file scanned, receipt found, not truncated");
+    CHECK(v.count == 1 && strstr(v.items[0].path, "zzz_last_receipt.json"), "large tree: the last-sorted receipt is the match");
+    for (int i = 0; i < NFILES; ++i) { snprintf(p, sizeof p, "%s/f%04d.txt", root, i); unlink(p); }
+    snprintf(p, sizeof p, "%s/zzz_last_receipt.json", root); unlink(p);
+    rmdir(root);
+}
 
 static const VisorEvidenceRecord *find(const VisorEvidenceView *view, const char *suffix) {
     size_t L = strlen(suffix);
@@ -98,6 +131,8 @@ int main(void) {
     CHECK(strstr(txt_a, "UNPARSED") && strstr(txt_a, "scope      SILICON (from silicon_observed=true)"), "text content");
     CHECK(visor_evidence_format_json(&v, js, sizeof(js)) > 0 && js[0] == '{' && strstr(js, "\"scope\":\"QEMU\""), "json");
     CHECK(visor_evidence_format_text(&v, txt_b, 32) == -1, "truncation fails closed");
+
+    check_large_tree();
 
     /* --- real evidence/ tree, read-only: format coverage and no upgrade --- */
     if (visor_evidence_scan("evidence", &v) == 0) {

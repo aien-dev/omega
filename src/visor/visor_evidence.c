@@ -441,10 +441,28 @@ int visor_evidence_load(const char *path, VisorEvidenceRecord *out) {
 /* ------------------------------------------------------------------ */
 /* Directory walk (sorted, deterministic)                              */
 /* ------------------------------------------------------------------ */
-#define VISOR_EVIDENCE_MAX_FILES 1024
-static char g_paths[VISOR_EVIDENCE_MAX_FILES][256];
-static size_t g_npaths;
+/* omega#404: the walk keeps every regular file (it used to stop at 1024 in readdir order, so with a large evidence/
+ * tree the verdict depended on the filesystem). The list grows on the heap and is sorted after the walk, so the
+ * result is the same for any directory order. VISOR_EVIDENCE_MAX_FILES is only a runaway guard far above any real
+ * tree (11078 files at 2026-10-16); reaching it, or failing to grow the list, marks the view truncated. */
+#define VISOR_EVIDENCE_MAX_FILES (1u << 20)
+typedef char VisorPath[256];
+static VisorPath *g_paths;
+static size_t g_npaths, g_paths_cap;
 static bool g_paths_overflow;
+
+static bool push_path(const char *p) {
+    if (g_npaths >= VISOR_EVIDENCE_MAX_FILES) return false;
+    if (g_npaths == g_paths_cap) {
+        size_t cap = g_paths_cap ? g_paths_cap * 2 : 1024;
+        VisorPath *grown = realloc(g_paths, cap * sizeof(VisorPath));
+        if (!grown) return false;
+        g_paths = grown;
+        g_paths_cap = cap;
+    }
+    memcpy(g_paths[g_npaths++], p, sizeof(VisorPath));
+    return true;
+}
 
 static void walk(const char *dir, int depth) {
     if (depth > 8) return;
@@ -460,8 +478,7 @@ static void walk(const char *dir, int depth) {
         if (lstat(p, &st) != 0) continue;
         if (S_ISDIR(st.st_mode)) { walk(p, depth + 1); continue; }
         if (!S_ISREG(st.st_mode)) continue;               /* symlinks and devices are not followed */
-        if (g_npaths >= VISOR_EVIDENCE_MAX_FILES) { g_paths_overflow = true; continue; }
-        memcpy(g_paths[g_npaths++], p, sizeof(p));
+        if (!push_path(p)) g_paths_overflow = true;
     }
     closedir(d);
 }
@@ -474,7 +491,7 @@ static int collect(const char *root) {
     g_npaths = 0;
     g_paths_overflow = false;
     walk(root, 0);
-    qsort(g_paths, g_npaths, sizeof(g_paths[0]), cmp_path);
+    if (g_npaths > 1) qsort(g_paths, g_npaths, sizeof(g_paths[0]), cmp_path);
     return 0;
 }
 

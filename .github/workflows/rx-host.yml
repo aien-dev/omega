@@ -88,7 +88,9 @@ jobs:
         run: |
           receipt="$(find build/qual-runs -name omega_incremental_semantics_receipt.json -type f | head -n 1)"
           test -n "$receipt"
-          grep -q '"OMEGA_INCREMENTAL_SEMANTICS_PASS": "HOST_PASS_ENERGY_UNMEASURED"' "$receipt"
+          # omega#404: PASS (energy meter present) or HOST_PASS_ENERGY_UNMEASURED (no meter, this runner); print which.
+          grep -qE '"OMEGA_INCREMENTAL_SEMANTICS_PASS": "(PASS|HOST_PASS_ENERGY_UNMEASURED)"' "$receipt"
+          grep -oE '"OMEGA_INCREMENTAL_SEMANTICS_PASS": "[A-Z_]+"' "$receipt"
           grep -q '"false_hits": 0,' "$receipt"
       - name: Show capability query receipt
         run: |

@@ -171,7 +171,10 @@ case "$step" in
     grep -q '^OMEGA_EFFECT_CAP64_PASS$' build/effect-cap64.log
     receipt omega_state_projection_receipt.json '"failures": 0,' '"candidate_bound": true,' '"OMEGA_STATE_PROJECTION_PASS": "PASS"'
     receipt rx_action_graph_receipt.json '"failures": 0,' '"candidate_bound": true,' '"OMEGA_ACTION_GRAPH_IR_PASS": "PASS"'
-    receipt omega_incremental_semantics_receipt.json '"OMEGA_INCREMENTAL_SEMANTICS_PASS": "HOST_PASS_ENERGY_UNMEASURED"' '"false_hits": 0,'
+    # omega#404 ruling: PASS (energy meter present, e.g. aien_spbm hwmon on the Spark) and HOST_PASS_ENERGY_UNMEASURED
+    # (no meter, the hosted runner) both pass; which one is recorded as an observation. PASS_UNBOUND and FAIL do not.
+    receipt omega_incremental_semantics_receipt.json '"OMEGA_INCREMENTAL_SEMANTICS_PASS": "\(PASS\|HOST_PASS_ENERGY_UNMEASURED\)"' '"false_hits": 0,'
+    obs incremental_semantics_verdict "$(grep -o '"OMEGA_INCREMENTAL_SEMANTICS_PASS": "[A-Z_]*"' "$(find build/qual-runs -name omega_incremental_semantics_receipt.json -type f -newer "$STEP_MARK" | head -n 1)" | sed 's/.*: //')"
     receipt rx_capability_query_receipt.json '"failures": 0,' '"candidate_bound": true,' '"OMEGA_CAPABILITY_QUERY_PASS": "PASS"'
     receipt rx_semantic_comm_receipt.json '"failures": 0,' '"candidate_bound": true,' '"OMEGA_SEMANTIC_COMMUNICATION_PASS": "PASS"'
     receipt rx_cognitive_routing_receipt.json '"failures": 0,' '"candidate_bound": true,' '"OMEGA_COGNITIVE_ROUTING_PASS": "PASS"'

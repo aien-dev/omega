@@ -14,20 +14,20 @@
       "children": [
         {
           "digest": "698c7acaafd2fdfc36c30117f7cda86aaacb21a3333d6a6f737a3bed1c990761",
-          "last_commit": "a56d21c",
+          "last_commit": "a56d21c1",
           "name": "rx",
           "purpose": "Directory src/visor/rx. Purpose not yet described by a human."
         }
       ],
       "children_root": "sha256:426a1b15679ed802080b03079613c322df3821181536f0f66596d50c63a2f7cb",
-      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiled_at": "2026-10-17T00:22:30Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:daf5e5e90c1ccb4c089220a6545844dbe4078a233f1777e8145b74f1bf5dd5fe",
+      "digest": "sha256:11575b0cfcbad20d6128d1b5c18a4bd691877ad970fba9f03b0df5665e3fb75f",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 21,
-      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
-      "source_tree": "sha256:a1963f6ba709fb4f1c6175371d26b0f5a8de6d51809035b7320204c2908c2d08"
+      "generated_at_commit": "3aaa2d879f6592bdd6fa31823820879a4fed48f0",
+      "source_tree": "sha256:083843b6110f98e7c70f75dc2a6e584bca081b1f239cc717210f6cd64ee9fbf9"
     },
     "owner_lane": "",
     "provenance": {
