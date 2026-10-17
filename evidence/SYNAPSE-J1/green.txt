@@ -1,0 +1,53 @@
+# GREEN: make test-synapse-codec with the codec unit (default SYN_FUZZ=20000, seed 0x53594e4a31636f64), after review notes 1-4 of #531
+# red commit 661176bd; corpus sha256 b2aba356b7dd58b48b6cd7139fdeaa059ee5ab8f496d3ba03f6e4a5aa94db50b; unit sha256 6ff3002df8204e0a0489b3133246c9649bd84eeb5196c568d9ed85f94f5e31b0; driver sha256 e21816c9137eaed145c1f5126eedbd9f8ade756b1bbb4987fa09da5bdcdb806f
+# host aarch64, cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0; 2026-10-17T06:10:49Z
+sh src/synapse/syn_gen.sh check src/synapse/syn_layout.lst src/synapse/syn_codec.osc.in src/synapse/syn_codec.osc src/synapse/syn_layout.h
+syn_gen: check OK (generated files match the layout list)
+/home/drakestapleton/workspace/omega-53/build/synapse/test_syn_codec src/synapse/syn_codec.osc tests/synapse/j1-corpus/corpus.bin 20000 > build/synapse/codec.out
+unit: 32 of 32 functions, 53020 bytes of AArch64
+fuzz seed: 0x53594e4a31636f64 (override with SYN_FUZZ_SEED)
+corpus: 48 bases, 55670 cases, sha256 trailer and pin OK
+bases: 28 of 28 decode to the Rust logical form, 28 of 28 encode to the Rust bytes (record kinds: 1:6 2:3 3:3 4:3 5:5 6:3 7:1 8:2)
+cases: 55670 of 55670 give the Rust outcome (Rust accepts 41750, refuses 13920); Omega accepts re-encoded 41750
+Rust outcomes by op: as-is 0/20 truncate 1/4644 flip 31642/5518 false-length 10107/3738 (accepted/refused)
+Rust refusal kinds in the corpus: Truncated:4321 LengthOverCap:3998 TrailingBytes:44 UnknownTag:380 InvalidUtf8:2160 VersionUnsupported:132 NotCanonical:406 InvalidRepoId:589 EmbeddedMalformed:1890
+encode refusals: 12; ABI cases: 11
+fuzz: 10000 LF edits (4241 encoded, 0 of those decoder-only refusals), 10000 byte edits (3649 accepted)
+calls: interp 125418, native 125418, interp==native compares 125418, traps 0
+checks 967369, failures 0
+SYN_J1_PASS
+/home/drakestapleton/workspace/omega-53/build/synapse/test_syn_codec_asan src/synapse/syn_codec.osc tests/synapse/j1-corpus/corpus.bin 20000 > build/synapse/codec_asan.out
+calls: interp 125418, native 125418, interp==native compares 125418, traps 0
+checks 967369, failures 0
+SYN_J1_PASS
+sh tests/synapse/corpus_guard.sh /home/drakestapleton/workspace/omega-53/build/synapse/test_syn_codec_asan src/synapse/syn_codec.osc tests/synapse/j1-corpus/corpus.bin \
+  $(sed -n 's/^corpus: .* case section at byte \([0-9]*\),.*/\1/p' build/synapse/codec.out) build/synapse/guard
+G1: OK exit 3, corpus refused: CORPUS_FINGERPRINT: SHA-256 trailer does not match the content (content hashes to b3c6cbf9ce0fc7239df153c94896385311616c92d02d6be90096cfd02c4d191b)
+G2: OK exit 3, corpus refused: CORPUS_PIN: file sha256 76383154aaa4ee876493eeab79025d946deab52461dad5382f36534cb9e94a3f, pinned b2aba356b7dd58b48b6cd7139fdeaa059ee5ab8f496d3ba03f6e4a5aa94db50b
+G3: OK exit 3, corpus refused: CORPUS_RANGE: case 0: op 1 position 4294967280 outside base 0 (434 bytes)
+G4: OK exit 3, corpus refused: CORPUS_RANGE: case 0: base index 65535, corpus has 48 bases
+corpus guard: PASS (4 of 4 refused with the expected code)
+pack20: OK, syn_gen: REFUSED PACK20: INPUT_MAX 1048576 must be at most MASK20 1048575 = 2^20 - 1 (emb_open save word)
+test-synapse-codec: PASS (Rust corpus both directions + A1 malformed corpus + encode refusals + fuzz; interp + native; plain and ASan/UBSan; corpus guard; PACK20 layout refusal)
+# full plain driver output:
+corpus: 48 bases, 55670 cases, case section at byte 93949, pin b2aba356b7dd58b48b6cd7139fdeaa059ee5ab8f496d3ba03f6e4a5aa94db50b
+unit: 32 of 32 functions, 53020 bytes of AArch64
+fuzz seed: 0x53594e4a31636f64 (override with SYN_FUZZ_SEED)
+corpus: 48 bases, 55670 cases, sha256 trailer and pin OK
+bases: 28 of 28 decode to the Rust logical form, 28 of 28 encode to the Rust bytes (record kinds: 1:6 2:3 3:3 4:3 5:5 6:3 7:1 8:2)
+cases: 55670 of 55670 give the Rust outcome (Rust accepts 41750, refuses 13920); Omega accepts re-encoded 41750
+Rust outcomes by op: as-is 0/20 truncate 1/4644 flip 31642/5518 false-length 10107/3738 (accepted/refused)
+Rust refusal kinds in the corpus: Truncated:4321 LengthOverCap:3998 TrailingBytes:44 UnknownTag:380 InvalidUtf8:2160 VersionUnsupported:132 NotCanonical:406 InvalidRepoId:589 EmbeddedMalformed:1890
+encode refusals: 12; ABI cases: 11
+fuzz: 10000 LF edits (4241 encoded, 0 of those decoder-only refusals), 10000 byte edits (3649 accepted)
+calls: interp 125418, native 125418, interp==native compares 125418, traps 0
+checks 967369, failures 0
+SYN_J1_PASS
+# make wall 98.429987859 s (plain + ASan/UBSan builds and runs, corpus guards, PACK20)
+# omega compiler quick tests, same tree, 2026-10-17T06:18:45Z: make test-compiler-quick exit 0
+#   OSC1_COMPILER_PASS golden=47 neg=138 diff_runs=17096 checks=57768
+#   OSC1_DETERMINISM_PASS
+#   OSC2_LEGACY_A64_PASS
+#   OSC2_LEGACY_CALLERS_PASS callers=16 selftest=3/3
+#   test-compiler-quick: PASS (smoke counts; not receipt evidence; full = make test-compiler-full. OSC-3 slice; not a general Omega compiler; no self-hosting.)
+#   test-osc-alloc: PASS

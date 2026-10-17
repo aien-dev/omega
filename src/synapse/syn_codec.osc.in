@@ -1,0 +1,948 @@
+// Synapse binary codec v2 in Omega (aien-dev/synapse ADR 0003 section 9 step 33, J1).
+// Entry: syn_codec(inp, w). Specification: synapse docs/J1_OMEGA_CODEC.md and the Rust codec
+// crates/synapse-store/src/codec.rs (Reader, decode_record, CheckpointState::decode_content) with the
+// synapse-core canonical encodings it embeds (crates/synapse-core/src/revision.rs). The shared corpus
+// tests/synapse/j1-corpus/corpus.bin pins both directions.
+//
+// Two entries (W_ENTRY): 1 one WAL record (`CODEC_V2 | kind | body`, kinds 1..8; 9..11 are reserved by open
+// synapse PRs and refused as an unknown record kind today), 2 the content of a binary checkpoint (the five
+// maps and the optional revision section). Two modes (W_MODE):
+//   1 decode: inp holds the bytes. Accepted bytes are written as a logical form (LF) into the LF region and
+//     W_LF_N holds its length. Refused bytes leave W_ERR = the CodecRefusal kind (1..9, declaration order)
+//     with W_ERR_AT / W_ERR_X / W_ERR_Y / W_ERR_FIELD as the corpus records them: Truncated (at, need),
+//     LengthOverCap (at, declared, cap), TrailingBytes (at, count), UnknownTag (at, tag, field), InvalidUtf8
+//     (at), VersionUnsupported (found), NotCanonical (at, field), InvalidRepoId (at), EmbeddedMalformed
+//     (at, code: 1 EnvelopeMalformed 2 EnvelopeVersionUnsupported, field). Offsets are relative to the record
+//     being read (a revision record inside a checkpoint restarts at 0, as the Rust decoder's nested Reader).
+//   2 encode: the LF region (W_LF_N cells) holds a logical form; the bytes go to the output region, one byte
+//     per cell, W_OUT their count. A logical form that is not a value of the Rust types is refused with an
+//     encode kind (20..27); like the Rust encoder, encode does not apply the decoder's length caps.
+// Logical form: a token is a header cell `type | len << 8` then len cells; scalars (u16, u64, bool, tag,
+// count) have len 1, byte runs (fixed arrays, strings, repository ids, byte strings) one cell per byte.
+// Field order is the Rust field order; version bytes and length prefixes of embedded encodings are not in it.
+// A checkpoint's revision section is always present in the LF (count 0 when the bytes hold none).
+//
+// The reader rules are the Rust ones. WAL rules (W_CORE = 0): a byte run length is checked against W_CAP and
+// then the input; a sequence count against the cap (count x minimum encoded size, count x size_of) and then
+// the input; tags out of range are UnknownTag at the tag byte. Inside an embedded synapse-core encoding
+// (W_CORE = 1) every failure is EnvelopeMalformed, except a revision content version other than 2
+// (EnvelopeVersionUnsupported); fail() turns it into EmbeddedMalformed at the embedding's length prefix.
+// The first refusal wins: every primitive is a no-op once W_ERR is set.
+//
+// LIMITS (read before adding a record kind):
+// - Functions: an OSC unit holds at most 32 functions (OSC_MAX_FUNCS, src/compiler/osc_ir.h), and this unit
+//   uses all 32 (the driver prints "unit: N of 32 functions"). Record kinds 9, 10 and 11
+//   (reserved by open synapse PRs) must land as `if k == N` arms inside record() built from the existing
+//   helpers (fint, ftag, fcount, frun, ids, emb_open/emb_close, ...); a new helper function does not fit
+//   until one is merged away or the unit is split.
+// - Input: inputs above INPUT_MAX (1,000,000) bytes, encode logical forms above INPUT_MAX cells, LF regions
+//   above 4 x INPUT_MAX cells and output regions above INPUT_MAX cells are refused LIMIT (loop bound LOOP_MAX).
+// - Packing: emb_open keeps a region's end, base and prefix offset in one word, 20 bits each, so every
+//   position must stay below 2^20 = 1,048,576. syn_gen.sh refuses a layout with INPUT_MAX > MASK20, and
+//   syn_codec() also refuses LIMIT for an input or output region above MASK20.
+// - Scope: the record layer only. Frame headers, CRCs, the SHA-256 chain and checkpoint roots are not here.
+
+fn fail(w: cells, kf: u64, at: u64, x: u64) {
+    if w[@W_ERR@] != 0 { return; }
+    let k: u64 = kf & 255;
+    if w[@W_CORE@] != 0 && (k < 20 || k == @R_CORE_VERSION@) {
+        w[@W_ERR@] = @R_EMBEDDED@;
+        w[@W_ERR_AT@] = w[@W_EMB_AT@] - w[@W_BASE@];
+        if k == @R_CORE_VERSION@ { w[@W_ERR_X@] = @C_VERSION@; } else { w[@W_ERR_X@] = @C_MALFORMED@; }
+        w[@W_ERR_Y@] = 0;
+        w[@W_ERR_FIELD@] = w[@W_EMB_F@];
+        return;
+    }
+    w[@W_ERR@] = k;
+    if k < 20 { w[@W_ERR_AT@] = at - w[@W_BASE@]; } else { w[@W_ERR_AT@] = at; }
+    w[@W_ERR_X@] = x;
+    if k == @R_OVER_CAP@ { w[@W_ERR_Y@] = w[@W_CAP@]; } else { w[@W_ERR_Y@] = 0; }
+    w[@W_ERR_FIELD@] = kf >> 8;
+}
+
+// Decode: k more bytes must remain in the region, else Truncated (at the cursor, need the shortfall).
+fn need(w: cells, k: u64) -> u64 {
+    if w[@W_ERR@] != 0 { return 1; }
+    let rem: u64 = w[@W_END@] - w[@W_POS@];
+    if k > rem {
+        fail(w, @R_TRUNCATED@, w[@W_POS@], k - rem);
+        return 1;
+    }
+    return 0;
+}
+
+// Decode: nb little-endian bytes at the cursor (need() checked them).
+fn rdle(inp: bytes, w: cells, nb: u64) -> u64 {
+    let p: u64 = w[@W_POS@];
+    let mut v: u64 = 0;
+    let mut i: u64 = 0;
+    while i < nb bound 8 {
+        v = v | (inp[p + i] << (i * 8));
+        i = i + 1;
+    }
+    w[@W_POS@] = p + nb;
+    return v;
+}
+
+// Decode: append one LF cell.
+fn lfput(w: cells, v: u64) {
+    if w[@W_ERR@] != 0 { return; }
+    let n: u64 = w[@W_LF_N@];
+    if n >= w[@W_LF_CAP@] {
+        fail(w, @R_LF_FULL@, n, 0);
+        return;
+    }
+    w[w[@W_LF_BASE@] + n] = v;
+    w[@W_LF_N@] = n + 1;
+}
+
+// Encode: the next LF cell.
+fn lfget(w: cells) -> u64 {
+    if w[@W_ERR@] != 0 { return 0; }
+    let i: u64 = w[@W_LF@];
+    if i >= w[@W_LF_N@] {
+        fail(w, @R_LF_END@, i, 0);
+        return 0;
+    }
+    w[@W_LF@] = i + 1;
+    return w[w[@W_LF_BASE@] + i];
+}
+
+// Encode: write v as nb little-endian bytes.
+fn outle(w: cells, v: u64, nb: u64) {
+    let mut j: u64 = 0;
+    while j < nb && w[@W_ERR@] == 0 bound 8 {
+        let o: u64 = w[@W_OUT@];
+        if o >= w[@W_OUT_CAP@] {
+            fail(w, @R_OUT_FULL@, o, 0);
+        } else {
+            w[w[@W_OUT_BASE@] + o] = (v >> (j * 8)) & 255;
+            w[@W_OUT@] = o + 1;
+        }
+        j = j + 1;
+    }
+}
+
+// Stream byte i: the input in decode, LF cell i in encode (byte runs and keys are checked there).
+fn sb(inp: bytes, w: cells, i: u64) -> u64 {
+    if w[@W_MODE@] == @MODE_DECODE@ { return inp[i]; }
+    return w[w[@W_LF_BASE@] + i];
+}
+
+// 1 when stream bytes [s, s + n) are UTF-8 under the Rust std::str::from_utf8 rules, else 0.
+fn utf8ok(inp: bytes, w: cells, s: u64, n: u64) -> u64 {
+    let e: u64 = s + n;
+    let mut i: u64 = s;
+    let mut ok: u64 = 1;
+    while i < e && ok == 1 bound @LOOP_MAX@ {
+        let c: u64 = sb(inp, w, i);
+        if c < 128 {
+            i = i + 1;
+        } else {
+            let mut k: u64 = 0;
+            let mut lo: u64 = 128;
+            let mut hi: u64 = 191;
+            if c >= 194 && c <= 223 {
+                k = 1;
+            } else if c == 224 {
+                k = 2;
+                lo = 160;
+            } else if c >= 225 && c <= 236 {
+                k = 2;
+            } else if c == 237 {
+                k = 2;
+                hi = 159;
+            } else if c >= 238 && c <= 239 {
+                k = 2;
+            } else if c == 240 {
+                k = 3;
+                lo = 144;
+            } else if c >= 241 && c <= 243 {
+                k = 3;
+            } else if c == 244 {
+                k = 3;
+                hi = 143;
+            }
+            if k == 0 || i + k >= e {
+                ok = 0;
+            } else {
+                let c1: u64 = sb(inp, w, i + 1);
+                if c1 < lo || c1 > hi { ok = 0; }
+                if k >= 2 {
+                    let c2: u64 = sb(inp, w, i + 2);
+                    if c2 < 128 || c2 > 191 { ok = 0; }
+                }
+                if k == 3 {
+                    let c3: u64 = sb(inp, w, i + 3);
+                    if c3 < 128 || c3 > 191 { ok = 0; }
+                }
+                i = i + k + 1;
+            }
+        }
+    }
+    return ok;
+}
+
+// 1 when stream bytes [s, s + n) are a RepoId (synapse-core RepoId::new): 1..=128 bytes of ASCII
+// alphanumerics and - _ . /, not starting or ending with /, no // and no .., else 0.
+fn repook(inp: bytes, w: cells, s: u64, n: u64) -> u64 {
+    if n == 0 || n > 128 { return 0; }
+    if sb(inp, w, s) == 47 || sb(inp, w, s + n - 1) == 47 { return 0; }
+    let mut i: u64 = 0;
+    let mut prev: u64 = 0;
+    let mut ok: u64 = 1;
+    while i < n && ok == 1 bound 128 {
+        let c: u64 = sb(inp, w, s + i);
+        let mut alnum: u64 = 0;
+        if (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) { alnum = 1; }
+        if alnum == 0 && c != 45 && c != 95 && c != 46 && c != 47 { ok = 0; }
+        if (c == 47 || c == 46) && prev == c { ok = 0; }
+        prev = c;
+        i = i + 1;
+    }
+    return ok;
+}
+
+// A little-endian integer field (desc = type | byte count << 8). Returns its value.
+fn fint(inp: bytes, w: cells, d: u64) -> u64 {
+    if w[@W_ERR@] != 0 { return 0; }
+    let t: u64 = d & 255;
+    let nb: u64 = d >> 8;
+    if w[@W_MODE@] == @MODE_DECODE@ {
+        if need(w, nb) != 0 { return 0; }
+        let v: u64 = rdle(inp, w, nb);
+        lfput(w, t + 256);
+        lfput(w, v);
+        return v;
+    }
+    let h: u64 = lfget(w);
+    let ev: u64 = lfget(w);
+    if w[@W_ERR@] != 0 { return 0; }
+    if h != t + 256 {
+        fail(w, @R_LF_TYPE@, w[@W_LF@] - 2, h);
+        return 0;
+    }
+    if nb < 8 && (ev >> (nb * 8)) != 0 {
+        fail(w, @R_LF_VALUE@, w[@W_LF@] - 1, ev);
+        return 0;
+    }
+    outle(w, ev, nb);
+    return ev;
+}
+
+// A one-byte tag (desc = field | lo << 8 | hi << 16 | LF type << 24): outside lo..=hi is UnknownTag at the
+// tag byte (decode) or LF_VALUE (encode). Returns the tag.
+fn ftag(inp: bytes, w: cells, d: u64) -> u64 {
+    if w[@W_ERR@] != 0 { return 0; }
+    let f: u64 = d & 255;
+    let lo: u64 = (d >> 8) & 255;
+    let hi: u64 = (d >> 16) & 255;
+    let t: u64 = d >> 24;
+    if w[@W_MODE@] == @MODE_DECODE@ {
+        let at: u64 = w[@W_POS@];
+        if need(w, 1) != 0 { return 0; }
+        let v: u64 = rdle(inp, w, 1);
+        if v < lo || v > hi {
+            fail(w, @R_TAG@ | (f << 8), at, v);
+            return 0;
+        }
+        lfput(w, t + 256);
+        lfput(w, v);
+        return v;
+    }
+    let h: u64 = lfget(w);
+    let ev: u64 = lfget(w);
+    if w[@W_ERR@] != 0 { return 0; }
+    if h != t + 256 {
+        fail(w, @R_LF_TYPE@, w[@W_LF@] - 2, h);
+        return 0;
+    }
+    if ev < lo || ev > hi {
+        fail(w, @R_LF_VALUE@, w[@W_LF@] - 1, ev);
+        return 0;
+    }
+    outle(w, ev, 1);
+    return ev;
+}
+
+// A u32 sequence count. WAL rules: min = minimum encoded item size, t2 = size_of the item
+// (Reader::vec). synapse-core rules: min as above, t2 = the count cap (0: none) (Reader::count).
+// Returns the count; every caller's loop is bounded by it.
+fn fcount(inp: bytes, w: cells, min: u64, t2: u64) -> u64 {
+    if w[@W_ERR@] != 0 { return 0; }
+    if w[@W_MODE@] == @MODE_DECODE@ {
+        let at: u64 = w[@W_POS@];
+        if need(w, 4) != 0 { return 0; }
+        let n: u64 = rdle(inp, w, 4);
+        let rem: u64 = w[@W_END@] - w[@W_POS@];
+        let nd: u64 = n * min;
+        if w[@W_CORE@] == 0 {
+            if nd > w[@W_CAP@] || n * t2 > w[@W_CAP@] {
+                fail(w, @R_OVER_CAP@, at, n);
+                return 0;
+            }
+            if nd > rem {
+                fail(w, @R_TRUNCATED@, w[@W_POS@], nd - rem);
+                return 0;
+            }
+        } else {
+            if (t2 != 0 && n > t2) || nd > rem {
+                fail(w, @R_TRUNCATED@, w[@W_POS@], 0);
+                return 0;
+            }
+        }
+        lfput(w, @H_COUNT@);
+        lfput(w, n);
+        return n;
+    }
+    let h: u64 = lfget(w);
+    let en: u64 = lfget(w);
+    if w[@W_ERR@] != 0 { return 0; }
+    if h != @H_COUNT@ {
+        fail(w, @R_LF_TYPE@, w[@W_LF@] - 2, h);
+        return 0;
+    }
+    if en > w[@W_LF_N@] - w[@W_LF@] {
+        fail(w, @R_LF_END@, w[@W_LF@] - 1, en);
+        return 0;
+    }
+    outle(w, en, 4);
+    return en;
+}
+
+// A byte run (desc = type | arg << 8): T_FIX has arg bytes and no prefix; T_STR, T_REPO and T_BYTES have
+// a u32 length (WAL: capped by W_CAP; synapse-core: capped by arg). Strings must be UTF-8, repository ids
+// a RepoId (InvalidRepoId at the length prefix). Returns the byte count.
+fn frun(inp: bytes, w: cells, d: u64) -> u64 {
+    if w[@W_ERR@] != 0 { return 0; }
+    let t: u64 = d & 255;
+    let arg: u64 = d >> 8;
+    if w[@W_MODE@] == @MODE_DECODE@ {
+        let at: u64 = w[@W_POS@];
+        let mut n: u64 = arg;
+        if t != @T_FIX@ {
+            if need(w, 4) != 0 { return 0; }
+            n = rdle(inp, w, 4);
+            let rem: u64 = w[@W_END@] - w[@W_POS@];
+            if w[@W_CORE@] == 0 {
+                if n > w[@W_CAP@] {
+                    fail(w, @R_OVER_CAP@, at, n);
+                    return 0;
+                }
+                if n > rem {
+                    fail(w, @R_TRUNCATED@, w[@W_POS@], n - rem);
+                    return 0;
+                }
+            } else {
+                if n > arg || n > rem {
+                    fail(w, @R_TRUNCATED@, w[@W_POS@], 0);
+                    return 0;
+                }
+            }
+        } else {
+            if need(w, n) != 0 { return 0; }
+        }
+        let s: u64 = w[@W_POS@];
+        if t == @T_STR@ || t == @T_REPO@ {
+            if utf8ok(inp, w, s, n) == 0 {
+                fail(w, @R_UTF8@, s, 0);
+                return 0;
+            }
+            if t == @T_REPO@ && repook(inp, w, s, n) == 0 {
+                fail(w, @R_REPO@, at, 0);
+                return 0;
+            }
+        }
+        lfput(w, t | (n << 8));
+        let mut i: u64 = 0;
+        while i < n && w[@W_ERR@] == 0 bound @LOOP_MAX@ {
+            lfput(w, inp[s + i]);
+            i = i + 1;
+        }
+        w[@W_POS@] = s + n;
+        return n;
+    }
+    let h: u64 = lfget(w);
+    if w[@W_ERR@] != 0 { return 0; }
+    let en: u64 = h >> 8;
+    let s2: u64 = w[@W_LF@];
+    if (h & 255) != t || (t == @T_FIX@ && en != arg) {
+        fail(w, @R_LF_TYPE@, s2 - 1, h);
+        return 0;
+    }
+    if en > w[@W_LF_N@] - s2 {
+        fail(w, @R_LF_END@, s2 - 1, en);
+        return 0;
+    }
+    let b: u64 = w[@W_LF_BASE@] + s2;
+    let mut j: u64 = 0;
+    while j < en && w[@W_ERR@] == 0 bound @LOOP_MAX@ {
+        if w[b + j] > 255 { fail(w, @R_LF_VALUE@, s2 + j, w[b + j]); }
+        j = j + 1;
+    }
+    if w[@W_ERR@] != 0 { return 0; }
+    if t == @T_STR@ || t == @T_REPO@ {
+        if utf8ok(inp, w, s2, en) == 0 {
+            fail(w, @R_LF_UTF8@, s2 - 1, 0);
+            return 0;
+        }
+        if t == @T_REPO@ && repook(inp, w, s2, en) == 0 {
+            fail(w, @R_LF_REPO@, s2 - 1, 0);
+            return 0;
+        }
+    }
+    if t != @T_FIX@ { outle(w, en, 4); }
+    let mut q: u64 = 0;
+    while q < en && w[@W_ERR@] == 0 bound @LOOP_MAX@ {
+        outle(w, w[b + q], 1);
+        q = q + 1;
+    }
+    w[@W_LF@] = s2 + en;
+    return en;
+}
+
+// Open a length-prefixed region. f = a field id: an embedded synapse-core encoding (WAL length rules for
+// the prefix, synapse-core rules inside); EMB_CORE: the inner content length of an envelope v2
+// (synapse-core rules); EMB_REV: a checkpoint revision record (WAL rules; offsets restart at its start).
+// Returns the save word for emb_close: old end | old base << 20 | prefix offset << 40.
+fn emb_open(inp: bytes, w: cells, f: u64) -> u64 {
+    if w[@W_ERR@] != 0 { return 0; }
+    if w[@W_MODE@] == @MODE_ENCODE@ {
+        let o: u64 = w[@W_OUT@];
+        outle(w, 0, 4);
+        return o << 40;
+    }
+    let at: u64 = w[@W_POS@];
+    if need(w, 4) != 0 { return 0; }
+    let n: u64 = rdle(inp, w, 4);
+    let rem: u64 = w[@W_END@] - w[@W_POS@];
+    if f == @EMB_CORE@ {
+        if n > rem {
+            fail(w, @R_TRUNCATED@, w[@W_POS@], 0);
+            return 0;
+        }
+    } else {
+        if n > w[@W_CAP@] {
+            fail(w, @R_OVER_CAP@, at, n);
+            return 0;
+        }
+        if n > rem {
+            fail(w, @R_TRUNCATED@, w[@W_POS@], n - rem);
+            return 0;
+        }
+    }
+    let save: u64 = w[@W_END@] | (w[@W_BASE@] << 20) | (at << 40);
+    w[@W_END@] = w[@W_POS@] + n;
+    if f == @EMB_REV@ {
+        w[@W_BASE@] = w[@W_POS@];
+    } else if f != @EMB_CORE@ {
+        w[@W_CORE@] = 1;
+        w[@W_EMB_AT@] = at;
+        w[@W_EMB_F@] = f;
+    }
+    return save;
+}
+
+// Close the region emb_open opened. Decode: the region must be used up (synapse-core finish; a revision
+// record checks its own end), then end and base come back. Encode: the length prefix is written.
+fn emb_close(w: cells, save: u64, f: u64) {
+    if w[@W_ERR@] != 0 { return; }
+    if w[@W_MODE@] == @MODE_DECODE@ {
+        if f != @EMB_REV@ && w[@W_POS@] != w[@W_END@] {
+            fail(w, @R_TRAILING@, w[@W_POS@], w[@W_END@] - w[@W_POS@]);
+            return;
+        }
+        w[@W_END@] = save & @MASK20@;
+        w[@W_BASE@] = (save >> 20) & @MASK20@;
+        if f != @EMB_CORE@ && f != @EMB_REV@ { w[@W_CORE@] = 0; }
+        return;
+    }
+    let at: u64 = save >> 40;
+    let n: u64 = w[@W_OUT@] - at - 4;
+    let b: u64 = w[@W_OUT_BASE@] + at;
+    w[b] = n & 255;
+    w[b + 1] = (n >> 8) & 255;
+    w[b + 2] = (n >> 16) & 255;
+    w[b + 3] = (n >> 24) & 255;
+}
+
+// A count then that many 32-byte ids (fcount rules for min and t2).
+fn ids(inp: bytes, w: cells, min: u64, t2: u64) {
+    let n: u64 = fcount(inp, w, min, t2);
+    let mut i: u64 = 0;
+    while i < n && w[@W_ERR@] == 0 bound @LOOP_MAX@ {
+        frun(inp, w, @D_FIX32@);
+        i = i + 1;
+    }
+}
+
+fn attachment(inp: bytes, w: cells) {
+    frun(inp, w, @D_STR@);
+    ftag(inp, w, @D_BOOL@);
+    frun(inp, w, @D_FIX32@);
+    frun(inp, w, @D_STR@);
+}
+
+fn attachments(inp: bytes, w: cells) {
+    let n: u64 = fcount(inp, w, 41, @SZ_ATTACHMENT@);
+    let mut i: u64 = 0;
+    while i < n && w[@W_ERR@] == 0 bound @LOOP_MAX@ {
+        attachment(inp, w);
+        i = i + 1;
+    }
+}
+
+// One path mutation: path, op tag (1 upsert: mode tag, blob digest, size; 2 delete). The same layout in the
+// v1 envelope (WAL rules) and in revision content (synapse-core rules, path cap 2048).
+fn mutation(inp: bytes, w: cells) {
+    frun(inp, w, @D_PATH@);
+    let op: u64 = ftag(inp, w, @D_MUTOP@);
+    if op == 1 {
+        ftag(inp, w, @D_FMODE@);
+        frun(inp, w, @D_FIX32@);
+        fint(inp, w, @D_U64@);
+    }
+}
+
+// A mutation list: count (min, t2 as fcount), then the mutations.
+fn mutations(inp: bytes, w: cells, t2: u64) {
+    let n: u64 = fcount(inp, w, 5, t2);
+    let mut i: u64 = 0;
+    while i < n && w[@W_ERR@] == 0 bound @LOOP_MAX@ {
+        mutation(inp, w);
+        i = i + 1;
+    }
+}
+
+// ChangesetEnvelope v1 (get_envelope).
+fn envelope(inp: bytes, w: cells) {
+    fint(inp, w, @D_U16@);
+    frun(inp, w, @D_REPO@);
+    frun(inp, w, @D_FIX20@);
+    ids(inp, w, 32, 32);
+    frun(inp, w, @D_STR@);
+    frun(inp, w, @D_FIX32@);
+    fint(inp, w, @D_U64@);
+    frun(inp, w, @D_STR@);
+    mutations(inp, w, @SZ_MUTATION@);
+    attachments(inp, w);
+    frun(inp, w, @D_BYTES@);
+}
+
+fn review(inp: bytes, w: cells) {
+    frun(inp, w, @D_STR@);
+    ftag(inp, w, @D_BOOL@);
+    frun(inp, w, @D_STR@);
+    fint(inp, w, @D_U64@);
+}
+
+fn projection(inp: bytes, w: cells) {
+    frun(inp, w, @D_REPO@);
+    fint(inp, w, @D_U64@);
+    frun(inp, w, @D_FIX32@);
+    frun(inp, w, @D_FIX20@);
+    frun(inp, w, @D_FIX20@);
+    frun(inp, w, @D_STR@);
+    frun(inp, w, @D_STR@);
+    frun(inp, w, @D_STR@);
+    frun(inp, w, @D_FIX32@);
+    ftag(inp, w, @D_BOOL@);
+}
+
+fn canonical(inp: bytes, w: cells) {
+    frun(inp, w, @D_REPO@);
+    frun(inp, w, @D_STR@);
+    frun(inp, w, @D_FIX20@);
+    let opt: u64 = ftag(inp, w, @D_OPTION@);
+    if opt == 1 { frun(inp, w, @D_FIX32@); }
+    frun(inp, w, @D_FIX20@);
+    fint(inp, w, @D_U64@);
+    let n: u64 = fcount(inp, w, 4, @SZ_STRING@);
+    let mut i: u64 = 0;
+    while i < n && w[@W_ERR@] == 0 bound @LOOP_MAX@ {
+        frun(inp, w, @D_STR@);
+        i = i + 1;
+    }
+    fint(inp, w, @D_U64@);
+}
+
+// StoredChangeset (get_stored).
+fn stored(inp: bytes, w: cells) {
+    frun(inp, w, @D_FIX32@);
+    fint(inp, w, @D_U64@);
+    envelope(inp, w);
+    attachments(inp, w);
+    let n: u64 = fcount(inp, w, 17, @SZ_REVIEW@);
+    let mut i: u64 = 0;
+    while i < n && w[@W_ERR@] == 0 bound @LOOP_MAX@ {
+        review(inp, w);
+        i = i + 1;
+    }
+    fint(inp, w, @D_U64@);
+}
+
+// Embedded ChangesetEnvelopeV2: u32 content length, content (u16 version 2, change id, base tree, parents,
+// mutations, intent), then the authorship attestation.
+fn env2(inp: bytes, w: cells) {
+    let sv: u64 = emb_open(inp, w, @F_ENV2@);
+    let sc: u64 = emb_open(inp, w, @EMB_CORE@);
+    if w[@W_MODE@] == @MODE_DECODE@ {
+        if need(w, 2) == 0 {
+            let ver: u64 = rdle(inp, w, 2);
+            if ver != 2 { fail(w, @R_CORE_VERSION@, 0, ver); }
+        }
+    } else {
+        outle(w, 2, 2);
+    }
+    frun(inp, w, @D_FIX16@);
+    frun(inp, w, @D_FIX32@);
+    ids(inp, w, 32, 0);
+    mutations(inp, w, 0);
+    frun(inp, w, @D_INTENT@);
+    emb_close(w, sc, @EMB_CORE@);
+    frun(inp, w, @D_REPO@);
+    frun(inp, w, @D_FIX32@);
+    frun(inp, w, @D_FIX32@);
+    frun(inp, w, @D_FIX32@);
+    fint(inp, w, @D_U64@);
+    frun(inp, w, @D_FIX64@);
+    emb_close(w, sv, @F_ENV2@);
+}
+
+// Embedded ChainPath: u8 depth 1..=16, then that many link digests.
+fn chain(inp: bytes, w: cells) {
+    let sv: u64 = emb_open(inp, w, @F_CHAIN@);
+    let n: u64 = ftag(inp, w, @D_CHAIN@);
+    let mut i: u64 = 0;
+    while i < n && w[@W_ERR@] == 0 bound 16 {
+        frun(inp, w, @D_FIX32@);
+        i = i + 1;
+    }
+    emb_close(w, sv, @F_CHAIN@);
+}
+
+// Embedded ObsolescenceMarker.
+fn marker(inp: bytes, w: cells) {
+    let sv: u64 = emb_open(inp, w, @F_MARKER@);
+    frun(inp, w, @D_REPO@);
+    frun(inp, w, @D_FIX16@);
+    frun(inp, w, @D_FIX32@);
+    ids(inp, w, 32, 256);
+    frun(inp, w, @D_FIX32@);
+    fint(inp, w, @D_U64@);
+    frun(inp, w, @D_FIX64@);
+    emb_close(w, sv, @F_MARKER@);
+}
+
+// One WAL record in [W_POS, W_END): version, kind, body, finish (decode_record). Returns the kind.
+// Kinds 9..11 (reserved by open synapse PRs) slot in as one more `if k == N` arm and a wider D_KIND.
+fn record(inp: bytes, w: cells) -> u64 {
+    if w[@W_ERR@] != 0 { return 0; }
+    if w[@W_MODE@] == @MODE_DECODE@ {
+        if need(w, 1) != 0 { return 0; }
+        let v: u64 = rdle(inp, w, 1);
+        if v != @CODEC_V2@ {
+            fail(w, @R_VERSION@, w[@W_BASE@], v);
+            return 0;
+        }
+    } else {
+        outle(w, @CODEC_V2@, 1);
+    }
+    let k: u64 = ftag(inp, w, @D_KIND@);
+    if k == 1 {
+        envelope(inp, w);
+        frun(inp, w, @D_FIX32@);
+        ids(inp, w, 32, 32);
+    }
+    if k == 2 {
+        frun(inp, w, @D_FIX32@);
+        attachment(inp, w);
+    }
+    if k == 3 {
+        frun(inp, w, @D_FIX32@);
+        review(inp, w);
+    }
+    if k == 4 { projection(inp, w); }
+    if k == 5 { canonical(inp, w); }
+    if k == 6 {
+        frun(inp, w, @D_FIX32@);
+        fint(inp, w, @D_U64@);
+    }
+    if k == 7 {
+        env2(inp, w);
+        chain(inp, w);
+        fint(inp, w, @D_U64@);
+        ids(inp, w, 32, 32);
+    }
+    if k == 8 {
+        marker(inp, w);
+        chain(inp, w);
+        fint(inp, w, @D_U64@);
+    }
+    if w[@W_MODE@] == @MODE_DECODE@ && w[@W_ERR@] == 0 && w[@W_POS@] != w[@W_END@] {
+        fail(w, @R_TRAILING@, w[@W_POS@], w[@W_END@] - w[@W_POS@]);
+    }
+    return k;
+}
+
+// Checkpoint map order: the entry at stream offset `at` must have a key strictly above the previous entry's
+// (kf = key kind | field << 8). Keys: K_FIX32 the first 32 bytes; K_STR the leading repository id; K_STRFIX
+// the repository id then the 32 bytes after it; K_U64 the u64 after the leading repository id. Decode
+// refuses NotCanonical at the entry, encode LF_ORDER.
+fn cmpkey(inp: bytes, w: cells, kf: u64, at: u64) {
+    if w[@W_ERR@] != 0 { return; }
+    if w[@W_KHAS@] == 1 {
+        let kind: u64 = kf & 255;
+        let a: u64 = w[@W_KPREV@];
+        let mut dec: u64 = 0;
+    if w[@W_MODE@] == @MODE_DECODE@ { dec = 1; }
+        let mut c: u64 = 0;
+        let mut pa: u64 = a;
+        let mut pb: u64 = at;
+        if dec == 0 {
+            pa = a + 1;
+            pb = at + 1;
+        }
+        if kind != @K_FIX32@ {
+            let mut na: u64 = 0;
+            let mut nb: u64 = 0;
+            if dec == 1 {
+                na = sb(inp, w, a) | (sb(inp, w, a + 1) << 8) | (sb(inp, w, a + 2) << 16) | (sb(inp, w, a + 3) << 24);
+                nb = sb(inp, w, at) | (sb(inp, w, at + 1) << 8) | (sb(inp, w, at + 2) << 16) | (sb(inp, w, at + 3) << 24);
+                pa = a + 4;
+                pb = at + 4;
+            } else {
+                na = w[w[@W_LF_BASE@] + a] >> 8;
+                nb = w[w[@W_LF_BASE@] + at] >> 8;
+            }
+            if kind == @K_U64@ {
+                let mut va: u64 = 0;
+                let mut vb: u64 = 0;
+                if dec == 1 {
+                    let mut i: u64 = 0;
+                    while i < 8 bound 8 {
+                        va = va | (sb(inp, w, pa + na + i) << (i * 8));
+                        vb = vb | (sb(inp, w, pb + nb + i) << (i * 8));
+                        i = i + 1;
+                    }
+                } else {
+                    va = w[w[@W_LF_BASE@] + pa + na + 1];
+                    vb = w[w[@W_LF_BASE@] + pb + nb + 1];
+                }
+                if va < vb { c = 1; } else { c = 2; }
+            } else {
+                let mut m: u64 = na;
+                if nb < m { m = nb; }
+                let mut j: u64 = 0;
+                while j < m && c == 0 bound 128 {
+                    let xa: u64 = sb(inp, w, pa + j);
+                    let xb: u64 = sb(inp, w, pb + j);
+                    if xa < xb { c = 1; }
+                    if xa > xb { c = 2; }
+                    j = j + 1;
+                }
+                if c == 0 && na < nb { c = 1; }
+                if c == 0 && na > nb { c = 2; }
+                if c == 0 && kind == @K_STRFIX@ {
+                    pa = pa + na;
+                    pb = pb + nb;
+                    if dec == 0 {
+                        pa = pa + 1;
+                        pb = pb + 1;
+                    }
+                }
+                if c == 0 && kind == @K_STR@ { c = 2; }
+            }
+        }
+        let mut q: u64 = 0;
+        while q < 32 && c == 0 bound 32 {
+            let ya: u64 = sb(inp, w, pa + q);
+            let yb: u64 = sb(inp, w, pb + q);
+            if ya < yb { c = 1; }
+            if ya > yb { c = 2; }
+            q = q + 1;
+        }
+        if c != 1 {
+            if dec == 1 { fail(w, @R_NOT_CANON@ | (kf >> 8 << 8), at, 0); } else { fail(w, @R_LF_ORDER@, at, 0); }
+            return;
+        }
+    }
+    w[@W_KPREV@] = at;
+    w[@W_KHAS@] = 1;
+}
+
+// Checkpoint content (CheckpointState::decode_content / encode_content).
+fn ckpt(inp: bytes, w: cells) {
+    let mut dec: u64 = 0;
+    if w[@W_MODE@] == @MODE_DECODE@ { dec = 1; }
+    if dec == 1 {
+        if need(w, 1) != 0 { return; }
+        let v: u64 = rdle(inp, w, 1);
+        if v != @CODEC_V2@ {
+            fail(w, @R_VERSION@, 0, v);
+            return;
+        }
+    } else {
+        outle(w, @CODEC_V2@, 1);
+    }
+    let mut at: u64 = 0;
+    let n1: u64 = fcount(inp, w, 40, 1);
+    w[@W_KHAS@] = 0;
+    let mut i1: u64 = 0;
+    while i1 < n1 && w[@W_ERR@] == 0 bound @LOOP_MAX@ {
+        at = w[@W_POS@];
+        if dec == 0 { at = w[@W_LF@]; }
+        stored(inp, w);
+        cmpkey(inp, w, @K_FIX32@ | (@F_CHANGESETS@ << 8), at);
+        i1 = i1 + 1;
+    }
+    let n2: u64 = fcount(inp, w, 76, 1);
+    w[@W_KHAS@] = 0;
+    let mut i2: u64 = 0;
+    while i2 < n2 && w[@W_ERR@] == 0 bound @LOOP_MAX@ {
+        at = w[@W_POS@];
+        if dec == 0 { at = w[@W_LF@]; }
+        frun(inp, w, @D_REPO@);
+        frun(inp, w, @D_FIX32@);
+        fint(inp, w, @D_U64@);
+        frun(inp, w, @D_FIX32@);
+        cmpkey(inp, w, @K_STRFIX@ | (@F_IDEM@ << 8), at);
+        i2 = i2 + 1;
+    }
+    let n3: u64 = fcount(inp, w, 40, 1);
+    w[@W_KHAS@] = 0;
+    let mut i3: u64 = 0;
+    while i3 < n3 && w[@W_ERR@] == 0 bound @LOOP_MAX@ {
+        at = w[@W_POS@];
+        if dec == 0 { at = w[@W_LF@]; }
+        frun(inp, w, @D_FIX32@);
+        cmpkey(inp, w, @K_FIX32@ | (@F_BLOBS@ << 8), at);
+        fint(inp, w, @D_U64@);
+        i3 = i3 + 1;
+    }
+    let n4: u64 = fcount(inp, w, 12, 1);
+    w[@W_KHAS@] = 0;
+    let mut i4: u64 = 0;
+    while i4 < n4 && w[@W_ERR@] == 0 bound @LOOP_MAX@ {
+        at = w[@W_POS@];
+        if dec == 0 { at = w[@W_LF@]; }
+        projection(inp, w);
+        cmpkey(inp, w, @K_U64@ | (@F_PROJ@ << 8), at);
+        i4 = i4 + 1;
+    }
+    let n5: u64 = fcount(inp, w, 4, 1);
+    w[@W_KHAS@] = 0;
+    let mut i5: u64 = 0;
+    while i5 < n5 && w[@W_ERR@] == 0 bound @LOOP_MAX@ {
+        at = w[@W_POS@];
+        if dec == 0 { at = w[@W_LF@]; }
+        canonical(inp, w);
+        cmpkey(inp, w, @K_STR@ | (@F_CANON@ << 8), at);
+        i5 = i5 + 1;
+    }
+    if w[@W_ERR@] != 0 { return; }
+    // Revision section: in the bytes only when it holds records; always a count in the LF.
+    let mut present: u64 = 1;
+    if dec == 1 && w[@W_POS@] >= w[@W_END@] {
+        present = 0;
+        lfput(w, @H_COUNT@);
+        lfput(w, 0);
+    }
+    if dec == 0 {
+        let l: u64 = w[@W_LF@];
+        if l + 1 < w[@W_LF_N@] && w[w[@W_LF_BASE@] + l] == @H_COUNT@ && w[w[@W_LF_BASE@] + l + 1] == 0 {
+            present = 0;
+            w[@W_LF@] = l + 2;
+        }
+    }
+    if present == 1 {
+        let sat: u64 = w[@W_POS@];
+        let n6: u64 = fcount(inp, w, 12, 1);
+        if dec == 1 && w[@W_ERR@] == 0 && n6 == 0 {
+            fail(w, @R_NOT_CANON@ | (@F_REVS@ << 8), sat, 0);
+            return;
+        }
+        let mut prev: u64 = 0;
+        let mut has: u64 = 0;
+        let mut i6: u64 = 0;
+        while i6 < n6 && w[@W_ERR@] == 0 bound @LOOP_MAX@ {
+            let rat: u64 = w[@W_POS@];
+            let seq: u64 = fint(inp, w, @D_U64@);
+            if dec == 1 && w[@W_ERR@] == 0 && ((has == 1 && prev >= seq) || seq > w[@W_CKSEQ@]) {
+                fail(w, @R_NOT_CANON@ | (@F_REVS@ << 8), rat, 0);
+            }
+            prev = seq;
+            has = 1;
+            let tag_at: u64 = w[@W_POS@] + 5;
+            let sv: u64 = emb_open(inp, w, @EMB_REV@);
+            let k: u64 = record(inp, w);
+            emb_close(w, sv, @EMB_REV@);
+            if dec == 1 && w[@W_ERR@] == 0 && k != 7 && k != 8 {
+                fail(w, @KF_REVKIND@, tag_at, k);
+            }
+            i6 = i6 + 1;
+        }
+    }
+    if dec == 1 && w[@W_ERR@] == 0 && w[@W_POS@] != w[@W_END@] {
+        fail(w, @R_TRAILING@, w[@W_POS@], w[@W_END@] - w[@W_POS@]);
+    }
+}
+
+// Entry. Header checks (ABI, regions inside w and apart, input within the loop bound), state reset,
+// one record or one checkpoint content, then (encode) the whole LF must have been used.
+fn syn_codec(inp: bytes, w: cells) -> u64 {
+    if w.len < @W_HDR@ { return @R_ABI@; }
+    w[@W_ERR@] = 0;
+    w[@W_ERR_AT@] = 0;
+    w[@W_ERR_X@] = 0;
+    w[@W_ERR_Y@] = 0;
+    w[@W_ERR_FIELD@] = 0;
+    let mode: u64 = w[@W_MODE@];
+    let lb: u64 = w[@W_LF_BASE@];
+    let lc: u64 = w[@W_LF_CAP@];
+    let ob: u64 = w[@W_OUT_BASE@];
+    let oc: u64 = w[@W_OUT_CAP@];
+    let mut bad: u64 = 0;
+    if w[@W_MAGIC@] != @ABI_MAGIC@ || w[@W_VERSION@] != @ABI_VERSION@ || w[@W_CELLS@] != w.len { bad = 1; }
+    if w[@W_ENTRY@] != @ENTRY_RECORD@ && w[@W_ENTRY@] != @ENTRY_CHECKPOINT@ { bad = 1; }
+    if mode != @MODE_DECODE@ && mode != @MODE_ENCODE@ { bad = 1; }
+    if lb < @W_HDR@ || lb > w.len || lc > w.len - lb { bad = 1; }
+    if bad == 0 && (ob < @W_HDR@ || ob > w.len || oc > w.len - ob) { bad = 1; }
+    if bad == 0 && oc != 0 && lc != 0 && ob < lb + lc && lb < ob + oc { bad = 1; }
+    if bad == 0 && mode == @MODE_ENCODE@ && w[@W_LF_N@] > lc { bad = 1; }
+    if bad == 1 {
+        w[@W_ERR@] = @R_ABI@;
+        return @R_ABI@;
+    }
+    // The second line keeps every packed position (emb_open) inside 20 bits even if INPUT_MAX grows.
+    if inp.len > @INPUT_MAX@ || lc > @INPUT_MAX@ * 4 || oc > @INPUT_MAX@ ||
+       inp.len > @MASK20@ || oc > @MASK20@ {
+        w[@W_ERR@] = @R_LIMIT@;
+        return @R_LIMIT@;
+    }
+    if mode == @MODE_ENCODE@ && w[@W_LF_N@] > @INPUT_MAX@ {
+        w[@W_ERR@] = @R_LIMIT@;
+        return @R_LIMIT@;
+    }
+    w[@W_POS@] = 0;
+    w[@W_END@] = inp.len;
+    w[@W_BASE@] = 0;
+    w[@W_CORE@] = 0;
+    w[@W_LF@] = 0;
+    w[@W_OUT@] = 0;
+    w[@W_EMB_AT@] = 0;
+    w[@W_EMB_F@] = 0;
+    w[@W_KHAS@] = 0;
+    w[@W_KPREV@] = 0;
+    if mode == @MODE_DECODE@ { w[@W_LF_N@] = 0; }
+    if w[@W_ENTRY@] == @ENTRY_RECORD@ {
+        record(inp, w);
+    } else {
+        if mode == @MODE_DECODE@ { w[@W_CAP@] = inp.len; }
+        ckpt(inp, w);
+    }
+    if mode == @MODE_ENCODE@ && w[@W_ERR@] == 0 && w[@W_LF@] != w[@W_LF_N@] {
+        fail(w, @R_LF_TRAILING@, w[@W_LF@], w[@W_LF_N@] - w[@W_LF@]);
+    }
+    return w[@W_ERR@];
+}

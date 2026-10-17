@@ -277,6 +277,12 @@
           "purpose": "Directory tests/searchtrace. Purpose not yet described by a human."
         },
         {
+          "digest": "e69616ad471704066a86bf2796776301179eada5c0aa36a7166b9aca788619f4",
+          "last_commit": "a094a9d7",
+          "name": "synapse",
+          "purpose": "J1 parity driver for syn_codec.osc against the sealed Rust A1 corpus (aien-dev/synapse j1-codec-"
+        },
+        {
           "digest": "3ecf636e2923038708cafa062895b8d8f2664dc1865cdff38575911eaa9f1b2d",
           "last_commit": "54826a37",
           "name": "train",
@@ -295,15 +301,15 @@
           "purpose": "Directory tests/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:ddc3618190458bc5073e3bee67ffccc68a2ee9f065f2cb0d86545386a29fddf8",
-      "compiled_at": "2026-10-16T19:04:20Z",
+      "children_root": "sha256:ccb6512c4f9249a0992652faf5893f6f9366391c353f993fe150f51a7836bfa2",
+      "compiled_at": "2026-10-17T06:18:48Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:4eb9d4d76234448c0ed691f0aeb9c90d785f8a47b1b1291d728bbe3e1509dc10",
+      "digest": "sha256:4a17b714bc0148b803373ef2141c9fd3c133fa462ed9ad004eb9e2932c90c9de",
       "evidence_files": 16,
       "evidence_root": "sha256:96d08097822ad95f4e562c19e0ba5df5a035774c48632f1832912c40a27bd27a",
-      "files": 1270,
-      "generated_at_commit": "88e24bdd57b27817d030d0ad95f62c3f3eacf426",
-      "source_tree": "sha256:e6c4f0021d383ba2e59da0d85d06a0b98170f6d188289c891b5745200548e6fc"
+      "files": 1274,
+      "generated_at_commit": "a094a9d7d340b7481796310ebd164cb5f5b85465",
+      "source_tree": "sha256:aa193a35f1625c3b8817c92717de21c48dfc49c6bb7d8896313509b463d73b49"
     },
     "owner_lane": "",
     "provenance": {

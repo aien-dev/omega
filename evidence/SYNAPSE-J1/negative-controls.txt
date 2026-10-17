@@ -1,0 +1,26 @@
+# Negative controls: one injected bug each in a temp copy of src/synapse/syn_codec.osc (unit sha256 6ff3002df8204e0a0489b3133246c9649bd84eeb5196c568d9ed85f94f5e31b0); the driver must fail (fuzz 0)
+control 1: UTF-8 accepts lead bytes 0xC0 and 0xC1
+FAIL: case 2075 (fixture record 0 op 2 pos 1641): Omega (0,0,0,0,0) Rust (5,186,0,0,0)
+FAIL: case 2099 (fixture record 0 op 2 pos 1665): Omega (0,0,0,0,0) Rust (5,186,0,0,0)
+FAIL: case 14359 (revision record 0 op 2 pos 2089): Omega (0,0,0,0,0) Rust (9,2,1,0,6)
+SYN_J1_FAIL
+control 2: embedded encodings skip their trailing-byte check
+FAIL: case 12287 (revision record 0 op 2 pos 17): Omega (0,0,0,0,0) Rust (9,2,1,0,6)
+FAIL: case 12289 (revision record 0 op 2 pos 19): Omega (0,0,0,0,0) Rust (9,2,1,0,6)
+FAIL: case 12290 (revision record 0 op 2 pos 20): Omega (0,0,0,0,0) Rust (9,2,1,0,6)
+SYN_J1_FAIL
+control 3: projection order accepts equal pr numbers
+FAIL: case 22748 (equal keys: projections op 0 pos 0): Omega (0,0,0,0,0) Rust (7,1445,0,0,12)
+cases: 55669 of 55670 give the Rust outcome (Rust accepts 41750, refuses 13920); Omega accepts re-encoded 41750
+checks 766359, failures 1
+SYN_J1_FAIL
+control 4: repository ids may end with a slash
+FAIL: case 22753 (repository id: trailing slash op 0 pos 0): Omega (0,0,0,0,0) Rust (8,2,0,0,0)
+cases: 55669 of 55670 give the Rust outcome (Rust accepts 41750, refuses 13920); Omega accepts re-encoded 41750
+checks 766359, failures 1
+SYN_J1_FAIL
+control 5: revision records accept equal seqs
+FAIL: case 22758 (revision records with equal seqs op 0 pos 0): Omega (0,0,0,0,0) Rust (7,753,0,0,14)
+cases: 55669 of 55670 give the Rust outcome (Rust accepts 41750, refuses 13920); Omega accepts re-encoded 41750
+checks 766359, failures 1
+SYN_J1_FAIL

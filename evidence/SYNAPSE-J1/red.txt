@@ -1,0 +1,26 @@
+# RED: make test-synapse-codec with the stub unit (src/synapse/syn_codec.osc.in = entry refusing everything)
+# omega base f4a9849f; corpus sha256 b2aba356b7dd58b48b6cd7139fdeaa059ee5ab8f496d3ba03f6e4a5aa94db50b
+sh src/synapse/syn_gen.sh check src/synapse/syn_layout.lst src/synapse/syn_codec.osc.in src/synapse/syn_codec.osc src/synapse/syn_layout.h
+syn_gen: check OK (generated files match the layout list)
+/home/drakestapleton/workspace/omega-53/build/synapse/test_syn_codec src/synapse/syn_codec.osc tests/synapse/j1-corpus/corpus.bin 2000 > build/synapse/codec.out
+make: *** [mk/synapse.mk:37: test-synapse-codec] Error 1
+make exit=2
+# first failures (stderr):
+FAIL: base fixture record 0: Omega decode refused kind 31 at 0
+FAIL: base fixture record 0: Omega encode refused kind 31 at 0
+FAIL: base fixture record 0: one byte short gave 31, want OUT_FULL
+FAIL: base fixture record 1: Omega decode refused kind 31 at 0
+FAIL: base fixture record 1: Omega encode refused kind 31 at 0
+# summary lines of build/synapse/codec.out (stub unit):
+unit: 1 functions, 324 bytes of AArch64
+fuzz seed: 0x53594e4a31636f64 (override with SYN_FUZZ_SEED)
+corpus: 48 bases, 55670 cases, sha256 trailer OK
+bases: 0 of 28 decode to the Rust logical form, 0 of 28 encode to the Rust bytes (record kinds: 1:6 2:3 3:3 4:3 5:5 6:3 7:1 8:2)
+cases: 0 of 55670 give the Rust outcome (Rust accepts 41750, refuses 13920); Omega accepts re-encoded 0
+Rust outcomes by op: as-is 0/20 truncate 1/4644 flip 31642/5518 false-length 10107/3738 (accepted/refused)
+Rust refusal kinds in the corpus: Truncated:4321 LengthOverCap:3998 TrailingBytes:44 UnknownTag:380 InvalidUtf8:2160 VersionUnsupported:132 NotCanonical:406 InvalidRepoId:589 EmbeddedMalformed:1890
+encode refusals: 12; ABI cases: 10
+fuzz: 1000 LF edits (0 encoded, 0 of those decoder-only refusals), 1000 byte edits (0 accepted)
+calls: interp 57777, native 57777, interp==native compares 57777, traps 0
+checks 403550, failures 56775
+SYN_J1_FAIL
