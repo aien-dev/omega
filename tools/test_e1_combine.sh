@@ -29,7 +29,7 @@ echo 'kernel' > "$R/src/numeric/k.c"; echo 'gate' > "$R/tests/run_numeric_gates.
 git -C "$R" add -A; git -C "$R" commit -qm cand; CAND=$(git -C "$R" rev-parse HEAD)
 echo 'all: more' > "$R/Makefile"; git -C "$R" commit -qam main; MAIN=$(git -C "$R" rev-parse HEAD)
 export E1_GIT_DIR=$R
-PHYS=e95e3ed2a86fe4bffe4d954fa94c27dfb5284280
+PHYS=6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf
 OTHER=1111111111111111111111111111111111111111
 sha() { sha256sum -- "$1" | cut -c1-64; }
 gsha() { git -C "$R" show "$1:$2" | sha256sum | cut -c1-64; }

@@ -152,8 +152,8 @@ case "$step" in
     ;;
   # rx-host.yml
   rx-host-reference)
-    pin physics-src-e95e3ed physics e95e3ed2a86fe4bffe4d954fa94c27dfb5284280
-    export PHYSICS_COMMIT=e95e3ed2a86fe4bffe4d954fa94c27dfb5284280 PHYSICS_DIR="$PINS/physics-src-e95e3ed"
+    pin physics-src-6d7cf0d physics 6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf
+    export PHYSICS_COMMIT=6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf PHYSICS_DIR="$PINS/physics-src-6d7cf0d"
     aienos_pin; set -o pipefail; mkdir -p build
     make test-r3 test-r7 test-r16-operator-authority-misuse test-r8 test-r9 test-r12 test-rx-emergency test-action-graph test-state-projection test-capability-query test-capability-graph test-skillroute-compose test-semantic-comm test-cognitive-routing test-sem-incremental test-cortex test-jspace-prod test-composition test-composition-attach-asan test-composition-gate test-fabric test-fabric-living
     make test-machine-identity
@@ -181,8 +181,8 @@ case "$step" in
     tools/rx_host_receipts.sh generation "$generation" "$OMEGA_CANDIDATE_COMMIT"
     ;;
   faculty-arm)
-    pin physics-src-e95e3ed physics e95e3ed2a86fe4bffe4d954fa94c27dfb5284280
-    export PHYSICS_DIR="$PINS/physics-src-e95e3ed"
+    pin physics-src-6d7cf0d physics 6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf
+    export PHYSICS_DIR="$PINS/physics-src-6d7cf0d"
     aienos_pin; argus_pin; set -o pipefail; mkdir -p build
     make OUT_DIR=build/pid $NOPHYS test-program-id
     make OUT_DIR=build/prz $NOPHYS test-program-realize
@@ -216,8 +216,8 @@ case "$step" in
   # rx-host.yml chip-only-declared and spark-only targets (SKIP on GitHub, never a pass there)
   chip:*|spark:*)
     t="${step#*:}"
-    pin physics-src-e95e3ed physics e95e3ed2a86fe4bffe4d954fa94c27dfb5284280
-    export PHYSICS_DIR="$PINS/physics-src-e95e3ed"
+    pin physics-src-6d7cf0d physics 6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf
+    export PHYSICS_DIR="$PINS/physics-src-6d7cf0d"
     aienos_pin; argus_pin
     make "$t"
     ;;
