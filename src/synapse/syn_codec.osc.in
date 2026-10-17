@@ -1,0 +1,8 @@
+// Synapse binary codec v2 in Omega (J1): RED STUB. The entry exists and refuses every input with LIMIT, so
+// the cross-check driver fails before the codec is written (the codec replaces this file).
+fn syn_codec(inp: bytes, w: cells) -> u64 {
+    if w.len < @W_HDR@ { return @R_ABI@; }
+    if inp.len > @INPUT_MAX@ { w[@W_ERR@] = @R_LIMIT@; }
+    w[@W_ERR@] = @R_LIMIT@;
+    return @R_LIMIT@;
+}

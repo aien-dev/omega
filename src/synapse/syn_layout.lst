@@ -1,0 +1,136 @@
+# Synapse binary codec v2 port (ADR 0003 section 9 step 33, J1): the one list every workspace offset and
+# constant of syn_codec.osc is generated from (syn_gen.sh). Format: NAME VALUE (decimal; text after '#' is a
+# comment). Cells are u64. The specification is synapse docs/J1_OMEGA_CODEC.md and the Rust codec
+# (synapse crates/synapse-store/src/codec.rs); the corpus tests/synapse/j1-corpus/corpus.bin pins it.
+
+# --- ABI header ---
+ABI_MAGIC 1398361674          # 0x53594E4A "SYNJ"
+ABI_VERSION 1
+W_MAGIC 0
+W_VERSION 1
+W_CELLS 2                     # exact workspace length in cells
+W_ENTRY 3                     # 1 WAL record, 2 checkpoint content
+W_MODE 4                      # 1 decode (bytes -> logical form), 2 encode (logical form -> bytes)
+W_CAP 5                       # record cap (decode); a checkpoint content's cap is its own length
+W_CKSEQ 6                     # checkpoint_seq (checkpoint decode and encode)
+W_ERR 7                       # result: 0 accepted, else a refusal kind below
+W_ERR_AT 8
+W_ERR_X 9
+W_ERR_Y 10
+W_ERR_FIELD 11
+W_POS 12                      # reader cursor (absolute input offset)
+W_END 13                      # end of the region being read
+W_BASE 14                     # refusal offsets are relative to this (a nested revision record)
+W_CORE 15                     # depth inside embedded synapse-core encodings
+W_LF 16                       # logical-form cursor (encode)
+W_LF_N 17                     # logical-form length: written by decode, given to encode
+W_OUT 18                      # encoded length (encode)
+W_LF_BASE 19                  # logical-form region (cells)
+W_LF_CAP 20
+W_OUT_BASE 21                 # output region (one byte per cell)
+W_OUT_CAP 22
+W_EMB_AT 23                   # length-prefix offset of the open embedded synapse-core encoding
+W_EMB_F 24                    # its refusal field id
+W_KHAS 25                     # a previous map key exists (checkpoint order check)
+W_KPREV 26                    # stream offset of the previous map entry
+W_HDR 32                      # header cells; regions start at or after this
+
+MODE_DECODE 1
+MODE_ENCODE 2
+ENTRY_RECORD 1
+ENTRY_CHECKPOINT 2
+CODEC_V2 2
+INPUT_MAX 1000000             # LIMIT above this many input bytes or logical-form cells (loop bound)
+LOOP_MAX 1000000
+
+# --- Rust layout sizes the record decoder's reservation check uses (size_of::<T>(); corpus header) ---
+SZ_ATTACHMENT 88
+SZ_MUTATION 72
+SZ_REVIEW 64
+SZ_STRING 24
+
+# --- refusal kinds: 1..9 are CodecRefusal in declaration order ---
+R_TRUNCATED 1
+R_OVER_CAP 2
+R_TRAILING 3
+R_TAG 4
+R_UTF8 5
+R_VERSION 6
+R_NOT_CANON 7
+R_REPO 8
+R_EMBEDDED 9
+# encode refusals (the logical form is not a value the Rust types can hold)
+R_LF_TYPE 20
+R_LF_END 21
+R_LF_VALUE 22
+R_LF_UTF8 23
+R_LF_REPO 24
+R_OUT_FULL 25
+R_LF_TRAILING 26
+R_LF_ORDER 27
+R_ABI 30
+R_LIMIT 31
+R_LF_FULL 32
+# internal: a refusal inside an embedded synapse-core encoding, converted to R_EMBEDDED when it closes
+R_CORE_VERSION 98
+R_CORE 99
+C_MALFORMED 1                 # EnvelopeMalformed
+C_VERSION 2                   # EnvelopeVersionUnsupported
+
+# --- refusal field ids (corpus field table order) ---
+F_BOOL 1
+F_OPTION 2
+F_MUTOP 3
+F_FMODE 4
+F_KIND 5
+F_ENV2 6
+F_CHAIN 7
+F_MARKER 8
+F_CHANGESETS 9
+F_IDEM 10
+F_BLOBS 11
+F_PROJ 12
+F_CANON 13
+F_REVS 14
+F_REVKIND 15
+
+# --- logical-form token types; a token is a header cell type | len << 8, then len cells ---
+T_U16 2
+T_U64 4
+T_BOOL 5
+T_TAG 6
+T_FIX 7
+T_STR 8
+T_BYTES 9
+T_REPO 10
+T_COUNT 11
+
+# --- checkpoint key kinds (cmpkey) ---
+K_FIX32 1
+K_STR 2
+K_STRFIX 3
+K_U64 4
+
+# --- field descriptors (precomputed: OSC literals take their type from context) ---
+D_FIX16 4103                # T_FIX | 16 << 8
+D_FIX20 5127                # T_FIX | 20 << 8
+D_FIX32 8199                # T_FIX | 32 << 8
+D_FIX64 16391                # T_FIX | 64 << 8
+D_STR 8                       # T_STR (WAL string, capped by W_CAP)
+D_BYTES 9                     # T_BYTES
+D_PATH 524296                # T_STR, core cap 2048 (path)
+D_INTENT 1048584              # T_STR, core cap 4096 (intent summary)
+D_REPO 32778                 # T_REPO, core cap 128
+D_U16 514                     # T_U16, 2 bytes
+D_U64 2052                    # T_U64, 8 bytes
+D_BOOL 83951617          # field 1, tags 0..1, type 5
+D_OPTION 100728834          # field 2, tags 0..1, type 6
+D_MUTOP 100794627          # field 3, tags 1..2, type 6
+D_FMODE 100860164          # field 4, tags 1..3, type 6
+D_KIND 101187845          # field 5, tags 1..8, type 6
+D_CHAIN 185598208          # field 0, tags 1..16, type 11
+H_COUNT 267                   # T_COUNT | 1 << 8
+KF_REVKIND 3844                # R_TAG | F_REVKIND << 8
+EMB_CORE 0                    # emb_open: the inner content length of an envelope v2 (synapse-core rules)
+EMB_REV 255                   # emb_open: a checkpoint revision record (WAL byte run, offsets restart at 0)
+MASK20 1048575                # 20-bit field of an emb_open save word
