@@ -17,6 +17,7 @@
 #include <time.h>
 #include <math.h>
 #include <limits.h>
+#include <errno.h>
 #include "omega_physics_dir.h"
 
 static int m17_gate_count = 0;
@@ -975,31 +976,58 @@ fail:
     return false;
 }
 
+/* Remove the built copy a clean-clone gate made under its private folder; the
+ * log beside it stays for the reader. Hundreds of MB per run otherwise pile up
+ * in /tmp (omega#526). */
+static void m18_clean_clone_remove_checkout(const char *clone) {
+    char cmd[PATH_MAX + 32];
+    int n = snprintf(cmd, sizeof(cmd), "rm -rf -- '%s/checkout'", clone);
+    if (n < 0 || (size_t)n >= sizeof(cmd)) return;
+    int rc = system(cmd);
+    (void)rc;
+}
+
 static bool test_m18_gate16_clean_clone(void) {
     if (getenv("OMEGA_IN_CLEAN_CLONE") != NULL) {
         return true;
     }
     /* Copy the repo this omegatool runs from (the code under test), not a
      * hardcoded checkout, and pass the PHYSICS_DIR this process resolves at run time
-     * (omega_physics_dir.h) as an absolute path so the copy in /tmp does not fall back to
-     * the Makefile default ../physics (= /tmp/physics). Mirrors M19. */
+     * (omega_physics_dir.h) as an absolute path so the copy does not fall back to
+     * the Makefile default ../physics. Mirrors M19.
+     *
+     * The copy and its log live in a private mkdtemp folder (omega#526). A fixed
+     * /tmp path is shared by every user of the machine, and the sticky /tmp lets
+     * neither the judge user nor the operator remove or overwrite what the other
+     * left behind ("rm: Permission denied", "cannot create ...log: Permission denied"),
+     * so the gate failed for whoever ran second. */
     char physics_dir_resolved[PATH_MAX], physics_err[OMEGA_PHYSICS_ERR_SIZE];
     if (!omega_physics_dir_resolve_pinned(physics_dir_resolved, sizeof(physics_dir_resolved), 0, physics_err, sizeof(physics_err))) {
         fprintf(stderr, "%s\n", physics_err);
         return false;
     }
+    const char *tmp = getenv("TMPDIR");
+    if (!tmp || !*tmp) tmp = "/tmp";
+    char clone[PATH_MAX];
+    int cl = snprintf(clone, sizeof(clone), "%s/omega_clean_m18_XXXXXX", tmp);
+    if (cl < 0 || (size_t)cl >= sizeof(clone)) return false;
+    if (!mkdtemp(clone)) {
+        fprintf(stderr, "M18 clean clone: mkdtemp %s: %s\n", clone, strerror(errno));
+        return false;
+    }
     char command[4608];
     int len = snprintf(command, sizeof(command),
                        "root=$(git rev-parse --show-toplevel) && "
-                       "rm -rf /tmp/omega_clean_m18 && "
-                       "cp -r \"$root\" /tmp/omega_clean_m18 && "
-                       "cd /tmp/omega_clean_m18 && "
+                       "cp -r \"$root\" '%s/checkout' && "
+                       "cd '%s/checkout' && "
                        "make clean >/dev/null 2>&1 && "
                        "make -j PHYSICS_DIR='%s' >/dev/null 2>&1 && "
-                       "OMEGA_IN_CLEAN_CLONE=1 ./build/omegatool --run-m18-gates >/tmp/clean_clone_m18.log 2>&1",
-                       physics_dir_resolved);
+                       "OMEGA_IN_CLEAN_CLONE=1 ./build/omegatool --run-m18-gates >'%s/clean_clone_m18.log' 2>&1",
+                       clone, clone, physics_dir_resolved, clone);
     if (len < 0 || (size_t)len >= sizeof(command)) return false;
     int rc = system(command);
+    if (rc != 0) fprintf(stderr, "M18 clean clone failed (rc %d); log: %s/clean_clone_m18.log\n", rc, clone);
+    m18_clean_clone_remove_checkout(clone);
     return (rc == 0);
 }
 

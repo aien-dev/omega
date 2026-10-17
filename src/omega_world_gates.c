@@ -1759,6 +1759,16 @@ static bool test_m19_gate15_zero_libcuda(void) {
     return true;
 }
 
+/* Remove the built copy under the private clone folder; qualification.log stays
+ * beside it (omega#526: five such copies per day filled /tmp). */
+static void m19_clean_clone_remove_checkout(const char *checkout) {
+    char cmd[600];
+    int n = snprintf(cmd, sizeof(cmd), "rm -rf -- '%s'", checkout);
+    if (n < 0 || (size_t)n >= sizeof(cmd)) return;
+    int rc = system(cmd);
+    (void)rc;
+}
+
 /* Gate 16: OMEGA_ACCEL_RESIDENT_CLEAN_CLONE_PASS */
 static bool test_m19_gate16_clean_clone(void) {
     char src_sha[41] = {0};
@@ -1803,12 +1813,18 @@ static bool test_m19_gate16_clean_clone(void) {
                        "OMEGA_IN_CLEAN_CLONE=1 ./build/omegatool --run-m19-gates >%s/qualification.log 2>&1",
                        checkout, checkout, src_sha, physics_dir_resolved, clone);
     if (len < 0 || (size_t)len >= sizeof(command)) return false;
-    if (system(command) != 0) return false;
+    int rc = system(command);
+    if (rc != 0) {
+        fprintf(stderr, "M19 clean clone failed (rc %d); log: %s/qualification.log\n", rc, clone);
+        m19_clean_clone_remove_checkout(checkout);
+        return false;
+    }
 
     /* The built checkout must be exactly the named candidate revision. */
     char clone_sha[41] = {0};
-    if (!m19_git_head(checkout, clone_sha)) return false;
-    if (strcmp(clone_sha, src_sha) != 0) return false;
+    bool same = m19_git_head(checkout, clone_sha) && strcmp(clone_sha, src_sha) == 0;
+    m19_clean_clone_remove_checkout(checkout);
+    if (!same) return false;
 
     memcpy(m19_candidate_commit, src_sha, sizeof(m19_candidate_commit));
     return true;
